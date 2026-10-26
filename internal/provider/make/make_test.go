@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -396,5 +397,83 @@ func TestStatusClassification(t *testing.T) {
 	})
 	if _, err := env.invoke(scenariosList.ID, "open", `{}`); classOf(err) != provider.ClassProviderError {
 		t.Fatalf("class = %q, want provider-error for a redirect", classOf(err))
+	}
+}
+
+// Every failing status keeps Make's own answer apart in Original, while Qatlas' message stays free of it.
+func TestFailureCarriesMakesOriginalAnswer(t *testing.T) {
+	const body = `{"detail":"` + foreignCanary + `","message":"Permission denied","code":"SC403",` +
+		`"suberrors":[{"message":"Validation detail","name":"ValidationError"},"skipped"]}`
+	want := []provider.OriginalEntry{
+		{Message: "Permission denied", Code: "SC403"},
+		{Message: "Validation detail", Type: "ValidationError"},
+	}
+	for _, status := range []int{400, 401, 403, 404, 429, 503, 504, 302} {
+		var calls []call
+		env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(status, body), nil
+		})
+		_, err := env.invoke(scenariosList.ID, "open", `{}`)
+		var failure *provider.Error
+		if !errors.As(err, &failure) {
+			t.Fatalf("status %d: err = %v, want a provider error", status, err)
+		}
+		if failure.Original == nil || failure.Original.Status != status ||
+			!reflect.DeepEqual(failure.Original.Entries, want) {
+			t.Fatalf("status %d: Original = %+v, want entries %+v", status, failure.Original, want)
+		}
+		if strings.Contains(failure.Error(), "Permission denied") || strings.Contains(failure.Error(), foreignCanary) {
+			t.Fatalf("status %d: Error() = %q carries provider text", status, failure.Error())
+		}
+	}
+}
+
+// A body that is not JSON is kept as text, an empty body leaves only the status, and a detail object is dropped.
+func TestFailureOriginalForOtherBodies(t *testing.T) {
+	cases := []struct {
+		body string
+		want []provider.OriginalEntry
+	}{
+		{"<html>Bad Gateway</html>", []provider.OriginalEntry{{Message: "<html>Bad Gateway</html>"}}},
+		{"", nil},
+		{`{"detail":{"scenarios":[{"id":1}]}}`, nil},
+	}
+	for _, c := range cases {
+		var calls []call
+		env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(500, c.body), nil
+		})
+		_, err := env.invoke(scenariosList.ID, "open", `{}`)
+		var failure *provider.Error
+		if !errors.As(err, &failure) || failure.Original == nil || failure.Original.Status != 500 ||
+			!reflect.DeepEqual(failure.Original.Entries, c.want) {
+			t.Fatalf("body %q: err = %v, want entries %+v", c.body, err, c.want)
+		}
+	}
+}
+
+// A kept refusal and the Original come from one read: a refusal larger than the Original bound still parses.
+func TestRefusalAndOriginalShareOneRead(t *testing.T) {
+	padding := strings.Repeat("x", 6000)
+	var calls []call
+	serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(400, `{"message":"Refused","code":"SC400","pad":"`+padding+
+			`","scenarios":[{"id":10,"name":"Uses it"}]}`), nil
+	})
+	red := &redact.Redactor{}
+	client, err := open(context.Background(), resolvedConnection("team/"+itoa64(ownTeam)),
+		resolver(red, nil), red, nil, false)
+	if err != nil {
+		t.Fatalf("open() = %v", err)
+	}
+	client.wantRefusal = true
+	err = client.get(context.Background(), "x", "/scenarios", nil, nil, needRead)
+	var failure *provider.Error
+	if !errors.As(err, &failure) || client.refusalStatus != 400 || !strings.Contains(string(client.refusal), `"id":10`) {
+		t.Fatalf("err = %v, refusal = %q, want the refusal kept", err, client.refusal)
+	}
+	want := []provider.OriginalEntry{{Message: "Refused", Code: "SC400"}}
+	if failure.Original == nil || failure.Original.Status != 400 || !reflect.DeepEqual(failure.Original.Entries, want) {
+		t.Fatalf("Original = %+v, want entries %+v", failure.Original, want)
 	}
 }

@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat messages
@@ -24,4 +24,6 @@ The messages tools of the [Infomaniak kChat provider](README.md). The effects an
   `messages.remind` (not idempotent) sends just `target_time` in Unix seconds, from an RFC 3339 time within a
   year.
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
-  its replies. Whether a token may edit or delete another author's message is kChat's decision (`permission`).
+  its replies.
+
+The token rights are listed under [Messages](setup.md#messages).

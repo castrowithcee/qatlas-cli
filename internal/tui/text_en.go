@@ -420,6 +420,7 @@ var textEN = map[textID]string{
 	tApprovalChanged:                                           "%s changed",
 	tApprovalRenamedItem:                                       "renamed %s -> %s",
 	tApprovalUnchangedCount:                                    "unchanged: %d",
+	tApprovalCredentialsChanged:                                "credentials changed",
 	tApprovalValueRenamed:                                      "renamed %s -> %s",
 	tApprovalValueUnchanged:                                    "unchanged",
 	tStatusValid:                                               "valid",

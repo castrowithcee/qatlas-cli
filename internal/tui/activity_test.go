@@ -110,7 +110,7 @@ func TestLogsHeatmapShowsLevelsLegendAndTotals(t *testing.T) {
 			t.Setenv("NO_COLOR", "1")
 			t.Setenv("LC_ALL", tc.locale)
 			m := heatModel(t, activityLog(t))
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, 120, 30)
 			grid := heatRows(view)
 			// 1, 2, 3, 4, and 8 calls on five days: every level shows.
@@ -129,7 +129,7 @@ func TestLogsHeatmapShowsLevelsLegendAndTotals(t *testing.T) {
 				t.Errorf("the heatmap still shows rows:\n%s", view)
 			}
 			pump(t, m, "left")
-			if v := m.View(); m.logs.heat || !strings.Contains(v, "wiki.pages.list") {
+			if v := m.render(); m.logs.heat || !strings.Contains(v, "wiki.pages.list") {
 				t.Errorf("left on View = heat %v, want the rows back:\n%s", m.logs.heat, v)
 			}
 		})
@@ -141,7 +141,7 @@ func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := f.model(false, f.localToday())
-	if view := m.View(); !strings.Contains(view, "[Table]  Activity   Details") {
+	if view := m.render(); !strings.Contains(view, "[Table]  Activity   Details") {
 		t.Fatalf("the bar lacks the tabs:\n%s", view)
 	}
 	pump(t, m, "a")
@@ -149,12 +149,12 @@ func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 		t.Fatalf("a switched to the heatmap; the key must stay unbound on Activity")
 	}
 	press(t, m, "tab")
-	if m.logs.focus != logFocusTabs || !strings.Contains(m.View(), "> [Table]") {
-		t.Fatalf("tab = focus %v, want the tabs:\n%s", m.logs.focus, m.View())
+	if m.logs.focus != logFocusTabs || !strings.Contains(m.render(), "> [Table]") {
+		t.Fatalf("tab = focus %v, want the tabs:\n%s", m.logs.focus, m.render())
 	}
 	pump(t, m, "right")
-	if !m.logs.heat || !strings.Contains(m.View(), "[Activity]") {
-		t.Fatalf("right = heat %v, want the heatmap:\n%s", m.logs.heat, m.View())
+	if !m.logs.heat || !strings.Contains(m.render(), "[Activity]") {
+		t.Fatalf("right = heat %v, want the heatmap:\n%s", m.logs.heat, m.render())
 	}
 	if m.logs.mode != logModeRange {
 		t.Errorf("the heatmap from a day = mode %v, want the retention range", m.logs.mode)
@@ -189,7 +189,7 @@ func TestLogsViewFieldAndCommandsSwitchTheHeatmap(t *testing.T) {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 50, Height: 24})
 	m.screen = screenLogs
-	assertViewFits(t, m.View(), 50, 24)
+	assertViewFits(t, m.render(), 50, 24)
 }
 
 func TestLogsHeatmapLevelsFollowQuartiles(t *testing.T) {
@@ -215,13 +215,13 @@ func TestLogsHeatmapFollowsTheFilters(t *testing.T) {
 	m := heatModel(t, activityLog(t))
 	m.logs.filters[logFilterResult] = "denied"
 	m.logs.applyFilters()
-	if view := m.View(); !strings.Contains(view, "Calls 2 · success 0% · errors 2") {
+	if view := m.render(); !strings.Contains(view, "Calls 2 · success 0% · errors 2") {
 		t.Errorf("the heatmap ignores the result filter:\n%s", view)
 	}
 	m.logs.filters[logFilterResult] = ""
 	m.logs.filters[logFilterTool] = "wiki.pages.read"
 	m.logs.applyFilters()
-	if view := m.View(); !strings.Contains(view, "Calls 10 · success 100% · errors 0") {
+	if view := m.render(); !strings.Contains(view, "Calls 10 · success 100% · errors 0") {
 		t.Errorf("the heatmap ignores the tool filter:\n%s", view)
 	}
 }
@@ -230,11 +230,11 @@ func TestLogsHeatmapMarksDaysOutsideRetention(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := heatModel(t, f)
-	if grid := heatRows(m.View()); strings.Contains(grid, "x") {
+	if grid := heatRows(m.render()); strings.Contains(grid, "x") {
 		t.Fatalf("a retention of 90 days marks days as outside it:\n%s", grid)
 	}
 	m.cfg.Logs.RetentionDays = 5
-	grid := heatRows(m.View())
+	grid := heatRows(m.render())
 	// The 8th day back holds a call and keeps its level; the empty ones before the 5th day back are marked.
 	if !strings.Contains(grid, "x") {
 		t.Errorf("no day is marked as outside the retention of 5 days:\n%s", grid)
@@ -260,10 +260,10 @@ func TestLogsHeatmapMarksAlteredAndGapDays(t *testing.T) {
 	})
 	f.edit(fileOf(removed), func(lines [][]byte) [][]byte { return append(lines[:1], lines[2:]...) })
 	m := heatModel(t, f)
-	grid := heatRows(m.View())
+	grid := heatRows(m.render())
 	for _, glyph := range []string{"✗", "…"} {
 		if !strings.Contains(grid, glyph) {
-			t.Errorf("the grid lacks the mark %q:\n%s", glyph, m.View())
+			t.Errorf("the grid lacks the mark %q:\n%s", glyph, m.render())
 		}
 	}
 }
@@ -273,7 +273,7 @@ func TestLogsHeatmapFitsSmallTerminals(t *testing.T) {
 	m := heatModel(t, activityLog(t))
 	for _, size := range []struct{ width, height int }{{80, 24}, {60, 20}, {40, minimumHeight}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		view := m.View()
+		view := m.render()
 		if strings.Contains(view, "Resize terminal") {
 			t.Errorf("%dx%d cannot show the heatmap:\n%s", size.width, size.height, view)
 			continue
@@ -290,7 +290,7 @@ func TestOverviewShowsTheHeatmapAndRecentCallsAfterLoading(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 46})
 	m.openSection(sectionOverview)
 	m.focusNav()
-	before := m.View()
+	before := m.render()
 	if m.overviewAct.loaded || strings.Contains(before, "wiki.pages.list") || !strings.Contains(before, "Connections") ||
 		strings.Count(before, "No calls logged yet") != 2 {
 		t.Fatalf("the Overview shows activity before it was read:\n%s", before)
@@ -301,7 +301,7 @@ func TestOverviewShowsTheHeatmapAndRecentCallsAfterLoading(t *testing.T) {
 		t.Fatalf("Init() took %v or returned no command", time.Since(start))
 	}
 	deliver(m, m.loadOverviewActivity())
-	view := m.View()
+	view := m.render()
 	assertViewFits(t, view, 100, 46)
 	for _, want := range []string{"Recent activity", "Activity (", "Calls 18", "Mon", "less", "wiki.pages.list", "wiki-main", "ok",
 		"25ms", "✓", "✗", "denied", "Connections", "Next steps"} {
@@ -321,14 +321,14 @@ func TestOverviewActivityGivesWayToTheCounts(t *testing.T) {
 	deliver(m, m.loadOverviewActivity())
 	for _, size := range []struct{ width, height int }{{40, minimumHeight}, {60, 16}, {80, 24}, {200, 60}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		view := m.View()
+		view := m.render()
 		assertViewFits(t, view, size.width, size.height)
 		if !strings.Contains(view, "Approvals") || !strings.Contains(view, "Connections") {
 			t.Errorf("%dx%d lacks the counts:\n%s", size.width, size.height, view)
 		}
 	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
-	if view := m.View(); strings.Contains(view, "Recent activity") {
+	if view := m.render(); strings.Contains(view, "Recent activity") {
 		t.Errorf("the smallest Overview still has room for the activity:\n%s", view)
 	}
 }

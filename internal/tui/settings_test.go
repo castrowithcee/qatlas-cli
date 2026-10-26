@@ -75,7 +75,7 @@ func TestGeneralWithBackgroundFieldFitsSmallTerminal(t *testing.T) {
 	openSectionByName(t, m, sectionGeneral)
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
 	press(t, m, "tab") // background
-	view := m.View()
+	view := m.render()
 	lines := strings.Split(view, "\n")
 	if len(lines) > 14 || m.tooSmall {
 		t.Fatalf("%d lines at height 14, too small %v\n%s", len(lines), m.tooSmall, view)
@@ -271,7 +271,7 @@ func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
 			shown         bool
 		}{{120, 40, true}, {80, 24, true}, {40, minimumHeight, false}} {
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, size.width, size.height)
 			plain := ansi.Strip(view)
 			if size.shown && !strings.Contains(plain, want) {

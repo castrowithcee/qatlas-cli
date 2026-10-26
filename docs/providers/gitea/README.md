@@ -143,11 +143,13 @@ wrappers, and commit lists add `X-HasMore`, `X-Page`, `X-PageCount`, and `X-PerP
 | `provider-error` | a redirect (not followed), another status, or a product or version mismatch |
 | `invalid-provider-response` | an answer that is not readable within the bounds |
 
-A change is sent once and never repeated. When its outcome is open (a timeout, a reset connection, a 5xx status, or
-an answer that cannot be read), the message says that the change may have been applied and that the current state
-has to be read before repeating it. Error bodies of the instance are untrusted data and never reach a message.
-Neither product documents an API limit, but public instances limit by policy; Codeberg was seen announcing 2000 requests per 600 seconds. Qatlas
-spaces the requests of one token by half a second and the anonymous probes per instance.
+A change is sent once and never repeated. When its outcome is open (a timeout, a reset connection, a 5xx status, or an
+answer that cannot be read), the message says that the change may have been applied and that the current state has to be
+read before repeating it. The text of an error answer never reaches Qatlas' message; the instance's `message` and
+documentation link go separately as the original details in the `provider` field of the error detail, marked untrusted,
+redacted, and bounded. A redirect to storage leaves only its status. Neither product documents an API limit, but public
+instances limit by policy; Codeberg was seen announcing 2000 requests per 600 seconds. Qatlas spaces the requests of one
+token by half a second and the anonymous probes per instance.
 
 ## Bounds
 

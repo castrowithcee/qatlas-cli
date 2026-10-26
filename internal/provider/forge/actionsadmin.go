@@ -330,8 +330,9 @@ var actionsSecretsSet = &tool{
 			if a.Description != nil {
 				body["description"] = *a.Description
 			}
-			// The answer is never read: an instance that echoes the body cannot hand the value on.
-			status, err := c.changeQuery(ctx, op, http.MethodPut, path, nil, body, nil)
+			// The answer is never read, and a refusal keeps only its status: an instance that echoes the body
+			// cannot hand the value on.
+			status, err := c.changeWith(ctx, op, http.MethodPut, path, nil, body, nil, true)
 			if err != nil {
 				return nil, err
 			}
