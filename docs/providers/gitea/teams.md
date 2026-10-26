@@ -12,7 +12,7 @@ updated: 2026-10-26
 # Teams
 
 These tools act on the teams of an organization and the people in them. Team names, descriptions, and activity
-texts in answers are untrusted data; members and activities are personal data. [Forgejo](../forgejo.md) names the
+texts in answers are untrusted data; members and activities are personal data. [Forgejo](../forgejo/README.md) names the
 differences.
 
 ## Target binding

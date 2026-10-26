@@ -26,7 +26,7 @@ token, and a token never widens the connection.
 - A personal access token of that account. Gitea scopes a token by **category**, and each category has a `read:`
   and a `write:` scope. What it reaches is decided by its scopes and by the account.
 - Qatlas keeps the token in the system keyring or the vault, or reads it from an environment variable.
-- Forgejo uses the same rules; see [Forgejo](../forgejo.md) for what differs.
+- Forgejo uses the same rules; see [Set up Forgejo](../forgejo/setup.md) for what differs.
 
 ## Create a token
 
@@ -178,7 +178,6 @@ change or run something. The instance serves them only to the people named in th
 | Push mirrors, deploy keys | `repository` | repository administrators; push mirrors also need mirroring switched on |
 | Keys, GPG keys, OAuth2 applications of the account | `user` | the account; no token limited to public resources |
 | Keys and GPG keys of another user | `user` | any reader the instance lets see the user |
-| The token list of the account (`access-tokens.list`, Forgejo only) | `user` | the account itself |
 | The token the connection uses (`access-tokens.get-current`, `.delete-current`) | none | any valid token |
 
 ### Instance administration
