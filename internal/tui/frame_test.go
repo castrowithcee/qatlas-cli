@@ -10,7 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
+
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 )
 
 // vaultCases are the vault states the header shows, each with the word it must name.
@@ -56,7 +57,7 @@ func TestFooterIsTheLastLineAtEverySize(t *testing.T) {
 					m := vc.m
 					m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 					m.section, m.screen = sectionServices, scr
-					view := m.View()
+					view := m.render()
 					assertViewFits(t, view, size.width, size.height)
 					lines := strings.Split(view, "\n")
 					if len(lines) != size.height {
@@ -79,9 +80,60 @@ func TestFooterIsTheLastLineAtEverySize(t *testing.T) {
 func TestBelowTheSmallestSizeTheResizeNoticeStands(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight - 1})
-	if view := m.View(); !strings.Contains(view, tr(tResizeTitle)) {
+	if view := m.render(); !strings.Contains(view, tr(tResizeTitle)) {
 		t.Errorf("no resize notice at %dx%d:\n%s", minimumWidth, minimumHeight-1, view)
 	}
+}
+
+// heightWithANote is the height a section asks for when it is not yet made to fit the smallest size with one
+// status note standing; the other sections are not listed.
+func heightWithANote(lang i18n.Lang, vault string, s section) int {
+	switch {
+	case s == sectionLogs && (vault == "unencrypted" || vault == "unlocked"):
+		return 17
+	case s == sectionLogs:
+		return 16
+	case s == sectionDefaults && (vault == "unencrypted" || vault == "unlocked"):
+		return 15
+	case lang == i18n.German && vault == "unencrypted" && (s == sectionApprovals || s == sectionTokens),
+		lang == i18n.German && vault == "unlocked" && s == sectionTokens:
+		return 15
+	}
+	return minimumHeight
+}
+
+// Every section shows its content at the smallest size with one status note standing, in every vault state
+// and both languages; the resize notice is for terminals below it. A section that asks for more is listed in
+// heightWithANote and keeps to the height it asks for.
+func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
+	eachLanguage(t, func(t *testing.T) {
+		for _, vc := range vaultCases(t) {
+			for s := section(0); s < sectionCount; s++ {
+				t.Run(fmt.Sprintf("%s/%d", vc.name, s), func(t *testing.T) {
+					m := vc.m
+					height := heightWithANote(uiLang, vc.name, s)
+					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: height})
+					m.section, m.screen = s, screenNav
+					m.status = tr(tCancelled)
+					view := m.render()
+					if strings.Contains(view, tr(tResizeTitle)) {
+						t.Fatalf("the resize notice at %dx%d:\n%s", minimumWidth, height, view)
+					}
+					assertViewFits(t, view, minimumWidth, height)
+					if !strings.Contains(view, tr(tCancelled)) {
+						t.Errorf("the status note is missing:\n%s", view)
+					}
+					if height == minimumHeight {
+						return
+					}
+					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
+					if view := m.render(); !strings.Contains(view, tr(tResizeTitle)) {
+						t.Errorf("the section fits %dx%d now, so it is no exception:\n%s", minimumWidth, minimumHeight, view)
+					}
+				})
+			}
+		}
+	})
 }
 
 // The header names every vault and admin state, and the workspace height follows each change of it: the
@@ -133,7 +185,7 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 			if unlocked.height != workspaceRows(unlocked) {
 				t.Errorf("width %d, %s: workspace height %d, want %d", width, step.name, unlocked.height, workspaceRows(unlocked))
 			}
-			view := unlocked.View()
+			view := unlocked.render()
 			if lines := strings.Split(view, "\n"); len(lines) != 30 || !strings.Contains(lines[29], tr(tHeaderHelp)) {
 				t.Errorf("width %d, %s: the footer is not the last line:\n%s", width, step.name, view)
 			}
@@ -196,11 +248,11 @@ func TestStatusAndErrorStayVisible(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		openSectionByName(t, m, sectionServices)
 		m.status = "saved"
-		if view := m.View(); !strings.Contains(view, "saved") {
+		if view := m.render(); !strings.Contains(view, "saved") {
 			t.Errorf("%dx%d: the status is gone:\n%s", size.width, size.height, view)
 		}
 		m.status, m.fail = "", "something failed"
-		view := m.View()
+		view := m.render()
 		if flat := flatText(view); !strings.Contains(flat, "something failed") {
 			t.Errorf("%dx%d: the error is gone:\n%s", size.width, size.height, view)
 		}
@@ -227,17 +279,17 @@ func hasColour(text string) bool {
 // Without colour the header, the tab line and the footer read as text: the active tab stays marked, the
 // vault state keeps its word, and the keys keep their names.
 func TestFrameReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
+	before := currentProfile()
 	prior := styles
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("", "")
-	lipgloss.SetColorProfile(termenv.ANSI256)
+	setProfile(profile256)
 
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 220, Height: 30})
 	m.section, m.screen = sectionServices, screenList
-	view := m.View()
+	view := m.render()
 	lines := strings.Split(view, "\n")
 	header, tabs, footer := lines[0], lines[1], lines[len(lines)-1]
 	for name, line := range map[string]string{"header": header, "tab line": tabs, "footer": footer} {

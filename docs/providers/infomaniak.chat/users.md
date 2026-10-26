@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat users
@@ -22,3 +22,5 @@ The users tools of the [Infomaniak kChat provider](README.md). The effects and t
 - `users.list` and `.search` need exactly one of `team_id` or `channel_id`; an instance-wide list is not offered.
   `not_in_channel_id` is the exception: it needs `team_id` and excludes `channel_id`; its channel goes through the
   same checks as a `channel_id` and must belong to that team. `users.search` is a `POST` that changes nothing.
+
+The token rights are listed under [Users](setup.md#users).

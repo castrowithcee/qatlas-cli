@@ -18,8 +18,8 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	f := activityLog(t)
 	m := f.model(true, f.localToday())
-	if m.logs.tab() != logTabTable || !strings.Contains(m.View(), "[Table]") {
-		t.Fatalf("the screen does not open on the Table tab:\n%s", m.View())
+	if m.logs.tab() != logTabTable || !strings.Contains(m.render(), "[Table]") {
+		t.Fatalf("the screen does not open on the Table tab:\n%s", m.render())
 	}
 	press(t, m, "tab")
 	if m.logs.focus != logFocusTabs {
@@ -34,8 +34,8 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 		{"right", logTabDetails, "[Details]"}, {"left", logTabActivity, "[Activity]"}, {"left", logTabTable, "[Table]"},
 	} {
 		pump(t, m, step.key)
-		if m.logs.tab() != step.want || !strings.Contains(m.View(), step.mark) {
-			t.Fatalf("%s = tab %v, want %v with %s:\n%s", step.key, m.logs.tab(), step.want, step.mark, m.View())
+		if m.logs.tab() != step.want || !strings.Contains(m.render(), step.mark) {
+			t.Fatalf("%s = tab %v, want %v with %s:\n%s", step.key, m.logs.tab(), step.want, step.mark, m.render())
 		}
 	}
 	row := m.workspaceTop()
@@ -48,8 +48,8 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 		t.Fatalf("a click on Details = tab %v", m.logs.tab())
 	}
 	clickAt(t, m, cellInRow(t, m, row, "Table"), row)
-	if m.logs.tab() != logTabTable || m.logs.stats || m.logs.heat || !strings.Contains(m.View(), "wiki.pages") {
-		t.Fatalf("a click on Table = tab %v:\n%s", m.logs.tab(), m.View())
+	if m.logs.tab() != logTabTable || m.logs.stats || m.logs.heat || !strings.Contains(m.render(), "wiki.pages") {
+		t.Fatalf("a click on Table = tab %v:\n%s", m.logs.tab(), m.render())
 	}
 	// The keys of the summary stay: s toggles Details, m shows the sessions in it.
 	press(t, m, "s")
@@ -64,7 +64,7 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 	m.logs.filters[logFilterResult] = "denied"
 	m.logs.applyFilters()
 	deliver(m, m.setLogTab(logTabActivity))
-	if view := m.View(); m.logs.tab() != logTabActivity || !strings.Contains(view, "Calls 2 · success 0% · errors 2") {
+	if view := m.render(); m.logs.tab() != logTabActivity || !strings.Contains(view, "Calls 2 · success 0% · errors 2") {
 		t.Errorf("the filter does not reach the Activity tab:\n%s", view)
 	}
 }
@@ -81,7 +81,7 @@ func TestLogsStatusStaysVisibleOnEveryTab(t *testing.T) {
 	m := heatModel(t, f)
 	for _, tab := range []logTab{logTabTable, logTabActivity, logTabDetails} {
 		m.setLogTab(tab)
-		if view := m.View(); !strings.Contains(view, "✗ altered") {
+		if view := m.render(); !strings.Contains(view, "✗ altered") {
 			t.Errorf("tab %v hides the status:\n%s", tab, view)
 		}
 	}
@@ -105,7 +105,7 @@ func TestActivityHeatmapTotalsMatchTheFixture(t *testing.T) {
 	m := visualModel(t, fixtures, 150, 42, "dark", "terminal")
 	activityHeatmap(t, m)
 	want := fmt.Sprintf("Calls %d · success %d%% · errors %d", len(calls), (len(calls)-failed)*100/len(calls), failed)
-	if view := ansi.Strip(m.View()); !strings.Contains(view, want) {
+	if view := ansi.Strip(m.render()); !strings.Contains(view, want) {
 		t.Errorf("the heatmap totals do not match the log (%q):\n%s", want, view)
 	}
 }
@@ -124,10 +124,10 @@ func TestLogsTabsWithoutColourAndAtTheSmallestSize(t *testing.T) {
 			m := heatModel(t, activityLog(t))
 			m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 			m.setLogTab(tab.tab)
-			view := m.View()
+			view := m.render()
 			name := fmt.Sprintf("%v at %dx%d", tab.mark, size.width, size.height)
 			if strings.Contains(view, "Resize terminal") {
-				// The summary needs more height than the smallest terminal gives, as it always did.
+				// The summary needs one row more than the smallest terminal gives.
 				if tab.tab == logTabDetails && size.height == minimumHeight {
 					continue
 				}
@@ -152,7 +152,7 @@ func TestLogsEmptyDayShowsAShortHintInThePanel(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("cli", "", "wiki.pages.list", "wiki", "success")
 	m := f.model(true, "2001-01-01")
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(view, "No entries for 2001-01-01") || !strings.Contains(view, "╭") {
 		t.Errorf("an empty day shows no hint in a panel:\n%s", view)
 	}

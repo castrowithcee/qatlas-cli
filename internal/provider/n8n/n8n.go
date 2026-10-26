@@ -343,21 +343,21 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	return nil
 }
 
-// responseError maps an HTTP status to a stable class. The provider body is never read into the message. It
-// returns the concrete type, not the error interface, so (*Client).do can still append the uncertain
-// suffix to its message for a change request that a 5xx may nonetheless have carried out.
+// responseError maps an HTTP status to a stable class. The message carries no provider text; the body's
+// "message" goes separately into Original. It returns the concrete type, not the error interface, so
+// (*Client).do can still append the uncertain suffix to its message for a change request that a 5xx may
+// nonetheless have carried out.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	return provider.ClassifyStatusBody(op, response.StatusCode, provider.StatusTexts{
 		Subject:    "n8n",
 		Auth:       "n8n rejected the API key",
 		Permission: "this n8n API key may not perform this operation; check its scopes under Settings, n8n API",
 		NotFound: "n8n does not hold this resource, does not show it to this API key, or this instance's " +
 			"Public API version does not have this endpoint",
-	})
+	}, response.Body, provider.OriginalFields{Message: "message"})
 }
 
 func providerError(op, message string) error {

@@ -21,7 +21,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -773,11 +772,10 @@ func (m *Model) updateLogDetail(key tea.KeyMsg) tea.Cmd {
 }
 
 func newLogInput(value string) textinput.Model {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.CharLimit = len(logDateLayout)
 	in.Placeholder = tr(tLogDateFormat)
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.SetValue(value)
 	in.CursorEnd()
 	return in

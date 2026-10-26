@@ -80,7 +80,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	openSectionByName(t, m, sectionTokens)
 
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{"Agent tokens need an encrypted vault.", "Open Settings > Vault (6)", "[Tokens]"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the section does not show %q:\n%s", want, view)
@@ -122,7 +122,7 @@ func TestTokensWhileLocked(t *testing.T) {
 	if !slices.Equal(m.list.all, []string{"kunde-a-ci"}) {
 		t.Fatalf("Tokens lists %v after unlocking, want kunde-a-ci", m.list.all)
 	}
-	view = m.View()
+	view = m.render()
 	for _, want := range []string{"kunde-a-ci", "personal", "no expiry", "n new", "d revoke"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the unlocked list does not show %q:\n%s", want, view)
@@ -197,7 +197,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 		!got.Expires.Equal(want) {
 		t.Errorf("created token = %s %v %v, want kunde-a-ci [personal] %v", got.Name, got.Models, got.Expires, want)
 	}
-	if strings.Contains(m.View(), got.Value) {
+	if strings.Contains(m.render(), got.Value) {
 		t.Error("the detail shows the value of a token nobody asked to reveal")
 	}
 }
@@ -367,9 +367,9 @@ func TestTokenWarningsForLapsedVorbildAndExpiry(t *testing.T) {
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	assertViewFits(t, m.View(), 60, 20)
+	assertViewFits(t, m.render(), 60, 20)
 	pump(t, m, "esc")
-	assertViewFits(t, m.View(), 60, 20)
+	assertViewFits(t, m.render(), 60, 20)
 }
 
 // x has no effect on the Tokens list or on a token's detail.

@@ -42,6 +42,11 @@ var messagePatterns = []struct {
 	class    string
 	patterns []string
 }{
+	// Refusals of the Tag Manager trigger tools; Matomo changed nothing. They come first because some quote a
+	// name or type the caller chose in double quotes, which is not masked.
+	{"trigger-in-use", []string{"this trigger cannot be deleted as it is used in a tag"}},
+	{"condition-invalid", []string{"in the condition at position", "missing value for array key",
+		`the comparison "`}},
 	// These come first: their texts also hold words of the groups below, and one quotes a setting ID.
 	{"password-refused", []string{"the current password you entered is not correct", "re-authenticate to confirm"}},
 	{"granular-off", []string{"granular compliance configuration is not enabled"}},
@@ -50,13 +55,20 @@ var messagePatterns = []struct {
 	{"invalid-filter", []string{"invalid filter."}},
 	{"ldap-unreachable", []string{"could not connect to the ldap server", "could not connect to any of the"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
+	// Refusals of the Tag Manager version tools; Matomo changed nothing.
+	{"version-name-in-use", []string{"this name is already in use"}},
+	{"version-not-deletable", []string{"version of a container cannot be deleted",
+		"cannot be deleted as it is published to at least one environment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
 	// A container, environment, or context ID is quoted in double quotes and is not masked; this comes before the
 	// groups below so that an ID like token1 cannot pick the class.
 	{"not-found", []string{`" does not exist`, `the context "`}},
+	// The trigger type of the trigger tools; the "trigger at position" text of a tag is a not-found above.
+	{"unsupported-type", []string{`the trigger "`}},
 	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
-		"pre-processed segments can only", "does not have access to any sites"}},
+		"pre-processed segments can only", "does not have access to any sites",
+		"can only be created or edited by"}},
 	{"auth", []string{"token", "authenticat", "password", "logged in", "login"}},
 	{"not-found", []string{"unexpected website", "website not found", "was not found", "does not exist",
 		"not found in the list of available reports", "there is no goal", "requested segment not found",
@@ -78,6 +90,25 @@ func applicationError(op string, data []byte) error {
 	switch classifyMessage(message) {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
+	case "version-name-in-use":
+		if strings.HasSuffix(op, triggerOpSuffix) {
+			return &provider.InvalidRequestError{Message: "Matomo refused the name: another trigger of the container " +
+				"version already uses it; nothing was changed"}
+		}
+		return &provider.InvalidRequestError{Message: "Matomo refused the name: another version of the container " +
+			"already uses it; nothing was changed"}
+	case "trigger-in-use":
+		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: a tag of the container version " +
+			"still uses the trigger; nothing was changed"}
+	case "condition-invalid":
+		return &provider.InvalidRequestError{Message: "Matomo refused a condition: a value is missing, the " +
+			"comparison is not supported, or the variable it names is unknown in the container version; nothing was changed"}
+	case "unsupported-type":
+		return &provider.InvalidRequestError{Message: "Matomo refused the trigger type as not " +
+			"supported; nothing was changed"}
+	case "version-not-deletable":
+		return &provider.InvalidRequestError{Message: "Matomo refused the deletion: the draft and a version that is " +
+			"released to an environment cannot be deleted; nothing was changed"}
 	case "invalid-filter":
 		return &provider.InvalidRequestError{Message: "Matomo refused the LDAP filter as invalid"}
 	case "ldap-unreachable":
