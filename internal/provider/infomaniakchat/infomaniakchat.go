@@ -407,11 +407,24 @@ func (c *Client) exchange(ctx context.Context, hc *http.Client, op, method, path
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. kChat's own error body is never read into the
-// message: it may echo request content such as a channel name back at the caller.
+// statusError maps an HTTP status to a stable class. kChat's own error body never reaches the message,
+// because it may echo request content such as a channel name; its id and message go separately into
+// Original. A redirect keeps only its status.
 func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+	failure := c.classifyStatus(op, response)
 	status := response.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+	if status >= 300 && status < 400 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		failure.Original = provider.ErrorOriginal(status, nil, provider.OriginalFields{})
+		return failure
+	}
+	failure.Original = provider.ErrorOriginal(status, provider.ReadErrorBody(response.Body),
+		provider.OriginalFields{Code: "id", Message: "message"})
+	return failure
+}
+
+func (c *Client) classifyStatus(op string, response *http.Response) *provider.Error {
+	status := response.StatusCode
 	switch {
 	case status == http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "kChat rejected the token"}

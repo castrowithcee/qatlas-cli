@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Twenty CRM: notes, tasks, and attachments
@@ -35,10 +35,10 @@ reachable target in `omitted`. Labels and content are untrusted.
 - `get` needs exactly one target on a reachable object, else it answers as if the attachment did not exist.
 - Deprecated attachment fields (`name`, `fullPath`, `type`, `fileCategory`, `author`) are not read, and the file
   address (`file[].url`) carries a token and is never reported.
-- `upload` takes `local_path` in a directory released for reading, or inline content up to 4 MiB; 1 byte to
-  100 MiB. It reads the record first, needs the Upload File right and create rights on attachments, sends each
-  step once, and names the file id from the upload on. Twenty drops unfinished uploads after 24 hours; a
-  completed file without an attachment stays.
+- `upload` takes `local_path` in a directory released for reading, or inline content up to 4 MiB; 1 byte to 100
+  MiB. It reads the record first, sends each step once (rights: [Notes, tasks, and
+  attachments](setup.md#notes-tasks-and-attachments)), and names the file id from the upload on. Twenty drops
+  unfinished uploads after 24 hours; a completed file without an attachment stays.
 - Qatlas uses a file address Twenty reports only if it is https on exactly the host and port of the connection,
   with the file's own path and the signed `token` as its only query. The request carries no API key and follows
   no redirect; the token appears in no result or error. External storage (another host) is not supported.
