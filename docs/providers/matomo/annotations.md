@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo annotation tools: listing, reading, counting, adding, updating, and deleting the notes on a website's days, their rights, limits, and unclear outcomes.
+  Describes the Matomo annotation tools: listing, reading, counting, adding, updating, and deleting the notes on a website's days, their limits and unclear outcomes.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -10,7 +10,7 @@ updated: 2026-10-26
 # Matomo annotations
 
 The annotation tools of the [Matomo provider](README.md). The profiles are described under
-[Setup profiles](README.md#setup-profiles). All seven tools need the Annotations plugin.
+[Setup profiles](README.md#setup-profiles). The rights and the plugin are listed in [rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -18,11 +18,11 @@ The annotation tools of the [Matomo provider](README.md). The profiles are descr
 | --- | --- |
 | `matomo.annotations.list` | reads the annotations of a website in a date range, in batches |
 | `matomo.annotations.get` | reads one annotation of a website |
-| `matomo.annotations.add` | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
+| `matomo.annotations.add` | adds an annotation to a day (effect `create`) |
 | `matomo.annotations.update` | changes the date, note, or star of an annotation (effect `update`) |
 | `matomo.annotations.count` | counts the annotations of a website per period, with starred counts |
 | `matomo.annotations.delete` | deletes one annotation for good (effect `delete`, only via `tools`) |
-| `matomo.annotations.delete-all` | deletes every annotation of a website; Super User, needs the `instance` target (effect `delete`, only via `tools`) |
+| `matomo.annotations.delete-all` | deletes every annotation of a website; needs the `instance` target (effect `delete`, only via `tools`) |
 
 Annotations are per website; `idNote` counts per website, and every tool works with `idSite` and `idNote` together.
 Matomo checks that pair itself and answers an ID the website does not have as an error, so no tool reads first.
@@ -33,19 +33,16 @@ Matomo checks that pair itself and answers an ID the website does not have as an
   per call: a list of website IDs is not accepted, and rows of another website are dropped.
 - `matomo.annotations.get` returns one annotation.
 - `matomo.annotations.add` attaches a note to a day (`YYYY-MM-DD`, `today`, or `yesterday`), optionally starred.
-  Matomo 5 needs a view right on the website for a named user, Matomo 6 needs a write right. It is not idempotent,
-  a repeated call creates a second annotation.
+  It is not idempotent, a repeated call creates a second annotation.
 - `matomo.annotations.update` changes the date, note, or star; a value not given stays as it is, and at least one
-  is required. It needs a write right on the website, or the user is the author of the annotation.
+  is required.
 - `matomo.annotations.count` counts the annotations of one website per period of `date`, `period`, and `lastN`
   (both `date` and `period` are required, as in Matomo; `range` counts per day), with the number of starred ones.
   `getAnnotationText` adds the note for a period with exactly one annotation. One website per call. It is part of
   the `read` profile.
 - `matomo.annotations.delete` deletes one annotation for good. Matomo pairs `idSite` and `idNote` itself and answers
-  an ID the website does not have as an error, so no read comes first. Matomo allows it with admin access to the
-  website, or to the author with view access.
-- `matomo.annotations.delete-all` deletes every annotation of a website for good, whoever wrote it. Matomo allows it
-  to Super Users only, so the connection must also bind the target `instance`.
+  an ID the website does not have as an error, so no read comes first.
+- `matomo.annotations.delete-all` deletes every annotation of a website for good, whoever wrote it. The connection must bind the target `instance`.
 
 Both delete tools are offered only where the `tools` list of a connection names them and are in no profile.
 

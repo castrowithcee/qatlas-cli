@@ -10,7 +10,8 @@ updated: 2026-10-26
 # Matomo scheduled reports
 
 The scheduled-report tools of the [Matomo provider](README.md). The profiles are described under
-[Setup profiles](README.md#setup-profiles). All four tools need the ScheduledReports plugin.
+[Setup profiles](README.md#setup-profiles); the rights and the plugin are listed in
+[rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -18,16 +19,15 @@ The scheduled-report tools of the [Matomo provider](README.md). The profiles are
 | --- | --- |
 | `matomo.scheduled-reports.list` | reads the scheduled e-mail reports inside the targets with their recipients (profile `live`) |
 | `matomo.scheduled-reports.generate` | renders one scheduled report as html, csv, or tsv text, sent to no one (profile `live`) |
-| `matomo.scheduled-reports.pause` | pauses one scheduled report by setting its schedule to never (creator or Super User; effect `update`, in no profile) |
-| `matomo.scheduled-reports.delete` | deletes one scheduled report (creator or Super User; effect `delete`, only via `tools`) |
+| `matomo.scheduled-reports.pause` | pauses one scheduled report by setting its schedule to never (effect `update`, in no profile) |
+| `matomo.scheduled-reports.delete` | deletes one scheduled report (effect `delete`, only via `tools`) |
 
 A scheduled report is an e-mail report that Matomo renders and sends on a schedule. Its `idReport` counts for the
 whole instance, and a report belongs to one website. Tools that create, resume, or send a report do not exist,
 because sending is a permanent path of data to recipients outside Matomo. Qatlas reads, renders as text, pauses, and
 deletes.
 
-- `matomo.scheduled-reports.list` returns the reports Matomo shows the token's user: all of them for a Super User,
-  otherwise the user's own. `idSite`, `period`, `idReport`, `ifSuperUserReturnOnlySuperUserReports`, and `idSegment`
+- `matomo.scheduled-reports.list` returns the reports Matomo shows the token's user. `idSite`, `period`, `idReport`, `ifSuperUserReturnOnlySuperUserReports`, and `idSegment`
   narrow the list as in Matomo. Matomo has no paging for it, so Qatlas cuts the batches and continues with
   `next_cursor`. A report of a website outside the connection's targets is left out. The recipients (additional
   e-mail addresses, phone numbers) and the creator's login are personal data, so the tool belongs to the profile
@@ -51,7 +51,7 @@ deletes.
   Matomo may also store a language for the token's user when it has none. The tool is offered by a connection that
   allows the effect `update`, not only via `tools`.
 - `matomo.scheduled-reports.delete` deletes one report so that it is no longer sent. Matomo marks the report as
-  deleted and Qatlas cannot restore it. Only the creator or a Super User may delete it. The tool is offered only
+  deleted and Qatlas cannot restore it. The tool is offered only
   where the `tools` list of a connection names it and is in no profile.
 
 Matomo asks for no password confirmation on any of them.

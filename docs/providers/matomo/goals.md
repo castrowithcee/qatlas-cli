@@ -10,6 +10,7 @@ updated: 2026-10-26
 # Matomo goals
 
 The goal tools of the [Matomo provider](README.md). The profiles are described under [Setup profiles](README.md#setup-profiles).
+The rights and the plugin are listed in [rights per tool group](setup.md#rights-per-tool-group).
 
 ## Tools
 
@@ -20,13 +21,12 @@ The goal tools of the [Matomo provider](README.md). The profiles are described u
 | `matomo.goals.add` | creates a goal (effect `create`) |
 | `matomo.goals.update` | replaces the definition of a goal (effect `update`) |
 | `matomo.goals.delete` | deletes a goal and its conversions (effect `delete`, only via `tools`) |
-| `matomo.goal-recommendations.list` | reads the saved goal recommendations of a website; needs a write right |
+| `matomo.goal-recommendations.list` | reads the saved goal recommendations of a website |
 | `matomo.goal-recommendations.scan` | lets Matomo crawl the website and save goal recommendations, without AI (effect `execute`) |
 | `matomo.goal-recommendations.dismiss` | dismisses one saved recommendation or all of a website (effect `update`) |
 
 Goals are per website; `idGoal` counts per website, and the ecommerce values `ecommerceOrder` and
-`ecommerceAbandonedCart` are no goals of these tools. Goal reports are read with the report tools. All five tools
-need the Goals plugin; the changes need a write right on the website, which Matomo checks.
+`ecommerceAbandonedCart` are no goals of these tools. Goal reports are read with the report tools.
 
 - `matomo.goals.list` and `matomo.goals.get` return every field Matomo documents for a goal, including the revenue
   and the event value flag. A goal matched `manually` has no pattern, pattern type, or case sensitivity.
@@ -57,9 +57,8 @@ and is never repeated; read the goal with `matomo.goals.get` before trying again
 ## Goal recommendations
 
 `matomo.goal-recommendations.list`, `.scan`, and `.dismiss` work on the recommendations that Matomo derives for a
-website. All three need a write right on the website (also the list, which is why it is not in the `read` profile
-and a token with a view right only gets a permission error), the Goals plugin, and the Goal recommendations feature
-of the instance; an instance without it reports the tools as unsupported.
+website. All three need the Goal recommendations feature of the instance; an instance without it reports the tools as
+unsupported. The list is not in the `read` profile.
 
 - `list` reads the result of the last scan from Matomo's stored options, without the recommendations dismissed one by
   one. Nothing saved gives an empty result without `generatedAt`. It returns every documented member: `mode`, `goals`
