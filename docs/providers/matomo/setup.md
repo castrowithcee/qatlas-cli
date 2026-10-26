@@ -272,13 +272,13 @@ Every failed call has a **code** and a **message** from Qatlas.
 
 ```text
 permission: this token may not use the requested website or function; check its rights for the website
+provider answer (untrusted, not written by qatlas), HTTP 200:
+  | You can't access this resource as it requires 'view' access for the website id = 3.
 ```
 
-- The message is **Qatlas' own**. Matomo's text is never copied into it: Qatlas reads it only to pick the code.
-  No second part with Matomo's own answer follows, so nothing more is available than the code and the message.
-- Matomo translates its messages into the language of the token's user. Qatlas knows the English ones. Set the
-  interface language of that user to English in Matomo, or a refusal may appear only as
-  `invalid-provider-response`: Matomo reported an error this provider does not recognise.
+- The message is **Qatlas' own**; the second part is **Matomo's own answer**, untrusted, redacted, and shortened.
+- Matomo translates its messages into the language of the token's user; Qatlas knows only the English ones. Set
+  that user's interface language to English, or a refusal may appear only as `invalid-provider-response`.
 
 ### By symptom
 

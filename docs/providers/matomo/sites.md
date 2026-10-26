@@ -110,7 +110,7 @@ instance-only binding sees no website. The group names come from the whole insta
 `matomo.sites.add`, `matomo.sites.update`, and `matomo.sites.delete` change websites through `SitesManager.addSite`,
 `SitesManager.updateSite`, and `SitesManager.deleteSite`. Each needs confirmation and is sent once and never
 repeated; after an unclear result, read the website (`matomo.sites.get`, or `matomo.sites.list` after an add) before
-trying again. Every documented parameter is offered, and the Matomo `message` never reaches an error.
+trying again. Every documented parameter is offered, and the Matomo `message` stays out of Qatlas' error message.
 
 - `sites.add` needs a connection whose targets name `instance`; it is offered only there and
   checks the target again before a secret is read. The result names the new `idSite`. The new website lies outside

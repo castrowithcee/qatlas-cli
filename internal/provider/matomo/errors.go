@@ -2,6 +2,7 @@ package matomo
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -75,8 +76,12 @@ var messagePatterns = []struct {
 		"marked as deleted", "there is no note", "couldn't be found", "doesn't exist", "invalid compliance", "nodataforaction"}},
 }
 
+// envelopeFields reads the message of Matomo's {"result":"error"} form into an Original.
+var envelopeFields = provider.OriginalFields{Message: "message"}
+
 // applicationError reads a JSON answer for Matomo's {"result":"error"} form and maps it. It returns nil for
-// any other answer. The message text is only matched, never copied.
+// any other answer. The message text is matched to choose the class and never copied into the Qatlas message;
+// a class that reaches the caller as a provider error carries it apart as Original.
 func applicationError(op string, data []byte) error {
 	var answer struct {
 		Result  string          `json:"result"`
@@ -87,6 +92,10 @@ func applicationError(op string, data []byte) error {
 	}
 	var message string
 	_ = json.Unmarshal(answer.Message, &message)
+	original := provider.ErrorOriginal(http.StatusOK, data, envelopeFields)
+	answered := func(class provider.Class, text string) error {
+		return &answeredError{&provider.Error{Class: class, Op: op, Message: text, Original: original}}
+	}
 	switch classifyMessage(message) {
 	case "invalid":
 		return &provider.InvalidRequestError{Message: "Matomo refused the segment name or definition"}
@@ -116,32 +125,31 @@ func applicationError(op string, data []byte) error {
 	case "invalid-filter":
 		return &provider.InvalidRequestError{Message: "Matomo refused the LDAP filter as invalid"}
 	case "ldap-unreachable":
-		return &answeredError{&provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Matomo could not connect to its LDAP server; check the LoginLdap server configuration"}}
+		return answered(provider.ClassProviderError,
+			"Matomo could not connect to its LDAP server; check the LoginLdap server configuration")
 	case "missing":
 		return &missingError{}
 	case "password-refused":
-		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op,
-			Message: "Matomo refused the password confirmation; check the secret role " + rolePasswordConfirmation +
-				" of this connection's credential"}}
+		return answered(provider.ClassAuth, "Matomo refused the password confirmation; check the secret role "+
+			rolePasswordConfirmation+" of this connection's credential")
 	case "granular-off":
 		return &missingError{granular: true}
 	case "config-controlled":
-		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "the compliance policy is controlled by the Matomo configuration file and cannot be changed " +
-				"through the API; change it there"}}
+		return answered(provider.ClassPermission, "the compliance policy is controlled by the Matomo "+
+			"configuration file and cannot be changed through the API; change it there")
 	case "unknown-setting":
 		return &provider.InvalidRequestError{Message: "Matomo refused a setting ID: it is unknown for this policy or cannot be toggled"}
 	case "auth":
-		return &answeredError{&provider.Error{Class: provider.ClassAuth, Op: op, Message: "Matomo rejected the token"}}
+		return answered(provider.ClassAuth, "Matomo rejected the token")
 	case "permission":
-		return &answeredError{&provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this token may not use the requested website or function; check its rights for the website"}}
+		return answered(provider.ClassPermission,
+			"this token may not use the requested website or function; check its rights for the website")
 	case "not-found":
-		return &answeredError{&provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "Matomo does not hold this resource or does not show it to this token"}}
+		return answered(provider.ClassNotFound, "Matomo does not hold this resource or does not show it to this token")
 	}
-	return provider.InvalidResponse(op, "Matomo reported an error this provider does not recognise")
+	failure := provider.InvalidResponse(op, "Matomo reported an error this provider does not recognise")
+	failure.Original = original
+	return failure
 }
 
 func classifyMessage(message string) string {

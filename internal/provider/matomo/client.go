@@ -164,9 +164,17 @@ func (c *Client) send(ctx context.Context, op, method string, params url.Values,
 	return nil
 }
 
-// failure maps an HTTP status other than 200 to a stable class; the body is never read into the message.
+// failure maps an HTTP status other than 200 to a stable class. The message holds no text of the body; the
+// body goes apart into Original: the message of Matomo's error form, or the text of a non-JSON answer.
 func (c *Client) failure(op string, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
+	body := provider.ReadErrorBody(response.Body)
+	fields := provider.OriginalFields{}
+	var envelope struct {
+		Result string `json:"result"`
+	}
+	if json.Unmarshal(body, &envelope) == nil && envelope.Result == "error" {
+		fields = envelopeFields
+	}
 	if response.StatusCode == http.StatusTooManyRequests {
 		// Matomo Cloud documents no header for its limit. Without a named wait the key rests briefly, and
 		// nothing here ever retries the request.
@@ -176,12 +184,14 @@ func (c *Client) failure(op string, response *http.Response) *provider.Error {
 		}
 		c.limiter.HoldFor(min(hold, maxRateLimitHold))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	failure := provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
 		Subject:    subject,
 		Auth:       "Matomo rejected the token",
 		Permission: "Matomo refused the operation for this token",
 		NotFound:   "Matomo does not hold this resource or does not show it to this token",
 	})
+	failure.Original = provider.ErrorOriginal(response.StatusCode, body, fields)
+	return failure
 }
 
 // call runs one fixed method of a tool after the instance supports the tool: version, plugin, and method
