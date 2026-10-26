@@ -81,10 +81,12 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 	if err != nil {
 		return fail(provider.Transport(op, "Nextcloud", err))
 	}
-	response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fail(statusError(op, response.StatusCode))
+		err := davStatusError(op, response)
+		response.Body.Close()
+		return fail(err)
 	}
+	response.Body.Close()
 
 	count := chunkCount(upload.Size)
 	for n := int64(1); n <= count; n++ {
@@ -97,10 +99,12 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 			}
 			return fail(provider.Transport(op, "Nextcloud", err))
 		}
-		response.Body.Close()
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
-			return fail(statusError(op, response.StatusCode))
+			err := davStatusError(op, response)
+			response.Body.Close()
+			return fail(err)
 		}
+		response.Body.Close()
 	}
 	// The file must end where it was measured; this read also completes the SHA-256.
 	if _, err := io.Copy(io.Discard, upload); err != nil {
@@ -117,9 +121,9 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if isRedirect(response.StatusCode) || response.StatusCode >= 400 && response.StatusCode < 500 {
-			return fail(statusError(op, response.StatusCode))
+			return fail(davStatusError(op, response))
 		}
-		return "", sentStatusError(op, response.StatusCode, uncertainStored)
+		return "", sentDAVStatusError(op, response, uncertainStored)
 	}
 	etag := response.Header.Get("ETag")
 	if etag == "" {

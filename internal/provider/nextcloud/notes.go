@@ -485,7 +485,7 @@ func (c *Client) notesGetJSON(ctx context.Context, op, target string) ([]byte, h
 	headers := http.Header{}
 	headers.Set("Accept", "application/json")
 	headers.Set("OCS-APIRequest", "true")
-	response, err := c.webdavTo(ctx, op, http.MethodGet, target, nil, "", "", "", headers)
+	response, err := c.restTo(ctx, op, http.MethodGet, target, nil, "", "", "", headers)
 	if err != nil {
 		return nil, nil, err
 	}

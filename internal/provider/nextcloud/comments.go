@@ -431,9 +431,11 @@ func commentRefusal(op string, err error, forbidden string) error {
 	}
 	switch {
 	case providerErr.Class == provider.ClassPermission:
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: forbidden}
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: forbidden,
+			Original: providerErr.Original}
 	case providerErr.Message == messageNotFound:
-		return providerError(op, messageCommentMissing)
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageCommentMissing,
+			Original: providerErr.Original}
 	}
 	return err
 }

@@ -492,7 +492,7 @@ func (c *Client) talkFeature(ctx context.Context, op string, features ...string)
 func talkNotFound(op string, err error, message string) error {
 	var providerErr *provider.Error
 	if errors.As(err, &providerErr) && providerErr.Message == messageNotFound {
-		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: message}
+		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: message, Original: providerErr.Original}
 	}
 	return err
 }
