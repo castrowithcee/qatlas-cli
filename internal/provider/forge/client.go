@@ -109,6 +109,8 @@ type request struct {
 	stream io.Reader
 	length int64
 	change bool
+	// statusOnly keeps an error answer's text out of the failure, for a request that carries a secret.
+	statusOnly bool
 }
 
 // textAnswer receives a plain-text or HTML answer: data keeps at most limit bytes, and truncated reports that
@@ -146,11 +148,18 @@ func (c *Client) change(ctx context.Context, op, method, path string, body any, 
 // query values are built from enumerated arguments only.
 func (c *Client) changeQuery(ctx context.Context, op, method, path string, query url.Values, body any,
 	out any) (int, error) {
+	return c.changeWith(ctx, op, method, path, query, body, out, false)
+}
+
+// changeWith is changeQuery; statusOnly keeps the instance's error text out of the failure, for a request whose
+// body carries a secret.
+func (c *Client) changeWith(ctx context.Context, op, method, path string, query url.Values, body any,
+	out any, statusOnly bool) (int, error) {
 	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch &&
 		method != http.MethodDelete {
 		return 0, provider.Fail(op, "the request method is not one of this provider")
 	}
-	spec := request{method: method, change: true}
+	spec := request{method: method, change: true, statusOnly: statusOnly}
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
@@ -243,9 +252,10 @@ func (c *Client) fetchVia(ctx context.Context, op, path string, query url.Values
 	case response.StatusCode >= 300 && response.StatusCode < 400:
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
-			" serves this file from another address, such as external storage; Qatlas does not follow it"}
+			" serves this file from another address, such as external storage; Qatlas does not follow it",
+			Original: &provider.Original{Status: response.StatusCode}}
 	case response.StatusCode != http.StatusOK:
-		return refusal(op, c.product, c.limiter, response)
+		return refusal(op, c.product, c.limiter, response, false)
 	case size >= 0 && response.ContentLength >= 0 && response.ContentLength != size:
 		return provider.InvalidResponse(op, c.product.name+" announced another size than the file has")
 	}
@@ -429,7 +439,7 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := refusal(op, p, limiter, response)
+		failure := refusal(op, p, limiter, response, spec.statusOnly)
 		if spec.change && response.StatusCode >= 500 {
 			failure = unsure(failure)
 		}
@@ -471,21 +481,30 @@ func notShown(op string, p *product) *provider.Error {
 		"resource to this token; it may not exist, or the token's scopes or repository binding do not reach it"}
 }
 
-// refusal maps an HTTP status to a stable class; the provider body is never read into the message. 403 and
+// refusal maps an HTTP status to a stable class; the provider body is never read into the message but kept apart
+// in Original (status and the answer's message and documentation link; status only with statusOnly). 403 and
 // 404 are both "not reachable": an instance answers 404 instead of 403 to a token bound to other repositories
 // or to public ones only, so neither proves that a resource exists or not.
-func refusal(op string, p *product, limiter *ratelimit.Limiter, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+func refusal(op string, p *product, limiter *ratelimit.Limiter, response *http.Response,
+	statusOnly bool) *provider.Error {
+	var body io.Reader = io.LimitReader(response.Body, maxResponseBytes)
+	if statusOnly {
+		_, _ = io.Copy(io.Discard, body)
+		body = nil
+	}
+	fields := provider.OriginalFields{Message: "message", Documentation: "url"}
 	switch response.StatusCode {
 	case http.StatusForbidden, http.StatusNotFound:
-		return notShown(op, p)
+		failure := notShown(op, p)
+		failure.Original = provider.ErrorOriginal(response.StatusCode, provider.ReadErrorBody(body), fields)
+		return failure
 	case http.StatusTooManyRequests:
 		limiter.HoldFor(min(provider.RetryAfter(response.Header), maxHold))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	return provider.ClassifyStatusBody(op, response.StatusCode, provider.StatusTexts{
 		Subject: p.name,
 		Auth:    p.name + " rejected the token; check that it is valid and not expired",
-	})
+	}, body, fields)
 }
 
 func invalidArgument(message string) error { return &provider.InvalidRequestError{Message: message} }
@@ -549,4 +568,13 @@ func (o object) child(key string) (object, bool) {
 		return nil, false
 	}
 	return value, true
+}
+
+// keepOriginal gives a failure built from a refused request the original details of the failure it replaces.
+func keepOriginal(failure *provider.Error, from error) *provider.Error {
+	var cause *provider.Error
+	if errors.As(from, &cause) {
+		failure.Original = cause.Original
+	}
+	return failure
 }

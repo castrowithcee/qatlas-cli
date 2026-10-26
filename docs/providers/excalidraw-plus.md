@@ -264,8 +264,9 @@ until `X-RateLimit-Reset`, for at most 60 seconds.
 | `invalid-provider-response` | unreadable, too large, or a different scene than requested |
 | `provider-error` | every other rejection, including a redirect |
 
-A `collection_id` or scene outside the targets is an invalid request, not a provider error. Errors never carry the key
-or a provider response body.
+A `collection_id` or scene outside the targets is an invalid request, not a provider error. Errors never carry the key,
+and Qatlas' message carries no provider text; the answer of Excalidraw+ travels apart from it as the provider's
+original statement in the `provider` field of the error detail, marked untrusted, redacted, and bounded.
 
 ## Boundary
 

@@ -4,15 +4,15 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Todoist
 
-Todoist is a provider for one personal Todoist account through the official Todoist API v1. It reads the
-account's projects, sections, labels, tasks, comments, reminders, and saved filters, and changes tasks,
-comments, time-based reminders, personal projects, sections, and personal labels, each within the
-connection's scope; every change needs its own confirmation. Saved filters are only read.
+Todoist is a provider for one personal Todoist account through the official Todoist API v1. It reads the account's projects, sections, labels, tasks, comments, reminders, and saved
+filters, and changes tasks, comments, time-based reminders, personal projects, sections, and personal labels, each
+within the connection's scope; every change needs its own confirmation. Saved filters are only read. [Set up
+Todoist](setup.md) leads through creating the token, checking the connection, and fixing errors.
 
 ## Configuration
 
@@ -20,11 +20,9 @@ A service is always the official API root `https://api.todoist.com/api/v1`, whic
 in and which applies when `base_url` is left out. Qatlas refuses any other URL before a secret is read,
 because a personal token belongs to that one service.
 
-The credential provides `token`, the personal API token from Todoist under Settings, Integrations,
-Developer. That token reaches the whole account, so the connection target is what limits Qatlas. A
-successful `qatlas connection test` reads each configured project and section once, or one project of the
-account for a wildcard connection; it proves that the token sees the scope, not that the account's plan
-includes every feature.
+The credential provides `token`, the personal API token of the account. That token reaches the whole account, so the
+connection target is what limits Qatlas. How to get the token, what the account's plan and roles allow, and how to
+test the connection are described in [Set up Todoist](setup.md).
 
 ```yaml
 services:
@@ -270,7 +268,7 @@ Errors keep stable classes and never carry the token, a provider body, or a URL 
 | Class | Cause |
 | --- | --- |
 | `auth` | Todoist rejected the token |
-| `permission` | the account's plan does not include the feature (reminders, filters, more labels, or older completed tasks), or the token may not read or change the resource; the message tells them apart |
+| `permission` | the account's plan does not include the feature, or the token may not read or change the resource; the message tells them apart (see [Fixing errors](setup.md#fixing-errors)) |
 | `rate-limited` | Todoist asked to wait; the next request of the same token waits as asked, at most one minute |
 | `not-found` | Todoist does not hold the resource or does not show it to this token, or it was deleted |
 | `provider-error` | Todoist rejected the request, no longer accepts the cursor, or answered a change with a server error |

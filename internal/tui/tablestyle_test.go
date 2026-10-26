@@ -5,8 +5,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 )
 
 // A list screen draws its table in a panel titled with the section and its entry count, the column names in
@@ -33,12 +31,12 @@ func TestTablesStandInAPanelWithTitleCountAndGroupHeads(t *testing.T) {
 // The marked row has its bar and accent mark under colour and its '>' without; the state is told by its word
 // and, under colour, by its colour.
 func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)
 
-	lipgloss.SetColorProfile(termenv.ANSI)
+	setProfile(profile16)
 	coloured := screenOf(m)
 	if row := findRow(coloured, "wiki-docs"); !strings.Contains(row, "▌") || !hasBackground(row) {
 		t.Errorf("the marked row has no accent mark and bar: %q", row)
@@ -51,7 +49,7 @@ func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
 		t.Error("active, expired and disabled share one style")
 	}
 
-	lipgloss.SetColorProfile(termenv.Ascii)
+	setProfile(profileNone)
 	plain := screenOf(m)
 	if strings.Contains(plain, "\x1b") || strings.Contains(plain, "▌") {
 		t.Errorf("without colour the table still emits styles or the accent mark:\n%s", plain)
@@ -64,22 +62,22 @@ func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
 // Every table screen stays inside the smallest terminal, with and without colour, and keeps its marked row
 // readable by its '>'.
 func TestTableScreensFitTheSmallestTerminalWithAndWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 	for _, size := range [][2]int{{40, smallestListHeight}, {80, 24}} {
 		for _, s := range []section{sectionConnections, sectionServices, sectionCredentials, sectionDefaults,
 			sectionApprovals, sectionTokens} {
-			for _, profile := range []termenv.Profile{termenv.ANSI, termenv.Ascii} {
+			for _, profile := range []colorProfile{profile16, profileNone} {
 				m := newTableModel(t, size[0])
 				m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-				lipgloss.SetColorProfile(profile)
+				setProfile(profile)
 				openSectionByName(t, m, s)
 				view := screenOf(m)
 				assertViewFits(t, view, size[0], size[1])
-				if profile == termenv.Ascii && strings.Contains(view, "\x1b") {
+				if profile == profileNone && strings.Contains(view, "\x1b") {
 					t.Errorf("%dx%d %s: NO_COLOR still emits styles:\n%s", size[0], size[1], s.title(), view)
 				}
-				if profile == termenv.Ascii && len(m.list.matches) > 0 && s != sectionTokens && s != sectionApprovals &&
+				if profile == profileNone && len(m.list.matches) > 0 && s != sectionTokens && s != sectionApprovals &&
 					!strings.Contains(view, "> ") {
 					t.Errorf("%dx%d %s: no '>' marks the selection:\n%s", size[0], size[1], s.title(), view)
 				}
@@ -91,9 +89,9 @@ func TestTableScreensFitTheSmallestTerminalWithAndWithoutColour(t *testing.T) {
 // The picker and the provider table keep their rows inside the smallest terminal and mark the row by '>'
 // when there is no colour.
 func TestPickerAndProviderTableFitTheSmallestTerminal(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
-	lipgloss.SetColorProfile(termenv.Ascii)
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
+	setProfile(profileNone)
 
 	m, _, _ := newModel(t)
 	seedConnections(t, m, numberedConnections(30)...)
@@ -119,4 +117,4 @@ func TestPickerAndProviderTableFitTheSmallestTerminal(t *testing.T) {
 
 // smallestListHeight is the least height at which a list screen is usable; below it the editor asks for a
 // larger terminal.
-const smallestListHeight = minimumHeight + 1
+const smallestListHeight = minimumHeight

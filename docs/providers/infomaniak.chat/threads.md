@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat threads
@@ -18,3 +18,5 @@ The threads tools of the [Infomaniak kChat provider](README.md). The effects and
 - `threads.follow` and `.unfollow` are idempotent, send no body, change nothing else, and report the state
   kChat confirmed. Threads never include deleted threads or participants' user data.
 - `threads.list` reports `total` as kChat's count before the reachable-channel filter.
+
+The token rights are listed under [Threads](setup.md#threads).

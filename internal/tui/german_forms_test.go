@@ -24,7 +24,7 @@ const navWidth, navHeight = 140, 40
 func (v *viewSet) see(m *Model) string {
 	v.t.Helper()
 	sizedModel(m, v.w, v.h)
-	view := m.View()
+	view := m.render()
 	sizedModel(m, navWidth, navHeight)
 	assertViewFits(v.t, view, v.w, v.h)
 	v.views = append(v.views, view)
@@ -382,7 +382,7 @@ func (v *viewSet) run() {
 
 // The screens of the forms fit the terminal in both languages.
 func TestFormsFitInBothLanguages(t *testing.T) {
-	sizes := []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {80, 24}, {helpPaneMinWidth, 40}, {140, 40}}
+	sizes := []struct{ w, h int }{{minimumWidth, minimumHeight}, {80, 24}, {helpPaneMinWidth, 40}, {140, 40}}
 	eachLanguage(t, func(t *testing.T) {
 		for _, size := range sizes {
 			(&viewSet{t: t, w: size.w, h: size.h}).run()

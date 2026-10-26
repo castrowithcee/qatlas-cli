@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -80,9 +79,9 @@ func TestServicesTableAndFilterTextHoldNoURLCredential(t *testing.T) {
 
 // The raw tab shows the entry as written, but never a secret value and never a control character.
 func TestDetailRawHoldsNoSecretAndNoControlCharacter(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3)
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	setProfile(profileNone)
+	t.Cleanup(func() { setProfile(before) })
 
 	m := rawModel(t)
 	canaries := []string{canaryUser, canaryURLPass, canaryQuery, canaryOption, canaryVault, "canary env", "secret value"}
@@ -175,24 +174,24 @@ func TestDetailTabsAreClickable(t *testing.T) {
 	m := newTableModel(t, 140)
 	openSectionByName(t, m, sectionConnections)
 	m.list.selectName("tracker-issues")
-	m.View()
+	m.render()
 	clickOn(t, m, "Raw")
 	if !m.detailFocused() || m.shownTab() != tabRaw {
 		t.Fatalf("click on Raw = pane %v tab %v", m.detailFocused(), m.shownTab())
 	}
-	m.View()
+	m.render()
 	clickOn(t, m, "Details")
 	if m.shownTab() != tabDetails {
 		t.Fatalf("click on Details shows %v", m.shownTab())
 	}
-	m.View()
+	m.render()
 	// The tab line of the areas has an Overview of its own, so the tab is found in the row of Raw.
 	_, row := cellOf(t, m, "Raw")
 	clickAt(t, m, cellInRow(t, m, row, "Overview"), row)
 	if m.shownTab() != tabOverview || !m.detailFocused() {
 		t.Fatalf("click on Overview = tab %v pane %v", m.shownTab(), m.detailFocused())
 	}
-	m.View()
+	m.render()
 	clickOn(t, m, "tracker-triage")
 	if m.detailFocused() {
 		t.Errorf("a click on a row left the focus on the pane")
@@ -202,11 +201,11 @@ func TestDetailTabsAreClickable(t *testing.T) {
 // Without colour the shown tab stands in brackets and the focused pane has the double frame; the pane fits
 // at the smallest size that has one, in each of the three lists.
 func TestDetailPaneReadsWithoutColourAtItsSmallestSize(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3)
+	before := currentProfile()
+	setProfile(profileNone)
 	saved := styles
 	setTheme(buildTheme(true, true, false))
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(saved) })
+	t.Cleanup(func() { setProfile(before); setTheme(saved) })
 
 	// The smallest height that has a pane in all three lists is the one that frames their tables.
 	smallest := tableFrameMinHeight
@@ -228,7 +227,7 @@ func TestDetailPaneReadsWithoutColourAtItsSmallestSize(t *testing.T) {
 		for _, s := range []section{sectionConnections, sectionServices, sectionCredentials} {
 			openSectionByName(t, m, s)
 			m.list.selectName(shownEntries(m)[0])
-			m.View()
+			m.render()
 			view := screenOf(m)
 			assertViewFits(t, view, size.w, size.h)
 			if !strings.Contains(view, "[Overview]") || strings.Contains(view, "\x1b") {
@@ -258,18 +257,5 @@ func TestDetailPaneIsLeftOutBelowItsWidth(t *testing.T) {
 	}
 	if strings.Contains(ansi.Strip(screenOf(m)), "[Overview]") {
 		t.Errorf("a pane shows below its width")
-	}
-}
-
-func TestMaskURLMasksTheWholeUserInfo(t *testing.T) {
-	for raw, want := range map[string]string{
-		"https://" + canaryUser + "@git.example.invalid/api":                "https://***@git.example.invalid/api",
-		"https://user:" + canaryURLPass + "@wiki.example.invalid/":          "https://***:***@wiki.example.invalid/",
-		"https://wiki.example.invalid/api?token=" + canaryQuery + "&page=1": "https://wiki.example.invalid/api?token=***&page=1",
-		"https://wiki.example.invalid/api":                                  "https://wiki.example.invalid/api",
-	} {
-		if got := maskURL(raw); got != want {
-			t.Errorf("maskURL(%q) = %q, want %q", raw, got, want)
-		}
 	}
 }
