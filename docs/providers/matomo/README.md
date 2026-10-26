@@ -31,8 +31,9 @@ for a Matomo user whose rights match what the connection should reach: the token
 rights of its user per website, or Super User rights. Qatlas does not check them in advance. The token is sent as
 `Authorization: Bearer ...`, never in a URL, a query, or an argument. The credential may also provide the optional
 `password-confirmation`, the Matomo password of the token's user, which only the [raw data
-tools](privacy.md#anonymizing-and-purging-raw-data) and the IP anonymization setter with `randomizeConfigId`
-([privacy settings](privacy.md#changing-privacy-settings)) send, in the request body.
+tools](privacy.md#anonymizing-and-purging-raw-data), the [retention setters](privacy.md#setting-retention-periods),
+and the IP anonymization setter with `randomizeConfigId` ([privacy settings](privacy.md#changing-privacy-settings))
+send, in the request body.
 
 ```yaml
 services:
@@ -159,7 +160,8 @@ offered only via `tools`. The
 `matomo.compliance.set-status` (target `instance`) are in no profile either; `matomo.compliance.enforce` is offered
 only via `tools`. The [privacy setters](privacy.md#changing-privacy-settings)
 `matomo.privacy-settings.set-anonymize-ip`, `matomo.do-not-track.enable`, and `matomo.do-not-track.disable` (target
-`instance`) are in no profile.
+`instance`) are in no profile. The [retention setters](privacy.md#setting-retention-periods) are in no profile
+and the two deleting ones are offered only via `tools`.
 The [report reads beyond `getProcessedReport`](reports.md#reads-beyond-getprocessedreport) `matomo.reports.evolution`,
 `matomo.distinct-counts.get`, `matomo.multi-sites.get`, and `matomo.report-glossary.list` are in no profile and are
 offered only via `tools`.
@@ -240,6 +242,9 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | `matomo.privacy-settings.set-anonymize-ip` | [privacy](privacy.md#changing-privacy-settings) | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
 | `matomo.do-not-track.enable` | [privacy](privacy.md#changing-privacy-settings) | enables Do Not Track support (Super User, target `instance`; effect `update`) |
 | `matomo.do-not-track.disable` | [privacy](privacy.md#changing-privacy-settings) | disables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.privacy-settings.set-delete-logs` | [privacy](privacy.md#setting-retention-periods) | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-delete-reports` | [privacy](privacy.md#setting-retention-periods) | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-report-deletion-schedule` | [privacy](privacy.md#setting-retention-periods) | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
 | `matomo.compliance.get` | [privacy](privacy.md) | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
 | `matomo.compliance.set-policy-settings` | [privacy](privacy.md#changing-compliance-policies) | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
 | `matomo.compliance.set-status` | [privacy](privacy.md#changing-compliance-policies) | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |

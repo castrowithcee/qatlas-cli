@@ -8,10 +8,13 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
-// confirmedMethods are the two methods that carry the password confirmation.
+// confirmedMethods are the methods that carry the password confirmation.
 var confirmedMethods = []struct{ id, method, connection, noPassword, args string }{
 	{"matomo.raw-data.anonymize", "PrivacyManager.anonymizeSomeRawData", "pe-anon", "pe-anon-nopw", `{"idSites":[1],"date":"2026-01-01","anonymizeIp":true}`},
 	{"matomo.data-purge.run", "PrivacyManager.executeDataPurge", "pe-purge", "pe-purge-nopw", `{}`},
+	{"matomo.privacy-settings.set-delete-logs", "PrivacyManager.setDeleteLogsSettings", "pe-logs", "pe-logs-nopw", deleteLogsArgs},
+	{"matomo.privacy-settings.set-delete-reports", "PrivacyManager.setDeleteReportsSettings", "pe-reports", "pe-reports-nopw", deleteReportsArgs},
+	{"matomo.privacy-settings.set-report-deletion-schedule", "PrivacyManager.setScheduleReportDeletionSettings", "pe-sched", "pe-sched-nopw", scheduleArgs},
 }
 
 func successAnswer(string) func(call) *http.Response {
