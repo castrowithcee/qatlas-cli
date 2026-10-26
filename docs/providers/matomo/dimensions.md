@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo custom dimensions
@@ -13,6 +13,15 @@ The custom dimension tools of the [Matomo provider](README.md). They need the pl
 without it reports the tools as unsupported. Every tool takes `idSite`, checked against the connection's targets
 before any secret or request. `idDimension` counts per website, and Matomo looks it up with the website, so an ID of
 another website is not found.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.dimensions.list` | reads the custom dimensions of a website |
+| `matomo.dimension-options.list` | reads the scopes with free slots and the extraction sources; needs a write right |
+| `matomo.dimensions.add` | adds a custom dimension, using a slot for good (effect `create`) |
+| `matomo.dimensions.update` | changes or pauses a custom dimension; Matomo cannot delete one (effect `update`) |
 
 - `matomo.dimensions.list` reads the dimensions of a website with scope, slot index, state, extraction rules,
   case sensitivity, and description (view right). Names, descriptions, and patterns are untrusted provider data.

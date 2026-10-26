@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo privacy and data subject requests
@@ -14,6 +14,27 @@ The privacy tools of the [Matomo provider](README.md). Targets are described und
 rights; `matomo.privacy-settings.get` and `matomo.compliance.get` need Super User rights for most of their modes.
 `matomo.data-subjects.delete` removes data for good, see [Deleting visits](#deleting-visits), and the
 [compliance setters](#changing-compliance-policies) change the policies. None of these tools is in a setup profile.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.data-subjects.find` | finds the visits of one person on a website by a segment (admin right; Live plugin) |
+| `matomo.data-subjects.export` | exports the data of found visits in batches of at most 25, capped at 256 KiB (admin right) |
+| `matomo.data-subjects.delete` | deletes for good the data of found visits (admin right; effect `delete`, only via `tools`) |
+| `matomo.raw-data.anonymize` | schedules the anonymization of the logs of listed websites for a date range (Super User, targets `instance` and the websites, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.data-purge.run` | runs the configured data purge now (Super User, target `instance`, role `password-confirmation`; effect `execute`, only via `tools`) |
+| `matomo.privacy-settings.get` | reads the anonymization settings of a website or the instance, or the columns that can be anonymized (admin right; Super User for the instance-wide modes) |
+| `matomo.privacy-settings.set-anonymize-ip` | replaces the global IP anonymization settings (Super User, target `instance`, role `password-confirmation` only for `randomizeConfigId`; effect `update`) |
+| `matomo.do-not-track.enable` | enables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.do-not-track.disable` | disables Do Not Track support (Super User, target `instance`; effect `update`) |
+| `matomo.privacy-settings.set-delete-logs` | sets whether and after how many days the scheduled purge deletes raw logs (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-delete-reports` | sets whether, after how many periods, and which report kinds are kept when old reports are deleted (Super User, target `instance`, role `password-confirmation`; effect `update`, only via `tools`) |
+| `matomo.privacy-settings.set-report-deletion-schedule` | sets the minimum days between scheduled deletion runs (Super User, target `instance`, role `password-confirmation`; effect `update`) |
+| `matomo.compliance.get` | reads the compliance policies and a policy's status or settings (Super User, target `instance`) |
+| `matomo.compliance.set-policy-settings` | enforces or releases single settings of a compliance policy (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `update`) |
+| `matomo.compliance.set-status` | switches the older whole-policy switch (Super User, target `instance`, Matomo 5.9.0, deprecated in Matomo 6; effect `update`) |
+| `matomo.compliance.enforce` | enforces every toggleable setting of a policy, with final data effects (Super User, target `instance`, Matomo 5.14.0 and feature flag; effect `execute`, only via `tools`) |
 
 ## Finding and exporting a person
 

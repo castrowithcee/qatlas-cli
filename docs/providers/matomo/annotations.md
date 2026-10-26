@@ -4,13 +4,25 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo annotations
 
 The annotation tools of the [Matomo provider](README.md). The profiles are described under
 [Setup profiles](README.md#setup-profiles). All seven tools need the Annotations plugin.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.annotations.list` | reads the annotations of a website in a date range, in batches |
+| `matomo.annotations.get` | reads one annotation of a website |
+| `matomo.annotations.add` | adds an annotation to a day (effect `create`; Matomo 5 needs view, Matomo 6 write) |
+| `matomo.annotations.update` | changes the date, note, or star of an annotation (effect `update`) |
+| `matomo.annotations.count` | counts the annotations of a website per period, with starred counts |
+| `matomo.annotations.delete` | deletes one annotation for good (effect `delete`, only via `tools`) |
+| `matomo.annotations.delete-all` | deletes every annotation of a website; Super User, needs the `instance` target (effect `delete`, only via `tools`) |
 
 Annotations are per website; `idNote` counts per website, and every tool works with `idSite` and `idNote` together.
 Matomo checks that pair itself and answers an ID the website does not have as an error, so no tool reads first.

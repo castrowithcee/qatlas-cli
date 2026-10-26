@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo saved segments
@@ -12,6 +12,18 @@ updated: 2026-10-24
 The saved-segment tools of the [Matomo provider](README.md). The segment fields a definition can use come from
 `matomo.segments.fields`, see [reports](reports.md). The profiles are described under
 [Setup profiles](README.md#setup-profiles). All seven tools need the SegmentEditor plugin.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.segments.list` | reads the saved segments inside the targets |
+| `matomo.segments.get` | reads one saved segment by its instance-wide ID |
+| `matomo.segments.add` | saves a segment (effect `create`) |
+| `matomo.segments.update` | replaces a saved segment (effect `update`) |
+| `matomo.segments.star` | stars a saved segment; the star belongs to the segment, not the user (effect `update`) |
+| `matomo.segments.unstar` | removes the star from a saved segment (effect `update`) |
+| `matomo.segments.delete` | deletes a saved segment, soft delete (effect `delete`, only via `tools`) |
 
 A segment ID counts for the whole instance, not per website. What decides is `enable_only_idsite`, the website a
 segment belongs to; `0` stands for all websites.
@@ -28,7 +40,7 @@ segment belongs to; `0` stands for all websites.
 - `matomo.segments.add` and `matomo.segments.update` write for all websites (`idSite` 0) only on such a wide
   connection; Matomo additionally requires the Super User right. `idSite` is checked before the secret is read.
 
-## Tools
+## Tool behavior
 
 - `matomo.segments.list` returns the segments the token may use, in the order Matomo gives them (own segments
   first), cut on the Qatlas side into batches ([Paging](README.md#paging)). With `idSite` Matomo answers the
