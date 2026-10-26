@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat administration
@@ -17,3 +17,5 @@ The administration tools of the [Infomaniak kChat provider](README.md). The effe
 - `emoji.create` takes a `name` and a released local PNG, GIF, or JPEG of up to 1 MiB, checked before any
   secret is read. Its multipart body holds `image` and `emoji` (JSON `name` and `creator_id`, the token's own
   user from `users/me`); that format is not proven live, so a wrong one is a `provider-error`.
+
+The token rights are listed under [Administration](setup.md#administration).

@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat channels
@@ -43,3 +43,5 @@ The channels tools of the [Infomaniak kChat provider](README.md). The effects an
 - Read state is always the token's own, never an argument, and the marks are idempotent. `channels.unread`
   reads only the bound channel. `channels.mark-read` is kChat's channel view, so it also
   clears push notifications for the channel; its body holds `channel_id` only.
+
+The token rights are listed under [Channels](setup.md#channels).
