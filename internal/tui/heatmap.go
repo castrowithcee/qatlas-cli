@@ -22,9 +22,11 @@ const (
 	heatSquareCol   = 3
 )
 
-// heatColoured reports whether the squares can carry their level as a colour.
+// heatColoured reports whether the squares can carry their level as a colour. With 16 colours there are too
+// few greens to tell four levels apart, so the shade glyphs carry them.
 func heatColoured() bool {
-	return styles.palette.heat[0] != "" && lipgloss.ColorProfile() != termenv.Ascii && !heatASCII()
+	profile := lipgloss.ColorProfile()
+	return styles.palette.heat[0] != "" && profile != termenv.Ascii && profile != termenv.ANSI && !heatASCII()
 }
 
 // heatSquare is the two-cell mark of a level: a square in its heat colour, or the glyph of the level.
@@ -38,7 +40,14 @@ func heatBlock(level, n int) string {
 		if level > 0 {
 			glyph = g.levels[level-1]
 		}
-		return strings.Repeat(glyph, n)
+		mark := strings.Repeat(glyph, n)
+		switch {
+		case styles.palette.heat[0] == "":
+			return mark
+		case level > 0:
+			return styles.ok.Render(mark)
+		}
+		return styles.hint.Render(mark)
 	}
 	return lipgloss.NewStyle().Foreground(styles.palette.heat[level]).Render(strings.Repeat("■", n))
 }
