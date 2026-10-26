@@ -409,11 +409,11 @@ func (m *Model) detailFacts(name string, tab detailTab) []detailFact {
 	case sectionServices:
 		svc := m.cfg.Services[name]
 		if tab == tabOverview {
-			add("Base URL", maskURL(svc.BaseURL))
+			add("Base URL", config.MaskURL(svc.BaseURL))
 			add("Connections", fmt.Sprint(len(m.connectionsOf(name))))
 			break
 		}
-		add("Base URL", maskURL(svc.BaseURL))
+		add("Base URL", config.MaskURL(svc.BaseURL))
 		keys := make([]string, 0, len(svc.Options))
 		for k := range svc.Options {
 			keys = append(keys, k)
@@ -445,7 +445,7 @@ func (m *Model) detailFacts(name string, tab detailTab) []detailFact {
 		cells := m.cells(name)
 		if tab == tabOverview {
 			add("Service", conn.Service)
-			add("Base URL", maskURL(m.cfg.Services[conn.Service].BaseURL))
+			add("Base URL", config.MaskURL(m.cfg.Services[conn.Service].BaseURL))
 			add("Credential", conn.Credential)
 			add("State", cells[1])
 			if name == m.testName {

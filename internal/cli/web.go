@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -204,7 +203,7 @@ func buildOverview(registry *capability.Registry, cfg *config.Config) web.Overvi
 	for _, name := range sortedKeys(cfg.Services) {
 		service := cfg.Services[name]
 		overview.Services = append(overview.Services, web.ServiceRow{
-			Name: name, Provider: service.Provider, BaseURL: displayBaseURL(cfg.ServiceBaseURL(service)),
+			Name: name, Provider: service.Provider, BaseURL: config.MaskURL(cfg.ServiceBaseURL(service)),
 		})
 	}
 	for _, name := range sortedKeys(cfg.Credentials) {
@@ -229,20 +228,6 @@ func webState(state string) string {
 		return "active"
 	}
 	return state
-}
-
-// displayBaseURL returns base stripped of any access value a service's base_url might carry: userinfo,
-// query, and fragment. A value that does not parse as a URL is not shown at all, since it cannot be
-// stripped with confidence.
-func displayBaseURL(base string) string {
-	parsed, err := url.Parse(base)
-	if err != nil {
-		return ""
-	}
-	parsed.User = nil
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
 }
 
 // sortedKeys returns the keys of m in stable, ascending order.

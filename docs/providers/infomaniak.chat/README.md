@@ -196,7 +196,9 @@ reached kChat, such as a timeout, a reset, or a 5xx response, says so; only the 
 
 ## Errors
 
-Errors keep stable classes and never carry the token, a message's text, or a raw provider response body:
+Errors keep stable classes, and Qatlas' message never carries the token, a message's text, or kChat's answer. kChat's
+answer (its error `id` and `message`) travels apart from it as the provider's original statement in the `provider`
+field of the error detail, marked untrusted, redacted, and bounded; a redirect keeps only its status:
 
 | Class | Cause |
 | --- | --- |

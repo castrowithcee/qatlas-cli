@@ -240,6 +240,11 @@ func TestKeyIsRedactedAndBodyNeverLeaks(t *testing.T) {
 	if strings.Contains(err.Error(), foreignCanary) || strings.Contains(err.Error(), apiKeyValue) {
 		t.Fatalf("error leaked: %v", err)
 	}
+	var pe *provider.Error
+	if !errors.As(err, &pe) || pe.Original == nil || pe.Original.Status != 403 ||
+		len(pe.Original.Entries) != 1 || !strings.Contains(pe.Original.Entries[0].Message, foreignCanary) {
+		t.Fatalf("Original = %+v", pe)
+	}
 	if env.red.Apply("x "+apiKeyValue+" y") == "x "+apiKeyValue+" y" {
 		t.Fatal("the API key was not registered with the redactor")
 	}
