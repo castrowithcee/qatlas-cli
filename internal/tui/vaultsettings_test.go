@@ -33,12 +33,12 @@ func TestVaultSectionInNavigation(t *testing.T) {
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	if view := m.View(); !strings.Contains(view, "6 Settings") || !strings.Contains(view, "[Vault]") {
+	if view := m.render(); !strings.Contains(view, "6 Settings") || !strings.Contains(view, "[Vault]") {
 		t.Errorf("the tab line does not name the Vault section:\n%s", view)
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
-	if view := m.View(); !strings.Contains(view, "6") {
+	if view := m.render(); !strings.Contains(view, "6") {
 		t.Errorf("narrow navigation does not offer digit 6:\n%s", view)
 	}
 }

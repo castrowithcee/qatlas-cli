@@ -87,7 +87,7 @@ func TestAnUpdateRestartsTheEditorInPlace(t *testing.T) {
 	_, cmd := m.Update(keyMsg("y"))
 	deliver(m, cmd)
 	if r.command == nil {
-		t.Fatalf("the update did not restart the editor:\n%s", m.View())
+		t.Fatalf("the update did not restart the editor:\n%s", m.render())
 	}
 	if len(r.calls) != 0 {
 		t.Fatalf("exec ran before the terminal was released")
@@ -183,8 +183,8 @@ func TestNoRestartWhereTheNewProgramCannotRun(t *testing.T) {
 			if r.command != nil || len(r.calls) != 0 {
 				t.Errorf("the editor restarted")
 			}
-			if !strings.Contains(m.View(), "Restart qatlas tui to use it.") {
-				t.Errorf("the hint is missing:\n%s", m.View())
+			if !strings.Contains(m.render(), "Restart qatlas tui to use it.") {
+				t.Errorf("the hint is missing:\n%s", m.render())
 			}
 		})
 	}
@@ -208,8 +208,8 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 		if m.screen != screenForm || m.fieldValue("name") != "typed" || r.command != nil {
 			t.Errorf("%s: screen %v name %q; want the form with its input and no restart", answer, m.screen, m.fieldValue("name"))
 		}
-		if !strings.Contains(m.View(), "Restart qatlas tui to use it.") {
-			t.Errorf("%s: the hint is missing:\n%s", answer, m.View())
+		if !strings.Contains(m.render(), "Restart qatlas tui to use it.") {
+			t.Errorf("%s: the hint is missing:\n%s", answer, m.render())
 		}
 	}
 

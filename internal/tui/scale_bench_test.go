@@ -108,7 +108,7 @@ func BenchmarkScaleList(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					if view := model.View(); view == "" {
+					if view := model.render(); view == "" {
 						b.Fatal("empty view")
 					}
 				}
@@ -119,7 +119,7 @@ func BenchmarkScaleList(b *testing.B) {
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
 					model.Update(tea.KeyMsg{Type: tea.KeyDown})
-					model.View()
+					model.render()
 				}
 			})
 			b.Run("filter-typing", func(b *testing.B) {
@@ -130,7 +130,7 @@ func BenchmarkScaleList(b *testing.B) {
 					for _, r := range "conn-001" {
 						model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 					}
-					model.View()
+					model.render()
 				}
 			})
 		})

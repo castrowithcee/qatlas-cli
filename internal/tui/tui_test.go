@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -463,8 +462,8 @@ func TestNarrowNavigation(t *testing.T) {
 			m, _, _ := newModel(t)
 			m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 			m.screen, m.section, m.navSub = screenNav, sectionOverview, false
-			if width >= narrowWidth-1 && !strings.Contains(m.View(), "←/→ move") {
-				t.Errorf("footer does not name left/right:\n%s", m.View())
+			if width >= narrowWidth-1 && !strings.Contains(m.render(), "←/→ move") {
+				t.Errorf("footer does not name left/right:\n%s", m.render())
 			}
 			press(t, m, "left")
 			if m.section != sectionGeneral || m.screen != screenNav {
@@ -536,8 +535,8 @@ func TestNarrowListFocus(t *testing.T) {
 			m.list.reset([]string{"a", "b", "c"})
 			m.screen = screenList
 
-			if !strings.Contains(m.View(), "tab areas") {
-				t.Errorf("footer does not name tab:\n%s", m.View())
+			if !strings.Contains(m.render(), "tab areas") {
+				t.Errorf("footer does not name tab:\n%s", m.render())
 			}
 
 			press(t, m, "up")
@@ -610,7 +609,7 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, tt.width, tt.height)
 			lines := strings.Split(view, "\n")
 			tabs := 1
@@ -647,11 +646,11 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 // The tab line reads without colour: brackets mark the active tab, the focus marker the tab line itself, and
 // a terminal too narrow for the names keeps the active tab whole.
 func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 	ascii := before
-	ascii = 3 // termenv.Ascii
-	lipgloss.SetColorProfile(ascii)
+	ascii = profileNone
+	setProfile(ascii)
 
 	m, _, _ := newModel(t)
 	for _, width := range []int{40, 60, 80, 160} {
@@ -684,11 +683,11 @@ func TestOnlyTheOverviewNamesTheNextStep(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	openSectionByName(t, m, sectionServices)
-	if view := m.View(); strings.Contains(view, "next:") {
+	if view := m.render(); strings.Contains(view, "next:") {
 		t.Errorf("the list shows a next step:\n%s", view)
 	}
 	openSectionByName(t, m, sectionOverview)
-	if view := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(view, "press c to set up a connection step by step") {
+	if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "press c to set up a connection step by step") {
 		t.Errorf("the Overview shows no next step:\n%s", view)
 	}
 }
@@ -815,7 +814,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
 		t.Fatalf("saved configuration = %+v, %v", saved, err)
 	}
-	if view := m.View(); !strings.Contains(view, "wiki  active  wiki     read") ||
+	if view := m.render(); !strings.Contains(view, "wiki  active  wiki     read") ||
 		!strings.Contains(view, "[2 Connections]") {
 		t.Errorf("the workspace or the tab line does not show the result:\n%s", view)
 	}
@@ -841,7 +840,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		if m.screen != screenLeave {
 			t.Fatalf("esc on a changed form = screen %v, want the leave question", m.screen)
 		}
-		view := m.View()
+		view := m.render()
 		for _, want := range []string{
 			"warning: unsaved changes", "F2 save", "d discard", "esc keep editing", "the Services list",
 		} {
@@ -923,7 +922,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		if m.screen != screenLeave {
 			t.Fatalf("esc on the first step = screen %v, want the leave question", m.screen)
 		}
-		if view := m.View(); !strings.Contains(view, "F2 next step") || !strings.Contains(view, "d discard") {
+		if view := m.render(); !strings.Contains(view, "F2 next step") || !strings.Contains(view, "d discard") {
 			t.Errorf("the setup question offers the wrong answers:\n%s", view)
 		}
 		press(t, m, "s", "k")
@@ -954,8 +953,8 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 
 // Colour only supports what markers, prefixes and borders already say.
 func TestTheScreenReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+	before := currentProfile()
+	t.Cleanup(func() { setProfile(before) })
 
 	m, _, _ := newModel(t)
 	m.tester = func(context.Context, string) (provider.Class, error) { return provider.ClassOK, nil }
@@ -966,15 +965,15 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 
 	colour := before
-	colour = 2 // termenv.ANSI
-	lipgloss.SetColorProfile(colour)
-	if view := m.View(); !strings.Contains(view, "\x1b[") {
+	colour = profile16
+	setProfile(colour)
+	if view := m.render(); !strings.Contains(view, "\x1b[") {
 		t.Fatalf("a colour terminal got no colour:\n%s", view)
 	}
-	colour = 3 // termenv.Ascii
-	lipgloss.SetColorProfile(colour)
+	colour = profileNone
+	setProfile(colour)
 
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "\x1b") {
 		t.Fatalf("a terminal without colour got escape sequences:\n%q", view)
 	}
@@ -987,7 +986,7 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 		t.Errorf("the tab line is marked although the list has the focus:\n%s", view)
 	}
 	press(t, m, "shift+tab")
-	view = m.View()
+	view = m.render()
 	if !strings.Contains(strings.Join(strings.Fields(view), " "), "> 1 Overview [2 Connections] 3 Activity") ||
 		strings.Contains(view, "> wiki") ||
 		strings.Count(view, "> ") != 1 {
@@ -996,15 +995,15 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 
 	press(t, m, "enter")
 	pump(t, m, "t")
-	if view := m.View(); !strings.Contains(view, "[ok] wiki") {
+	if view := m.render(); !strings.Contains(view, "[ok] wiki") {
 		t.Errorf("success has no marker:\n%s", view)
 	}
 	m.testClass = provider.ClassAuth
-	if view := m.View(); !strings.Contains(view, "[failed] wiki: auth") {
+	if view := m.render(); !strings.Contains(view, "[failed] wiki: auth") {
 		t.Errorf("a failed test has no marker:\n%s", view)
 	}
 	m.fail = "something went wrong"
-	if view := m.View(); !strings.Contains(view, "error: something went wrong") {
+	if view := m.render(); !strings.Contains(view, "error: something went wrong") {
 		t.Errorf("an error has no prefix:\n%s", view)
 	}
 	m.clearMessages()
@@ -1013,7 +1012,7 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	focusField(t, m, "description")
 	typeText(t, m, "x")
 	press(t, m, "esc")
-	if view := m.View(); !strings.Contains(view, "warning: unsaved changes") {
+	if view := m.render(); !strings.Contains(view, "warning: unsaved changes") {
 		t.Errorf("the warning has no prefix:\n%s", view)
 	}
 }
@@ -1033,14 +1032,14 @@ func TestResizePreservesState(t *testing.T) {
 
 	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, minimumHeight}, {20, 5}, {80, 24}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		assertViewFits(t, m.View(), max(size.width, minimumWidth), max(size.height, minimumHeight))
+		assertViewFits(t, m.render(), max(size.width, minimumWidth), max(size.height, minimumHeight))
 		if m.screen != screenList || m.section != sectionServices || m.list.query() != "a" ||
 			selectedName(t, m) != selected {
 			t.Fatalf("%dx%d changed the list: screen %v section %v filter %q selected %q", size.width,
 				size.height, m.screen, m.section, m.list.query(), selectedName(t, m))
 		}
-		if size.width >= minimumWidth && !strings.Contains(m.View(), "/ a") {
-			t.Errorf("%dx%d does not show the filter:\n%s", size.width, size.height, m.View())
+		if size.width >= minimumWidth && !strings.Contains(m.render(), "/ a") {
+			t.Errorf("%dx%d does not show the filter:\n%s", size.width, size.height, m.render())
 		}
 	}
 
@@ -1052,7 +1051,7 @@ func TestResizePreservesState(t *testing.T) {
 	focus, url := m.focus, m.fieldValue("base url")
 	for _, size := range []struct{ width, height int }{{60, 24}, {40, minimumHeight}, {20, 5}, {100, 28}} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		view := m.View()
+		view := m.render()
 		assertViewFits(t, view, max(size.width, minimumWidth), max(size.height, minimumHeight))
 		if m.activeScreenTooSmall() {
 			// A screen that cannot be shown takes no keys that change it.
@@ -1082,7 +1081,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 		{39, 12}, {40, 11}, {12, 4}, {1, 1}, {0, 0}, {-4, -2},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-		view := m.View()
+		view := m.render()
 		width, height := max(size.width, 1), max(size.height, 1)
 		if size.width == 0 {
 			width, height = 12, 4 // a zero dimension keeps the last one
@@ -1102,10 +1101,10 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	if m.screen != screenNav || m.section != sectionDefaults {
 		t.Fatalf("resize lost the tab line state: screen %v section %v", m.screen, m.section)
 	}
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(m.render(), "\n")
 	if !strings.Contains(lines[1], "[6 Settings]") || !strings.HasPrefix(lines[2], "> ") ||
 		!strings.Contains(lines[2], "[Defaults]") {
-		t.Errorf("restored navigation lost focus:\n%s", m.View())
+		t.Errorf("restored navigation lost focus:\n%s", m.render())
 	}
 
 	// The notice is not a new editor screen. A half-completed form remains intact behind it.
@@ -1115,7 +1114,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	press(t, form, "tab")
 	focus := form.focus
 	form.Update(tea.WindowSizeMsg{Width: 20, Height: 5})
-	if view := form.View(); !strings.Contains(view, "esc leave") {
+	if view := form.render(); !strings.Contains(view, "esc leave") {
 		t.Errorf("a tiny form view does not offer its way out:\n%s", view)
 	}
 	press(t, form, "tab", "n", "5", "q")
@@ -1124,8 +1123,8 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 		t.Errorf("resize changed form state: quitting %v screen %v focus %d name %q", form.quitting, form.screen,
 			form.focus, form.fieldValue("name"))
 	}
-	if strings.Contains(form.View(), "Resize terminal") {
-		t.Errorf("restored form still shows the resize notice:\n%s", form.View())
+	if strings.Contains(form.render(), "Resize terminal") {
+		t.Errorf("restored form still shows the resize notice:\n%s", form.render())
 	}
 }
 
@@ -1133,7 +1132,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 // and rule above it. The frame itself is tested on its own, through View.
 func screenOf(m *Model) string {
 	if m.quitting || m.terminalTooSmall() {
-		return m.View()
+		return m.render()
 	}
 	m.screenKeys, m.screenPos = "", ""
 	view := leftOfPane(m, m.workspaceView())
@@ -1496,7 +1495,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 
 	// The frame of the field pads its line, so the cursor cell shows only as the reverse video it is drawn in.
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.ANSI)
+	setProfile(profile16)
 	m, _, _ := newModel(t)
 	noPane(m)
 	openSectionByName(t, m, sectionServices)
@@ -1887,7 +1886,7 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 		t.Error("a file was created before anything was saved")
 	}
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 30})
-	view := m.View()
+	view := m.render()
 	for _, want := range []string{
 		"created on first save",
 		"c setup",
@@ -2449,4 +2448,12 @@ func sectionViews(m *Model) string {
 	m.focus = focus
 	m.applyFocus()
 	return b.String()
+}
+
+// View hands the drawing to render unchanged.
+func TestViewWrapsRender(t *testing.T) {
+	m, _, _ := newModel(t)
+	if got, want := m.View(), m.render(); got != want {
+		t.Fatalf("View differs from render:\n%q\n%q", got, want)
+	}
 }

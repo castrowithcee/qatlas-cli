@@ -609,7 +609,7 @@ func (c *Client) fetchExport(ctx context.Context, op, id string, download *local
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return c.responseError(op, response)
+		return c.responseError(op, response, false)
 	}
 	if response.ContentLength > maxExportBytes {
 		return providerError(op, "the export is larger than the limit of 1 GiB")

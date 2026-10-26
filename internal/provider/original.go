@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"sort"
 	"strings"
 )
 
@@ -14,7 +15,11 @@ const ErrorBodyLimit = 4096
 // to a scalar (string or number) below the object it applies to; an empty path means the provider has no
 // such field. Message, Code, Type, and Path make up one entry; Documentation is the link of the whole answer.
 // List names an array below the object. Without Item, every string in it is one entry's Message. With Item,
-// every object in it is one entry, mapped by Item (its own List and Documentation are ignored).
+// every object in it is one entry, mapped by Item (its own List, Fields, and Documentation are ignored).
+// Fields names an object below the object whose keys are field names, such as validation errors per field.
+// Each value is a string, a list of strings, or a list of objects (mapped by Item; skipped without Item);
+// every such element is one entry whose Path is the key unless Item sets its own. Keys are visited sorted;
+// a Fields path that is not an object yields nothing, and nested values are ignored.
 type OriginalFields struct {
 	Message       string
 	Code          string
@@ -22,6 +27,7 @@ type OriginalFields struct {
 	Path          string
 	Documentation string
 	List          string
+	Fields        string
 	Item          *OriginalFields
 }
 
@@ -81,7 +87,48 @@ func ErrorOriginal(status int, body []byte, fields OriginalFields) *Original {
 			}
 		}
 	}
+	original.Entries = append(original.Entries, keyedEntries(valueAt(object, fields.Fields), fields.Item)...)
 	return original
+}
+
+// keyedEntries maps an object of field name to string, string list, or object list to entries.
+func keyedEntries(value any, item *OriginalFields) []OriginalEntry {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var entries []OriginalEntry
+	add := func(entry OriginalEntry, key string) {
+		if entry == (OriginalEntry{}) {
+			return
+		}
+		if entry.Path == "" {
+			entry.Path = key
+		}
+		entries = append(entries, entry)
+	}
+	for _, key := range keys {
+		elements, isList := object[key].([]any)
+		if !isList {
+			elements = []any{object[key]}
+		}
+		for _, element := range elements {
+			switch typed := element.(type) {
+			case string:
+				add(OriginalEntry{Message: strings.TrimSpace(typed)}, key)
+			case map[string]any:
+				if item != nil {
+					add(entryOf(typed, *item), key)
+				}
+			}
+		}
+	}
+	return entries
 }
 
 // ClassifyStatusBody is ClassifyStatus plus the Original of the answer, read from body. Class and message

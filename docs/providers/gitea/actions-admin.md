@@ -45,10 +45,10 @@ A secret value is never an argument and never readable: the API answers names an
 `actions-secrets.set` creates or replaces one secret. Its value comes from `secret_ref`, a forward credential with
 exactly one field that the connection releases in `forward_secrets`. The core refuses an unreleased or unknown name
 before the confirmation gate (`secret-ref-not-allowed`), and a credential with another number of fields is refused
-before the token is resolved. The value is read only for the confirmed call, after the level was proven, registered
-with the redactor, and sent once in the request body. The answer is discarded unread, so an instance that echoes the
-body cannot hand the value on; the result names the secret and whether the instance created or replaced it. No
-result, error, audit event, or invocation log entry carries the value.
+before the token is resolved. The value is read only for the confirmed call, after the level was proven, registered with
+the redactor, and sent once in the request body. The answer is discarded unread, and a refusal keeps only its status as
+original details, so an instance that echoes the body cannot hand the value on; the result names the secret and whether
+the instance created or replaced it. No result, error, audit event, or invocation log entry carries the value.
 
 Because of `secret_ref`, `actions-secrets.set` is offered only by a connection whose `tools` list names it, needs
 the `update` permission and its own confirmation, and is in no setup profile.

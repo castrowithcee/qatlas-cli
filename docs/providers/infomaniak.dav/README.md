@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-02
-updated: 2026-10-04
+updated: 2026-10-26
 ---
 
 # Infomaniak Calendar and Contacts
@@ -16,6 +16,8 @@ Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV servic
 the calendars and address books the connection allows, reads the events of the allowed calendars, and creates, replaces,
 and deletes such events from structured fields. It lists and reads the contacts of the allowed address books and
 creates, replaces, and deletes such contacts from structured fields. It changes no collection.
+
+[Set up Infomaniak Calendar and Contacts](setup.md) covers the application password, rights, and errors.
 
 ## Configuration
 
@@ -195,11 +197,10 @@ The three contact write tools take `addressbook` like the read tools and carry t
 `infomaniak-dav-contacts`. Each needs `confirm: true`; without it nothing is sent. Every argument is validated
 before any secret is read or any request is sent, and no error quotes a value.
 
-Qatlas builds a vCard 3.0 from structured fields; no vCard text, header, method, or URL comes from an
-argument.
-Version 3.0 is the form Sabre, the engine behind Infomaniak, stores and serves natively, and the one the read
-tools already meet. The encoder escapes line breaks, backslashes, and commas, so a line break in a value stays
-text and cannot start a property. Fields:
+Qatlas builds a vCard 3.0 from structured fields; no vCard text, header, method, or URL comes from an argument.
+Version 3.0 is the form Sabre, the engine behind Infomaniak, stores and serves natively, and the one the read tools
+already meet. The encoder escapes line breaks, backslashes, and commas, so a line break in a value stays text and
+cannot start a property. Fields:
 
 | Field | Rule |
 | --- | --- |
@@ -244,14 +245,12 @@ IDs.
 
 ## Discovery and path binding
 
-Each list runs three PROPFIND requests, all of depth 0 except the last: `current-user-principal` of the root,
-then `calendar-home-set` or `addressbook-home-set` of that principal, then one depth 1 listing of the home
-set. An event or contact tool runs the first two, then one REPORT of the allowed collection or one GET of
-one item in it;
-a write adds exactly one PUT or DELETE (and the update one GET before it).
-Only these five methods are ever sent, over one internal read path and one internal write path, and never
-one that an argument names.
-Request bodies are fixed or built from validated values.
+Each list runs three PROPFIND requests, all of depth 0 except the last: `current-user-principal` of the root, then
+`calendar-home-set` or `addressbook-home-set` of that principal, then one depth 1 listing of the home set. An event
+or contact tool runs the first two, then one REPORT of the allowed collection or one GET of one item in it; a write
+adds exactly one PUT or DELETE (and the update one GET before it). Only these five methods are ever sent, over one
+internal read path and one internal write path, and never one that an argument names. Request bodies are fixed or
+built from validated values.
 
 Every location the server names is untrusted. It must be a path on the fixed origin, without a query,
 fragment, or userinfo, and without an empty, `.`, or `..` component, also not percent-encoded. A discovery
@@ -282,7 +281,8 @@ beyond a cap is refused instead of truncated.
 | `invalid-provider-response` | the answer broke the shape, bounds, or path binding above |
 | `provider-error` | every other rejection, including a refused redirect, a failed precondition, and an event that cannot be replaced safely |
 
-The text of an Infomaniak answer never reaches an error message, and neither does the password.
+The text of an Infomaniak answer never reaches an error message, and neither does the password. Remedies are in
+[Fixing errors](setup.md#fixing-errors).
 
 ## Untrusted data
 

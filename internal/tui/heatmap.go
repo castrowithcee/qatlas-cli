@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 )
@@ -25,8 +24,8 @@ const (
 // heatColoured reports whether the squares can carry their level as a colour. With 16 colours there are too
 // few greens to tell four levels apart, so the shade glyphs carry them.
 func heatColoured() bool {
-	profile := lipgloss.ColorProfile()
-	return styles.palette.heat[0] != "" && profile != termenv.Ascii && profile != termenv.ANSI && !heatASCII()
+	profile := currentProfile()
+	return styles.palette.heat[0] != "" && profile != profileNone && profile != profile16 && !heatASCII()
 }
 
 // heatSquare is the two-cell mark of a level: a square in its heat colour, or the glyph of the level.
@@ -49,7 +48,7 @@ func heatBlock(level, n int) string {
 		}
 		return styles.hint.Render(mark)
 	}
-	return lipgloss.NewStyle().Foreground(styles.palette.heat[level]).Render(strings.Repeat("■", n))
+	return lipgloss.NewStyle().Foreground(styles.palette.heat[level].lip()).Render(strings.Repeat("■", n))
 }
 
 // heatCell is the n-cell mark of one day: a day the check flagged or one outside the retention shows that
