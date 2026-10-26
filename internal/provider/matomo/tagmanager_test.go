@@ -38,8 +38,8 @@ func otherContainerRow(id, name string, site int) string {
 }
 
 const tagManagerConnections = `
-  tm-all: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export, matomo.tag-manager-tags.list, matomo.tag-manager-tags.get, matomo.tag-manager-triggers.list, matomo.tag-manager-triggers.get], targets: [site]}
-  tm-one: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export, matomo.tag-manager-tags.list, matomo.tag-manager-tags.get, matomo.tag-manager-triggers.list, matomo.tag-manager-triggers.get], targets: [site/2]}
+  tm-all: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export, matomo.tag-manager-tags.list, matomo.tag-manager-tags.get, matomo.tag-manager-triggers.list, matomo.tag-manager-triggers.get, matomo.tag-manager-variables.list, matomo.tag-manager-variables.get, matomo.tag-manager-variables.list-available, matomo.tag-manager-references.list], targets: [site]}
+  tm-one: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-containers.get, matomo.tag-manager-containers.get-embed-code, matomo.tag-manager-catalog.list, matomo.tag-manager-versions.list, matomo.tag-manager-versions.get, matomo.tag-manager-versions.export, matomo.tag-manager-tags.list, matomo.tag-manager-tags.get, matomo.tag-manager-triggers.list, matomo.tag-manager-triggers.get, matomo.tag-manager-variables.list, matomo.tag-manager-variables.get, matomo.tag-manager-variables.list-available, matomo.tag-manager-references.list], targets: [site/2]}
   tm-instance: {service: matomo, credential: token, tools: [matomo.tag-manager-containers.list, matomo.tag-manager-catalog.list], targets: [instance]}
 `
 
@@ -326,6 +326,10 @@ var tagManagerTools = []struct{ id, arguments string }{
 	{"matomo.tag-manager-tags.get", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idTag":4}`},
 	{"matomo.tag-manager-triggers.list", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
 	{"matomo.tag-manager-triggers.get", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idTrigger":7}`},
+	{"matomo.tag-manager-variables.list", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+	{"matomo.tag-manager-variables.get", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idVariable":3}`},
+	{"matomo.tag-manager-variables.list-available", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+	{"matomo.tag-manager-references.list", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"variable","idVariable":3}`},
 }
 
 func TestTagManagerToolsRefuseBadArgumentsBeforeSecretAndRequest(t *testing.T) {
@@ -381,6 +385,22 @@ func TestTagManagerToolsRefuseBadArgumentsBeforeSecretAndRequest(t *testing.T) {
 		"trigger id text":            {"matomo.tag-manager-triggers.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idTrigger":"1"}`},
 		"triggers version zero":      {"matomo.tag-manager-triggers.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":0}`},
 		"triggers method":            {"matomo.tag-manager-triggers.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"method":"TagManager.deleteContainerTrigger"}`},
+		"foreign website variables":  {"matomo.tag-manager-variables.list", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+		"foreign website variable":   {"matomo.tag-manager-variables.get", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","idContainerVersion":7,"idVariable":3}`},
+		"foreign website available":  {"matomo.tag-manager-variables.list-available", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+		"foreign website references": {"matomo.tag-manager-references.list", "tm-one", `{"idSite":3,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"trigger","idTrigger":7}`},
+		"variable without id":        {"matomo.tag-manager-variables.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7}`},
+		"variable id zero":           {"matomo.tag-manager-variables.get", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idVariable":0}`},
+		"variables method":           {"matomo.tag-manager-variables.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"method":"TagManager.deleteContainerVariable"}`},
+		"available without version":  {"matomo.tag-manager-variables.list-available", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM"}`},
+		"references without kind":    {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"idTrigger":7}`},
+		"references unknown kind":    {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"tag","idTrigger":7}`},
+		"references kind text":       {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"TagManager.deleteContainerTrigger","idTrigger":7}`},
+		"references trigger no id":   {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"trigger"}`},
+		"references variable no id":  {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"variable"}`},
+		"references wrong id":        {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"trigger","idVariable":3}`},
+		"references both ids":        {"matomo.tag-manager-references.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"variable","idVariable":3,"idTrigger":1}`},
+		"kind on tags":               {"matomo.tag-manager-tags.list", "tm-all", `{"idSite":1,"idContainer":"6OMh6taM","idContainerVersion":7,"kind":"trigger"}`},
 		"extra argument":             {"matomo.tag-manager-containers.list", "tm-all", `{"idSite":1,"method":"TagManager.deleteContainer"}`},
 	} {
 		var calls []call
@@ -508,6 +528,10 @@ func TestTagManagerToolsSendBearerAndNoForbiddenParameterAndAreListedOnly(t *tes
 		"TagManager.getContainerTag":                               func(call) *http.Response { return ok(tagRow) },
 		"TagManager.getContainerTriggers":                          func(call) *http.Response { return ok(`[` + triggerRow + `]`) },
 		"TagManager.getContainerTrigger":                           func(call) *http.Response { return ok(triggerRow) },
+		"TagManager.getContainerVariables":                         func(call) *http.Response { return ok(`[` + variableRow + `]`) },
+		"TagManager.getContainerVariable":                          func(call) *http.Response { return ok(variableRow) },
+		"TagManager.getAvailableContainerVariables":                func(call) *http.Response { return ok(availableVariablesAnswer) },
+		"TagManager.getContainerVariableReferences":                func(call) *http.Response { return ok(`[]`) },
 	}).handler(t))
 	for _, tool := range tagManagerTools {
 		if _, err := env.invoke(tool.id, "tm-all", tool.arguments); err != nil {

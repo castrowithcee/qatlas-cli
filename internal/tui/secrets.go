@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -339,10 +338,9 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 // askSecret opens the masked prompt for one role. The typed value lives in this one input and nowhere else
 // in the model, it is drawn masked, and it is dropped the moment the prompt closes.
 func (m *Model) askSecret(role string) {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 
 	m.secretInput = in
@@ -475,10 +473,9 @@ type vaultOffer struct {
 // roles a guided setup commits at once, and every vault settings action (see vaultsettings.go).
 func (m *Model) openVaultOffer(title, hint string, optional, twice bool,
 	resume func(offer vault.PassphraseFunc) tea.Cmd, cancel func() tea.Cmd) {
-	in := textinput.New()
+	in := newTextInput()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
-	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 
 	m.vaultOffer = &vaultOffer{input: in, optional: optional, twice: twice, title: title, hint: hint,
