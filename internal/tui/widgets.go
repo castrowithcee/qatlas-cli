@@ -30,7 +30,7 @@ func frameChars(focused bool) (h, v string, corners [4]string) {
 func panel(title string, lines []string, inner, rows int, o panelOpts) []string {
 	inner = max(inner, 0)
 	out := []string{panelTop(title, "", inner, o.focused)}
-	bg := lipgloss.Color("")
+	bg := colour("")
 	if o.fill && styles.palette.panel != "" {
 		bg = styles.palette.panel
 	}
@@ -79,13 +79,13 @@ func panelTop(title, note string, inner int, focused bool) string {
 
 // panelSide is one content line of a panel: cut or padded to inner cells between the side borders. A
 // background colour fills the content area.
-func panelSide(text string, inner int, focused bool, bg lipgloss.Color) string {
+func panelSide(text string, inner int, focused bool, bg colour) string {
 	inner = max(inner, 0)
 	style := panelStyle(focused)
 	_, v, _ := frameChars(focused)
 	body := lipgloss.NewStyle()
 	if bg != "" {
-		body = body.Background(bg)
+		body = body.Background(bg.lip())
 	}
 	text = keepBackground(clipCells(text, inner), bg)
 	return style.Render(v) + body.Render(" "+padLine(text, inner)+" ") + style.Render(v)
@@ -99,11 +99,11 @@ func panelBottom(inner int, focused bool) string {
 
 // keepBackground makes a finished line keep the background bg across the resets of its own styles, so a
 // filled area stays filled behind styled text. Without a colour it returns the line as it is.
-func keepBackground(text string, bg lipgloss.Color) string {
+func keepBackground(text string, bg colour) string {
 	if bg == "" || !strings.Contains(text, "\x1b[") {
 		return text
 	}
-	set := lipgloss.NewStyle().Background(bg).Render("x")
+	set := lipgloss.NewStyle().Background(bg.lip()).Render("x")
 	set = set[:strings.Index(set, "x")]
 	if set == "" {
 		return text
@@ -132,7 +132,7 @@ func surfaceRow(text string, width int) string {
 	if styles.palette.surface == "" {
 		return text
 	}
-	return lipgloss.NewStyle().Background(styles.palette.surface).Render(keepBackground(text, styles.palette.surface))
+	return lipgloss.NewStyle().Background(styles.palette.surface.lip()).Render(keepBackground(text, styles.palette.surface))
 }
 
 // tabStrip draws a row of tabs, the active one in brackets and highlighted, the others dimmed, and returns
@@ -215,16 +215,16 @@ func button(kind buttonKind, label string, focused bool) string {
 	case buttonPrimary:
 		style = style.Bold(true)
 		if p.accent != "" {
-			style = style.Background(p.accent).Foreground(p.base)
+			style = style.Background(p.accent.lip()).Foreground(p.base.lip())
 		}
 	case buttonDanger:
 		style = style.Bold(true)
 		if p.fail != "" {
-			style = style.Background(p.fail).Foreground(p.base)
+			style = style.Background(p.fail.lip()).Foreground(p.base.lip())
 		}
 	default:
 		if p.border != "" {
-			style = style.Foreground(p.text)
+			style = style.Foreground(p.text.lip())
 		}
 	}
 	if focused {
@@ -234,7 +234,7 @@ func button(kind buttonKind, label string, focused bool) string {
 }
 
 // brandColor is the stable brand colour of a provider name.
-func brandColor(name string) lipgloss.Color {
+func brandColor(name string) colour {
 	h := fnv.New32a()
 	h.Write([]byte(name))
 	return styles.palette.brand[h.Sum32()%uint32(len(styles.palette.brand))]
@@ -244,7 +244,7 @@ func brandColor(name string) lipgloss.Color {
 func providerMark(name string) string {
 	style := lipgloss.NewStyle()
 	if c := brandColor(name); c != "" {
-		style = style.Foreground(c)
+		style = style.Foreground(c.lip())
 	}
 	return style.Render("■")
 }

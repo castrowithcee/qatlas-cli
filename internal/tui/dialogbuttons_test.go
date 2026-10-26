@@ -103,7 +103,7 @@ func TestSecretFieldIsMaskedOnItsSurface(t *testing.T) {
 	m.screen, m.secretInput = screenSecret, maskedInput()
 	m.secretInput.SetValue("canary-secret")
 	view := m.render()
-	surface := lipgloss.NewStyle().Background(styles.palette.surface).Render("x")
+	surface := lipgloss.NewStyle().Background(styles.palette.surface.lip()).Render("x")
 	if !strings.Contains(view, surface[:strings.Index(surface, "x")]) {
 		t.Errorf("the field has no surface:\n%s", view)
 	}
