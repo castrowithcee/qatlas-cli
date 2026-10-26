@@ -543,7 +543,9 @@ func (c *Client) openDownload(ctx context.Context, op string, driveID, fileID in
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		defer response.Body.Close()
-		return nil, c.statusError(op, response, false)
+		// After the redirect the answer comes from the storage, whose body is not Infomaniak's error format.
+		own := response.Request == nil || response.Request.URL.Host == apiHost
+		return nil, c.statusError(op, response, false, own)
 	}
 	return response, nil
 }

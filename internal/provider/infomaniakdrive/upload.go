@@ -367,7 +367,8 @@ func (p *uploadPlan) result(op string, env *envelope, fileData json.RawMessage, 
 	case "asynchronous":
 		out.Status = statusPending
 	default:
-		return nil, invalidResponse(op, "Infomaniak reported an error for a response with an HTTP success status"+hint)
+		return nil, env.unsuccessful(op,
+			"Infomaniak reported an error for a response with an HTTP success status"+hint)
 	}
 	item, ok := fileOf(p, fileData)
 	switch {
@@ -423,7 +424,7 @@ func (c *Client) uploadSession(ctx context.Context, op string, plan *uploadPlan)
 	}
 	var start sessionStart
 	if env.Result != "success" || json.Unmarshal(env.Data, &start) != nil || !sessionTokenPattern.MatchString(start.Token) {
-		return nil, invalidResponse(op, "Infomaniak answered the session start without a usable session"+startHint)
+		return nil, env.unsuccessful(op, "Infomaniak answered the session start without a usable session"+startHint)
 	}
 	token := start.Token
 	target, ok := chunkTarget(start.UploadURL, plan.driveID, token)
@@ -446,7 +447,7 @@ func (c *Client) uploadSession(ctx context.Context, op string, plan *uploadPlan)
 		}
 		var got sessionChunk
 		if env.Result != "success" || json.Unmarshal(env.Data, &got) != nil || got.Number != number || got.Size != length {
-			return nil, c.abortSession(ctx, op, plan, token, invalidResponse(op,
+			return nil, c.abortSession(ctx, op, plan, token, env.unsuccessful(op,
 				"Infomaniak answered a chunk without a matching result"))
 		}
 	}
@@ -580,11 +581,12 @@ func (c *Client) exchange(ctx context.Context, op string, spec exchangeSpec) (*e
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		if spec.etag && (response.StatusCode == http.StatusPreconditionFailed || response.StatusCode == http.StatusConflict) {
-			_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-			return nil, providerError(op, "etag conflict: the file changed, or is locked, since the given etag was "+
-				"read; nothing was replaced, read the file again for its current etag")
+			failure := providerError(op, "etag conflict: the file changed, or is locked, since the given etag was "+
+				"read; nothing was replaced, read the file again for its current etag").(*provider.Error)
+			failure.Original = provider.ErrorOriginal(response.StatusCode, provider.ReadErrorBody(response.Body), originalFields)
+			return nil, failure
 		}
-		failure := c.statusError(op, response, true)
+		failure := c.statusError(op, response, true, true)
 		if response.StatusCode == http.StatusPreconditionFailed {
 			failure.Message = "precondition failed: Infomaniak refused the request; nothing was changed"
 		}
@@ -604,5 +606,6 @@ func (c *Client) exchange(ctx context.Context, op string, spec exchangeSpec) (*e
 		spec.markUnclear()
 		return nil, invalidResponse(op, "Infomaniak returned an invalid response"+spec.hint)
 	}
+	env.status, env.raw = response.StatusCode, data
 	return &env, nil
 }
