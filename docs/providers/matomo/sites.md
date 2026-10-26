@@ -4,13 +4,36 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Matomo sites and version
 
 The version and website tools of the [Matomo provider](README.md). Version checks and availability are described
 under [Version and availability](README.md#version-and-availability); targets under [Scope](README.md#scope).
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.version.get` | reads the instance version and, with `plugin`, whether that plugin is activated |
+| `matomo.sites.list` | reads websites of the token inside the targets, optionally matching `pattern` |
+| `matomo.sites.get` | reads one website with its addresses, time zone, currency, and tracking settings |
+| `matomo.sites.add` | creates a website (Super User, target `instance`; effect `create`) |
+| `matomo.sites.update` | changes the settings of one website; lists not sent are kept (effect `update`) |
+| `matomo.sites.delete` | deletes a website and its configuration (Super User, targets `instance` and the website; effect `delete`, only via `tools`) |
+| `matomo.site-urls.add` | adds alias URLs to a website, an assignment for tracking only (effect `create`) |
+| `matomo.site-urls.set` | replaces the alias URL list of a website (effect `update`) |
+| `matomo.sites.update-created-time` | sets the creation date of up to 100 websites (effect `update`) |
+| `matomo.site-groups.rename` | renames a website group instance-wide (Super User, target `instance`; effect `update`) |
+| `matomo.tracking-code.get` | reads the JavaScript or image tracking code of a website as text |
+| `matomo.opt-out-code.get` | reads the opt-out embed code, script or self-contained, as text |
+| `matomo.tracking-failures.list` | reads the logged tracking failures inside the targets (admin right; profile `live`) |
+| `matomo.tracking-failures.delete` | deletes one tracking failure of a website (admin right; effect `delete`) |
+| `matomo.tracking-failures.delete-all` | deletes every tracking failure of the token, beyond the bound websites (admin right, target `instance`; effect `delete`, only via `tools`) |
+| `matomo.site-settings.get` | reads the measurable settings of a website (admin right) |
+| `matomo.consent-manager.detect` | reads the consent manager the Matomo server detects on the website |
+| `matomo.site-groups.list` | reads website groups and their websites (Super User, target `instance`) |
 
 ## Websites
 

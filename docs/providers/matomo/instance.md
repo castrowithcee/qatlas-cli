@@ -11,6 +11,27 @@ updated: 2026-10-26
 
 The instance tools of the [Matomo provider](README.md). Targets are described under [Scope](README.md#scope).
 
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.global-settings.get` | reads the global website settings (admin right, target `instance`) |
+| `matomo.global-settings.set-excluded-ips` | replaces the globally excluded IPs (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-user-agents` | replaces the globally excluded user agents (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-referrers` | replaces the globally excluded referrers (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-excluded-query-parameters` | sets the global query parameter exclusion type and list (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-search-parameters` | replaces the global site search keyword and category parameters (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-keep-url-fragments` | sets whether URL fragments are kept by default (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-default-currency` | sets the default currency (Super User, target `instance`; effect `update`) |
+| `matomo.global-settings.set-default-timezone` | sets the default time zone (Super User, target `instance`; effect `update`) |
+| `matomo.archive-settings.set` | sets browser-triggered archiving and the validity of today's reports (Super User, target `instance`; effect `update`) |
+| `matomo.trusted-hosts.set` | replaces the trusted hosts; a wrong list locks the instance out (Super User, target `instance`; effect `update`, only via `tools`) |
+| `matomo.branding.set` | switches the custom logo and favicon on or off (Super User, target `instance`; effect `update`) |
+| `matomo.database-statistics.get` | reads the size of the database by section: general information, server status, and table and report sizes (Super User, target `instance`, only via `tools`) |
+| `matomo.reference-data.list` | reads currencies, time zones, measurable types, and country codes |
+| `matomo.ip-ranges.expand` | reads the lowest and highest address of an IP range |
+| `matomo.reports.archive` | starts the archiving of the reports of a website for a period (Super User, targets `instance` and the website; effect `execute`) |
+
 ## Global settings
 
 `matomo.global-settings.get` reads the defaults every website inherits. It needs a connection whose targets name

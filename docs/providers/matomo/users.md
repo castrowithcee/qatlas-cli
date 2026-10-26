@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo users and roles
@@ -13,6 +13,20 @@ The user tools of the [Matomo provider](README.md). Targets are described under 
 read; `matomo.users.list`, `matomo.users.get`, and `matomo.users.get-access` carry personal data and the rights of
 administrators. `matomo.users.delete` and `matomo.users.logout` change users, and three more change roles and
 capabilities. No user tool is in a setup profile.
+
+## Tools
+
+| Tool | Does |
+| --- | --- |
+| `matomo.users.list` | reads the users of a website with their role, or the users of the instance (admin right; the instance-wide mode needs the target `instance`) |
+| `matomo.users.get` | reads one user, checks a login or email, lists the Super Users, or tells whether the token is a Super User (target `instance`) |
+| `matomo.users.get-access` | reads which websites a user can access, or which users can access a website (admin right; Super User for the raw and instance-wide modes) |
+| `matomo.users.delete` | deletes a user (admin or Super User, target `instance`; effect `delete`, only via `tools`) |
+| `matomo.users.logout` | ends the web sessions of a user (Super User, target `instance`; effect `execute`) |
+| `matomo.access.set` | sets or removes the role of a user on websites (admin; effect `update`, only via `tools`) |
+| `matomo.capabilities.add` | adds capabilities of a user on websites (admin; effect `update`, only via `tools`) |
+| `matomo.capabilities.remove` | removes capabilities of a user on websites (admin; effect `update`, only via `tools`) |
+| `matomo.roles.list` | reads the roles and capabilities Matomo offers (admin right on some website) |
 
 ## Personal data and what is never returned
 
