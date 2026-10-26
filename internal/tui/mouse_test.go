@@ -418,20 +418,20 @@ func TestATooSmallTerminalIgnoresTheMouse(t *testing.T) {
 	}
 
 	// A screen that does not fit the workspace shows the notice, and takes no clicks either.
-	m = sizedModel(groupModel(t), 40, minimumHeight)
-	openSectionByName(t, m, sectionConnections)
+	m = sizedModel(heatModel(t, activityLog(t)), 40, minimumHeight)
+	m.setLogTab(logTabDetails)
 	m.View()
 	if !m.tooSmall {
-		t.Fatalf("the Connections list fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.View()))
+		t.Fatalf("the Details tab fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.View()))
 	}
-	cursor, area := m.list.cursor, m.section.area()
+	cursor, area, screen := m.list.cursor, m.section.area(), m.screen
 	for row := 0; row < minimumHeight; row++ {
 		for _, x := range []int{0, 3, 12, 30} {
 			clickAt(t, m, x, row)
 			wheelAt(t, m, x, row, tea.MouseButtonWheelDown)
 		}
 	}
-	if m.list.cursor != cursor || m.section.area() != area || m.screen != screenList {
+	if m.list.cursor != cursor || m.section.area() != area || m.screen != screen {
 		t.Errorf("cursor %d area %v screen %v after clicks on the size notice", m.list.cursor, m.section.area(), m.screen)
 	}
 }

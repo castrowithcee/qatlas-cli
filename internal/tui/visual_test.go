@@ -318,7 +318,7 @@ func visualShots() []visualShot {
 			pump(t, m, "enter")
 			openTargetList(t, m)
 		}},
-		{"59-resize", 39, 11, dark, term, false, overview},
+		{"59-resize", 39, 12, dark, term, false, overview},
 	}
 }
 
