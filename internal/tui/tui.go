@@ -4826,7 +4826,7 @@ func (m *Model) cells(name string) []string {
 	case sectionServices:
 		s := m.cfg.Services[name]
 		// Masking comes first so that the log text cannot cut a credential in half and leave a part of it.
-		return []string{name, m.logText(maskURL(s.BaseURL))}
+		return []string{name, m.logText(config.MaskURL(s.BaseURL))}
 	case sectionCredentials:
 		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.

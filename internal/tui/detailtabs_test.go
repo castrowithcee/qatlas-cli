@@ -260,16 +260,3 @@ func TestDetailPaneIsLeftOutBelowItsWidth(t *testing.T) {
 		t.Errorf("a pane shows below its width")
 	}
 }
-
-func TestMaskURLMasksTheWholeUserInfo(t *testing.T) {
-	for raw, want := range map[string]string{
-		"https://" + canaryUser + "@git.example.invalid/api":                "https://***@git.example.invalid/api",
-		"https://user:" + canaryURLPass + "@wiki.example.invalid/":          "https://***:***@wiki.example.invalid/",
-		"https://wiki.example.invalid/api?token=" + canaryQuery + "&page=1": "https://wiki.example.invalid/api?token=***&page=1",
-		"https://wiki.example.invalid/api":                                  "https://wiki.example.invalid/api",
-	} {
-		if got := maskURL(raw); got != want {
-			t.Errorf("maskURL(%q) = %q, want %q", raw, got, want)
-		}
-	}
-}

@@ -27,6 +27,8 @@ capabilities. No user tool is in a setup profile.
 | `matomo.capabilities.add` | adds capabilities of a user on websites (admin; effect `update`, only via `tools`) |
 | `matomo.capabilities.remove` | removes capabilities of a user on websites (admin; effect `update`, only via `tools`) |
 | `matomo.roles.list` | reads the roles and capabilities Matomo offers (admin right on some website) |
+| `matomo.ldap-users.count` | counts the LDAP directory entries matching a filter or a group (Super User, target `instance`; only via `tools`) |
+| `matomo.ldap-users.list` | lists the Matomo logins stored as LDAP users (Super User, target `instance`; only via `tools`) |
 
 ## Personal data and what is never returned
 
@@ -119,3 +121,15 @@ after Matomo confirmed. After an unclear result, read the access with `matomo.us
 
 Capability IDs come from `matomo.roles.list`; a role name is refused as a capability. Super User rights cannot be
 granted, `anonymous` is refused, and the tools take no password: a personal token needs no password confirmation.
+
+## LDAP users
+
+The two tools need the LoginLdap plugin; without it they are unsupported. Both are instance-wide, need Super User rights
+(Matomo checks them), are in no profile, and are offered only via `tools`. `matomo.ldap-users.count` takes exactly one
+of `filter` (`getCountOfUsersMatchingFilter`) and `memberOf` (`getCountOfUsersMemberOf`); the filter text is sent to
+Matomo, which queries the configured directory with its own bind account. An invalid filter is `invalid-request`, an
+unreachable directory a provider error. `matomo.ldap-users.list` reads only the logins in the Matomo database
+(`getExistingLdapUsersFromDb`) and does not contact the directory; logins are untrusted personal data.
+
+The other LoginLdap methods are not offered: `saveLdapConfig` and `saveServersInfo` write the directory connection and
+its credentials, and `synchronizeUser` creates or changes a user from the external directory.
