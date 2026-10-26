@@ -293,7 +293,7 @@ func (c *Client) send(ctx context.Context, op, command string, body io.Reader, l
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.responseError(op, response)
+		failure := c.responseError(op, response, true)
 		if change && response.StatusCode >= 500 {
 			failure.Message += hint
 		}
@@ -306,19 +306,30 @@ func (c *Client) send(ctx context.Context, op, command string, body io.Reader, l
 	return data, nil
 }
 
-// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
-func (c *Client) responseError(op string, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
+// originalFields names the scalar fields of a Penpot error body that go into the original provider details.
+var originalFields = provider.OriginalFields{Type: "type", Code: "code", Message: "hint"}
+
+// responseError maps an HTTP status to a stable class. The message carries no provider text; the body goes
+// separately into the original details. With withBody false (foreign storage) only the status is kept.
+func (c *Client) responseError(op string, response *http.Response, withBody bool) *provider.Error {
+	var body []byte
+	if withBody {
+		body = provider.ReadErrorBody(response.Body)
+	} else {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
+	}
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	failure := provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
 		Subject: "Penpot",
 		Auth:    "Penpot rejected the access token; check that it is valid and that the access-tokens flag is enabled on the instance",
 		Permission: "Penpot refused this access token; check that the access-tokens flag is enabled on the instance and " +
 			"that the account may read this resource",
 		NotFound: "Penpot does not hold this resource or does not show it to this token",
 	})
+	failure.Original = provider.ErrorOriginal(response.StatusCode, body, originalFields)
+	return failure
 }
 
 func providerError(op, message string) error {
