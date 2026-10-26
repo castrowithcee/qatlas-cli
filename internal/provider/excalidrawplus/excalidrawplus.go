@@ -243,9 +243,16 @@ func (c *Client) sendBounded(ctx context.Context, op, method, path string, paylo
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message.
+// statusError maps an HTTP status to a stable class. The message carries no provider text; the bounded body
+// goes separately into Original.
 func (c *Client) statusError(op string, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+	failure := c.classifyStatus(op, response)
+	failure.Original = provider.ErrorOriginal(response.StatusCode, provider.ReadErrorBody(response.Body),
+		provider.OriginalFields{Message: "message"})
+	return failure
+}
+
+func (c *Client) classifyStatus(op string, response *http.Response) *provider.Error {
 	status := response.StatusCode
 	switch {
 	case status == http.StatusUnauthorized:
