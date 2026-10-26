@@ -598,7 +598,7 @@ func (c *Client) fetchNote(ctx context.Context, op string, sel selection, id str
 	body, _, err := c.notesGetJSON(ctx, op, c.notesURL(query, "notes", id))
 	if err != nil {
 		if isNotFound(err) {
-			return nil, noteNotFound(op)
+			return nil, withOriginalValue(noteNotFound(op), refusedOriginal(err))
 		}
 		return nil, err
 	}
@@ -636,7 +636,7 @@ func (c *Client) GetNoteAttachment(ctx context.Context, sel selection, id, path 
 	body, header, err := c.readInline(ctx, op, c.attachmentTarget(id, path), messageNoteTooLarge)
 	if err != nil {
 		if isNotFound(err) {
-			return nil, attachmentNotFound(op)
+			return nil, withOriginalValue(attachmentNotFound(op), refusedOriginal(err))
 		}
 		return nil, err
 	}
@@ -653,7 +653,7 @@ func (c *Client) DownloadNoteAttachment(ctx context.Context, sel selection, id, 
 	header, err := c.downloadTo(ctx, op, c.attachmentTarget(id, path), download, done)
 	if err != nil {
 		if isNotFound(err) {
-			return nil, attachmentNotFound(op)
+			return nil, withOriginalValue(attachmentNotFound(op), refusedOriginal(err))
 		}
 		return nil, err
 	}

@@ -301,7 +301,7 @@ func (c *Client) DownloadDeckAttachment(ctx context.Context, input deckAttachmen
 // notFoundAsAttachment turns the 404 of the download into the same refusal as an attachment the list lacks.
 func notFoundAsAttachment(op string, err error) error {
 	if isNotFound(err) {
-		return deckNotFound(op)
+		return withOriginalValue(deckNotFound(op), refusedOriginal(err))
 	}
 	return err
 }
