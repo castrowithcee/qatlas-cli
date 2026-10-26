@@ -667,7 +667,7 @@ func telegramMock(t *testing.T, dir string) (*httptest.Server, string, *telegram
 		}
 		if request.Text == telegramFailureText {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = fmt.Fprintf(w, `{"ok":false,"description":%q}`, telegramProviderBody+wantToken+wantTarget+request.Text)
+			_, _ = fmt.Fprintf(w, `{"ok":false,"description":%q}`, telegramProviderBody+wantToken)
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -874,7 +874,6 @@ defaults: {}
 	canaries := []string{
 		canaryPrimaryID, canaryPrimarySecret, telegramTokenA, telegramTokenB,
 		telegramTargetA, telegramTargetB, telegramSuccessText, telegramFailureText, telegramUnclearText,
-		telegramProviderBody,
 	}
 
 	t.Run("configuration and several connections validate", func(t *testing.T) {
@@ -997,7 +996,25 @@ defaults: {}
 			probe.count(telegramFailureText) != before+1 {
 			t.Fatalf("exit=%d stdout=%q stderr=%q calls=%d", code, stdout, stderr, probe.count(telegramFailureText)-before)
 		}
-		assertAudit(t, stderr, "telegram-operations", "provider-error", canaries)
+		// Telegram's answer follows apart from Qatlas' message with the token redacted; everything outside that
+		// block stays free of every canary.
+		var outside, answer []string
+		for _, line := range strings.Split(stderr, "\n") {
+			if strings.HasPrefix(line, "provider answer (untrusted, not written by qatlas)") ||
+				strings.HasPrefix(line, "  | ") {
+				answer = append(answer, line)
+			} else {
+				outside = append(outside, line)
+			}
+		}
+		block := strings.Join(answer, "\n")
+		if !strings.HasPrefix(block, "provider answer (untrusted, not written by qatlas), HTTP 500:") ||
+			!strings.Contains(block, telegramProviderBody) || strings.Contains(block, telegramTokenA) ||
+			strings.Contains(block, telegramTokenB) {
+			t.Errorf("provider answer is not kept apart or not redacted: %q", stderr)
+		}
+		assertAudit(t, strings.Join(outside, "\n"), "telegram-operations", "provider-error",
+			append(canaries, telegramProviderBody))
 	})
 
 	t.Run("ambiguous Telegram network result is not retried", func(t *testing.T) {

@@ -81,8 +81,8 @@ func (c *Client) callMultipart(ctx context.Context, s spec, fields []field, file
 	return c.exchange(ctx, s, http.MethodPost, writer.FormDataContentType(), &buf)
 }
 
-// envelope is the Bot API response frame. Telegram's description is deliberately not decoded: it is
-// provider text and never reaches an error message.
+// envelope is the Bot API response frame. Telegram's description is not decoded here: it is provider text and
+// never reaches Qatlas' message. A failed answer travels apart as provider.Error.Original.
 type envelope struct {
 	OK         bool            `json:"ok"`
 	Result     json.RawMessage `json:"result"`
@@ -112,31 +112,44 @@ func (c *Client) exchange(ctx context.Context, s spec, httpMethod, contentType s
 		}
 		return nil, failure
 	}
+	if response.StatusCode != http.StatusOK {
+		return nil, c.failedStatus(s, response)
+	}
 	data, readErr := readResponse(response.Body, s.limit)
 	var env envelope
 	parsed := readErr == nil && json.Unmarshal(data, &env) == nil
-	if response.StatusCode == http.StatusOK {
-		if !parsed || !env.OK || len(env.Result) == 0 {
-			return nil, withUncertainty(s, invalidResponse(s.op))
-		}
-		return env.Result, nil
+	if !parsed || !env.OK || len(env.Result) == 0 {
+		return nil, withUncertainty(s, invalidResponse(s.op))
 	}
-	if parsed {
+	return env.Result, nil
+}
+
+// failedStatus maps a non-200 answer to an error. The bounded body only feeds Original, never the message.
+func (c *Client) failedStatus(s spec, response *http.Response) error {
+	defer response.Body.Close()
+	data := provider.ReadErrorBody(response.Body)
+	original := provider.ErrorOriginal(response.StatusCode, data, originalFields)
+	var env envelope
+	if json.Unmarshal(data, &env) == nil {
 		switch {
 		case env.Parameters.MigrateToChatID != 0:
-			return nil, providerError(s.op,
-				"the Telegram chat was migrated to a supergroup; adjust the connection's target")
+			return &provider.Error{Class: provider.ClassProviderError, Op: s.op, Original: original,
+				Message: "the Telegram chat was migrated to a supergroup; adjust the connection's target"}
 		case env.Parameters.RetryAfter > 0:
-			return nil, &provider.Error{Class: provider.ClassRateLimited, Op: s.op,
-				Message: "Telegram rate-limited the operation"}
+			return &provider.Error{Class: provider.ClassRateLimited, Op: s.op,
+				Message: "Telegram rate-limited the operation", Original: original}
 		}
 	}
 	failure := statusError(s.op, response.StatusCode)
+	failure.Original = original
 	if response.StatusCode >= 500 {
-		return nil, withUncertainty(s, failure)
+		return withUncertainty(s, failure)
 	}
-	return nil, failure
+	return failure
 }
+
+// originalFields names the scalars of a Bot API error answer; parameters are deliberately left out.
+var originalFields = provider.OriginalFields{Message: "description", Code: "error_code"}
 
 func withUncertainty(s spec, err error) error {
 	var providerErr *provider.Error
@@ -159,7 +172,7 @@ func invalidResponse(op string) error {
 	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Telegram returned an invalid response"}
 }
 
-func statusError(op string, status int) error {
+func statusError(op string, status int) *provider.Error {
 	switch status {
 	case http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Telegram rejected the bot token"}
