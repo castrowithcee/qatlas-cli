@@ -73,12 +73,29 @@ and send exactly one request that is never repeated after a timeout, a 5xx, or a
   names. Matomo only schedules the job and its scheduled task runs it later, so `scheduled` means accepted, not done.
 - `matomo.data-purge.run` calls `PrivacyManager.executeDataPurge`, which takes no argument. It deletes raw logs and
   report data of the whole instance by the retention periods configured in Matomo, at once; Matomo refuses it when its
-  administrators disabled the purge settings. No tool sets the retention periods.
+  administrators disabled the purge settings. The [retention setters](#setting-retention-periods) set those periods.
 
-Matomo asks for the password of the token's user on these two methods even with a token. The credential needs the
+Matomo asks for the password of the token's user on these methods and the retention setters even with a
+token. The credential needs the
 optional secret role `password-confirmation` for it. It is stored and redacted like the token, is never an argument,
-and is sent only on these two methods, in the request body. A connection whose credential lacks it refuses both tools
+and is sent only on these methods, in the request body. A connection whose credential lacks it refuses these tools
 before any request. The other tools, `matomo.data-subjects.delete` among them, never send the password.
+
+
+## Setting retention periods
+
+`matomo.privacy-settings.set-delete-logs`, `matomo.privacy-settings.set-delete-reports`, and
+`matomo.privacy-settings.set-report-deletion-schedule` call `PrivacyManager.setDeleteLogsSettings`,
+`setDeleteReportsSettings`, and `setScheduleReportDeletionSettings`. They need Super User rights, the target
+`instance`, `confirm`, and the password role described above, and send exactly one request that is never repeated
+after an unclear result. The first two make the scheduled purge delete raw logs or reports for good from then on, so
+they are offered only where a connection's `tools` list names them and are in no profile; the schedule setter is not
+listed-only.
+
+Every argument is required: Matomo resets an omitted one to its default, so each call states the whole state. No
+Qatlas tool reads the current purge settings, so check them in Matomo first. The age of logs is in days, the age of
+reports in periods (months); Matomo itself raises an age below 1 or 2 to the minimum, which Qatlas refuses instead.
+Matomo keeps the stored log age unchanged when a compliance policy forbids setting it, and still answers success.
 
 ## Privacy settings
 
