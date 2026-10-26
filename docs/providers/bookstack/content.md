@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack content
@@ -42,8 +42,8 @@ see [Deleting](#deleting), for cover images see [Cover images](#cover-images).
 - `tags` replaces all existing tags; an empty list removes them. Omit `tags` to keep them.
 - `default_template_id` is the identifier of a template page. On `update`, `null` removes the default
   template. BookStack validates that the page is a template the token may see.
-- `chapters.update` with `book_id` moves the chapter into that book. BookStack requires the permission to
-  delete the chapter in addition to the permission to update it. Without it the call fails as `permission`.
+- `chapters.update` with `book_id` moves the chapter into that book. Moving needs more than updating; see
+  [Content](setup.md#content).
 
 On a connection with targets, the book, the chapter, a target `book_id`, and a `default_template_id` are proven
 before the change (see [Targets](README.md#targets)).
@@ -124,8 +124,7 @@ Side effects of a write:
 - `tags` replaces all existing tags of the page; an empty list removes them. Omit `tags` to keep them.
 
 Moving: `pages.update` with exactly one of `book_id` and `chapter_id` moves the page into that book or chapter.
-BookStack requires the permission to delete the page in addition to the permission to update it and to create
-pages in the target. Without delete permission the call fails as `permission`. On a connection with
+Moving needs more than updating; see [Content](setup.md#content). On a connection with
 targets the source page and the target are proven before the change (see [Targets](README.md#targets)).
 
 ## Search
@@ -159,8 +158,7 @@ profile; the connection must release the directory for writing, and an existing 
 confirmation. The answer never carries the content. A ZIP export
 contains the attachments and images of the exported content.
 
-Both tools need the BookStack role permission `content-export` for the token's user in addition to read access.
-On a connection with targets the item is proven first (see [Targets](README.md#targets)).
+The token rights are listed under [Content](setup.md#content). On a connection with targets the item is proven first (see [Targets](README.md#targets)).
 
 ## Deleting
 

@@ -4,12 +4,12 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack comments
 
-Group `comments`.
+Group `comments`. The token rights are listed under [Comments](setup.md#comments).
 
 Comments are read and managed on pages only; comments on other object types are not reachable.
 

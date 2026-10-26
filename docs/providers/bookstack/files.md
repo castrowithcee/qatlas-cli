@@ -4,12 +4,13 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack files
 
-Group `files`: attachments and images of pages.
+Group `files`: attachments and images of pages. The token rights are listed under
+[Attachments and images](setup.md#attachments-and-images).
 
 ## Attachments
 
@@ -41,8 +42,7 @@ connection releases for reading and is streamed from disk as `multipart/form-dat
 held in memory; the size is checked before any credential is used, and the transfer may take 30 minutes.
 
 `bookstack.attachments.update` takes the `id` and at least one of `name`, `link` (for a link attachment only;
-BookStack refuses it for a file), and `page_id` (moves the attachment to that page; BookStack needs the update
-permission on both pages). `bookstack.attachments.replace` takes the `id` and `local_path` and replaces the file of
+BookStack refuses it for a file), and `page_id` (moves the attachment to that page; see [Attachments and images](setup.md#attachments-and-images)). `bookstack.attachments.replace` takes the `id` and `local_path` and replaces the file of
 a file attachment under the same limits as `upload`; the name stays and the previous file is gone. BookStack
 accepts a multipart body only on `POST`, so the request is `POST /api/attachments/{id}` with the form field
 `_method=PUT`. A link attachment is refused after one metadata read, also on a connection without targets.
