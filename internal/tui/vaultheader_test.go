@@ -400,7 +400,7 @@ func TestKeyLineNamesTheLockKey(t *testing.T) {
 					continue
 				}
 				tt.m.screen = scr
-				view := strings.Join(strings.Fields(tt.m.View()), " ")
+				view := strings.Join(strings.Fields(tt.m.render()), " ")
 				if tt.want == "" && strings.Contains(view, "ctrl+l") {
 					t.Errorf("%s at %d columns names ctrl+l:\n%s", tt.name, width, view)
 				}
@@ -474,7 +474,7 @@ func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
 				{40, minimumHeight}, {79, 24}, {80, 24}, {120, 28},
 			} {
 				m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
-				view := m.View()
+				view := m.render()
 				assertViewFits(t, view, size.width, size.height)
 			}
 		})

@@ -103,7 +103,7 @@ func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 	if fake.checks != 1 {
 		t.Fatalf("the start ran %d checks, want 1", fake.checks)
 	}
-	if line := strings.Split(m.View(), "\n")[0]; !strings.Contains(line, fullBanner) {
+	if line := strings.Split(m.render(), "\n")[0]; !strings.Contains(line, fullBanner) {
 		t.Errorf("the top line does not name the newer release: %q", line)
 	}
 
@@ -113,7 +113,7 @@ func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 		"dev build": {checkErr: selfupdate.ErrDevelopmentBuild},
 	} {
 		m := startedWith(t, fake)
-		view := m.View()
+		view := m.render()
 		if strings.Contains(view, "Update") || strings.Contains(view, "error:") || m.fail != "" || m.status != "" {
 			t.Errorf("%s: the editor is not silent:\n%s", name, view)
 		}
@@ -125,8 +125,8 @@ func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 
 	// Without an updater, as in a dev build or with the check switched off, nothing is asked at all.
 	m = startedWith(t, nil)
-	if m.checkUpdate() != nil || strings.Contains(m.View(), "Update") {
-		t.Errorf("an editor without an updater checks or shows a banner:\n%s", m.View())
+	if m.checkUpdate() != nil || strings.Contains(m.render(), "Update") {
+		t.Errorf("an editor without an updater checks or shows a banner:\n%s", m.render())
 	}
 }
 
@@ -137,11 +137,11 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 		press(t, m, "u")
 		if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") ||
 			!strings.Contains(flatText(screenOf(m)), "y update n/esc cancel") {
-			t.Fatalf("u did not ask:\n%s", m.View())
+			t.Fatalf("u did not ask:\n%s", m.render())
 		}
 		pump(t, m, no)
-		if m.screen != screenNav || fake.updates != 0 || !strings.Contains(m.View(), fullBanner) {
-			t.Errorf("%s installed or lost the release: screen %v updates %d\n%s", no, m.screen, fake.updates, m.View())
+		if m.screen != screenNav || fake.updates != 0 || !strings.Contains(m.render(), fullBanner) {
+			t.Errorf("%s installed or lost the release: screen %v updates %d\n%s", no, m.screen, fake.updates, m.render())
 		}
 	}
 
@@ -156,7 +156,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 	if m.screen != screenList || !m.updating {
 		t.Fatalf("y did not start the update in the background: screen %v updating %v", m.screen, m.updating)
 	}
-	view := m.View()
+	view := m.render()
 	if !strings.Contains(strings.Split(view, "\n")[0], "Updating to v0.5.0 …") {
 		t.Errorf("the running update is not shown in the top line:\n%s", view)
 	}
@@ -168,7 +168,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 	if fake.updates != 1 {
 		t.Fatalf("y ran %d installations, want 1", fake.updates)
 	}
-	view = m.View()
+	view = m.render()
 	for _, want := range []string{"Updated to v0.5.0 · restart qatlas tui", "Updated to v0.5.0. Restart qatlas tui to use it."} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the finished update does not say %q:\n%s", want, view)
@@ -209,8 +209,8 @@ func TestUpdateFailuresAreReported(t *testing.T) {
 					t.Errorf("the failure does not say %q:\n%s", want, screenOf(m))
 				}
 			}
-			if strings.Contains(m.View(), "s3cr3t-value") {
-				t.Errorf("the failure echoed a secret:\n%s", m.View())
+			if strings.Contains(m.render(), "s3cr3t-value") {
+				t.Errorf("the failure echoed a secret:\n%s", m.render())
 			}
 			if m.updating || m.updated != "" {
 				t.Errorf("a failed update left updating %v updated %q", m.updating, m.updated)
@@ -250,7 +250,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			case "question":
 				press(t, m, "u")
 			}
-			view := m.View()
+			view := m.render()
 			assertViewFits(t, view, tt.width, tt.height)
 			lines := strings.Split(view, "\n")
 			if !strings.Contains(lines[0], tt.banner) {
@@ -279,12 +279,12 @@ func TestTheBannerReadsWithoutColour(t *testing.T) {
 	colour := before
 	colour = 2 // termenv.ANSI
 	lipgloss.SetColorProfile(colour)
-	if line := strings.Split(m.View(), "\n")[0]; !strings.Contains(line, "\x1b[") {
+	if line := strings.Split(m.render(), "\n")[0]; !strings.Contains(line, "\x1b[") {
 		t.Errorf("a colour terminal got a plain banner: %q", line)
 	}
 	colour = 3 // termenv.Ascii
 	lipgloss.SetColorProfile(colour)
-	view := m.View()
+	view := m.render()
 	if strings.Contains(view, "\x1b") {
 		t.Errorf("a terminal without colour got escape sequences:\n%q", view)
 	}
@@ -374,7 +374,7 @@ func TestTheBannerShowsTheDownloadProgress(t *testing.T) {
 		t.Fatalf("the first message of the installation is %T, want the download progress", msg)
 	}
 	_, next := m.Update(progress)
-	if line := strings.Split(m.View(), "\n")[0]; !strings.Contains(line, "Updating to v0.5.0 … 50 %") {
+	if line := strings.Split(m.render(), "\n")[0]; !strings.Contains(line, "Updating to v0.5.0 … 50 %") {
 		t.Errorf("the top line does not show the progress: %q", line)
 	}
 	deliver(m, next)

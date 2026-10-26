@@ -605,7 +605,7 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 			}
 			// The next step is the hint of the role row, so it shows only once that row is focused.
 			focusField(t, m, "token-id")
-			view = m.View()
+			view = m.render()
 			words = explained(m)
 			for _, want := range tt.next {
 				if !strings.Contains(words, want) {

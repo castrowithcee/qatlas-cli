@@ -187,7 +187,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 						typeText(t, m, long)
 					}
 
-					view := m.View()
+					view := m.render()
 					if strings.Contains(view, "Resize terminal") {
 						t.Fatalf("the long value replaced the screen:\n%s", view)
 					}
@@ -247,7 +247,7 @@ func TestVaultSecretOf500CharactersIsStored(t *testing.T) {
 		t.Fatalf("screen = %v, want the secret prompt", m.screen)
 	}
 	typeText(t, m, long)
-	if view := m.View(); strings.Contains(view, "Resize terminal") {
+	if view := m.render(); strings.Contains(view, "Resize terminal") {
 		t.Fatalf("the long secret replaced the screen:\n%s", view)
 	}
 	pump(t, m, "enter")
