@@ -131,7 +131,7 @@ func (c *Client) getQuota(ctx context.Context, op string, s quotaScope, suffix s
 		query, out)
 	if err != nil && status == http.StatusNotFound {
 		if reachable, probeErr := c.probe(ctx, op, s.base); probeErr == nil && reachable {
-			return nil, provider.Fail(op, quotaOffMessage)
+			return nil, keepOriginal(provider.Fail(op, quotaOffMessage), err)
 		}
 	}
 	return header, err
