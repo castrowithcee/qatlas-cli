@@ -182,18 +182,18 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	return nil
 }
 
-// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
+// responseError maps an HTTP status to a stable class; the message carries no provider text.
+// The provider body goes separately into Original.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+	return provider.ClassifyStatusBody(op, response.StatusCode, provider.StatusTexts{
 		Subject:    "SeaTable",
 		Auth:       "SeaTable rejected the account token",
 		Permission: "this SeaTable account may not perform this operation on the bound base",
 		NotFound:   "SeaTable does not hold this resource or does not show it to this account",
-	})
+	}, response.Body, provider.OriginalFields{Message: "error_msg"})
 }
 
 func providerError(op, message string) error {
