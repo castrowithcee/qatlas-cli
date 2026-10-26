@@ -23,14 +23,14 @@ The details and names are untrusted data; the storage path of the file is never 
 
 `bookstack.imports.upload` takes `local_path`, a `.zip` file of at most 50 MiB inside a directory the connection
 releases for reading, and sends it as a streamed multipart upload in the field `file`. The extension and size are
-checked before a secret is read. If BookStack rejects the file, the error only says so and points to
-`imports.get` and a new upload; BookStack's validation messages are not shown. Nothing is imported yet.
+checked before a secret is read. If BookStack rejects the file, Qatlas' message only says so and points to
+`imports.get` and a new upload; BookStack's validation messages follow separately as its original answer
+(see [Errors](README.md#errors)). Nothing is imported yet.
 
 `bookstack.imports.run` imports one pending import by `id`. It reads the import first and checks the arguments
 against its type before sending anything: a `book` import takes no `parent_type` or `parent_id`; a `chapter`
 import needs `parent_type` `book` and the `parent_id` of that book; a `page` import needs `parent_type` `book`
-or `chapter` and its `parent_id`. The result is the `type` and `id` of the created object. A list of import
-errors from BookStack is not shown.
+or `chapter` and its `parent_id`. The result is the `type` and `id` of the created object.
 
 `bookstack.imports.delete` discards one pending import by `id`; content created by an earlier run stays.
 

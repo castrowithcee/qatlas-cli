@@ -2,6 +2,7 @@ package bookstack
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // userServer serves users and the guest role; role 5 is the guest role and user 99 its only member.
@@ -292,6 +294,14 @@ func TestUserWritesFailClosedWhenGuestRoleIsUnknown(t *testing.T) {
 		_, err := callPerm(t, Provider+".users."+tt.tool, boundResolved(server.URL), tt.args)
 		if err == nil || strings.Contains(err.Error(), "secret provider text") || !strings.Contains(err.Error(), "guest role") {
 			t.Errorf("%s: err = %v", tt.tool, err)
+		}
+		var perr *provider.Error
+		if !errors.As(err, &perr) || perr.Class != provider.ClassPermission || !strings.Contains(perr.Message, "guest role") {
+			t.Fatalf("%s: error = %v, want a permission error with the guest message", tt.tool, err)
+		}
+		want := []provider.OriginalEntry{{Message: "secret provider text"}}
+		if perr.Original == nil || perr.Original.Status != 403 || !reflect.DeepEqual(perr.Original.Entries, want) {
+			t.Errorf("%s: original = %+v, want status 403 and %+v", tt.tool, perr.Original, want)
 		}
 		if server.changeRequests() != 0 {
 			t.Errorf("%s: requests = %v, want no change", tt.tool, server.requests())
