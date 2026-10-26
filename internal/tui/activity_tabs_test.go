@@ -127,7 +127,7 @@ func TestLogsTabsWithoutColourAndAtTheSmallestSize(t *testing.T) {
 			view := m.View()
 			name := fmt.Sprintf("%v at %dx%d", tab.mark, size.width, size.height)
 			if strings.Contains(view, "Resize terminal") {
-				// The summary needs more height than the smallest terminal gives, as it always did.
+				// The summary needs one row more than the smallest terminal gives.
 				if tab.tab == logTabDetails && size.height == minimumHeight {
 					continue
 				}

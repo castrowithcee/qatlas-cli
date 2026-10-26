@@ -121,8 +121,9 @@ func TestOverviewAtTheSmallestSize(t *testing.T) {
 	view := m.View()
 	assertViewFits(t, ansi.Strip(view), minimumWidth, minimumHeight)
 	_, items, _ := m.overviewLines()
-	if len(items) != 5 {
-		t.Fatalf("%d selectable items, want the 5 counts:\n%s", len(items), ansi.Strip(view))
+	// The five counts and the one next step that the height leaves room for.
+	if len(items) != 6 {
+		t.Fatalf("%d selectable items, want the 5 counts and a step:\n%s", len(items), ansi.Strip(view))
 	}
 	for _, label := range []string{"Connections", "Services", "Credentials", "Tokens", "Approvals"} {
 		if !strings.Contains(view, label) {
