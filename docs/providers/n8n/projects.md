@@ -73,7 +73,7 @@ the only one it allows: a delete always deletes, and there is no argument to mov
 
 **License and role.** All project routes carry `@Licensed(PROJECT_ROLE_ADMIN)`; `create` also needs the
 global `project:create` scope. n8n answers 403 for a missing license (the license middleware), a missing API
-key scope, and a role that may not manage projects, and this provider does not read the response body, so
+key scope, and a role that may not manage projects, and Qatlas' message does not use the response body, so
 every 403 of a project tool is reported as class `permission` with a message that names all three possible
 causes (license, API key scope, role).
 
@@ -94,5 +94,5 @@ The member tools call only the member routes of the Public API, as of n8n-io/n8n
   untrusted, with the data sensitivity `n8n-project-members` (personal data). Entries beyond `limit`
   (default 100) are cut and flagged `truncated`.
 - **403.** n8n answers 403 for a missing Projects license, a missing API key scope, and a role that may not
-  manage members, and the body is not read, so every 403 is the neutral message "license or role missing",
-  class `permission`.
+  manage members, and Qatlas' message does not use the body, so every 403 is the neutral message "license or
+  role missing", class `permission`.

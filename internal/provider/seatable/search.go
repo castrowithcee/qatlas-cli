@@ -476,7 +476,7 @@ func (c *Client) post(ctx context.Context, op, path, token string, body []byte, 
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
 	if response.StatusCode != http.StatusOK {
-		return statusError(op, response.StatusCode)
+		return statusErrorBody(op, response.StatusCode, response.Body, gatewayFields)
 	}
 	if failure := provider.ReadJSON(op, "SeaTable", response.Body, maxResponseBytes, out); failure != nil {
 		return failure

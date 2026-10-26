@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Penpot: API forms
@@ -41,15 +41,14 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
   project, refuses a move into the same project, and answers without a body. Names are at most 250 characters. The
   optional `id` (user-provided UUID), `is-shared`, and `features` of the create commands are never sent.
 - Libraries (`files.clj`): `get-file-libraries` returns the libraries the file uses, directly or through another
-  library; `link-file-to-library` requires edit permission on both files and the same team. Assumed: the answers of
+  library; `link-file-to-library` requires both files in the same team. Assumed: the answers of
   `set-file-shared` and `link-file-to-library` are not read.
-- Snapshots and deleted files (`files_snapshot.clj`, `files.clj`): `create-file-snapshot` needs edit permission;
-  `restore-file-snapshot` and `delete-file` answer without a body. `restore-deleted-team-files` and
-  `permanently-delete-team-files` take a set of file IDs and answer a server-sent event stream whose `end` event
-  carries the IDs acted on. The permanent deletion acts on any file ID of the team, so the tool checks the
-  deleted-file list first. Assumed: the stream lines are `event:` and `data:` with a JSON array in the `end` event,
-  the answers of the other changes are read only as far as stated, and the response is delivered with
-  `Accept: application/json`.
+- Snapshots and deleted files (`files_snapshot.clj`, `files.clj`): `restore-file-snapshot` and `delete-file` answer
+  without a body. `restore-deleted-team-files` and `permanently-delete-team-files` take a set of file IDs and
+  answer a server-sent event stream whose `end` event carries the IDs acted on. The permanent deletion acts on any
+  file ID of the team, so the tool checks the deleted-file list first. Assumed: the stream lines are `event:` and
+  `data:` with a JSON array in the `end` event, the answers of the other changes are read only as far as stated,
+  and the response is delivered with `Accept: application/json`.
 - Media and transfer (`rpc/commands/media.clj`, `binfile.clj`, `app/media.clj`, `app/http/sse.clj`):
   `upload-file-media-object` is multipart and its file part must have an image content type;
   `create-file-media-object-from-url` lets Penpot fetch the URL, follow up to three redirects, and needs a size and an
@@ -61,7 +60,7 @@ instance. The request and answer fields are fixed by the tool descriptors and sc
   and the temporary object is readable without the token.
 - Webhooks (`webhooks.clj`): `update-webhook` requires `uri`, `mtype` (one of `application/json` and
   `application/transit+json`), and `is-active`; `uri` is always the stored one; it resets the error counters.
-  `delete-webhook` answers without a body. Edit permission on the team is checked by Penpot. Assumed: the answers of
+  `delete-webhook` answers without a body. Assumed: the answers of
   the changes are not read, and a webhook ID is not tied to a team by the command itself, which is why the tool
   proves it through `get-webhooks` first.
 - Teams (`teams.clj`, `common/types/team.cljc`): `update-team-member-role` accepts `owner`, `admin`, `editor`, and

@@ -12,7 +12,7 @@ import (
 // colour profile; empty where the terminal shows no colour.
 func (t theme) canvasPrefix() string {
 	const probe = "x"
-	out := lipgloss.NewStyle().Foreground(t.palette.text).Background(t.palette.base).Render(probe)
+	out := lipgloss.NewStyle().Foreground(t.palette.text.lip()).Background(t.palette.base.lip()).Render(probe)
 	prefix, _, _ := strings.Cut(out, probe)
 	return prefix
 }

@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Penpot: comments
@@ -34,8 +34,8 @@ appear in the file's threads (`get-comment-threads`) and a comment in the thread
 reads are the only I/O before a refusal; the refusal does not name the ID. Threads and comments that report another
 file or thread are dropped.
 
-Penpot allows editing and deleting only for the comments and threads of the token's own account; another one is
-refused by Penpot (a `provider-error`, without its text). A thread that has no comment is not listed by Penpot and
+The rights for the comment tools, including editing and deleting only your own comments, are listed under
+[Rights per tool group](setup.md#rights-per-tool-group). A thread that has no comment is not listed by Penpot and
 cannot be addressed.
 
 Changes follow [Changes](README.md#changes); read the comments of the file before trying again.

@@ -2,6 +2,7 @@ package n8n
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -254,5 +256,40 @@ func TestNotReachedToolsAreStillRefusedAtTheCall(t *testing.T) {
 	}
 	if len(calls) != 0 {
 		t.Fatalf("requests sent: %v", calls)
+	}
+}
+
+func TestFailuresCarryN8nMessageAsOriginal(t *testing.T) {
+	for _, tt := range []struct {
+		status int
+		class  provider.Class
+		body   string
+		want   string
+	}{
+		{401, provider.ClassAuth, `{"message":"` + foreignCanary + `"}`, foreignCanary},
+		{403, provider.ClassPermission, `{"message":"` + foreignCanary + `"}`, foreignCanary},
+		{404, provider.ClassNotFound, `{"message":"` + foreignCanary + `"}`, foreignCanary},
+		{422, provider.ClassProviderError, `{"message":"` + foreignCanary + `"}`, foreignCanary},
+		{400, provider.ClassProviderError, `<html>` + foreignCanary + `</html>`, "<html>" + foreignCanary + "</html>"},
+		{403, provider.ClassPermission, ``, ""},
+	} {
+		_, _, err := browse(t, func(*http.Request) (*http.Response, error) {
+			return jsonResponse(tt.status, tt.body), nil
+		}, config.TargetListRequest{Kind: "project"})
+		var perr *provider.Error
+		if err == nil || !errors.As(err, &perr) {
+			t.Fatalf("%d: err = %v", tt.status, err)
+		}
+		if perr.Class != tt.class || perr.Original == nil || perr.Original.Status != tt.status ||
+			strings.Contains(err.Error(), foreignCanary) {
+			t.Fatalf("%d: original = %+v, err = %v", tt.status, perr.Original, err)
+		}
+		got := ""
+		if len(perr.Original.Entries) > 0 {
+			got = perr.Original.Entries[0].Message
+		}
+		if got != tt.want {
+			t.Fatalf("%d: message = %q, want %q", tt.status, got, tt.want)
+		}
 	}
 }

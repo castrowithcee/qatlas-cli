@@ -118,7 +118,7 @@ func TestFocusedFieldHintIsOneLineAndTheLongFormIsInThePane(t *testing.T) {
 			if height != 1 {
 				t.Errorf("%dx%d %s: the hint takes %d lines, want one:\n%s", size.w, size.h, credential, height, view)
 			}
-			full := m.View()
+			full := m.render()
 			flat := strings.Join(strings.Fields(full), " ")
 			if credential == "a-cred" {
 				whole := strings.Contains(flat, "PERMISSION-LIST-TAIL")
@@ -133,7 +133,7 @@ func TestFocusedFieldHintIsOneLineAndTheLongFormIsInThePane(t *testing.T) {
 					}
 					press(t, m, "i")
 					if m.infoOpen {
-						t.Errorf("%dx%d: i opened the info over a text row:\n%s", size.w, size.h, m.View())
+						t.Errorf("%dx%d: i opened the info over a text row:\n%s", size.w, size.h, m.render())
 					}
 				}
 			}
