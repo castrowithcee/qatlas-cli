@@ -53,6 +53,31 @@ func showRaw(t *testing.T, m *Model) string {
 	return screenOf(m)
 }
 
+// The services table and its filter text show a base URL without the credentials in it.
+func TestServicesTableAndFilterTextHoldNoURLCredential(t *testing.T) {
+	m := rawModel(t)
+	openSectionByName(t, m, sectionServices)
+	canaries := []string{canaryURLPass, canaryQuery, canaryUser}
+	for _, name := range m.list.all {
+		if isGroupRow(name) {
+			continue
+		}
+		m.list.selectName(name)
+		shown := map[string]string{
+			"screen":   screenOf(m),
+			"cells":    strings.Join(m.cells(name), "\n"),
+			"describe": m.describe(name),
+		}
+		for where, text := range shown {
+			for _, c := range canaries {
+				if strings.Contains(text, c) {
+					t.Errorf("%q: the %s shows %q:\n%s", name, where, c, text)
+				}
+			}
+		}
+	}
+}
+
 // The raw tab shows the entry as written, but never a secret value and never a control character.
 func TestDetailRawHoldsNoSecretAndNoControlCharacter(t *testing.T) {
 	before := lipgloss.ColorProfile()
@@ -70,12 +95,7 @@ func TestDetailRawHoldsNoSecretAndNoControlCharacter(t *testing.T) {
 			m.leaveDetail()
 			m.screen = screenList
 			m.list.selectName(name)
-			// Only the pane counts: the table beside it shows what the list shows today.
-			var paneText []string
-			for _, line := range strings.Split(showRaw(t, m), "\n") {
-				paneText = append(paneText, ansi.TruncateLeft(line, m.listWidth(), ""))
-			}
-			view := strings.Join(paneText, "\n")
+			view := showRaw(t, m)
 			for _, c := range canaries {
 				if strings.Contains(view, c) {
 					t.Errorf("%v %q: the raw tab shows %q:\n%s", s, name, c, view)
