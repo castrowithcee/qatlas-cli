@@ -168,7 +168,8 @@ func longInputCases() []longInputCase {
 }
 
 func TestLongInputStaysOneScrollingLine(t *testing.T) {
-	long := strings.Repeat(longMark, 1000)
+	// Longer than the widest size below, which is all the scrolling needs; every typed rune redraws the screen.
+	long := strings.Repeat(longMark, 300)
 	sizes := []struct{ w, h int }{{80, 24}, {minimumWidth, minimumHeight}, {208, 60}}
 	for _, c := range longInputCases() {
 		for _, size := range sizes {

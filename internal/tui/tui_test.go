@@ -195,12 +195,12 @@ func typeText(t *testing.T, m *Model, text string) {
 	}
 }
 
-// clearField sends backspaces to the focused text field.
+// clearField empties the focused text field with the field's own delete-before and delete-after keys: two
+// key presses instead of one per character, since every key press redraws the screen to check its size.
 func clearField(t *testing.T, m *Model) {
 	t.Helper()
-	for i := 0; i < 256; i++ {
-		m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
-	}
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 }
 
 // openSectionByName navigates from the tab line to a section the way a person does: the digit of its area,
