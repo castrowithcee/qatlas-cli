@@ -4,13 +4,15 @@ import (
 	"os"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // palette names the colours of a theme by role. Screen code takes colours only from here or from the styles
-// built on them, never as a literal. All values are truecolor hex; lipgloss steps them down to 256 or 16
-// colours (or none) by the profile of the terminal. A palette of a theme without colour is the zero value.
+// built on them, never as a literal. Each theme has a truecolor palette (hex) and one hand-picked for 256 and for
+// 16 colours (see paletteOf), because a computed step-down picks muddy neighbours. A palette of a theme without
+// colour is the zero value.
 type palette struct {
 	base, surface, panel   lipgloss.Color
 	border, borderFocus    lipgloss.Color
@@ -39,6 +41,65 @@ var lightPalette = palette{
 	selection: "#cfe0fb",
 	heat:      [5]lipgloss.Color{"#e1e8ef", "#b7e1c4", "#7cc794", "#3fa365", "#1b7a44"},
 	brand:     [8]lipgloss.Color{"#c2570c", "#1d5fd6", "#9a6700", "#0f7f79", "#7b3fc4", "#1a7f43", "#b8346f", "#c62828"},
+}
+
+// The 256-colour palettes name indexes of the xterm cube and ramp, the 16-colour ones the ANSI slots of the
+// terminal's own scheme. The 16-colour surfaces stay black: a dim grey slot would fall into the text colours.
+var darkPalette256 = palette{
+	base: "233", surface: "234", panel: "235",
+	border: "240", borderFocus: "69",
+	text: "253", textDim: "246",
+	accent: "75", ok: "71", fail: "203", warn: "179",
+	selection: "24",
+	heat:      [5]lipgloss.Color{"236", "22", "29", "35", "41"},
+	brand:     [8]lipgloss.Color{"208", "75", "179", "37", "135", "78", "168", "203"},
+}
+
+var lightPalette256 = palette{
+	base: "255", surface: "254", panel: "231",
+	border: "250", borderFocus: "26",
+	text: "234", textDim: "241",
+	accent: "26", ok: "28", fail: "160", warn: "130",
+	selection: "153",
+	heat:      [5]lipgloss.Color{"254", "151", "114", "71", "28"},
+	brand:     [8]lipgloss.Color{"166", "26", "130", "30", "91", "28", "125", "160"},
+}
+
+var darkPalette16 = palette{
+	base: "0", surface: "0", panel: "0",
+	border: "8", borderFocus: "12",
+	text: "15", textDim: "7",
+	accent: "12", ok: "10", fail: "9", warn: "11",
+	selection: "4",
+	heat:      [5]lipgloss.Color{"8", "2", "2", "10", "10"},
+	brand:     [8]lipgloss.Color{"3", "12", "11", "6", "5", "10", "13", "9"},
+}
+
+var lightPalette16 = palette{
+	base: "15", surface: "15", panel: "15",
+	border: "8", borderFocus: "4",
+	text: "0", textDim: "8",
+	accent: "4", ok: "2", fail: "1", warn: "3",
+	selection: "7",
+	heat:      [5]lipgloss.Color{"7", "2", "2", "10", "10"},
+	brand:     [8]lipgloss.Color{"3", "4", "3", "6", "5", "2", "5", "1"},
+}
+
+// paletteOf is the palette of a theme for the colour profile of the terminal.
+func paletteOf(dark bool, profile termenv.Profile) palette {
+	switch {
+	case profile == termenv.ANSI256 && dark:
+		return darkPalette256
+	case profile == termenv.ANSI256:
+		return lightPalette256
+	case profile == termenv.ANSI && dark:
+		return darkPalette16
+	case profile == termenv.ANSI:
+		return lightPalette16
+	case dark:
+		return darkPalette
+	}
+	return lightPalette
 }
 
 // theme holds the palette and the styles of the TUI. The styles are built from the palette roles. None of
@@ -94,10 +155,7 @@ func buildTheme(dark, noColor, filled bool) theme {
 			footKey:     lipgloss.NewStyle().Bold(true),
 		}
 	}
-	p := lightPalette
-	if dark {
-		p = darkPalette
-	}
+	p := paletteOf(dark, lipgloss.ColorProfile())
 	return theme{
 		palette:     p,
 		title:       lipgloss.NewStyle().Bold(true).Foreground(p.text),
