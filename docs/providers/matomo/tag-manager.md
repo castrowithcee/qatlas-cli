@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, deleting and pausing tags of the draft, and creating, updating, and deleting containers, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, adding, updating, and deleting triggers of the draft, adding, updating, pausing, resuming, and deleting tags of the draft, and creating, updating, and deleting containers, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -41,6 +41,9 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
 | `matomo.tag-manager-tags.delete` | deletes a tag from the draft |
 | `matomo.tag-manager-tags.pause` | pauses a tag of the draft |
+| `matomo.tag-manager-tags.add` | adds a tag of the type `Matomo` or `ThemeColor` to the draft |
+| `matomo.tag-manager-tags.update` | replaces name, parameters, trigger IDs, fire settings, and description of a tag of the draft |
+| `matomo.tag-manager-tags.resume` | activates a paused tag of the draft again |
 | `matomo.tag-manager-containers.create-default` | creates the default container of a website |
 | `matomo.tag-manager-containers.add` | creates a container with a context, name, and settings |
 | `matomo.tag-manager-containers.update` | replaces name, description, and settings of a container |
@@ -94,7 +97,7 @@ the paths of non-live releases are data of the website's owners, and the change 
   nothing changed. It is offered only via `tools`.
 - The change tools send exactly one request after confirmation and never repeat it. After a timeout, a reset, a
   server error, or an answer that cannot be read, the result is unknown: read the versions (or, for the trigger
-  tools, the triggers with `matomo.tag-manager-triggers.list`) before trying again. A container and a version are bound by Matomo to `idSite`
+  and tag tools, the triggers or tags with `matomo.tag-manager-triggers.list` or `matomo.tag-manager-tags.list`) before trying again. A container and a version are bound by Matomo to `idSite`
   (and `idContainer`) before it changes anything, so no prior read is made and an ID of another website is not found.
 - Names and descriptions are untrusted text. A name has 1 to 50 characters (Matomo's API limit), a description up to
   1000.
@@ -116,12 +119,23 @@ the paths of non-live releases are data of the website's owners, and the change 
   unknown trigger type, and a condition with a missing value, an unknown comparison, or an unknown variable; each is
   reported as such and nothing changed. A custom template needs the right to use custom templates.
 - `matomo.tag-manager-triggers.delete` cannot be undone and is offered only via `tools`.
-- The tag tools `matomo.tag-manager-tags.delete` and `matomo.tag-manager-tags.pause` bind to the draft the same way
-  and take only `idSite`, `idContainer`, and `idTag`. Pausing changes the draft only: it takes effect live after a
+- The tag tools bind to the draft the same way as the trigger tools and publish nothing. `matomo.tag-manager-tags.delete`
+  and `matomo.tag-manager-tags.pause` take only `idSite`, `idContainer`, and `idTag`. Pausing takes effect live after a
   release. Deleting cannot be undone and removes a data path; it is offered only via `tools`. Both need the right to
   use custom templates for a tag of a custom template; without it the refusal is a permission error. After an unclear
   result read the tags with `matomo.tag-manager-tags.list` before trying again.
-
+- `matomo.tag-manager-tags.add`, `matomo.tag-manager-tags.update`, and `matomo.tag-manager-tags.resume` accept only the
+  tag types `Matomo` and `ThemeColor`, a fixed list that `matomo.tag-manager-catalog.list` does not extend: every
+  other type can send data to a third party. `add` refuses another type before any request; `update` and `resume`
+  read the stored tag once and refuse one of another type before they change anything. `update` replaces everything
+  as given and cannot change the type; `add` takes `status` (`active` or `paused`). `parameters` are capped like
+  those of triggers; Matomo keeps only the parameters the type defines.
+- A `Matomo` tag sends to the address of the variable its `matomoConfig` refers to. The reference must be exactly one
+  `{{Name}}` that names a variable of the draft of the type `MatomoConfiguration`, whose `matomoUrl` and `idSite` are
+  written out (no reference) and equal this connection's base URL (scheme, host, port, and path, ignoring a trailing
+  slash) and the selected website. The tool reads the variables of the draft once for it; otherwise it refuses
+  without a request to change anything and without naming the other value. `resume` applies the rule to the stored
+  `matomoConfig`. Variables themselves are not changed by these tools.
 - The container tools create a container with its draft and change its name, description, and settings; they save no
   version and publish nothing. `matomo.tag-manager-containers.add` takes a `context` that cannot change later;
   `matomo.tag-manager-containers.update` replaces everything as given, so `description` and the three settings are
@@ -136,5 +150,4 @@ the paths of non-live releases are data of the website's owners, and the change 
   `matomo.tag-manager-containers.list`. `matomo.tag-manager-containers.create-default` returns `idContainer` only when
   Matomo reports it.
 
-Importing a version, adding, changing, or resuming tags, variables, and publishing a release are not part of these
-tools.
+Importing a version, changing variables, and publishing a release are not part of these tools.
