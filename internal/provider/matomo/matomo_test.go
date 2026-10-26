@@ -238,7 +238,8 @@ var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.dist
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
 	metadata, ok := reg.ProviderMetadata(Provider)
-	if !ok || len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != roleToken ||
+	if !ok || len(metadata.SecretRoles) != 2 || metadata.SecretRoles[0].Name != roleToken || metadata.SecretRoles[0].Optional ||
+		metadata.SecretRoles[1].Name != rolePasswordConfirmation || !metadata.SecretRoles[1].Optional ||
 		metadata.DefaultBaseURL != "" || metadata.Target.Required || !metadata.Target.Multiple {
 		t.Fatalf("metadata = %+v", metadata)
 	}
@@ -249,7 +250,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			strings.HasPrefix(tool.ID, "matomo.site-urls.") ||
 			tool.ID == "matomo.users.delete" || tool.ID == "matomo.users.logout" ||
 			tool.ID == "matomo.access.set" || tool.ID == "matomo.capabilities.add" || tool.ID == "matomo.capabilities.remove" ||
-			tool.ID == "matomo.data-subjects.delete" ||
+			tool.ID == "matomo.data-subjects.delete" || tool.ID == "matomo.raw-data.anonymize" || tool.ID == "matomo.data-purge.run" ||
+			strings.HasPrefix(tool.ID, "matomo.tracking-failures.delete") ||
 			(strings.HasPrefix(tool.ID, "matomo.global-settings.") && tool.ID != "matomo.global-settings.get") || tool.ID == "matomo.site-groups.rename" || strings.HasPrefix(tool.ID, "matomo.compliance.set-") ||
 			tool.ID == "matomo.compliance.enforce" || tool.ID == "matomo.archive-settings.set" ||
 			tool.ID == "matomo.trusted-hosts.set" || tool.ID == "matomo.branding.set" || tool.ID == "matomo.reports.archive") &&
@@ -259,7 +261,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 21 || len(metadata.Tools) != 91 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 22 || len(metadata.Tools) != 97 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
@@ -502,6 +504,8 @@ func TestMessagePatterns(t *testing.T) {
 		"The compliance policy is controlled by the config file and cannot be changed":         "config-controlled",
 		`The setting "Core.token" is unknown or cannot be toggled`:                             "unknown-setting",
 		`The setting "Core.not enabled" is unknown or cannot be toggled`:                       "unknown-setting",
+		"The current password you entered is not correct.":                                     "password-refused",
+		"Please re-authenticate to confirm this change.":                                       "password-refused",
 		"Username 'tokenx' already exists.":                                                    "",
 		"Ein unbekannter Fehler":                                                               "",
 		"":                                                                                     "",

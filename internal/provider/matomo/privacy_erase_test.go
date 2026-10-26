@@ -11,12 +11,57 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const eraseConnections = `
+const (
+	confirmEnv   = "PE_CONFIRM_ENV"
+	confirmValue = "confirm-canary-8f2a1c"
+)
+
+const eraseDocument = `version: 1
+services:
+  matomo:
+    provider: matomo
+    base_url: ` + baseURL + `
+credentials:
+  token:
+    provider: matomo
+    type: env
+    values:
+      token: ` + tokenEnv + `
+  withpw:
+    provider: matomo
+    type: env
+    values:
+      token: ` + tokenEnv + `
+      password-confirmation: ` + confirmEnv + `
+  locked:
+    provider: matomo
+    type: keyring
+connections:
   pe-delete: {service: matomo, credential: token, tools: [matomo.data-subjects.delete], targets: [site/1, site/2]}
-  pe-effects: {service: matomo, credential: token, effects: [read, update, delete, execute], targets: [site, instance]}
+  pe-delete-pw: {service: matomo, credential: withpw, tools: [matomo.data-subjects.delete], targets: [site/1, site/2]}
+  pe-anon: {service: matomo, credential: withpw, tools: [matomo.raw-data.anonymize], targets: [site/1, site/2, instance]}
+  pe-anon-nopw: {service: matomo, credential: token, tools: [matomo.raw-data.anonymize], targets: [site/1, instance]}
+  pe-anon-noinst: {service: matomo, credential: withpw, tools: [matomo.raw-data.anonymize], targets: [site/1]}
+  pe-anon-instonly: {service: matomo, credential: withpw, tools: [matomo.raw-data.anonymize], targets: [instance]}
+  pe-purge: {service: matomo, credential: withpw, tools: [matomo.data-purge.run], targets: [instance]}
+  pe-purge-nopw: {service: matomo, credential: token, tools: [matomo.data-purge.run], targets: [instance]}
+  pe-purge-noinst: {service: matomo, credential: withpw, tools: [matomo.data-purge.run], targets: [site]}
+  pe-purge-locked: {service: matomo, credential: locked, tools: [matomo.data-purge.run], targets: [instance]}
+  pe-effects: {service: matomo, credential: withpw, effects: [read, update, delete, execute], targets: [site, instance]}
 `
+
+// lockedPasswordStore answers the token and fails for the password role, as a locked store would.
+type lockedPasswordStore struct{ *secret.MemoryStore }
+
+func (s lockedPasswordStore) Get(ctx context.Context, key string) (string, error) {
+	if strings.HasSuffix(key, "/"+rolePasswordConfirmation) {
+		return "", secret.ErrLocked
+	}
+	return s.MemoryStore.Get(ctx, key)
+}
 
 func newEraseEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
 	t.Helper()
@@ -24,23 +69,41 @@ func newEraseEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.
 	reads := 0
 	red := &redact.Redactor{}
 	reg := registry(t)
-	document := strings.Replace(testConfigDocument, "connections:\n", "connections:\n"+strings.TrimPrefix(eraseConnections, "\n"), 1)
-	cfg, err := config.Decode(strings.NewReader(document), reg)
+	cfg, err := config.Decode(strings.NewReader(eraseDocument), reg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &environment{cfg: cfg, core: application.New(reg, cfg, resolver(red, &reads), red), red: red, reads: &reads}
+	store := secret.NewMemoryStore()
+	if err := store.Set(secret.StoreKey("locked", roleToken), tokenValue); err != nil {
+		t.Fatal(err)
+	}
+	resolve := secret.NewWith(func(name string) string {
+		reads++
+		switch name {
+		case tokenEnv:
+			return tokenValue
+		case confirmEnv:
+			return confirmValue
+		}
+		return ""
+	}, lockedPasswordStore{store}, nil, red)
+	return &environment{cfg: cfg, core: application.New(reg, cfg, resolve, red), red: red, reads: &reads}
 }
 
 func eraseAnswers(method string, handler func(call) *http.Response) answers {
 	return with(pluginsOn(), answers{method: handler})
 }
 
-const deleteArgs = `{"visits":[{"idSite":1,"idVisit":11},{"idSite":2,"idVisit":12}]}`
+const (
+	deleteArgs    = `{"visits":[{"idSite":1,"idVisit":11},{"idSite":2,"idVisit":12}]}`
+	anonymizeArgs = `{"idSites":[2,1],"date":"2026-01-01,2026-01-31","anonymizeIp":true,"unsetVisitColumns":["location_city"]}`
+)
 
 // eraseCases are the tools with a connection and arguments that pass every check before a request.
 var eraseCases = []struct{ id, method, connection, args string }{
 	{"matomo.data-subjects.delete", "PrivacyManager.deleteDataSubjects", "pe-delete", deleteArgs},
+	{"matomo.raw-data.anonymize", "PrivacyManager.anonymizeSomeRawData", "pe-anon", anonymizeArgs},
+	{"matomo.data-purge.run", "PrivacyManager.executeDataPurge", "pe-purge", `{}`},
 }
 
 func TestEraseToolsAreListedOnlyAndInNoProfile(t *testing.T) {
@@ -50,6 +113,8 @@ func TestEraseToolsAreListedOnlyAndInNoProfile(t *testing.T) {
 		sensitivity string
 	}{
 		"matomo.data-subjects.delete": {capability.EffectDelete, dataSubjectsSensitive},
+		"matomo.raw-data.anonymize":   {capability.EffectUpdate, rawDataSensitive},
+		"matomo.data-purge.run":       {capability.EffectExecute, rawDataSensitive},
 	} {
 		d, _, found := reg.Lookup(id)
 		if !found || d.Risk.Effect != want.effect || d.Risk.Idempotency != capability.IdempotencyIdempotent ||
@@ -61,7 +126,7 @@ func TestEraseToolsAreListedOnlyAndInNoProfile(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, id := range profile.Tools {
-			if id == "matomo.data-subjects.delete" {
+			if id == "matomo.data-subjects.delete" || id == "matomo.raw-data.anonymize" || id == "matomo.data-purge.run" {
 				t.Errorf("profile %s holds %s", profile.ID, id)
 			}
 		}
@@ -189,6 +254,9 @@ func TestEraseToolsNeverRepeatAfterAnUnclearResult(t *testing.T) {
 		handlers := map[string]func(call) *http.Response{
 			"server": func(call) *http.Response { return respond(500, bodyCanary) },
 			"html":   func(call) *http.Response { return ok(`<html>` + bodyCanary + `</html>`) },
+		}
+		if c.id != "matomo.data-subjects.delete" {
+			handlers["no confirmation"] = func(call) *http.Response { return ok(`{"value":1}`) }
 		}
 		for name, handler := range handlers {
 			var calls []call

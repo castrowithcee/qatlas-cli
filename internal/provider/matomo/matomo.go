@@ -74,7 +74,8 @@ func Register(reg *capability.Registry) error {
 	readTools := []string{versionGet.ID, sitesList.ID, sitesGet.ID, reportsList.ID, reportsDescribe.ID,
 		segmentsFields.ID, segmentsSuggest.ID, reportsGet.ID, goalsList.ID, goalsGet.ID, segmentsList.ID,
 		segmentsGet.ID, annotationsList.ID, annotationsGet.ID, annotationsCount.ID, trackingCodeGet.ID,
-		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID, referenceDataList.ID, ipRangesExpand.ID}
+		siteSettingsGet.ID, consentManagerDetect.ID, dimensionsList.ID, referenceDataList.ID, ipRangesExpand.ID,
+		optOutCodeGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Matomo",
 		Description:    "Web analytics, on-premise or Matomo Cloud, through a personal authentication token",
@@ -87,6 +88,10 @@ func Register(reg *capability.Registry) error {
 			Name: roleToken,
 			Description: "Personal Matomo authentication token, created under Personal, Security; it has the " +
 				"rights of its user per website and is sent as 'Authorization: Bearer ...'",
+		}, {
+			Name: rolePasswordConfirmation, Optional: true,
+			Description: "Matomo password of the token's user; sent only as the password confirmation Matomo asks " +
+				"for on raw data anonymization and data purge, and set only for a connection that offers those tools",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "website",
@@ -112,7 +117,7 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read websites", Recommended: true,
 			Description: "reads the instance version, the websites of the token, their tracking code, settings, and " +
-				"consent manager, the goals, the saved segments, the annotations, the custom dimensions, the report and " +
+				"consent manager, the opt-out code, the goals, the saved segments, the annotations, the custom dimensions, the report and " +
 				"segment catalog of a website, the data of its reports, reference data, and IP ranges; changes nothing",
 			Tools: readTools,
 		}, {
@@ -120,9 +125,10 @@ func Register(reg *capability.Registry) error {
 			// separate choice and not part of the recommended start.
 			ID: "live", Title: "Read websites and live visits",
 			Description: "reads what the read profile reads, the visit log with visitor IDs, IP addresses, user IDs, " +
-				"and locations, the live counters, the time of the latest visit, and visitor profiles; changes nothing",
+				"and locations, the live counters, the time of the latest visit, visitor profiles, and the tracking failures " +
+				"with the requests that failed; changes nothing",
 			Tools: append(slices.Clone(readTools), visitsList.ID, liveCountersGet.ID, visitsGetLatestTime.ID,
-				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID),
+				visitorsGetProfile.ID, visitorsGetLatestID.ID, visitsGetFirst.ID, trackingFailuresList.ID),
 		}, {
 			ID: "goals", Title: "Manage goals",
 			Description: "reads what the read profile reads and adds and updates the goals of a website, and reads, scans for, and dismisses goal recommendations; every " +
@@ -238,6 +244,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataSubjectsFind, Handler: capability.Handler(invokeDataSubjectsFind)},
 		capability.Operation{Descriptor: dataSubjectsExport, Handler: capability.Handler(invokeDataSubjectsExport)},
 		capability.Operation{Descriptor: dataSubjectsDelete, Handler: capability.Handler(invokeDataSubjectsDelete)},
+		capability.Operation{Descriptor: rawDataAnonymize, Handler: capability.Handler(invokeRawDataAnonymize)},
+		capability.Operation{Descriptor: dataPurgeRun, Handler: capability.Handler(invokeDataPurgeRun)},
 		capability.Operation{Descriptor: privacySettingsGet, Handler: capability.Handler(invokePrivacySettingsGet)},
 		capability.Operation{Descriptor: complianceGet, Handler: capability.Handler(invokeComplianceGet)},
 		capability.Operation{Descriptor: complianceSetPolicySettings, Handler: capability.Handler(invokeComplianceSetPolicySettings)},
@@ -251,5 +259,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: transitionsGet, Handler: capability.Handler(invokeTransitionsGet)},
 		capability.Operation{Descriptor: botRealtimeGet, Handler: capability.Handler(invokeBotRealtimeGet)},
 		capability.Operation{Descriptor: databaseStatisticsGet, Handler: capability.Handler(invokeDatabaseStatisticsGet)},
+		capability.Operation{Descriptor: trackingFailuresList, Handler: capability.Handler(invokeTrackingFailuresList)},
+		capability.Operation{Descriptor: trackingFailuresDelete, Handler: capability.Handler(invokeTrackingFailuresDelete)},
+		capability.Operation{Descriptor: trackingFailuresDeleteAll, Handler: capability.Handler(invokeTrackingFailuresDeleteAll)},
+		capability.Operation{Descriptor: optOutCodeGet, Handler: capability.Handler(invokeOptOutCodeGet)},
 	)
 }
