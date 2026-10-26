@@ -65,18 +65,36 @@ func randomValue() string {
 	return strconv.FormatUint(binary.BigEndian.Uint64(b[:])>>1, 10)
 }
 
-// send posts the form once to matomo.php. Only an empty 204 or a GIF counts as sent; that proves no
-// processing, because Matomo answers many invalid parameters the same way and a queue confirms before it
-// processes. It never retries.
-func (s *trackingSender) send(ctx context.Context, op string, site int, params url.Values, auth *trackingAuth) error {
+// checkedForm copies params and refuses a set that holds a parameter this provider never sends.
+func checkedForm(op string, params url.Values) (url.Values, error) {
 	form := url.Values{}
 	for name, values := range params {
 		form[name] = values
 	}
 	for _, name := range neverSentParameters {
 		if _, found := form[name]; found {
-			return provider.Fail(op, "the request carries a parameter this provider never sends")
+			return nil, provider.Fail(op, "the request carries a parameter this provider never sends")
 		}
+	}
+	return form, nil
+}
+
+// stamp sets the parameters every tracking request carries, whatever the tool.
+func stamp(form url.Values, site int) {
+	form.Set("idsite", strconv.Itoa(site))
+	form.Set("rec", "1")
+	form.Set("apiv", "1")
+	form.Set("rand", randomValue())
+	form.Set("send_image", "0")
+}
+
+// send posts the form once to matomo.php. Only an empty 204 or a GIF counts as sent; that proves no
+// processing, because Matomo answers many invalid parameters the same way and a queue confirms before it
+// processes. It never retries.
+func (s *trackingSender) send(ctx context.Context, op string, site int, params url.Values, auth *trackingAuth) error {
+	form, err := checkedForm(op, params)
+	if err != nil {
+		return err
 	}
 	if auth != nil {
 		if auth.token == "" || len(auth.overrides) == 0 {
@@ -90,11 +108,7 @@ func (s *trackingSender) send(ctx context.Context, op string, site int, params u
 		}
 		form.Set("token_auth", auth.token)
 	}
-	form.Set("idsite", strconv.Itoa(site))
-	form.Set("rec", "1")
-	form.Set("apiv", "1")
-	form.Set("rand", randomValue())
-	form.Set("send_image", "0")
+	stamp(form, site)
 	if err := s.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, subject, err)
 	}
