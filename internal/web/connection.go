@@ -478,7 +478,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 
 	summary := []summaryRow{
 		{"provider", metadata.Name},
-		{"service", cand.Services[conn.Service].BaseURL + " (" + serviceState + ")"},
+		{"service", config.MaskURL(cand.Services[conn.Service].BaseURL) + " (" + serviceState + ")"},
 		{"credential", conn.Credential + " (" + credentialState + ") · " + storage},
 		{"connection", f.ConnName},
 		{"targets", targets},
