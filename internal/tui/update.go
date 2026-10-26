@@ -249,13 +249,15 @@ func (m *Model) updateView() string {
 	if m.restart != nil {
 		after = tr(tUpdateAfterRestart)
 	}
-	// One consequence per line: a sentence that comes and goes with the running processes would otherwise move
-	// where the others wrap.
-	var details []string
-	for _, sentence := range strings.SplitAfter(m.updateText, ". ") {
-		if sentence = strings.TrimSpace(sentence); sentence != "" {
-			details = append(details, m.wrapped(lipgloss.NewStyle(), sentence))
-		}
+	// The closing advice stands on a line of its own: a sentence about other running processes, present on one
+	// machine and missing on another, would otherwise move where it wraps.
+	text, advice := strings.TrimSpace(m.updateText), ""
+	if i := strings.LastIndex(text, ". "); i >= 0 {
+		text, advice = text[:i+1], strings.TrimSpace(text[i+2:])
+	}
+	details := []string{m.wrapped(lipgloss.NewStyle(), text)}
+	if advice != "" {
+		details = append(details, m.wrapped(lipgloss.NewStyle(), advice))
 	}
 	details = append(details, "", m.wrapped(lipgloss.NewStyle(), after))
 	return m.questionText(question{

@@ -200,7 +200,12 @@ func (m *Model) modalView() (string, bool) {
 		return "", false
 	}
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	if len(lines) > m.termHeight-4 {
+	room := m.termHeight - 4
+	if m.questionScreen() {
+		// A question leaves the top line and the tab line in view, so it never hides where it was asked.
+		room = m.termHeight - 6
+	}
+	if len(lines) > room {
 		return "", false
 	}
 	for i, line := range lines {
