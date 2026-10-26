@@ -16,7 +16,7 @@ setup profiles. The tools are sorted into groups; each group has a page: [sites 
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md),
 [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
-[users and roles](users.md), and [privacy and data subject requests](privacy.md).
+[users and roles](users.md), [privacy and data subject requests](privacy.md), and [Tag Manager](tag-manager.md).
 
 ## Configuration
 
@@ -169,6 +169,9 @@ The [insights, transitions, and AI chatbot reads](reports.md#insights-transition
 `matomo.insights.list`, `matomo.transitions.get`, and `matomo.bot-realtime.get` and the
 [database statistics](instance.md#database-statistics) `matomo.database-statistics.get` (target `instance`) are in no
 profile and are offered only via `tools`.
+The [Tag Manager reads](tag-manager.md) `matomo.tag-manager-containers.list`, `matomo.tag-manager-containers.get`,
+`matomo.tag-manager-containers.get-embed-code`, and `matomo.tag-manager-catalog.list` are in no profile and are offered
+only via `tools`.
 The profile `goals` adds `matomo.goals.add`,
 `matomo.goals.update`, and the [goal recommendation tools](goals.md#goal-recommendations), which need a write
 right; it is not recommended because it changes the goal configuration of a website. `matomo.goals.delete` is in
@@ -202,6 +205,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [saved segments](segments.md) | reading, creating, replacing, starring, and deleting saved segments |
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
+| [Tag Manager](tag-manager.md) | containers, embed code and installation steps, catalog of contexts, environments, and templates |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never

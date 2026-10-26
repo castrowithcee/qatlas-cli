@@ -269,5 +269,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trackingFailuresDelete, Handler: capability.Handler(invokeTrackingFailuresDelete)},
 		capability.Operation{Descriptor: trackingFailuresDeleteAll, Handler: capability.Handler(invokeTrackingFailuresDeleteAll)},
 		capability.Operation{Descriptor: optOutCodeGet, Handler: capability.Handler(invokeOptOutCodeGet)},
+		capability.Operation{Descriptor: tagManagerContainersList, Handler: capability.Handler(invokeTagManagerContainersList)},
+		capability.Operation{Descriptor: tagManagerContainersGet, Handler: capability.Handler(invokeTagManagerContainersGet)},
+		capability.Operation{Descriptor: tagManagerContainersGetEmbedCode, Handler: capability.Handler(invokeTagManagerContainersGetEmbedCode)},
+		capability.Operation{Descriptor: tagManagerCatalogList, Handler: capability.Handler(invokeTagManagerCatalogList)},
 	)
 }
