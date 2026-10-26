@@ -4,12 +4,12 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # BookStack administration
 
-Group `administration`.
+Group `administration`. The token rights are listed under [Administration](setup.md#administration).
 
 ## Instance information
 
@@ -47,8 +47,8 @@ without sending the change, when
   `role_permissions`, otherwise the current ones) have no explicit guest entry with all four values `false`, or
 - `owner_id` is a user of the guest role, because ownership would pass to anonymous visitors.
 
-If the guest role cannot be determined (for example the token's user lacks the BookStack permission to manage
-user roles, no role has the system name `public`, or the confirmation differs), the change is refused as well.
+If the guest role cannot be determined (for example the role list cannot be read, no role has
+the system name `public`, or the confirmation differs), the change is refused as well.
 The refusals never name the other target or relay provider text. The guest lookup is made once per call and not
 cached beyond it.
 
@@ -64,7 +64,7 @@ content. Names and descriptions are untrusted data.
 
 `bookstack.recycle-bin.restore` restores one deletion by `deletion_id`.
 `bookstack.recycle-bin.destroy` destroys one deletion permanently; this cannot be
-undone. BookStack requires the role permissions `settings-manage` and `restrictions-manage-all` for all three.
+undone.
 The recycle bin spans the whole instance, so the tools are refused on a connection with targets. Each
 change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
 reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
@@ -76,14 +76,13 @@ These tools cover the whole instance, so they are refused on a connection with t
 read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
 authentication identifiers, IP addresses). Names and texts are untrusted data.
 
-`bookstack.users.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.users.get` (`id`) need the role permission
-`users-manage`. BookStack does not report roles in the
+`bookstack.users.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.users.get` (`id`) read users. BookStack does not report roles in the
 listing, so only `get` carries them. The avatar and edit addresses are returned as untrusted addresses of the instance and are never fetched. `last_activity_at` and `created_at`
 can be sorted but not filtered: the listing joins the latest activity as `last_activity_at`, so a filter on the alias
 fails and one on `created_at` is ambiguous. A filter on `email` or `external_auth_id` narrows only what the tool
 already lists.
 
-`bookstack.roles.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.roles.get` (`id`) need `user-roles-manage`. `get` returns the
+`bookstack.roles.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.roles.get` (`id`) read roles. `get` returns the
 `permissions` and the `users` of the role besides the listed fields, at most 1000 users; `truncated` is true when the
 users or permissions were cut. `users_count` and `permissions_count` can be sorted but not filtered: BookStack
 computes them as aliases of counting subqueries, and the database does not accept such an alias in a filter
@@ -91,8 +90,7 @@ condition. Without `sort`, the list is ordered by `id`, which is not a listed fi
 
 ### Changing roles
 
-`bookstack.roles.create`, `bookstack.roles.update`, and `bookstack.roles.delete` need the role permission
-`user-roles-manage`. Role permissions can escalate up to full administrative control of the instance, so these
+`bookstack.roles.create`, `bookstack.roles.update`, and `bookstack.roles.delete` change roles. Role permissions can escalate up to full administrative control of the instance, so these
 tools require a tool allow list, are part of no profile, need confirmation, and are refused on a connection with
 targets. Each sends exactly one change request without retry; after a timeout, a 5xx answer, or an unreadable
 answer the result is reported as uncertain. `create` and `update` return the role like `roles.get`.
@@ -123,8 +121,7 @@ so the argument does not exist and no request body contains it.
 
 ### Changing and deleting users
 
-`bookstack.users.update` and `bookstack.users.delete` change or remove existing users and need the role
-permission `users-manage`. They require a tool allow list, are part of no profile, need confirmation, and are
+`bookstack.users.update` and `bookstack.users.delete` change or remove existing users. They require a tool allow list, are part of no profile, need confirmation, and are
 refused on a connection with targets (before any secret is read). Each sends exactly one change request
 without retry; after a timeout, a 5xx answer, or an unreadable answer the result is reported as uncertain. No tool
 creates or invites users or sets an e-mail address, a password, or an external authentication identifier, and no
@@ -140,12 +137,12 @@ them.
   that user. BookStack refuses to delete the only administrator and the guest user.
 
 Public access is protected. When `roles` is given, `users.update` determines the guest role (system role `public`;
-a read of the role list, at most 100 roles, and a read of that role, which needs `user-roles-manage` as well) and
+a read of the role list, at most 100 roles, and a read of that role) and
 refuses, without a change, when the user is a guest user, when `roles` contains the guest role, or when the guest
 role cannot be determined. `users.delete` does the same check when `migrate_ownership_id` is given and refuses
 to hand the content to a guest user. Without `roles` or `migrate_ownership_id` no role is read.
 
-`bookstack.audit-log.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
+`bookstack.audit-log.list` lists the audit log. It contains IP addresses and sign-in events
 of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, `sort`, `filters`, and
 the arguments `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
 `loggable_type` (`page`, `chapter`, `book`, or `bookshelf`), `loggable_id`, and `created_after`/`created_before`
