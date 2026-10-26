@@ -124,7 +124,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 	current := map[string]string{
 		approval.FieldCredential:  choiceText(c.After.Credential),
 		approval.FieldProvider:    choiceText(c.After.Provider),
-		approval.FieldOrigin:      choiceText(c.After.Origin),
+		approval.FieldOrigin:      choiceText(approval.OriginText(c.After.Origin)),
 		approval.FieldEffects:     approvalList(c.After.Effects),
 		approval.FieldTargets:     approvalList(c.After.Targets),
 		approval.FieldTools:       approvalTools(c.After.Tools),
@@ -157,6 +157,8 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 					}
 				}
 			}
+		case ok && f.CredentialsChanged:
+			rows = append(rows, fieldRow(field, tr(tApprovalCredentialsChanged)))
 		case ok && f.IsRename:
 			rows = append(rows, fieldRow(field, tr(tApprovalValueRenamed, f.Before, f.After)))
 		case ok:

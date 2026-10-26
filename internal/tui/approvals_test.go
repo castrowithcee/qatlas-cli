@@ -16,6 +16,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -890,5 +891,48 @@ func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
 				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
 			}
 		}
+	}
+}
+
+const (
+	canaryApprovalUser  = "canary-approval-user"
+	canaryApprovalPass  = "canary-approval-pass"
+	canaryApprovalQuery = "canary-approval-query"
+)
+
+// The origin of an approval shows masked, whether it is the whole scope of a new connection or a change; a change
+// of only the masked parts reads as changed credentials in the language of the screen.
+func TestApprovalDetailMasksTheOrigin(t *testing.T) {
+	origin := "https://" + canaryApprovalUser + ":" + canaryApprovalPass + "@wiki.example.invalid/api?token=" +
+		canaryApprovalQuery
+	masked := approval.OriginText(origin)
+	newConnection := approval.Change{New: true, After: vault.Scope{Origin: origin}}
+	credentials := approval.Change{Fields: []approval.FieldChange{
+		{Field: approval.FieldOrigin, Before: masked, After: masked, CredentialsChanged: true}}}
+	host := approval.Change{Fields: []approval.FieldChange{{Field: approval.FieldOrigin, Before: masked,
+		After: strings.Replace(masked, "wiki.", "moved.", 1)}}}
+
+	for lang, want := range map[i18n.Lang]string{i18n.English: "credentials changed", i18n.German: "Zugangsdaten geändert"} {
+		useLanguage(t, lang)
+		rows := approvalDetailRows(credentials)
+		if !containsRow(rows, "origin", want) {
+			t.Errorf("%s: rows lack %q:\n%s", lang, want, strings.Join(rows, "\n"))
+		}
+	}
+	useLanguage(t, i18n.English)
+	for name, change := range map[string]approval.Change{"new": newConnection, "credentials": credentials, "host": host} {
+		text := strings.Join(approvalDetailRows(change), "\n")
+		for _, canary := range []string{canaryApprovalUser, canaryApprovalPass, canaryApprovalQuery} {
+			if strings.Contains(text, canary) {
+				t.Errorf("%s: rows show %q:\n%s", name, canary, text)
+			}
+		}
+	}
+	if rows := approvalDetailRows(newConnection); !containsRow(rows, "origin", "https://***:***@wiki.example.invalid/api?token=***") {
+		t.Errorf("new connection rows lack the masked origin:\n%s", strings.Join(rows, "\n"))
+	}
+	if rows := approvalDetailRows(host); !containsRow(rows, "origin",
+		"https://***:***@wiki.example.invalid/api?token=*** -> https://***:***@moved.example.invalid/api?token=***") {
+		t.Errorf("host change rows lack both masked origins:\n%s", strings.Join(approvalDetailRows(host), "\n"))
 	}
 }
