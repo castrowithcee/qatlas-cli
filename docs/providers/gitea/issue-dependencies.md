@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Issue dependencies
@@ -22,11 +22,6 @@ resolved; it may be left out when the targets name exactly one repository.
 | `issue-dependencies.list`, `issue-blocks.list` | read | both |
 | `issue-dependencies.add`, `issue-blocks.add` | create | both |
 | `issue-dependencies.remove`, `issue-blocks.remove` | delete | both |
-
-## Scopes
-
-Reads presumably need `read:issue`, changes presumably `write:issue`. The scopes are not confirmed against a live
-instance.
 
 ## Counterpart and binding
 

@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes the milestone tools of the Gitea and Forgejo providers: scopes, target and ID binding, and the limits of
-  create, update, and delete.
+  Describes the milestone tools of the Gitea and Forgejo providers: target and ID binding, and the limits of create,
+  update, and delete.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Milestones
@@ -13,11 +13,6 @@ updated: 2026-10-22
 The milestone tools read and change the milestones of one repository inside the connection's targets. Both products
 serve them with the same shape, so every tool exists for Forgejo and Gitea. The assignment of a milestone to an issue
 is set by `issues.create` and `issues.update`.
-
-## Scopes
-
-Reads need presumably `read:issue`, changes `write:issue`. No scope was checked against a live instance; a missing
-scope shows as `not-found`.
 
 ## Binding
 

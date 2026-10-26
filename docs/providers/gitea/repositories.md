@@ -1,24 +1,19 @@
 ---
 description: >
-  Describes the repository lifecycle tools of the Gitea and Forgejo providers: creating, changing, forking,
-  generating from a template, syncing, transferring, and deleting repositories, pull mirrors, and repository
-  avatars. It covers the token scopes, how a new owner is bound to the targets, what a change that moves a
-  repository returns, the differences between the products, and the limits.
+  Describes the repository lifecycle tools of the Gitea and Forgejo providers: creating, changing, forking, generating
+  from a template, syncing, transferring, and deleting repositories, pull mirrors, and repository avatars. It covers
+  how a new owner is bound to the targets, what a change that moves a repository returns, the differences between the
+  products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-24
+updated: 2026-10-26
 ---
 
 # Repository lifecycle
 
 These tools create, change, fork, and delete repositories of a connection's targets. Reading repositories is
 described on the [provider page](README.md). [Forgejo](../forgejo.md) names the differences.
-
-## Scopes
-
-A read needs `read:repository`, a change `write:repository`; creating a repository in an organization also needs
-`write:organization`.
 
 ## Target binding
 

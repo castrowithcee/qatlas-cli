@@ -1,22 +1,17 @@
 ---
 description: >
-  Describes the branch tools of the Gitea and Forgejo providers: what they read and change, the token scopes, the
-  repository binding, the branch name rules, the differences between the products, and the limits.
+  Describes the branch tools of the Gitea and Forgejo providers: what they read and change, the repository binding,
+  the branch name rules, the differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Branches
 
 The branch tools list, read, create, rename, and delete the branches of a repository, and on Gitea point a branch at
 another commit. [Forgejo](../forgejo.md) names the differences. Branch protection rules are another tool group.
-
-## Scopes
-
-All tools need `read:repository` for a read and `write:repository` for a change (presumably; not checked against
-a live instance).
 
 ## Target binding
 

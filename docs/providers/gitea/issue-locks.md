@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes the lock tools of the Gitea and Forgejo providers: locking and unlocking the conversation of an issue
-  or pull request.
+  Describes the lock tools of the Gitea and Forgejo providers: locking and unlocking the conversation of an issue or
+  pull request.
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Issue locks
@@ -17,10 +17,6 @@ secret is resolved; it may be left out when the targets name exactly one reposit
 | Tool | Effect | Provider |
 | --- | --- | --- |
 | `issue-locks.lock`, `issue-locks.unlock` | update | both |
-
-## Scopes
-
-Changes presumably need `write:issue`. The scope is not confirmed against a live instance.
 
 ## Changing
 

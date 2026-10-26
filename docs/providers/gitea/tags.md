@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes the tag tools of the Gitea and Forgejo providers: what they read and change, the token scopes, the
-  repository binding, the tag name rules, the differences between the products, and the limits.
+  Describes the tag tools of the Gitea and Forgejo providers: what they read and change, the repository binding, the
+  tag name rules, the differences between the products, and the limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Tags
@@ -13,11 +13,6 @@ updated: 2026-10-22
 The tag tools list, read, create, and delete the Git tags of a repository. Gitea and Forgejo share them; a line
 below names a difference. Tags are lightweight unless `tags.create` gets a message. Annotated tag objects, tag
 protections, and releases are other tool groups.
-
-## Scopes
-
-All tools need `read:repository` for a read and `write:repository` for a change (presumably; not checked against
-a live instance).
 
 ## Target binding
 

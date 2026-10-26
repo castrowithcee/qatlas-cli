@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the assignee tools of the Gitea and Forgejo providers: listing the assignable users of a repository and,
-  on Gitea, checking, adding, and removing the assignees of one issue; their scopes, target and index binding,
-  product differences, and limits.
+  on Gitea, checking, adding, and removing the assignees of one issue; target and index binding, product differences,
+  and limits.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Assignees
@@ -14,11 +14,6 @@ updated: 2026-10-22
 The assignee tools read who can be assigned in a repository and, on Gitea only, change the assignees of one existing
 issue. Forgejo and Gitea both set assignees through the members of `issues.create` and `issues.update`; the tools
 here are the separate routes.
-
-## Scopes
-
-A read presumably needs `read:issue` (and `read:repository`), a change presumably `write:issue`; none was checked
-against a live instance. A change also reads the issue first.
 
 ## Binding
 
