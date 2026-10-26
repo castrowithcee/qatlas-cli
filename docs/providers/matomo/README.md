@@ -16,7 +16,7 @@ setup profiles. The tools are sorted into groups; each group has a page: [sites 
 [reports](reports.md), [live data](live.md), [visitor profiles](visitors.md), [goals](goals.md),
 [saved segments](segments.md), [annotations](annotations.md), [scheduled reports](scheduled-reports.md),
 [custom dimensions](dimensions.md), [instance settings and reference data](instance.md),
-[users and roles](users.md), and [privacy and data subject requests](privacy.md).
+[users and roles](users.md), [SMS settings](mobile-messaging.md), and [privacy and data subject requests](privacy.md).
 
 ## Configuration
 
@@ -204,6 +204,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 | [annotations](annotations.md) | listing, reading, counting, adding, updating, and deleting annotations |
 | [custom dimensions](dimensions.md) | listing, options, adding, and updating custom dimensions |
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, deleting one |
+| [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 
 The tools that read are safe to repeat and need no confirmation. Names, addresses, settings, patterns, and
 values Matomo returns are untrusted data: they are shortened, and an address is returned as text and never
