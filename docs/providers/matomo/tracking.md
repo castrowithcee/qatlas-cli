@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, content impressions and interactions, and requests of AI chatbots through the tracking endpoint, its answers and their limits, the risks of writing raw data, the overrides of address, time, and location that need the token, and the instance check and token use of the chatbot tool.
+  Describes the Matomo tracking tools: recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, content impressions and interactions, several of these in one bulk request, and requests of AI chatbots through the tracking endpoint, its answers and their limits, the risks of writing raw data, the overrides of address, time, and location that need the token, the counts and partial success of the bulk request, and the instance check and token use of the chatbot tool.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -25,6 +25,7 @@ The tracking tools of the [Matomo provider](README.md). The profiles are describ
 | `matomo.tracking.record-cart-update` | records the current content of a cart (effect `create`) |
 | `matomo.tracking.record-content-impression` | records an impression of a content block with name, piece, and target (effect `create`) |
 | `matomo.tracking.record-content-interaction` | records an interaction such as a click with a content block (effect `create`) |
+| `matomo.tracking.record-batch` | records up to 100 entries of one website in one bulk request (effect `create`) |
 | `matomo.tracking.record-bot-request` | records a request of an AI chatbot that the server of the website saw (effect `create`) |
 
 All tools are offered only where the `tools` list of a connection names them and are in no profile.
@@ -61,13 +62,34 @@ visit as arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`
 Addresses (`url`, `referrer`, `target`) must be http or https addresses of at most 2048 characters; they are
 passed on as text and never fetched. Texts are limited as the tool schema says. Matomo's own limits apply on top.
 The content target is passed on as free text, not checked as an address, and never fetched. The tools offer no media
-tracking and no bulk tracking.
+tracking.
 
 Goals and e-commerce use `matomo.php` with `idgoal`. Matomo resolves a goal ID only within the named website and
 refuses an unknown one as invalid, so no token is needed to check it. An order is a request with an order ID, a cart
 update one without; Matomo reads the cart items of a request as the full cart and marks items missing from a later
 update as removed. Matomo normally refuses an order ID it already holds for the website, but a queue confirms
 before it checks.
+
+## Bulk tracking
+
+`matomo.tracking.record-batch` sends entries of one website in one JSON request to `matomo.php`. It needs the
+`BulkTracking` plugin of Matomo. The `type` of an entry names one of the nine single tools above, except the
+chatbot tool, and the rules of that tool check the entry. An entry sends its parameters as a query string, the form
+the plugin documents.
+
+- The bulk takes none of the [overrides](#overrides-of-address-time-and-location): the token would apply to the
+  whole request. It reads no secret and sends neither `token_auth` nor an `Authorization` header. A Super User token
+  would make Matomo name the invalid entries; without it the result holds counts only. An instance that sets
+  `bulk_requests_require_authentication` aborts every such bulk as HTTP 500 and records nothing.
+- Matomo answers HTTP 200 with `tracked` and `invalid`. It skips an invalid entry and records the others, so a call
+  can succeed in part. `tracked` also counts a visit that Matomo excludes, and an entry that hit a database lock
+  timeout is in neither number. Switched-off tracking is answered with 0 and 0, not with HTTP 503. The counts prove
+  no processing; a number above the entries sent, or an answer that is not a bulk answer, is an unreadable answer.
+- An exception in the middle ends the bulk as HTTP 500 with the counts so far: the entries before it stay recorded,
+  unless the instance sets `bulk_requests_use_transaction` and rolls the bulk back. Qatlas reports it as an error with
+  the counts. An inactive `BulkTracking` plugin is answered as HTTP 400 (`invalid-request`); nothing was recorded.
+- The confirmation covers the number of entries and the website, not which entries Matomo accepts. A repeat counts
+  every entry twice, so a partial success is not repeated whole.
 
 ## Risks
 

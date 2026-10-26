@@ -54,7 +54,7 @@ var trackingClock = time.Now
 // arrives, so the tool refuses both instead.
 const trackingTimeWindow = 20 * 365 * 86400
 
-const trackingContextSchema = `"url":{"type":"string","minLength":1,"maxLength":2048},` +
+const trackingContextBaseSchema = `"url":{"type":"string","minLength":1,"maxLength":2048},` +
 	`"referrer":{"type":"string","minLength":1,"maxLength":2048},` +
 	`"pageTitle":{"type":"string","minLength":1,"maxLength":512},` +
 	`"pageViewId":{"type":"string","pattern":"^[A-Za-z0-9]{6}$","maxLength":6},` +
@@ -71,15 +71,19 @@ const trackingContextSchema = `"url":{"type":"string","minLength":1,"maxLength":
 	`"campaignKeyword":{"type":"string","minLength":1,"maxLength":255},` +
 	`"visitCount":{"type":"integer","minimum":1,"maximum":2147483647},` +
 	`"firstVisitTime":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
-	`"previousVisitTime":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
-	`"clientIp":{"type":"string","minLength":2,"maxLength":45},` +
+	`"previousVisitTime":{"type":"integer","minimum":946684800,"maximum":4102444800}`
+
+const trackingOverrideSchema = `"clientIp":{"type":"string","minLength":2,"maxLength":45},` +
 	`"timestamp":{"type":"integer","minimum":946684800,"maximum":4102444800},` +
 	`"country":{"type":"string","pattern":"^[A-Za-z]{2}$","maxLength":2},` +
 	`"region":{"type":"string","pattern":"^[A-Za-z0-9]{1,3}$","maxLength":3},` +
 	`"city":{"type":"string","minLength":1,"maxLength":255},` +
-	`"latitude":{"type":"number","minimum":-90,"maximum":90},"longitude":{"type":"number","minimum":-180,"maximum":180},` +
-	`"dimensions":{"type":"object","maxProperties":20,"propertyNames":{"pattern":"^[1-9][0-9]{0,5}$"},` +
+	`"latitude":{"type":"number","minimum":-90,"maximum":90},"longitude":{"type":"number","minimum":-180,"maximum":180}`
+
+const trackingDimensionsSchema = `"dimensions":{"type":"object","maxProperties":20,"propertyNames":{"pattern":"^[1-9][0-9]{0,5}$"},` +
 	`"additionalProperties":{"type":"string","maxLength":255}}`
+
+const trackingContextSchema = trackingContextBaseSchema + `,` + trackingOverrideSchema + `,` + trackingDimensionsSchema
 
 const trackingOutputSchema = `{"type":"object","properties":{"idSite":{"type":"integer"},"sent":{"type":"boolean"},` +
 	`"processingConfirmed":{"type":"boolean"},"message":{"type":"string"}},` +
@@ -531,39 +535,42 @@ func record(ctx context.Context, resolved *config.Resolved, secrets *secret.Reso
 	return &TrackingSent{IDSite: site, Sent: true, Message: trackingSent}, nil
 }
 
-func invokeTrackingRecordPageView(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
+func pageViewEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		Performance    map[string]*int `json:"performance"`
 		GenerationTime *int            `json:"generationTime"`
 	}
-	return record(ctx, resolved, secrets, red, "record page view", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			timings := map[string]string{"network": "pf_net", "server": "pf_srv", "transfer": "pf_tfr",
-				"domProcessing": "pf_dm1", "domCompletion": "pf_dm2", "onLoad": "pf_onl"}
-			if len(args.Performance) > len(timings) {
-				return invalidArgument("performance names only the six timings")
+	return &args, &args.trackingContext, func(form url.Values) error {
+		timings := map[string]string{"network": "pf_net", "server": "pf_srv", "transfer": "pf_tfr",
+			"domProcessing": "pf_dm1", "domCompletion": "pf_dm2", "onLoad": "pf_onl"}
+		if len(args.Performance) > len(timings) {
+			return invalidArgument("performance names only the six timings")
+		}
+		for name, value := range args.Performance {
+			key, known := timings[name]
+			if !known || value == nil || *value < 0 || *value > maxTrackingMillis {
+				return invalidArgument("performance holds only the six timings, each 0 to 3600000 milliseconds")
 			}
-			for name, value := range args.Performance {
-				key, known := timings[name]
-				if !known || value == nil || *value < 0 || *value > maxTrackingMillis {
-					return invalidArgument("performance holds only the six timings, each 0 to 3600000 milliseconds")
-				}
-				form.Set(key, strconv.Itoa(*value))
+			form.Set(key, strconv.Itoa(*value))
+		}
+		if args.GenerationTime != nil {
+			if *args.GenerationTime < 0 || *args.GenerationTime > maxTrackingMillis {
+				return invalidArgument("generationTime must be 0 to 3600000 milliseconds")
 			}
-			if args.GenerationTime != nil {
-				if *args.GenerationTime < 0 || *args.GenerationTime > maxTrackingMillis {
-					return invalidArgument("generationTime must be 0 to 3600000 milliseconds")
-				}
-				form.Set("gt_ms", strconv.Itoa(*args.GenerationTime))
-			}
-			return nil
-		})
+			form.Set("gt_ms", strconv.Itoa(*args.GenerationTime))
+		}
+		return nil
+	}
 }
 
-func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordPageView(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := pageViewEntry()
+	return record(ctx, resolved, secrets, red, "record page view", raw, args, func() *trackingContext { return shared }, extend)
+}
+
+func eventEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		Category *string  `json:"category"`
@@ -571,71 +578,84 @@ func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, s
 		Name     *string  `json:"name"`
 		Value    *float64 `json:"value"`
 	}
-	return record(ctx, resolved, secrets, red, "record event", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			if err := trackingRequired(form, "e_c", "category", args.Category, maxTrackingText); err != nil {
-				return err
+	return &args, &args.trackingContext, func(form url.Values) error {
+		if err := trackingRequired(form, "e_c", "category", args.Category, maxTrackingText); err != nil {
+			return err
+		}
+		if err := trackingRequired(form, "e_a", "action", args.Action, maxTrackingText); err != nil {
+			return err
+		}
+		if err := trackingText(form, "e_n", "name", args.Name, maxTrackingText); err != nil {
+			return err
+		}
+		if args.Value != nil {
+			if math.IsNaN(*args.Value) || math.IsInf(*args.Value, 0) {
+				return invalidArgument("value must be a finite number")
 			}
-			if err := trackingRequired(form, "e_a", "action", args.Action, maxTrackingText); err != nil {
-				return err
-			}
-			if err := trackingText(form, "e_n", "name", args.Name, maxTrackingText); err != nil {
-				return err
-			}
-			if args.Value != nil {
-				if math.IsNaN(*args.Value) || math.IsInf(*args.Value, 0) {
-					return invalidArgument("value must be a finite number")
-				}
-				form.Set("e_v", strconv.FormatFloat(*args.Value, 'f', -1, 64))
-			}
-			return nil
-		})
+			form.Set("e_v", strconv.FormatFloat(*args.Value, 'f', -1, 64))
+		}
+		return nil
+	}
 }
 
-func invokeTrackingRecordSiteSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordEvent(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := eventEntry()
+	return record(ctx, resolved, secrets, red, "record event", raw, args, func() *trackingContext { return shared }, extend)
+}
+
+func siteSearchEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		Keyword     *string `json:"keyword"`
 		Category    *string `json:"category"`
 		ResultCount *int    `json:"resultCount"`
 	}
-	return record(ctx, resolved, secrets, red, "record site search", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			if err := trackingRequired(form, "search", "keyword", args.Keyword, maxTrackingText); err != nil {
-				return err
+	return &args, &args.trackingContext, func(form url.Values) error {
+		if err := trackingRequired(form, "search", "keyword", args.Keyword, maxTrackingText); err != nil {
+			return err
+		}
+		if err := trackingText(form, "search_cat", "category", args.Category, maxTrackingText); err != nil {
+			return err
+		}
+		if args.ResultCount != nil {
+			if *args.ResultCount < 0 || *args.ResultCount > math.MaxInt32 {
+				return invalidArgument("resultCount must be 0 or more")
 			}
-			if err := trackingText(form, "search_cat", "category", args.Category, maxTrackingText); err != nil {
-				return err
-			}
-			if args.ResultCount != nil {
-				if *args.ResultCount < 0 || *args.ResultCount > math.MaxInt32 {
-					return invalidArgument("resultCount must be 0 or more")
-				}
-				form.Set("search_count", strconv.Itoa(*args.ResultCount))
-			}
-			return nil
-		})
+			form.Set("search_count", strconv.Itoa(*args.ResultCount))
+		}
+		return nil
+	}
 }
 
-func invokeTrackingRecordLink(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordSiteSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := siteSearchEntry()
+	return record(ctx, resolved, secrets, red, "record site search", raw, args, func() *trackingContext { return shared }, extend)
+}
+
+func linkEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		Kind   *string `json:"kind"`
 		Target *string `json:"target"`
 	}
-	return record(ctx, resolved, secrets, red, "record link", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			if args.Kind == nil || (*args.Kind != "download" && *args.Kind != "outlink") {
-				return invalidArgument("kind must be download or outlink")
-			}
-			key := "download"
-			if *args.Kind == "outlink" {
-				key = "link"
-			}
-			return trackingAddress(form, key, "target", args.Target, true)
-		})
+	return &args, &args.trackingContext, func(form url.Values) error {
+		if args.Kind == nil || (*args.Kind != "download" && *args.Kind != "outlink") {
+			return invalidArgument("kind must be download or outlink")
+		}
+		key := "download"
+		if *args.Kind == "outlink" {
+			key = "link"
+		}
+		return trackingAddress(form, key, "target", args.Target, true)
+	}
+}
+
+func invokeTrackingRecordLink(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := linkEntry()
+	return record(ctx, resolved, secrets, red, "record link", raw, args, func() *trackingContext { return shared }, extend)
 }
 
 func trackingOperations() []capability.Operation {
@@ -645,5 +665,5 @@ func trackingOperations() []capability.Operation {
 		{Descriptor: trackingRecordSiteSearch, Handler: capability.Handler(invokeTrackingRecordSiteSearch)},
 		{Descriptor: trackingRecordLink, Handler: capability.Handler(invokeTrackingRecordLink)},
 		{Descriptor: trackingRecordBotRequest, Handler: capability.Handler(invokeTrackingRecordBotRequest)},
-	}, append(trackingCommerceOperations(), trackingContentOperations()...)...)
+	}, append(append(trackingCommerceOperations(), trackingContentOperations()...), trackingBatchOperations()...)...)
 }

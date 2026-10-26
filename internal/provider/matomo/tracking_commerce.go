@@ -213,25 +213,28 @@ func commerceItems(form url.Values, items []commerceItem, required bool) error {
 	return nil
 }
 
-func invokeTrackingRecordGoal(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
+func goalEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		GoalID  *int64   `json:"goalId"`
 		Revenue *float64 `json:"revenue"`
 	}
-	return record(ctx, resolved, secrets, red, "record goal", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			if args.GoalID == nil || *args.GoalID < 1 || *args.GoalID > math.MaxInt32 {
-				return invalidArgument("goalId must be a whole number of 1 or more")
-			}
-			form.Set("idgoal", strconv.FormatInt(*args.GoalID, 10))
-			return commerceAmount(form, "revenue", "revenue", args.Revenue, false)
-		})
+	return &args, &args.trackingContext, func(form url.Values) error {
+		if args.GoalID == nil || *args.GoalID < 1 || *args.GoalID > math.MaxInt32 {
+			return invalidArgument("goalId must be a whole number of 1 or more")
+		}
+		form.Set("idgoal", strconv.FormatInt(*args.GoalID, 10))
+		return commerceAmount(form, "revenue", "revenue", args.Revenue, false)
+	}
 }
 
-func invokeTrackingRecordOrder(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordGoal(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := goalEntry()
+	return record(ctx, resolved, secrets, red, "record goal", raw, args, func() *trackingContext { return shared }, extend)
+}
+
+func orderEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		OrderID  *string        `json:"orderId"`
@@ -242,44 +245,53 @@ func invokeTrackingRecordOrder(ctx context.Context, resolved *config.Resolved, s
 		Discount *float64       `json:"discount"`
 		Items    []commerceItem `json:"items"`
 	}
-	return record(ctx, resolved, secrets, red, "record order", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			form.Set("idgoal", "0")
-			if err := trackingRequired(form, "ec_id", "orderId", args.OrderID, maxTrackingShort); err != nil {
-				return err
+	return &args, &args.trackingContext, func(form url.Values) error {
+		form.Set("idgoal", "0")
+		if err := trackingRequired(form, "ec_id", "orderId", args.OrderID, maxTrackingShort); err != nil {
+			return err
+		}
+		for _, step := range []error{
+			commerceAmount(form, "revenue", "revenue", args.Revenue, true),
+			commerceAmount(form, "ec_st", "subtotal", args.Subtotal, false),
+			commerceAmount(form, "ec_tx", "tax", args.Tax, false),
+			commerceAmount(form, "ec_sh", "shipping", args.Shipping, false),
+			commerceAmount(form, "ec_dt", "discount", args.Discount, false),
+			commerceItems(form, args.Items, false),
+		} {
+			if step != nil {
+				return step
 			}
-			for _, step := range []error{
-				commerceAmount(form, "revenue", "revenue", args.Revenue, true),
-				commerceAmount(form, "ec_st", "subtotal", args.Subtotal, false),
-				commerceAmount(form, "ec_tx", "tax", args.Tax, false),
-				commerceAmount(form, "ec_sh", "shipping", args.Shipping, false),
-				commerceAmount(form, "ec_dt", "discount", args.Discount, false),
-				commerceItems(form, args.Items, false),
-			} {
-				if step != nil {
-					return step
-				}
-			}
-			return nil
-		})
+		}
+		return nil
+	}
 }
 
-func invokeTrackingRecordCartUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+func invokeTrackingRecordOrder(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := orderEntry()
+	return record(ctx, resolved, secrets, red, "record order", raw, args, func() *trackingContext { return shared }, extend)
+}
+
+func cartUpdateEntry() (any, *trackingContext, func(url.Values) error) {
 	var args struct {
 		trackingContext
 		Revenue *float64       `json:"revenue"`
 		Items   []commerceItem `json:"items"`
 	}
-	return record(ctx, resolved, secrets, red, "record cart update", raw, &args, func() *trackingContext { return &args.trackingContext },
-		func(form url.Values) error {
-			// Without an order ID Matomo reads the request as a cart update.
-			form.Set("idgoal", "0")
-			if err := commerceAmount(form, "revenue", "revenue", args.Revenue, true); err != nil {
-				return err
-			}
-			return commerceItems(form, args.Items, true)
-		})
+	return &args, &args.trackingContext, func(form url.Values) error {
+		// Without an order ID Matomo reads the request as a cart update.
+		form.Set("idgoal", "0")
+		if err := commerceAmount(form, "revenue", "revenue", args.Revenue, true); err != nil {
+			return err
+		}
+		return commerceItems(form, args.Items, true)
+	}
+}
+
+func invokeTrackingRecordCartUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	args, shared, extend := cartUpdateEntry()
+	return record(ctx, resolved, secrets, red, "record cart update", raw, args, func() *trackingContext { return shared }, extend)
 }
 
 func trackingCommerceOperations() []capability.Operation {
