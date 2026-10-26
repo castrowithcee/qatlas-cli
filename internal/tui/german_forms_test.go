@@ -382,7 +382,7 @@ func (v *viewSet) run() {
 
 // The screens of the forms fit the terminal in both languages.
 func TestFormsFitInBothLanguages(t *testing.T) {
-	sizes := []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {80, 24}, {helpPaneMinWidth, 40}, {140, 40}}
+	sizes := []struct{ w, h int }{{minimumWidth, minimumHeight}, {80, 24}, {helpPaneMinWidth, 40}, {140, 40}}
 	eachLanguage(t, func(t *testing.T) {
 		for _, size := range sizes {
 			(&viewSet{t: t, w: size.w, h: size.h}).run()

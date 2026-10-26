@@ -368,10 +368,10 @@ func TestPaletteReadsWithoutColour(t *testing.T) {
 }
 
 func TestPaletteStaysUsableAtTheSmallestSize(t *testing.T) {
-	m := paletteModel(t, 40, 13)
+	m := paletteModel(t, 40, minimumHeight)
 	view := ansi.Strip(m.View())
 	if !strings.Contains(view, "> ") {
-		t.Fatalf("no cursor at 40x13:\n%s", view)
+		t.Fatalf("no cursor at 40x%d:\n%s", minimumHeight, view)
 	}
 	press(t, m, "h", "e", "l", "p", "enter")
 	if m.screen != screenHelp {

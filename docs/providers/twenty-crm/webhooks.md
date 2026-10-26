@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Twenty CRM: webhooks
@@ -15,7 +15,7 @@ updated: 2026-10-22
 events it reports, and remove a webhook. There is no tool to create a webhook or to change its target or
 signing key.
 
-- The tools are workspace-wide. Twenty requires the settings right API keys and webhooks; a 403 points to it.
+- The tools are workspace-wide. Rights: [Webhooks](setup.md#webhooks).
 - The signing key is never shown, and the target is reduced to scheme, host with port, and path: query,
   fragment, and credentials are dropped, because they often carry tokens. The path stays visible, so webhook
   configuration has its own data class.
