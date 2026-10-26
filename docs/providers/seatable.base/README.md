@@ -1,18 +1,20 @@
 ---
 description: >
-  Describes SeaTable Base credential, table binding, target selection, shared boundaries, permissions, tool selection, and the setup profile; indexes the area pages.
+  Describes SeaTable Base credential, table binding, target selection, shared boundaries, tool selection, and the setup profile; indexes the area pages.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # SeaTable Base
 
-A credential is one API token for one base. A connection binds it to one table through `target`, to an
-explicit table allow-list through `targets`, or to every table through the explicit `target: "*"` scope.
-An empty target never means the whole base. A fixed table may include a view after `/`; identifiers use
-`id:TABLEID` and `id:TABLEID/id:VIEWID`.
+A credential is one API token for one base. How to create it, which permission each tool group needs, how to
+test the connection, and how to fix errors is described in [Set up SeaTable Base](setup.md).
+
+A connection binds the credential to one table through `target`, to an explicit table allow-list through
+`targets`, or to every table through the explicit `target: "*"` scope. An empty target never means the whole
+base. A fixed table may include a view after `/`; identifiers use `id:TABLEID` and `id:TABLEID/id:VIEWID`.
 
 ```sh
 qatlas invoke seatable.base.tables.list --connection sales-all-tables
@@ -74,10 +76,9 @@ These rules hold for every tool; the area pages refer here.
 
 ## Permissions and tools
 
-The credential provides `api-token`. Use provider permission `r` for read-only connections and `rw` when
-writes are intended. The local selection is a separate ceiling and cannot turn an `r` token into a
-writer. A connection selects by `effects` or by a `tools` list naming exactly the tools it offers, for example
-`[seatable.base.rows.list]`; neither widens the table scope.
+The credential provides `api-token`; its permission is described in [Set up SeaTable Base](setup.md). The local
+selection is a separate ceiling: a connection selects by `effects` or by a `tools` list naming exactly the tools
+it offers, for example `[seatable.base.rows.list]`; neither widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
 connection on the setup profile `read`, which selects the tools `[seatable.base.tables.list,
 seatable.base.columns.list, seatable.base.rows.list, seatable.base.rows.search, seatable.base.rows.get, seatable.base.links.list, seatable.base.views.list, seatable.base.views.get]`. A profile is a visible
