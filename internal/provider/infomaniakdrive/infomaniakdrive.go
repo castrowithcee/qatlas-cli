@@ -215,6 +215,26 @@ func newDownloadClient() *http.Client {
 type envelope struct {
 	Result string          `json:"result"`
 	Data   json.RawMessage `json:"data"`
+
+	// status is the HTTP status of the answer; it is not part of the JSON.
+	status int
+	// raw is the answer as received, kept to build the original details of an unsuccessful result.
+	raw []byte
+}
+
+// originalFields maps Infomaniak's error answer, {"result":"error","error":{"code","description","errors":
+// [{"code","description"}]}}, to the original details of a failure.
+var originalFields = provider.OriginalFields{Message: "error.description", Code: "error.code",
+	List: "error.errors", Item: &provider.OriginalFields{Code: "code", Message: "description"}}
+
+// unsuccessful reports an HTTP success status whose result is not "success" as invalid-response. Qatlas'
+// message stays free of Infomaniak's text, which goes separately in the original details.
+func (e *envelope) unsuccessful(op, message string) error {
+	failure := &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
+	if e.Result != "success" {
+		failure.Original = provider.ErrorOriginal(e.status, e.raw, originalFields)
+	}
+	return failure
 }
 
 // uncertain is appended to a failure of a change whose request may have reached Infomaniak: the change may
@@ -234,7 +254,7 @@ func (c *Client) doInto(ctx context.Context, op, path string, query url.Values, 
 		return err
 	}
 	if env.Result != "success" {
-		return invalidResponse(op, "Infomaniak reported an error for a response with an HTTP success status")
+		return env.unsuccessful(op, "Infomaniak reported an error for a response with an HTTP success status")
 	}
 	if out != nil {
 		if err := json.Unmarshal(env.Data, out); err != nil {
@@ -293,7 +313,7 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.statusError(op, response, change)
+		failure := c.statusError(op, response, change, true)
 		if change && response.StatusCode >= 500 {
 			failure.Message += uncertain
 		}
@@ -311,6 +331,7 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 	if err := json.Unmarshal(data, &env); err != nil {
 		return nil, nil, invalidResponse(op, "Infomaniak returned an invalid response"+suffix)
 	}
+	env.status, env.raw = response.StatusCode, data
 	return &env, data, nil
 }
 
@@ -334,10 +355,21 @@ func (c *Client) verifyDriveAccount(ctx context.Context, op string, driveID int6
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response, change bool) *provider.Error {
+// statusError maps an HTTP status to a stable class. The provider body never enters the message; when
+// fromInfomaniak is set, the bounded body goes separately into the original details. An answer of a foreign
+// storage keeps only its status.
+func (c *Client) statusError(op string, response *http.Response, change, fromInfomaniak bool) *provider.Error {
+	failure := c.classify(op, response, change)
+	var body []byte
+	if fromInfomaniak {
+		body = provider.ReadErrorBody(response.Body)
+	}
+	failure.Original = provider.ErrorOriginal(response.StatusCode, body, originalFields)
+	return failure
+}
+
+func (c *Client) classify(op string, response *http.Response, change bool) *provider.Error {
 	status := response.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch {
 	case status == http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Infomaniak rejected the API token"}
