@@ -49,6 +49,9 @@ var messagePatterns = []struct {
 	{"unknown-setting", []string{"is unknown or cannot be toggled"}},
 	{"invalid", []string{"the specified segment is invalid", "invalid name for this custom segment"}},
 	{"missing", []string{"not available in the module", "not activated", "not enabled", "deactivated"}},
+	// A container, environment, or context ID is quoted in double quotes and is not masked; this comes before the
+	// groups below so that an ID like token1 cannot pick the class.
+	{"not-found", []string{`" does not exist`, `the context "`}},
 	{"permission", []string{"you can't access this resource", "super user", "not allowed to", "required access level",
 		"requires permission", "adding segments for all websites has been disabled", "real time segments are disabled",
 		"pre-processed segments can only", "does not have access to any sites"}},

@@ -282,5 +282,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scheduledReportsGenerate, Handler: capability.Handler(invokeScheduledReportsGenerate)},
 		capability.Operation{Descriptor: scheduledReportsDelete, Handler: capability.Handler(invokeScheduledReportsDelete)},
 		capability.Operation{Descriptor: scheduledReportsPause, Handler: capability.Handler(invokeScheduledReportsPause)},
+		capability.Operation{Descriptor: tagManagerContainersList, Handler: capability.Handler(invokeTagManagerContainersList)},
+		capability.Operation{Descriptor: tagManagerContainersGet, Handler: capability.Handler(invokeTagManagerContainersGet)},
+		capability.Operation{Descriptor: tagManagerContainersGetEmbedCode, Handler: capability.Handler(invokeTagManagerContainersGetEmbedCode)},
+		capability.Operation{Descriptor: tagManagerCatalogList, Handler: capability.Handler(invokeTagManagerCatalogList)},
 	)
 }
