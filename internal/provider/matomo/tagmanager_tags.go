@@ -205,16 +205,18 @@ type EntryResult struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
-// entryRequest is the validated request of the four tools.
+// entryRequest is the validated request of the tools on the entries of a container version.
 type entryRequest struct {
 	site      int
 	container string
 	version   int
 	object    int
+	kind      string // references only: trigger or variable
 	paging    page
 }
 
-// entryRequestOf validates the arguments; tool names the list whose cursor binds to the request, empty for a get.
+// entryRequestOf validates the arguments; list names the tool whose cursor binds to the request, empty for a get.
+// idName is the ID argument of a get, "reference" for the references of a trigger or variable, empty for a list.
 func entryRequestOf(resolved *config.Resolved, raw json.RawMessage, idName, list string) (entryRequest, error) {
 	var args struct {
 		IDSite             *int    `json:"idSite"`
@@ -222,6 +224,8 @@ func entryRequestOf(resolved *config.Resolved, raw json.RawMessage, idName, list
 		IDContainerVersion *int    `json:"idContainerVersion"`
 		IDTag              *int    `json:"idTag"`
 		IDTrigger          *int    `json:"idTrigger"`
+		IDVariable         *int    `json:"idVariable"`
+		Kind               *string `json:"kind"`
 		Limit              int     `json:"limit"`
 		Cursor             string  `json:"cursor"`
 	}
@@ -242,25 +246,51 @@ func entryRequestOf(resolved *config.Resolved, raw json.RawMessage, idName, list
 		return entryRequest{}, err
 	}
 	req := entryRequest{site: id, container: container, version: version}
-	if list != "" {
-		binding := provider.CursorBinding(list, scopeBinding(resolved), id, container, version)
-		if req.paging, err = startPage(binding, args.Limit, args.Cursor); err != nil {
+	idOf := func(name string, given *int) (int, error) {
+		if given == nil || *given < 1 || *given > 2147483647 {
+			return 0, invalidArgument(name + " must be an ID between 1 and 2147483647")
+		}
+		return *given, nil
+	}
+	other := func(names map[string]*int, keep string) error {
+		for name, given := range names {
+			if name != keep && given != nil {
+				return invalidArgument(name + " does not belong to this tool or kind")
+			}
+		}
+		return nil
+	}
+	ids := map[string]*int{"idTag": args.IDTag, "idTrigger": args.IDTrigger, "idVariable": args.IDVariable}
+	keep := idName
+	if idName == "reference" {
+		keep = ""
+		switch {
+		case args.Kind != nil && *args.Kind == "trigger":
+			keep, req.kind = "idTrigger", "trigger"
+		case args.Kind != nil && *args.Kind == "variable":
+			keep, req.kind = "idVariable", "variable"
+		default:
+			return entryRequest{}, invalidArgument("kind must be trigger or variable")
+		}
+	} else if args.Kind != nil {
+		return entryRequest{}, invalidArgument("kind belongs to the references tool")
+	}
+	if err := other(ids, keep); err != nil {
+		return entryRequest{}, err
+	}
+	if keep != "" {
+		if req.object, err = idOf(keep, ids[keep]); err != nil {
 			return entryRequest{}, err
 		}
 	}
-	switch idName {
-	case "idTag":
-		given := args.IDTag
-		if given == nil || *given < 1 || *given > 2147483647 {
-			return entryRequest{}, invalidArgument("idTag must be a tag ID between 1 and 2147483647")
+	if list != "" {
+		binding := provider.CursorBinding(list, scopeBinding(resolved), id, container, version)
+		if req.kind != "" {
+			binding = provider.CursorBinding(list, scopeBinding(resolved), id, container, version, req.kind, req.object)
 		}
-		req.object = *given
-	case "idTrigger":
-		given := args.IDTrigger
-		if given == nil || *given < 1 || *given > 2147483647 {
-			return entryRequest{}, invalidArgument("idTrigger must be a trigger ID between 1 and 2147483647")
+		if req.paging, err = startPage(binding, args.Limit, args.Cursor); err != nil {
+			return entryRequest{}, err
 		}
-		req.object = *given
 	}
 	return req, nil
 }
@@ -345,13 +375,13 @@ func (r entryRequest) getEntry(op string, answer json.RawMessage) (*EntryResult,
 }
 
 func (r entryRequest) read(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, op, tool, method string) (json.RawMessage, error) {
+	red *redact.Redactor, op, tool, method string, params url.Values) (json.RawMessage, error) {
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
 	var answer json.RawMessage
-	if err := client.call(ctx, op, tagManagerRequirement(tool), method, r.params(), &answer); err != nil {
+	if err := client.call(ctx, op, tagManagerRequirement(tool), method, params, &answer); err != nil {
 		return nil, err
 	}
 	return answer, nil
@@ -364,7 +394,7 @@ func invokeTagManagerTagsList(ctx context.Context, resolved *config.Resolved, se
 	if err != nil {
 		return nil, err
 	}
-	answer, err := req.read(ctx, resolved, secrets, red, op, tagManagerTagsList.ID, "TagManager.getContainerTags")
+	answer, err := req.read(ctx, resolved, secrets, red, op, tagManagerTagsList.ID, "TagManager.getContainerTags", req.params())
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +425,7 @@ func invokeTagManagerTriggersList(ctx context.Context, resolved *config.Resolved
 	if err != nil {
 		return nil, err
 	}
-	answer, err := req.read(ctx, resolved, secrets, red, op, tagManagerTriggersList.ID, "TagManager.getContainerTriggers")
+	answer, err := req.read(ctx, resolved, secrets, red, op, tagManagerTriggersList.ID, "TagManager.getContainerTriggers", req.params())
 	if err != nil {
 		return nil, err
 	}

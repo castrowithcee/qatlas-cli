@@ -420,13 +420,19 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	return nil
 }
 
-// pausedErrorCode reads a small, bounded prefix of a 429 response body and extracts only its "code" field,
-// never its message or any other value: the provider body is otherwise never read into an error, so this is
-// the one exception, kept to the single classification value Make documents (IM310, an organization or team
+// originalFields maps Make's error schema (code, message, detail, suberrors) to an Original. detail is left
+// out because Make documents it as a string on some endpoints and returns an object on others.
+var originalFields = provider.OriginalFields{
+	Message: "message",
+	Code:    "code",
+	List:    "suberrors",
+	Item:    &provider.OriginalFields{Message: "message", Type: "name"},
+}
+
+// pausedErrorCode extracts only the "code" field of an already read error body, never its message or any
+// other value. It is the one classification value Make documents for a 429 (IM310, an organization or team
 // that is paused, not a transient rate limit), which is itself never surfaced verbatim, only recognised.
-func pausedErrorCode(body io.Reader) string {
-	const maxPeekBytes = 4096
-	data, _ := io.ReadAll(io.LimitReader(body, maxPeekBytes))
+func pausedErrorCode(data []byte) string {
 	var parsed struct {
 		Code string `json:"code"`
 	}
@@ -434,30 +440,50 @@ func pausedErrorCode(body io.Reader) string {
 	return parsed.Code
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message,
-// except the one bounded peek pausedErrorCode takes of a 429 to tell a paused organization or team apart
-// from an ordinary rate limit. need names the scope this operation needs, so a permission refusal tells a
+// statusError maps an HTTP status to a stable class. The message never carries provider text; the body is
+// read once, bounded, and kept apart in Original. The same read lets pausedErrorCode tell a paused
+// organization or team apart from an ordinary 429 and feeds the refusal that hooks.delete and
+// connections.delete inspect. need names the scope this operation needs, so a permission refusal tells a
 // caller what to add to the token instead of only that it was refused.
 func (c *Client) statusError(op string, response *http.Response, need string) *provider.Error {
 	status := response.StatusCode
+	keepRefusal := c.wantRefusal && status >= 400 && status < 500 && !isDedicatedStatus(status)
+	var body []byte
+	if keepRefusal {
+		body, _ = io.ReadAll(io.LimitReader(response.Body, maxRefusalBytes))
+		c.refusalStatus = status
+		c.refusal = body
+	} else {
+		body = provider.ReadErrorBody(response.Body)
+	}
+	failure := c.classify(op, response, need, body)
+	failure.Original = provider.ErrorOriginal(status, body, originalFields)
+	return failure
+}
+
+// isDedicatedStatus reports a status that has its own class in classify and so never feeds the refusal.
+func isDedicatedStatus(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden ||
+		status == http.StatusNotFound || status == http.StatusTooManyRequests
+}
+
+// classify maps an HTTP status and its already read body to a stable class and Qatlas' own message.
+func (c *Client) classify(op string, response *http.Response, need string, body []byte) *provider.Error {
+	status := response.StatusCode
 	switch {
 	case status == http.StatusUnauthorized:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Make rejected the API token; a " +
 			"token created for a different zone is rejected here the same way as any other invalid token"}
 	case status == http.StatusForbidden:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "this Make API token may " +
 			"not perform this operation; it needs " + need + ", added under Profile, API, when the token was created"}
 	case status == http.StatusNotFound:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "Make does not hold this resource or does not show it to this token"}
 	case status == http.StatusTooManyRequests:
 		// IM310 is Make's own code for an organization or team that is paused: waiting out a Retry-After
 		// will not fix that, unlike every other 429 this provider still holds its own limiter for.
-		code := pausedErrorCode(response.Body)
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		code := pausedErrorCode(body)
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		if code == "IM310" {
 			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make reports this " +
@@ -466,21 +492,13 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 		}
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make rate-limited the operation"}
 	case status == http.StatusServiceUnavailable:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Make is unavailable or in maintenance"}
 	case status == http.StatusGatewayTimeout:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Make did not answer in time"}
 	case status >= 300 && status < 400:
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "Make answered with a redirect, which Qatlas does not follow for this request"}
 	default:
-		if c.wantRefusal && status >= 400 && status < 500 {
-			c.refusalStatus = status
-			c.refusal, _ = io.ReadAll(io.LimitReader(response.Body, maxRefusalBytes))
-		}
-		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Make rejected the operation (HTTP %d)", status)}
 	}

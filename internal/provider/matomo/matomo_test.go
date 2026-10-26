@@ -238,8 +238,10 @@ var listedReads = map[string]bool{"matomo.reports.evolution": true, "matomo.dist
 	"matomo.tag-manager-containers.get-embed-code": true, "matomo.tag-manager-catalog.list": true,
 	"matomo.tag-manager-versions.list": true, "matomo.tag-manager-versions.get": true, "matomo.tag-manager-versions.export": true,
 	"matomo.tag-manager-tags.list": true, "matomo.tag-manager-tags.get": true, "matomo.tag-manager-triggers.list": true,
-	"matomo.tag-manager-triggers.get": true,
-	"matomo.ldap-users.count":         true, "matomo.ldap-users.list": true}
+	"matomo.tag-manager-triggers.get": true, "matomo.tag-manager-variables.list": true,
+	"matomo.tag-manager-variables.get": true, "matomo.tag-manager-variables.list-available": true,
+	"matomo.tag-manager-references.list": true,
+	"matomo.ldap-users.count":            true, "matomo.ldap-users.list": true}
 
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
@@ -272,7 +274,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 136 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 140 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

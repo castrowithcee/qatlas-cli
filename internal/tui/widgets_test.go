@@ -12,10 +12,10 @@ var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func withTheme(t *testing.T, th theme) {
 	t.Helper()
-	before, profile := styles, lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(3 - 3) // TrueColor
+	before, profile := styles, currentProfile()
+	setProfile(profileTrueColor)
 	setTheme(th)
-	t.Cleanup(func() { setTheme(before); lipgloss.SetColorProfile(profile) })
+	t.Cleanup(func() { setTheme(before); setProfile(profile) })
 }
 
 func TestWidgetsCloseTheirFrameAtEveryWidth(t *testing.T) {

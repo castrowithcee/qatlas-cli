@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags and triggers of a version, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, and adding, updating, and deleting triggers of the draft, with their rights and limits.
+  Describes the Matomo Tag Manager tools: reading the containers of a website, their versions and their export, the tags, triggers, and variables of a version and where they are used, the embed code, and the catalog of contexts, environments, and templates, creating, renaming, and deleting container versions, and adding, updating, and deleting triggers of the draft, with their rights and limits.
 type: knowledge
 edit: shared
 created: 2026-10-26
@@ -32,6 +32,10 @@ the paths of non-live releases are data of the website's owners, and the change 
 | `matomo.tag-manager-tags.get` | reads one tag of a container version |
 | `matomo.tag-manager-triggers.list` | reads the triggers of a container version, the draft included, with parameters and conditions |
 | `matomo.tag-manager-triggers.get` | reads one trigger of a container version |
+| `matomo.tag-manager-variables.list` | reads the configured variables of a container version, the draft included, with parameters, default value, and lookup table |
+| `matomo.tag-manager-variables.get` | reads one configured variable of a container version |
+| `matomo.tag-manager-variables.list-available` | reads the configured and the preconfigured variables a container version offers |
+| `matomo.tag-manager-references.list` | reads where a trigger or a variable of a container version is used, chosen by `kind` |
 | `matomo.tag-manager-triggers.add` | adds a trigger to the draft |
 | `matomo.tag-manager-triggers.update` | replaces name, parameters, conditions, and description of a trigger of the draft |
 | `matomo.tag-manager-triggers.delete` | deletes a trigger from the draft |
@@ -52,13 +56,20 @@ the paths of non-live releases are data of the website's owners, and the change 
 - The export is data for a person to review. Custom HTML, scripts, and addresses in the parameters of tags,
   triggers, and variables are untrusted text: they are cut at limits, never run, and never fetched; `truncated` says
   when anything was cut. The presentation metadata of the templates is not part of it.
-- Tags and triggers are bound by the website, the container, and the version together: Matomo looks them up with
-  `idSite`, `idContainer`, `idContainerVersion`, and the tag or trigger ID, so an ID of another version, container,
+- Tags, triggers, and variables are bound by the website, the container, and the version together: Matomo looks them
+  up with `idSite`, `idContainer`, `idContainerVersion`, and the tag, trigger, or variable ID, so an ID of another version, container,
   or website is not found. A listed row that names another website or version is dropped, a single one is refused.
   The version is required; the ID of the draft is in `matomo.tag-manager-containers.get`. Parameters, conditions,
   and custom HTML are untrusted text with the same limits as the export; `truncated` says when anything was cut.
   The lists page in batches, with a cursor bound to the website, container, and version.
   The template metadata Matomo adds to a row is not returned.
+- Variable code (such as the function of a `CustomJsFunction` variable), default values, and lookup tables are
+  untrusted text with the same limits. `matomo.tag-manager-variables.list` leaves out the preconfigured variables;
+  `matomo.tag-manager-variables.list-available` flattens both kinds from their categories and pages the same way.
+- `matomo.tag-manager-references.list` calls one fixed method per `kind`: `trigger` (with `idTrigger`) lists the tags
+  that fire or block on the trigger, `variable` (with `idVariable`) lists the tags, triggers, and variables that
+  use it. The other ID is refused. Matomo reports an ID the version does not hold as having no references, so an
+  empty list does not prove the object exists; the cursor is bound to the kind and the ID.
 - `matomo.tag-manager-catalog.list` calls one fixed method per `kind`. The template kinds need a context from `kind`
   `contexts` and return the templates flattened from their categories with their parameters (cut at 100 per template
   and 100 offered values per parameter). `publishable-environments` needs `idSite` and leaves out `live` for a token
