@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the Matomo tools for instance-wide website settings and reference data: global settings, reference lists, IP range expansion, and the database statistics.
+  Describes the Matomo tools for instance-wide website settings and reference data: global settings, operations (archiving, trusted hosts, branding), reference lists, IP range expansion, and the database statistics.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Matomo instance settings and reference data
@@ -37,6 +37,29 @@ Matomo types take none. A privacy policy of the instance can make Matomo keep th
 `-search-parameters` sends both the keyword and the category list. `-default-currency` takes three capital letters and
 `-default-timezone` takes text without spaces; Matomo checks both against its own lists, which
 `matomo.reference-data.list` shows, and a rejected value ends as an error.
+
+## Operations
+
+Four tools change the operation of the instance. Each needs Super User rights and a connection whose targets name
+`instance`, is in no profile, and sends one request that is never repeated; after an unclear result check the state
+in Matomo before repeating it. None sends `passwordConfirmation`: Matomo asks for it only for a session token.
+
+- `matomo.archive-settings.set` sends both values every time. `todayArchiveTimeToLive` is narrowed to 60 to 86400
+  seconds. A value fixed in the configuration file can override the stored one, and an instance without the general
+  settings in its interface refuses the change.
+- `matomo.trusted-hosts.set` replaces the whole list. Matomo refuses every request from a host outside it, so Qatlas
+  refuses before any request a list without the host of the connection's base URL (with its port when the URL names
+  one other than 443), compared exactly and not by parent domain, which is narrower than Matomo's own match. Entries
+  are host names, IPv4 or bracketed IPv6 addresses with an optional port, at most 50, never empty; they are sent in
+  lower case without duplicates. The tool is offered only where the `tools` list of the connection names it.
+- `matomo.branding.set` switches only. No file is uploaded, so a logo is published only if an upload already waits in
+  Matomo. Turning the branding off deletes the uploaded files.
+- `matomo.reports.archive` also needs the website inside the site targets, because Matomo requires Super User rights
+  for a direct call. It waits for the archiving, which can exceed the timeout and then leaves the state unknown.
+  `period` day, week, month, or year takes one date (`today`, `yesterday`, or `YYYY-MM-DD`); `range` takes two dates of
+  at most 366 days apart. `lastN` and `previousN` are refused. `segment` is checked like the report segment; `plugin`
+  and `report` narrow the work. Matomo's hidden maintenance methods (scheduled tasks, cron archiving, invalidation)
+  are not offered.
 
 ## Reference data
 

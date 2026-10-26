@@ -126,7 +126,8 @@ var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.I
 	globalSettingsSetDefaultCurrency.ID: true, globalSettingsSetDefaultTimezone.ID: true, usersGet.ID: true,
 	usersDelete.ID: true, usersLogout.ID: true, complianceGet.ID: true, complianceSetPolicySettings.ID: true,
 	complianceEnforce.ID: true, complianceSetStatus.ID: true, databaseStatisticsGet.ID: true,
-	dataPurgeRun.ID: true, trackingFailuresDeleteAll.ID: true}
+	dataPurgeRun.ID: true, trackingFailuresDeleteAll.ID: true, archiveSettingsSet.ID: true, trustedHostsSet.ID: true,
+	brandingSet.ID: true}
 
 // reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide
 // tool needs the instance target, and the website tools need a binding that reaches websites. A binding to the
@@ -139,7 +140,7 @@ func reaches(tool string, targets []string) (bool, []string) {
 	if err != nil {
 		return true, nil
 	}
-	if (tool == annotationsDeleteAll.ID || tool == sitesDelete.ID || tool == rawDataAnonymize.ID) && !(bound.instance && bound.reachesSites()) {
+	if (tool == annotationsDeleteAll.ID || tool == sitesDelete.ID || tool == rawDataAnonymize.ID || tool == reportsArchive.ID) && !(bound.instance && bound.reachesSites()) {
 		return false, []string{formInstance}
 	}
 	if bound.reachesSites() || tool == versionGet.ID {
