@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -13,17 +12,17 @@ import (
 // restoreRenderer puts the process-wide colour state back after a test that changes it.
 func restoreRenderer(t *testing.T) {
 	t.Helper()
-	dark, profile, saved := lipgloss.HasDarkBackground(), lipgloss.ColorProfile(), styles
+	dark, profile, saved := hasDarkBackground(), currentProfile(), styles
 	t.Cleanup(func() {
-		lipgloss.SetHasDarkBackground(dark)
-		lipgloss.SetColorProfile(profile)
+		setHasDarkBackground(dark)
+		setProfile(profile)
 		setTheme(saved)
 	})
 }
 
 func TestColorSchemeVariants(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
 	dark, light := buildTheme(true, false, false), buildTheme(false, false, false)
 	if dark.active.GetForeground() == light.active.GetForeground() {
@@ -40,7 +39,7 @@ func TestColorSchemeVariants(t *testing.T) {
 		{uiprefs.ThemeAuto, false, light},
 	}
 	for _, c := range cases {
-		lipgloss.SetHasDarkBackground(c.detected)
+		setHasDarkBackground(c.detected)
 		applyColorScheme(c.mode, uiprefs.BackgroundTerminal)
 		if styles.active.GetForeground() != c.want.active.GetForeground() ||
 			styles.warning.GetForeground() != c.want.warning.GetForeground() {
@@ -51,7 +50,7 @@ func TestColorSchemeVariants(t *testing.T) {
 
 func TestColorSchemeNoColorWins(t *testing.T) {
 	restoreRenderer(t)
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
 	for _, mode := range []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark} {
 		applyColorScheme(mode, uiprefs.BackgroundQatlas)

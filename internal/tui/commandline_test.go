@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -351,12 +349,12 @@ func TestPaletteClickRunsTheEntry(t *testing.T) {
 }
 
 func TestPaletteReadsWithoutColour(t *testing.T) {
-	before := lipgloss.ColorProfile()
+	before := currentProfile()
 	prior := styles
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); setTheme(prior) })
+	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
 	applyColorScheme("", "")
-	lipgloss.SetColorProfile(termenv.Ascii)
+	setProfile(profileNone)
 	m := paletteModel(t, 150, 42)
 	view := m.render()
 	if strings.Contains(view, "\x1b[") {

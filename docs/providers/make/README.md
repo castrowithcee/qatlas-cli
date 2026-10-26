@@ -156,7 +156,9 @@ a folder target also reaches no hook or hook queue tool.
 
 ## Errors
 
-Errors keep stable classes and never carry the API token or a raw provider response body:
+Errors keep stable classes and never carry the API token. Qatlas' message stays free of provider text; Make's own
+answer (status, `code`, `message`, and each `suberrors` message and name) goes along separately as the original
+statement in the error detail's `provider` field, marked untrusted, redacted, and bounded:
 
 | Class | Cause |
 | --- | --- |
