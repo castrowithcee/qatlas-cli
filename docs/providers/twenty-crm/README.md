@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-22
+updated: 2026-10-26
 ---
 
 # Twenty CRM
@@ -22,6 +22,8 @@ reset, server error, unreadable answer) it reports the outcome as uncertain and 
 of one key are spaced to Twenty's limit of 100 per minute.
 
 A `domain` sets the primary link `https://<domain>` with the domain as label; an empty value clears both.
+
+Setup, the rights of the API key's role, and fixing errors: [Set up Twenty CRM](setup.md).
 
 Pages by area:
 
@@ -54,26 +56,26 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
   refused before the key is read and listed as not reachable.
 
-The target choice lists the objects from one page of the metadata list (`/rest/metadata/objects`, the Data
-model right, see [Data model](data-model.md)) as `object/NAME` with the label of the object; the list ignores a connection's
+The target choice lists the objects from one page of the metadata list (`/rest/metadata/objects`; rights: see
+[Data model](setup.md#data-model)) as `object/NAME` with the label of the object; the list ignores a connection's
 targets, so the choice also offers objects outside them, and system objects are left out. The metadata API has
 no search, so the list is filtered locally. Qatlas resolves no URL to a target.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
-connection does not reach are left out. The catalog comes from the generated API document, which needs no
-settings right, unlike the metadata API (see [Data model](data-model.md)). Enum values and field descriptions
+connection does not reach are left out. The catalog comes from the generated API document, not from the metadata API
+(rights: [Data model](setup.md#data-model)). Enum values and field descriptions
 also leave Qatlas, as untrusted workspace data. Enum values appear only when every value has the form of a Twenty
 selection value (letters, digits, underscore, at most 64 characters) and the field has at most 500 values;
 otherwise `enum` is left out and named in `omitted_fields`.
 
 ## Credential and profiles
 
-The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
-connection's local selection can only narrow it, by `effects` or by a `tools` list naming exactly the tools it
-offers. The `companies.*` read tools report the whole company record, own fields under `custom_fields`; they
-read no workspace catalog, so a file list, rich text, or signed file address is recognized by its shape, and a
-value beyond the size limits is left out and named in `omitted_fields`. `addressOld` of a company is marked
-deprecated in Twenty and is left out. Own fields are written through `records.create` and `records.update`.
-Invocation arguments never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
-A profile is a visible starting selection, not a role: only the ticked `tools` are saved,
-and a saved connection never follows a profile.
+The credential provides `api-key`. The rights of the key's role are listed under [Rights per tool
+group](setup.md#rights-per-tool-group); the connection's local selection can only narrow them, by `effects` or by a
+`tools` list naming exactly the tools it offers. The `companies.*` read tools report the whole company record, own
+fields under `custom_fields`; they read no workspace catalog, so a file list, rich text, or signed file address is
+recognized by its shape, and a value beyond the size limits is left out and named in `omitted_fields`. `addressOld`
+of a company is marked deprecated in Twenty and is left out. Own fields are written through `records.create` and
+`records.update`. Invocation arguments never replace the configured origin. The terminal editor starts a new
+connection on the setup profile `read`. A profile is a visible starting selection, not a role: only the ticked
+`tools` are saved, and a saved connection never follows a profile.

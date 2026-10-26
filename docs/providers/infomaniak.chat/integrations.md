@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat integrations
@@ -25,3 +25,5 @@ The integrations tools of the [Infomaniak kChat provider](README.md). The effect
   only as its origin.
 - Deleted webhooks and commands are never returned, so their deletion time is not offered.
 - `commands.list` lists the team's custom commands only, the purpose of the tool.
+
+The token rights are listed under [Integrations](setup.md#integrations).

@@ -1330,6 +1330,10 @@ func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approv
 				redactor.Apply(field.After))
 			continue
 		}
+		if field.CredentialsChanged {
+			fmt.Fprintf(out, "  %s  credentials changed\n", field.Field)
+			continue
+		}
 		if !field.IsListChange() {
 			fmt.Fprintf(out, "  %s  %s -> %s\n", field.Field, redactor.Apply(field.Before), redactor.Apply(field.After))
 			continue
@@ -1501,6 +1505,8 @@ type approvalFieldDocument struct {
 	Removed []string                 `json:"removed,omitempty"`
 	Kept    []string                 `json:"kept,omitempty"`
 	Renamed []approvalRenameDocument `json:"renamed,omitempty"`
+	// CredentialsChanged is true when the origin differs only in its masked parts; before and after are equal.
+	CredentialsChanged bool `json:"credentials_changed,omitempty"`
 }
 
 type approvalRenameDocument struct {
@@ -1521,7 +1527,8 @@ func approvalChangeJSON(redactor *redact.Redactor, change approval.Change,
 		}
 		if !field.IsListChange() {
 			before, after := redactor.Apply(field.Before), redactor.Apply(field.After)
-			doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field, Before: &before, After: &after})
+			doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field, Before: &before, After: &after,
+				CredentialsChanged: field.CredentialsChanged})
 			continue
 		}
 		var renamed []approvalRenameDocument

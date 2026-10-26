@@ -119,4 +119,4 @@ func TestPickerAndProviderTableFitTheSmallestTerminal(t *testing.T) {
 
 // smallestListHeight is the least height at which a list screen is usable; below it the editor asks for a
 // larger terminal.
-const smallestListHeight = minimumHeight + 1
+const smallestListHeight = minimumHeight

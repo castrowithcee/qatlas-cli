@@ -281,7 +281,9 @@ func TestGermanKeyRows(t *testing.T) {
 	if !strings.Contains(m.View(), "Taste beibehalten") {
 		t.Errorf("cancelling lacks its status:\n%s", m.View())
 	}
-	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight}, {60, 16}, {80, 24}, {140, 40}} {
+	// The capture status is a second note, which the smallest terminal has no row for: there the form asks for
+	// one row more, so that a capture cannot start in a screen the terminal replaces by the resize notice.
+	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {60, 16}, {80, 24}, {140, 40}} {
 		sizedModel(m, size.w, size.h)
 		assertViewFits(t, m.View(), size.w, size.h)
 		press(t, m, "enter")

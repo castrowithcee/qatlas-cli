@@ -196,7 +196,8 @@ func subscriptionChange(action, method, title, done string) *tool {
 				}
 				status, err := c.changeQuery(ctx, op, method, subscriptionsPath(repo, a.Number)+"/"+escape(a.User), nil, nil, nil)
 				if status == http.StatusNotModified {
-					return nil, provider.Fail(op, "the account behind the token is no administrator and can change only its own subscription")
+					return nil, keepOriginal(provider.Fail(op, "the account behind the token is no administrator and "+
+						"can change only its own subscription"), err)
 				}
 				if err != nil {
 					return nil, err
