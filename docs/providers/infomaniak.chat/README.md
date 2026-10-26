@@ -1,13 +1,13 @@
 ---
 description: >
-  Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the binding of direct
-  and group channels, posts, files, and users, the instance-wide connection form, the local file contracts,
-  pagination, the confirmed changes and their unclear-result contract, redirect handling, and the boundary to
-  kDrive, Mail, and CalDAV/CardDAV. The tool groups are described on their own pages.
+  Describes the Infomaniak kChat provider: the service and credential, the team and channel allow-list, the
+  binding of direct and group channels, posts, files, and users, the instance-wide connection form, the local file
+  contracts, pagination, the confirmed changes and their unclear-result contract, redirect handling, and the
+  boundary to kDrive, Mail, and CalDAV/CardDAV. The tool groups are described on their own pages.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-23
+updated: 2026-10-26
 ---
 
 # Infomaniak kChat
@@ -19,6 +19,8 @@ attachments, users, the own sidebar categories, channel notifications, webhooks,
 the instance's `/api/v4/...` REST API; an instance-wide connection also reaches bot accounts. kChat renders
 Markdown and mentions such as `@channel` in a message; Qatlas sends the text as written.
 
+[Set up Infomaniak kChat](setup.md) leads through creating a token and lists the rights it needs.
+
 ## Configuration
 
 Unlike kDrive, kChat has no shared Infomaniak-wide API root: every team has its own instance host, always
@@ -27,9 +29,8 @@ Unlike kDrive, kChat has no shared Infomaniak-wide API root: every team has its 
 exactly that shape: `https`, no port, no path, no user, no query, no fragment. Qatlas refuses any other host,
 label count, or scheme before a secret is read, lowercases the host, and never follows a redirect from it.
 
-The credential provides `token`, sent as a bearer token: an Infomaniak Manager API token with the kChat scope
-(valid account-wide), or a bot token created in the kChat interface, as the `mcp-server-kchat` README
-describes; a personal profile token is undocumented and usable only where verified live. A token reaches
+The credential provides `token`, sent as a bearer token. Which kinds of token work, the rights each tool group
+needs, and how to test the connection are described in [Set up Infomaniak kChat](setup.md). A token reaches
 every team and channel its owner can reach, possibly of several customers: the connection target, not the
 token, decides which teams and channels are reachable.
 
@@ -200,7 +201,7 @@ Errors keep stable classes and never carry the token, a message's text, or a raw
 | Class | Cause |
 | --- | --- |
 | `auth` | kChat rejected the token |
-| `permission` | this token may not perform the operation; check its rights on the team or channel in kChat |
+| `permission` | this token may not perform the operation; see [Fixing errors](setup.md#fixing-errors) |
 | `not-found` | kChat does not hold the resource, or does not show it to this token; HTTP 404 of `insights.top` means the instance offers no insights |
 | `rate-limited` | kChat rate-limited the request; Qatlas applies no proactive spacing and only honours `Retry-After` |
 | `timeout` | kChat did not answer in time |
