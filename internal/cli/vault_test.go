@@ -1466,3 +1466,90 @@ func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
 		t.Errorf("outside in JSON: %s", stdout)
 	}
 }
+
+const (
+	canaryApprovalUser  = "canary-approval-user"
+	canaryApprovalPass  = "canary-approval-pass"
+	canaryApprovalPass2 = "canary-approval-pass-2"
+	canaryApprovalQuery = "canary-approval-query"
+)
+
+const approveOriginConfig = `
+version: 3
+services:
+  wiki:
+    provider: bookstack
+    base_url: "%s"
+credentials:
+  wiki-vault:
+    type: vault
+connections:
+  wiki:
+    service: wiki
+    credential: wiki-vault
+`
+
+// The origin of a changed connection is shown masked, and a change of only the masked parts is told as changed
+// credentials in text and in JSON; a changed host shows both masked values.
+func TestVaultApproveMasksTheOriginOfAChange(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
+	origin := func(user, pass, host string) string {
+		return "https://" + user + ":" + pass + "@" + host + "/api?token=" + canaryApprovalQuery + "&page=1"
+	}
+	writeConfig := func(baseURL string) {
+		t.Helper()
+		body := fmt.Sprintf(approveOriginConfig, baseURL)
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approveAll := func(args ...string) (int, string, string) {
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		return runWithInput(t, &Options{}, "", append([]string{"vault", "approve", "--config", configIn(dir)}, args...)...)
+	}
+	noCanary := func(stdout, stderr string) {
+		t.Helper()
+		for _, canary := range []string{canaryApprovalUser, canaryApprovalPass, canaryApprovalPass2, canaryApprovalQuery} {
+			if strings.Contains(stdout, canary) || strings.Contains(stderr, canary) {
+				t.Errorf("output shows %q:\n%s\n%s", canary, stdout, stderr)
+			}
+		}
+	}
+
+	writeConfig(origin(canaryApprovalUser, canaryApprovalPass, "wiki.example.invalid"))
+	if code, _, stderr := approveAll(); code != exitOK {
+		t.Fatalf("first approve: exit %d, stderr %s", code, stderr)
+	}
+
+	writeConfig(origin(canaryApprovalUser, canaryApprovalPass2, "wiki.example.invalid"))
+	code, stdout, stderr := approveAll("--output", "json")
+	if code != exitOK {
+		t.Fatalf("json run: exit %d, stderr %s", code, stderr)
+	}
+	noCanary(stdout, stderr)
+	if !strings.Contains(stdout, `"field":"origin"`) || !strings.Contains(stdout, `"credentials_changed":true`) {
+		t.Errorf("json lacks the credentials_changed mark:\n%s", stdout)
+	}
+
+	writeConfig(origin(canaryApprovalUser, canaryApprovalPass, "wiki.example.invalid"))
+	code, stdout, stderr = approveAll()
+	if code != exitOK {
+		t.Fatalf("text run: exit %d, stderr %s", code, stderr)
+	}
+	noCanary(stdout, stderr)
+	if !strings.Contains(stdout, "  origin  credentials changed\n") || strings.Contains(stdout, "origin  https") {
+		t.Errorf("text lacks the credentials changed line:\n%s", stdout)
+	}
+
+	writeConfig(origin(canaryApprovalUser, canaryApprovalPass, "moved.example.invalid"))
+	code, stdout, stderr = approveAll()
+	if code != exitOK {
+		t.Fatalf("host run: exit %d, stderr %s", code, stderr)
+	}
+	noCanary(stdout, stderr)
+	want := "  origin  https://***:***@wiki.example.invalid/api?token=***&page=1 -> https://***:***@moved.example.invalid/api?token=***&page=1\n"
+	if !strings.Contains(stdout, want) || strings.Contains(stdout, "credentials changed") {
+		t.Errorf("text lacks %q:\n%s", want, stdout)
+	}
+}
