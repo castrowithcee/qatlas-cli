@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -248,11 +249,19 @@ func (m *Model) updateView() string {
 	if m.restart != nil {
 		after = tr(tUpdateAfterRestart)
 	}
+	// One consequence per line: a sentence that comes and goes with the running processes would otherwise move
+	// where the others wrap.
+	var details []string
+	for _, sentence := range strings.SplitAfter(m.updateText, ". ") {
+		if sentence = strings.TrimSpace(sentence); sentence != "" {
+			details = append(details, m.wrapped(lipgloss.NewStyle(), sentence))
+		}
+	}
+	details = append(details, "", m.wrapped(lipgloss.NewStyle(), after))
 	return m.questionText(question{
 		title:       tr(tUpdateQuestion, m.release.Latest),
 		consequence: tr(tUpdateConsequence),
-		details: []string{m.wrapped(lipgloss.NewStyle(), m.updateText), "",
-			m.wrapped(lipgloss.NewStyle(), after)},
-		keys: "y update · n/{back} cancel · {command} cmds · {help} help",
+		details:     details,
+		keys:        "y update · n/{back} cancel · {command} cmds · {help} help",
 	})
 }
