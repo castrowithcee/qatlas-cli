@@ -46,12 +46,15 @@ The stored Microsoft Teams address is a credential. No tool returns it and no er
 
 ## Targets
 
-An alert has no single website: it watches the websites of `id_sites`, and it counts as inside the targets only
-when every one of them is. `list` and `list-triggered` leave out each alert, or each triggered entry, with a
-website outside the targets; for a triggered entry the website of the entry counts, and the websites of its alert
-where the answer shows them. `get`, `get-past-values`, and `delete` take `idSite` and `idAlert`, read the alert
-once, and refuse it as not found, without telling whether it exists, when `idSite` is not one of its websites or
-any of its websites lies outside the targets. Computing the values or deleting follows only after that read.
+An alert has no single website: it watches the websites of `id_sites`, and Matomo shows it with all of them when
+any is requested. Qatlas follows that. `list` shows an alert when at least one of its websites is inside the
+targets, and with `idSite` when it watches that website; `id_sites` stays complete, so websites outside the targets
+appear as IDs only. In `list-triggered` only the website of the entry counts. `get`, `get-past-values`, and
+`delete` take `idSite`, which must be inside the targets, and `idAlert`; they read the alert once and refuse it as
+not found, without telling whether it exists, when `idSite` is not one of its websites. Further websites outside
+the targets do not matter. `get-past-values` returns the values of websites inside the targets only. Computing the
+values or deleting follows only after that read; an alert is not a container of websites, and Matomo checks only
+who owns it for the deletion.
 
 `delete` needs the confirmation of the caller and is sent exactly once. After a result that is unclear (no answer in
 time, a reset connection, an answer Qatlas cannot read) the error says the change may have been applied and is

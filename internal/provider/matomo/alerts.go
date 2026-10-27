@@ -87,16 +87,16 @@ func idAlertArgument(verb string) capability.Argument {
 func alertSiteArgument() capability.Argument {
 	return capability.Argument{Name: "idSite", Target: "site", Description: "A website the alert watches, from " +
 		"matomo.sites.list; optional when the connection binds exactly one website; it must be one of the alert's " +
-		"websites, and every website of the alert must lie inside the connection's targets"}
+		"websites"}
 }
 
 var alertsList = capability.Descriptor{
 	ID: Provider + ".alerts.list", Version: 1, Title: "List Matomo alerts",
 	Description: "List the custom alerts of the token's user for the websites inside the connection's targets, in " +
 		"batches; with the Super User switch the alerts of all users. An alert watches several websites and " +
-		"appears only when every one of them lies inside the targets. Logins, recipients, names, and conditions " +
-		"are personal or untrusted data; a Microsoft Teams address never appears, only whether one is stored. " +
-		"Needs the plugin CustomAlerts and a view right on the websites",
+		"appears when at least one of them lies inside the targets, with all its websites listed. Logins, " +
+		"recipients, names, and conditions are personal or untrusted data; a Microsoft Teams address never " +
+		"appears, only whether one is stored. Needs the plugin CustomAlerts and a view right on the websites",
 	Tags: []string{"matomo", "alerts", "notifications", "recipients", "list"}, Risk: readRisk(alertsSensitive),
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,` + allAlertsProperty + `,` +
@@ -135,9 +135,9 @@ var alertsGet = capability.Descriptor{
 var alertsGetPastValues = capability.Descriptor{
 	ID: Provider + ".alerts.get-past-values", Version: 1, Title: "Get the past values of a Matomo alert",
 	Description: "Compute the value an own alert watches for each of its websites, for the current period or " +
-		"periods back. One read first proves that the website is one of the alert's and that all its websites lie " +
-		"inside the targets, otherwise the alert is not found. Matomo evaluates the report of every website, which " +
-		"can take time; nothing is sent to anyone. Needs the plugin CustomAlerts",
+		"periods back, only for the websites inside the connection's targets. One read first proves that the website " +
+		"is one of the alert's, otherwise the alert is not found. Matomo evaluates the report of every website of " +
+		"the alert, which can take time; nothing is sent to anyone. Needs the plugin CustomAlerts",
 	Tags: []string{"matomo", "alerts", "notifications", "values"}, Risk: readRisk(alertsSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,` + idAlertSchema + `,` +
 		subPeriodNSchema + `},"required":["idAlert","subPeriodN"],"additionalProperties":false}`),
@@ -161,10 +161,9 @@ var alertsGetPastValues = capability.Descriptor{
 var alertsListTriggered = capability.Descriptor{
 	ID: Provider + ".alerts.list-triggered", Version: 1, Title: "List triggered Matomo alerts",
 	Description: "List the entries of alerts that fired for the token's own login, in batches, with the alert " +
-		"definition as it was when it fired. An entry appears only when its website, and every website of its " +
-		"alert where the answer shows them, lies inside the connection's targets. Logins, recipients, names, and " +
-		"conditions are personal or untrusted data; a Microsoft Teams address never appears. Needs the plugin " +
-		"CustomAlerts and a view right on the websites",
+		"definition as it was when it fired. An entry appears only when its website lies inside the connection's " +
+		"targets. Logins, recipients, names, and conditions are personal or untrusted data; a Microsoft Teams " +
+		"address never appears. Needs the plugin CustomAlerts and a view right on the websites",
 	Tags: []string{"matomo", "alerts", "notifications", "triggered", "list"}, Risk: readRisk(alertsSensitive),
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,` + pagingKeys + `},` +
@@ -360,13 +359,14 @@ func (r alertRowJSON) definition(red *redact.Redactor, sites []int) (AlertDefini
 	}, true
 }
 
-func (s scope) allowsAll(ids []int) bool {
+// allowsAny reports whether at least one website is inside the scope.
+func (s scope) allowsAny(ids []int) bool {
 	for _, id := range ids {
-		if !s.allows(id) {
-			return false
+		if s.allows(id) {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func alertIDOf(given *int) (int, error) {
@@ -376,15 +376,15 @@ func alertIDOf(given *int) (int, error) {
 	return *given, nil
 }
 
-// alertNotFound is the answer for an alert that is absent, not watching the website, or watching a website
-// outside the targets; it does not tell which, and names no website.
+// alertNotFound is the answer for an alert that is absent or does not watch the website; it does not tell
+// which, and names no website.
 func alertNotFound(op string) error {
 	return &provider.Error{Class: provider.ClassNotFound, Op: op,
 		Message: "Matomo has no alert with this ID for this website inside the targets of this connection"}
 }
 
-// fetchAlert is the one proving read of an alert: getAlert with its ID. The alert must watch the website, and
-// every website it watches must lie inside the targets.
+// fetchAlert is the one proving read of an alert: getAlert with its ID. The alert must watch the website, which
+// selectSite has already proven to lie inside the targets; its other websites do not matter.
 func (c *Client) fetchAlert(ctx context.Context, op string, req requirement, red *redact.Redactor, id, site int) (AlertDefinition, error) {
 	var row alertRowJSON
 	if err := c.call(ctx, op, req, "CustomAlerts.getAlert", url.Values{"idAlert": {strconv.Itoa(id)}}, &row); err != nil {
@@ -398,7 +398,7 @@ func (c *Client) fetchAlert(ctx context.Context, op string, req requirement, red
 	if !valid || alert.IDAlert != id {
 		return AlertDefinition{}, provider.InvalidResponse(op, "Matomo returned another alert than asked for")
 	}
-	if !present || !slices.Contains(sites, site) || !c.scope.allowsAll(sites) {
+	if !present || !slices.Contains(sites, site) {
 		return AlertDefinition{}, alertNotFound(op)
 	}
 	return alert, nil
@@ -471,7 +471,7 @@ func invokeAlertsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := client.call(ctx, op, alertsRequirement(alertsList.ID), "CustomAlerts.getAlerts", params, &rows); err != nil {
 		return nil, err
 	}
-	// Matomo answers for every website the token views; each alert is proven against the targets before paging.
+	// Matomo answers with each alert's full website list; an alert counts when it watches a reachable website.
 	alerts := []AlertDefinition{}
 	for _, data := range rows {
 		var row alertRowJSON
@@ -479,7 +479,7 @@ func invokeAlertsList(ctx context.Context, resolved *config.Resolved, secrets *s
 			continue
 		}
 		sites, present, ok := row.siteIDs()
-		if !ok || !present || len(sites) == 0 || !bound.allowsAll(sites) || site > 0 && !slices.Contains(sites, site) {
+		if !ok || !present || len(sites) == 0 || !bound.allowsAny(sites) || site > 0 && !slices.Contains(sites, site) {
 			continue
 		}
 		if alert, valid := row.definition(red, sites); valid {
@@ -525,11 +525,11 @@ func invokeAlertsListTriggered(ctx context.Context, resolved *config.Resolved, s
 		if json.Unmarshal(data, &row) != nil {
 			continue
 		}
-		// The entry's website always counts; the alert's websites count where the answer shows them.
+		// Only the website of the entry counts.
 		sites, _, ok := row.siteIDs()
 		entry, trigger := row.IDSite.number(), row.IDTriggered.number()
 		if !ok || entry == nil || trigger == nil || *entry < 1 || *trigger < 1 || !bound.allows(*entry) ||
-			site > 0 && *entry != site || !bound.allowsAll(sites) {
+			site > 0 && *entry != site {
 			continue
 		}
 		definition, valid := row.definition(red, sites)
@@ -618,7 +618,7 @@ func invokeAlertsGetPastValues(ctx context.Context, resolved *config.Resolved, s
 	out := &AlertPastValues{IDAlert: id, Values: []AlertValue{}}
 	for _, row := range rows {
 		entry := row.IDSite.number()
-		if entry == nil || !slices.Contains(alert.IDSites, *entry) {
+		if entry == nil || !slices.Contains(alert.IDSites, *entry) || !client.scope.allows(*entry) {
 			continue
 		}
 		var value loose
