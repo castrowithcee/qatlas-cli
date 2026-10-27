@@ -378,6 +378,7 @@ func (c *Client) insightThreads(ctx context.Context, op string, result *Insights
 	if err != nil {
 		return nil, err
 	}
+	guard := c.newPreviewGuard(ctx, op)
 	for i := range items {
 		it := &items[i]
 		head := heads[i]
@@ -398,6 +399,9 @@ func (c *Client) insightThreads(ctx context.Context, op string, result *Insights
 		thread := InsightThread{PostID: head.ID, ChannelID: channelID, ReplyCount: head.ReplyCount, ParticipantIDs: ids,
 			ChannelName: cleanText(it.ChannelName.Value), ChannelDisplayName: cleanText(it.ChannelDisplayName.Value),
 			Post: insightRootOf(items[i].Post, head.ID, channelID), UserInformation: insightAuthorOf(authors[i], allowed)}
+		if thread.Post != nil {
+			guard.apply(thread.Post)
+		}
 		result.Threads = append(result.Threads, thread)
 	}
 	result.Count = len(result.Threads)
