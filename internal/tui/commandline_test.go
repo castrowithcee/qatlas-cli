@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 func commandNames(list []command) []string {
@@ -353,7 +355,7 @@ func TestPaletteReadsWithoutColour(t *testing.T) {
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
-	applyColorScheme("", "")
+	applyTheme(uiprefs.ThemeTerminal)
 	setProfile(profileNone)
 	m := paletteModel(t, 150, 42)
 	view := m.render()

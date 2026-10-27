@@ -450,8 +450,8 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 // under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
 // hold at.
 func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
-	before := currentProfile()
-	t.Cleanup(func() { setProfile(before) })
+	restoreRenderer(t)
+	setTheme(darkTheme())
 
 	for _, width := range []int{40, 79, 80, 120} {
 		m, _ := providerModel(t, providerRegistry(t, 55))

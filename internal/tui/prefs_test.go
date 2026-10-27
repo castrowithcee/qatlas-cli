@@ -14,48 +14,21 @@ import (
 // restoreRenderer puts the process-wide colour state back after a test that changes it.
 func restoreRenderer(t *testing.T) {
 	t.Helper()
-	dark, profile, saved := hasDarkBackground(), currentProfile(), styles
+	fg, bg, profile, saved := termFg, termBg, currentProfile(), styles
 	t.Cleanup(func() {
-		setHasDarkBackground(dark)
+		termFg, termBg = fg, bg
 		setProfile(profile)
 		setTheme(saved)
 	})
-}
-
-func TestColorSchemeVariants(t *testing.T) {
-	restoreRenderer(t)
-	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "")
-	dark, light := buildTheme(true, false, false), buildTheme(false, false, false)
-	if dark.active.GetForeground() == light.active.GetForeground() {
-		t.Fatal("light and dark themes share a foreground; want one per background")
-	}
-	cases := []struct {
-		mode     string
-		detected bool
-		want     theme
-	}{
-		{uiprefs.ThemeLight, true, light},
-		{uiprefs.ThemeDark, false, dark},
-		{uiprefs.ThemeAuto, true, dark},
-		{uiprefs.ThemeAuto, false, light},
-	}
-	for _, c := range cases {
-		setHasDarkBackground(c.detected)
-		applyColorScheme(c.mode, uiprefs.BackgroundTerminal)
-		if styles.active.GetForeground() != c.want.active.GetForeground() ||
-			styles.warning.GetForeground() != c.want.warning.GetForeground() {
-			t.Errorf("mode %s with detected dark=%v: got the wrong palette", c.mode, c.detected)
-		}
-	}
 }
 
 func TestColorSchemeNoColorWins(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
-	for _, mode := range []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark} {
-		applyColorScheme(mode, uiprefs.BackgroundQatlas)
+	termFg, termBg = &rgb{255, 255, 255}, &rgb{0, 0, 0}
+	for _, mode := range themeNames() {
+		applyTheme(mode)
 		for name, st := range map[string]lipgloss.Style{
 			"title": styles.title, "active": styles.active, "ok": styles.ok, "fail": styles.fail,
 			"warning": styles.warning, "focusBorder": styles.focusBorder,
@@ -116,7 +89,7 @@ func TestNoColorWithAnyValueDrawsWithoutColour(t *testing.T) {
 	for _, value := range []string{"1", "yes"} {
 		t.Setenv("NO_COLOR", value)
 		setProfile(detectProfile(io.Discard))
-		applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
+		applyTheme(uiprefs.ThemeQatlasDark)
 		if toColorprofile(currentProfile()) != colorprofile.NoTTY {
 			t.Errorf("NO_COLOR=%s: profile %v, want no colour", value, currentProfile())
 		}

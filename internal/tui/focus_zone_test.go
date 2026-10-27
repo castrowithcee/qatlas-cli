@@ -21,7 +21,7 @@ func TestFormFocusFrameStandsAroundTheRowsNotTheSectionList(t *testing.T) {
 		for _, size := range []struct{ w, h int }{{80, 24}, {150, 42}} {
 			t.Run(fmt.Sprintf("%s/%dx%d", form.name, size.w, size.h), func(t *testing.T) {
 				visualSetup(t, true)
-				m := visualModel(t, fixtures, size.w, size.h, uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+				m := visualModel(t, fixtures, size.w, size.h, uiprefs.ThemeQatlasDark)
 				form.open(t, m)
 				var top string
 				for _, line := range strings.Split(ansi.Strip(m.render()), "\n") {
