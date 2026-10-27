@@ -61,9 +61,13 @@ These rules hold for every tool; the area pages refer here.
 - Link columns in row output follow the table boundary. A link entry into a table outside the connection
   allow-list, or into a table that cannot be determined from the base metadata, is reduced to its `row_id`
   and carries no `display_value`. A wildcard connection keeps the values. This applies to
-  `seatable.base.rows.list` and `seatable.base.rows.get`, whichever way the table is addressed. Lookup and
-  formula columns are returned as the provider computes them. The base metadata is read once and reused.
-  The area pages state their own forms of this rule.
+  `seatable.base.rows.list`, `seatable.base.rows.get`, `seatable.base.rows.search` and
+  `seatable.base.rows.activities`, whichever way the table is addressed. The value of a lookup, findmin or
+  findmax column is removed from the row, and the column is named in `omitted_fields`, when its linked table
+  is outside the allow-list or cannot be determined; the table follows from the column's link column.
+  Rollup, count and formula values are returned as the provider computes them: they cannot be assigned to a
+  table and may reflect data of linked tables outside the allow-list. The base metadata is read once and
+  reused. The area pages state their own forms of this rule.
 - A change needs the matching effect (`create`, `update`, `delete`) and `confirm`. Each change sends exactly one
   request (a multi-step tool, one per step) and is never repeated. A timeout, a dropped connection, a 5xx
   answer, or an unreadable answer is reported as uncertain: read the affected objects before repeating the
