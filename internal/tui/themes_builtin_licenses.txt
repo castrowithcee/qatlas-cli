@@ -1,0 +1,102 @@
+Colour values and names of the built-in TUI themes come from the iTerm2-Color-Schemes collection
+(https://github.com/mbadolato/iTerm2-Color-Schemes, commit 470683d5e5b58a28a15a243c8fef868abef3940f).
+The collection is licensed as follows:
+
+MIT License
+
+Copyright (c) 2011 to Present Mark Badolato
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+This license covers the iTerm-Color-Schemes repository collection of themes. 
+
+The copyright/license for each individual theme belongs to the author of that theme.
+
+The schemes are licensed by their creators as recorded in the collection (licenses.yml, CREDITS.md),
+each under the MIT terms above with the copyright notice of its upstream licence file:
+
+Catppuccin Mocha
+  License: MIT
+  Source: https://github.com/catppuccin/palette
+  Credit: The Catppuccin themes were created by the [Catppuccin](https://github.com/orgs/catppuccin/people) team
+  Copyright: Copyright (c) 2021 Catppuccin
+  Copyright read from: https://github.com/catppuccin/palette, file LICENSE, commit 07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd
+
+Catppuccin Latte
+  License: MIT
+  Source: https://github.com/catppuccin/palette
+  Credit: The Catppuccin themes were created by the [Catppuccin](https://github.com/orgs/catppuccin/people) team
+  Copyright: Copyright (c) 2021 Catppuccin
+  Copyright read from: https://github.com/catppuccin/palette, file LICENSE, commit 07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd
+
+Nord
+  License: MIT
+  Source: https://github.com/nordtheme/iterm2
+  Credit: Nord theme was created by [Arctic Ice Studio](https://www.nordtheme.com/) and added by [Teraskull](https://github.com/Teraskull)
+  Copyright: Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de)
+  Copyright read from: https://github.com/nordtheme/iterm2, file license, commit 233a2462e04e07a9676386a52dad0c2ff6666d72
+
+Atom One Dark
+  License: MIT
+  Source: https://github.com/atom/atom/tree/master/packages/one-dark-ui
+  Credit: The AtomOneDark theme was created by [zasdaym](https://github.com/zasdaym)
+  Copyright: Copyright (c) 2011-2022 GitHub Inc.
+  Copyright read from: https://github.com/atom/atom, file LICENSE.md, commit 1c3bd35ce238dc0491def9e1780d04748d8e18af
+
+Atom One Light
+  License: MIT
+  Source: https://github.com/atom/atom/tree/master/packages/one-light-ui
+  Credit: The AtomOneLight theme was created by [iamstarkov](https://github.com/iamstarkov)
+  Copyright: Copyright (c) 2011-2022 GitHub Inc.
+  Copyright read from: https://github.com/atom/atom, file LICENSE.md, commit 1c3bd35ce238dc0491def9e1780d04748d8e18af
+
+Rose Pine
+  License: MIT
+  Source: https://github.com/rose-pine/build
+  Credit: The Rosé Pine themes were created by the [Rosé Pine](https://github.com/orgs/rose-pine/people) team
+  Copyright: Copyright (c) mvllow
+  Copyright read from: https://github.com/rose-pine/build, file LICENSE, commit 1111ed6c610e13eeec99a5112aa937942f663b1d
+
+Rose Pine Dawn
+  License: MIT
+  Source: https://github.com/rose-pine/build
+  Credit: The Rosé Pine themes were created by the [Rosé Pine](https://github.com/orgs/rose-pine/people) team
+  Copyright: Copyright (c) mvllow
+  Copyright read from: https://github.com/rose-pine/build, file LICENSE, commit 1111ed6c610e13eeec99a5112aa937942f663b1d
+
+Selenized Dark
+  License: MIT
+  Source: https://github.com/jan-warchol/selenized
+  Credit: The themes Selenized Dark and Light were created by [jan-warchol](https://github.com/jan-warchol) and added by [iton0](https://github.com/iton0)
+  Copyright: Copyright (c) 2021 Jan Warchoł
+  Copyright read from: https://github.com/jan-warchol/selenized, file LICENSE.txt, commit 9a753d5c575c48e29eeb2be745d9571b4cec42b3
+
+Selenized Light
+  License: MIT
+  Source: https://github.com/jan-warchol/selenized
+  Credit: The themes Selenized Dark and Light were created by [jan-warchol](https://github.com/jan-warchol) and added by [iton0](https://github.com/iton0)
+  Copyright: Copyright (c) 2021 Jan Warchoł
+  Copyright read from: https://github.com/jan-warchol/selenized, file LICENSE.txt, commit 9a753d5c575c48e29eeb2be745d9571b4cec42b3
+
+Tomorrow Night
+  License: MIT
+  Source: https://github.com/chriskempson/tomorrow-theme/tree/master/iTerm2
+  Credit: The Tomorrow themes were created by [chriskempson](https://github.com/chriskempson/tomorrow-theme/tree/master/iTerm2)
+  Copyright: Copyright (C) 2011 [Chris Kempson](https://github.com/chriskempson)
+  Copyright read from: https://github.com/chriskempson/tomorrow-theme, file LICENSE.md, commit ccf6666d888198d341b26b3a99d0bc96500ad503

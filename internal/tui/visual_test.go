@@ -378,6 +378,21 @@ func visualTerminalShots() []visualTerminalShot {
 	}
 }
 
+// visualBuiltinShots are the snapshots of a dark and a light built-in theme, numbered 80 to 89.
+func visualBuiltinShots() []visualProfileShot {
+	overview := func(*testing.T, *Model) {}
+	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	shot := func(name, theme string, show func(*testing.T, *Model)) visualProfileShot {
+		return visualProfileShot{visualShot{name, 150, 42, theme, false, show}, profileTrueColor}
+	}
+	return []visualProfileShot{
+		shot("80-overview-catppuccin-mocha", "catppuccin mocha", overview),
+		shot("81-connections-catppuccin-mocha", "catppuccin mocha", connections),
+		shot("82-overview-catppuccin-latte", "catppuccin latte", overview),
+		shot("83-connections-catppuccin-latte", "catppuccin latte", connections),
+	}
+}
+
 func TestVisualSnapshots(t *testing.T) {
 	fixtures, err := filepath.Abs(visualDir)
 	mustNoError(t, err)
@@ -387,7 +402,7 @@ func TestVisualSnapshots(t *testing.T) {
 		mustNoError(t, err)
 		mustNoError(t, os.MkdirAll(htmlDir, 0o755))
 	}
-	shots := make([]visualTerminalShot, 0, 80)
+	shots := make([]visualTerminalShot, 0, 90)
 	for _, shot := range visualShots() {
 		shots = append(shots, visualTerminalShot{visualProfileShot: visualProfileShot{shot, profileTrueColor}})
 	}
@@ -395,6 +410,9 @@ func TestVisualSnapshots(t *testing.T) {
 		shots = append(shots, visualTerminalShot{visualProfileShot: shot})
 	}
 	shots = append(shots, visualTerminalShots()...)
+	for _, shot := range visualBuiltinShots() {
+		shots = append(shots, visualTerminalShot{visualProfileShot: shot})
+	}
 	for _, ts := range shots {
 		shot := ts.visualShot
 		t.Run(shot.name, func(t *testing.T) {
@@ -432,6 +450,10 @@ func TestVisualSnapshots(t *testing.T) {
 					pal = htmlPalette{htmlDark.page, ts.bg, ts.fg}
 				case shot.theme == uiprefs.ThemeQatlasLight:
 					pal = htmlLight
+				default:
+					if d, ok := themeNamed(shot.theme); ok && d.paints && styles.palette.base != "" {
+						pal = htmlPalette{htmlDark.page, string(styles.palette.base), string(styles.palette.text)}
+					}
 				}
 				page := ansiToHTML(view, name, pal)
 				mustNoError(t, os.WriteFile(filepath.Join(htmlDir, name+".html"), []byte(page), 0o644))

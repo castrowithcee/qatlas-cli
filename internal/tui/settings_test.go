@@ -67,7 +67,7 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 	}
 }
 
-// The theme row offers the terminal theme and the qatlas themes, and no background row is left.
+// The theme row offers the terminal theme, the qatlas themes and the built-in schemes, and no background row is left.
 func TestGeneralOffersTheThemes(t *testing.T) {
 	m, _ := lockedVaultModel(t)
 	openSectionByName(t, m, sectionGeneral)
@@ -77,9 +77,10 @@ func TestGeneralOffersTheThemes(t *testing.T) {
 		}
 	}
 	theme := m.fields[0]
-	if theme.label != themeLabel || strings.Join(theme.choices, ",") != "terminal,qatlas dark,qatlas light" ||
+	if theme.label != themeLabel || strings.Join(theme.choices, ",") != strings.Join(themeNames(), ",") ||
+		strings.Join(theme.choices[:3], ",") != "terminal,qatlas dark,qatlas light" ||
 		theme.choices[theme.index] != uiprefs.ThemeTerminal {
-		t.Errorf("theme row = %q %v at %d, want terminal, qatlas dark and qatlas light on terminal",
+		t.Errorf("theme row = %q %v at %d, want the registry on terminal, led by qatlas dark and qatlas light",
 			theme.label, theme.choices, theme.index)
 	}
 }

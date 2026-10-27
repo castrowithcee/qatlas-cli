@@ -1,0 +1,13 @@
+# Copyright notices of the upstream repositories of the built-in schemes, copied verbatim from their licence files.
+# Fields separated by " | ": scheme name in the collection, upstream repository, licence file, commit read, notice.
+# Each licence is MIT; the collection's MIT text in the notice file covers the permission text.
+Catppuccin Mocha | https://github.com/catppuccin/palette | LICENSE | 07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd | Copyright (c) 2021 Catppuccin
+Catppuccin Latte | https://github.com/catppuccin/palette | LICENSE | 07d02aa110ef9eb7e7427afca5c73ba9cf7f8ebd | Copyright (c) 2021 Catppuccin
+Nord | https://github.com/nordtheme/iterm2 | license | 233a2462e04e07a9676386a52dad0c2ff6666d72 | Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de)
+Atom One Dark | https://github.com/atom/atom | LICENSE.md | 1c3bd35ce238dc0491def9e1780d04748d8e18af | Copyright (c) 2011-2022 GitHub Inc.
+Atom One Light | https://github.com/atom/atom | LICENSE.md | 1c3bd35ce238dc0491def9e1780d04748d8e18af | Copyright (c) 2011-2022 GitHub Inc.
+Rose Pine | https://github.com/rose-pine/build | LICENSE | 1111ed6c610e13eeec99a5112aa937942f663b1d | Copyright (c) mvllow
+Rose Pine Dawn | https://github.com/rose-pine/build | LICENSE | 1111ed6c610e13eeec99a5112aa937942f663b1d | Copyright (c) mvllow
+Selenized Dark | https://github.com/jan-warchol/selenized | LICENSE.txt | 9a753d5c575c48e29eeb2be745d9571b4cec42b3 | Copyright (c) 2021 Jan Warchoł
+Selenized Light | https://github.com/jan-warchol/selenized | LICENSE.txt | 9a753d5c575c48e29eeb2be745d9571b4cec42b3 | Copyright (c) 2021 Jan Warchoł
+Tomorrow Night | https://github.com/chriskempson/tomorrow-theme | LICENSE.md | ccf6666d888198d341b26b3a99d0bc96500ad503 | Copyright (C) 2011 [Chris Kempson](https://github.com/chriskempson)

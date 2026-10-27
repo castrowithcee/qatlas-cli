@@ -361,7 +361,7 @@ func TestMixedPaletteTakesKnownANSIColours(t *testing.T) {
 // The registry offers the terminal theme first, and every name it holds is a theme of its own.
 func TestThemeRegistry(t *testing.T) {
 	names := themeNames()
-	if strings.Join(names, ",") != "terminal,qatlas dark,qatlas light" {
+	if len(names) < 3 || strings.Join(names[:3], ",") != "terminal,qatlas dark,qatlas light" {
 		t.Errorf("themes = %v", names)
 	}
 	for _, name := range names {
