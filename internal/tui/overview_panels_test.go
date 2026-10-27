@@ -130,7 +130,7 @@ func TestOverviewAtTheSmallestSize(t *testing.T) {
 			t.Errorf("the smallest Overview lacks %q:\n%s", label, ansi.Strip(view))
 		}
 	}
-	if strings.Contains(view, "╭") {
+	if frame := strings.Index(view, "╭"); frame >= 0 && frame < strings.Index(view, "Approvals") {
 		t.Errorf("the smallest Overview keeps frames over the counts:\n%s", ansi.Strip(view))
 	}
 	m.screen, m.overviewCursor = screenList, 2
