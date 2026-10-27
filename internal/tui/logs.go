@@ -664,9 +664,9 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 				m.focusNav()
 			}
 		}
-	case key.String() == "s":
+	case keyIs(key, actSummary):
 		lv.stats, lv.sessions, lv.heat = !lv.stats, false, false
-	case key.String() == "m":
+	case keyIs(key, actSessions):
 		on := !(lv.stats && lv.sessions)
 		lv.stats, lv.sessions, lv.scroll, lv.heat = on, on, 0, false
 	case keyIs(key, actEnter):
@@ -702,7 +702,7 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 			start, end := m.logsWindow()
 			lv.list.page(key, start, end)
 		}
-	case key.String() == "f":
+	case keyIs(key, actFilter):
 		m.openLogPick(-1)
 	case keyIs(key, actSearch):
 		lv.focus = logFocusRows

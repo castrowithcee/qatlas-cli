@@ -46,7 +46,7 @@ func newOptionalModel(t *testing.T) (*Model, *config.Store, *secret.MemoryStore)
 func walkOptionalSetup(t *testing.T, m *Model) {
 	t.Helper()
 	m.screen = screenNav
-	press(t, m, "c", "enter")
+	press(t, m, "g", "enter")
 	press(t, m, "tab")
 	typeText(t, m, "site")
 	press(t, m, "tab")

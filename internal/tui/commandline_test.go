@@ -153,7 +153,7 @@ func TestEmptyCommandLineListsOnlyTheAreas(t *testing.T) {
 
 func TestEnterRunsSetupHelpAndQuit(t *testing.T) {
 	a, b := cmdModel(t), cmdModel(t)
-	pump(t, a, "c")
+	pump(t, a, "g")
 	pump(t, b, ":")
 	typeText(t, b, "setup")
 	pump(t, b, "enter")

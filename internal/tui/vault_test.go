@@ -42,7 +42,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 				t.Fatalf("New() = %v", err)
 			}
 			openSectionByName(t, e, sectionCredentials)
-			press(t, e, "n")
+			pressNew(t, e)
 			row := e.field(storageLabel)
 			if row == nil || row.value() != tt.want || !equalChoices(row.choices, tt.wantVia) {
 				t.Errorf("credential form storage = %+v, want %q among %v", row, tt.want, tt.wantVia)
@@ -57,7 +57,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 				t.Fatalf("New() = %v", err)
 			}
 			m.screen = screenNav
-			press(t, m, "c")
+			press(t, m, "g")
 			steps := []func(){
 				func() { press(t, m, "enter") },
 				func() {

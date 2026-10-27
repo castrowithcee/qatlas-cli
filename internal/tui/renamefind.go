@@ -11,10 +11,10 @@ import (
 
 // Renames the vault shows that the configuration does not: a connection or credential renamed by hand in
 // config.yaml, which leaves its approval or vault entry under the old name, and the rest of a rename that
-// stopped early. Finding them is the core's (see renameFindings); acting on one is f on Connections,
-// Credentials or Approvals, which lists them and offers the core's action for each: adopt a hand rename,
-// finish an unfinished one, or put a credential's back. Every action shows the dry run first, on the rename
-// screen, and changes nothing until it is confirmed there, in the admin session like any rename.
+// stopped early. Finding them is the core's (see renameFindings); acting on one starts from the hint line
+// on Connections, Credentials or Approvals, which lists them and offers the core's action for each: adopt a
+// hand rename, finish an unfinished one, or put a credential's back. Every action shows the dry run first, on
+// the rename screen, and changes nothing until it is confirmed there, in the admin session like any rename.
 
 // renameFinding is one rename found in the vault. entry is the name in the configuration the list shows it
 // at; from and to are the names the core's action takes: the old and new name of a hand rename, and for the
@@ -85,16 +85,62 @@ func (m *Model) sectionFindings() []renameFinding {
 	return out
 }
 
+// noticeFocused reports whether the hint line about the renames found has the focus: down on the last row
+// reaches it, enter opens the findings, and up or esc return to the rows.
+func (m *Model) noticeFocused() bool {
+	return m.noticeFocus && m.screen == screenList && !m.list.editing && len(m.sectionFindings()) > 0
+}
+
+// updateNotice handles a key while the hint line has the focus. Every key that acts on a row is ignored, so
+// none reaches an entry the focus has left; quit and search leave the line and go on as usual.
+func (m *Model) updateNotice(key tea.KeyPressMsg) (tea.Cmd, bool) {
+	switch {
+	case keyIs(key, actEnter):
+		m.noticeFocus = false
+		return m.openFindings(), true
+	case keyIs(key, actUp) || keyIs(key, actBack):
+		m.noticeFocus = false
+	case keyIs(key, actQuit) || keyIs(key, actSearch):
+		m.noticeFocus = false
+		return nil, false
+	}
+	return nil, true
+}
+
+// hitNotice makes the hint line about the renames found clickable. out is the finished workspace, which ends
+// in footer, so the line stands where the footer starts plus the line's place in it. A click does what enter
+// does on the line.
+func (m *Model) hitNotice(out, footer string) {
+	if m.noticeAt < 0 || m.noticeRows == 0 {
+		return
+	}
+	y := m.workspaceTop() + strings.Count(out, "\n") - strings.Count(footer, "\n") + m.noticeAt
+	m.addHit(0, y, m.listWidth(), y+m.noticeRows, func() tea.Cmd {
+		if m.screen != screenList || m.list.editing {
+			return nil
+		}
+		m.noticeFocus = false
+		return m.openFindings()
+	})
+}
+
 // findingsNotice is the hint a list shows about the renames found, at the foot: the finding of the selected
-// entry, else the count of those of the section.
+// entry, else the count of those of the section. It is a stop of its own, drawn as selected while it has the
+// focus.
 func (m *Model) findingsNotice(finds []renameFinding) string {
 	if len(finds) == 0 {
 		return ""
 	}
+	hint := m.hint
+	if m.noticeFocused() {
+		hint = func(text string) string {
+			return "\n" + m.wrapped(styles.active, selectionMark()+" "+text)
+		}
+	}
 	if name, ok := m.selected(); ok && m.section != sectionApprovals {
 		for _, f := range finds {
 			if f.entry == name {
-				return m.hint(m.findingNotice(f))
+				return hint(m.findingNotice(f))
 			}
 		}
 	}
@@ -118,7 +164,7 @@ func (m *Model) findingsNotice(finds []renameFinding) string {
 			parts = append(parts, fmt.Sprintf("%d %s", p.n, p.what))
 		}
 	}
-	return m.hint(tr(tFindNotice, strings.Join(parts, ", ")))
+	return hint(tr(tFindNotice, strings.Join(parts, ", ")))
 }
 
 // findingNotice is the short hint at the entry a finding belongs to.
@@ -166,7 +212,7 @@ func (m *Model) findingDetail(f renameFinding) string {
 	return tr(tFindDetailHand, kindText(f.kind), apply(f.from), apply(f.to), what, what)
 }
 
-// openFindings lists the renames found, from f on a list that has them. It says why when there is nothing to
+// openFindings lists the renames found, from the hint line of a list that has them. It says why when there is nothing to
 // list: the vault is locked and cannot be read without a passphrase, or nothing was found.
 func (m *Model) openFindings() tea.Cmd {
 	switch m.section {
@@ -236,7 +282,7 @@ func (m *Model) updateFindings(key tea.KeyPressMsg) tea.Cmd {
 		s.cursor = len(s.items) - 1
 	case keyIs(key, actEnter):
 		return m.askFinding(false)
-	case key.String() == "b":
+	case keyIs(key, actRevert):
 		return m.askFinding(true)
 	}
 	return nil

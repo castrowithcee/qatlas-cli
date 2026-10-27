@@ -202,7 +202,7 @@ func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actBack):
 		m.screen = st.from
 		m.st = nil
-	case key.String() == "w":
+	case keyIs(key, actWrite):
 		m.saveSelftest()
 	default:
 		st.view.scroll(key, m.selftestRoom())

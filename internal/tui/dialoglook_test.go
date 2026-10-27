@@ -105,7 +105,7 @@ func dialogScreens() []dialogScreen {
 			pressNew(t, m)
 			typeText(t, m, "gh")
 			openTargetList(t, m)
-			press(t, m, "a")
+			press(t, m, "n")
 			return m
 		}},
 		{"selftest running", selftestAt(nil)},

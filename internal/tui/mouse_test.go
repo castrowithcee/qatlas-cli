@@ -1246,7 +1246,7 @@ func TestTabClickFromAPickerKeepsUnsavedInputBehindTheQuestion(t *testing.T) {
 // A click on a tab does nothing where esc would only end a typed line, a dialog or a question.
 func TestTabClickDoesNothingWhileTypingOrAsked(t *testing.T) {
 	m := targetsScreen(t)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "repos/octo/x")
 	clickOn(t, m, "6 Settings")
 	if m.screen != screenTargets || !m.typing() {

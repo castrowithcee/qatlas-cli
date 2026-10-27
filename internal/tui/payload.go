@@ -124,7 +124,7 @@ func (m *Model) payloadKey(key tea.KeyPressMsg) bool {
 	case current.kind == fieldPayloadNew && keyIs(key, actEnter):
 		m.addPayloadField()
 		return true
-	case current.kind == fieldMasked && key.String() == "ctrl+d":
+	case current.kind == fieldMasked && keyIs(key, actRemoveField):
 		m.payloadRemoveAsk = true
 		m.clearMessages()
 		return true

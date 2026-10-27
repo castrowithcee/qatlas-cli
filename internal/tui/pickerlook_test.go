@@ -69,7 +69,7 @@ func lookScreens() []lookScreen {
 		{"setup summary", [][2]int{{99, 18}, {100, 20}, {60, 24}, {40, 30}, {150, 42}}, func(t *testing.T) *Model {
 			m, _ := templateModel(t)
 			m.screen = screenNav
-			press(t, m, "c", "down", "enter", "enter", "f2", "f2", "f2", "f2")
+			press(t, m, "g", "down", "enter", "enter", "f2", "f2", "f2", "f2")
 			if m.screen != screenSummary {
 				t.Fatalf("screen %v, want the summary", m.screen)
 			}
@@ -78,7 +78,7 @@ func lookScreens() []lookScreen {
 		{"setup step", nil, func(t *testing.T) *Model {
 			m, _ := templateModel(t)
 			m.screen = screenNav
-			press(t, m, "c", "down", "enter", "enter", "f2", "f2")
+			press(t, m, "g", "down", "enter", "enter", "f2", "f2")
 			return m
 		}},
 	}

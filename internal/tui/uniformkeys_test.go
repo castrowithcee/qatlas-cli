@@ -162,7 +162,7 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 		m, _, _ := knownTargetsModel(t)
 		openEntryForm(t, m, sectionConnections, "gh-a")
 		openTargetList(t, m)
-		press(t, m, "a")
+		press(t, m, "n")
 		typeText(t, m, "jk")
 		if got := m.targetAdd.choices.query(); got != "jk" {
 			t.Fatalf("the add menu line = %q, want the letters as text", got)
@@ -252,9 +252,9 @@ func TestQuestionMarkOpensTheHelpWhereNothingIsTyped(t *testing.T) {
 			t.Fatal("d did not ask to remove")
 		}
 		helpRoundTrip(t, m, "the remove question")
-		press(t, m, "n", "a")
+		press(t, m, "n", "n")
 		if m.targetAdd == nil {
-			t.Fatal("a did not open the add menu")
+			t.Fatal("n did not open the add menu")
 		}
 		helpRoundTrip(t, m, "the add menu")
 		press(t, m, "x", "?")
@@ -272,7 +272,7 @@ func TestQuestionMarkOpensTheHelpWhereNothingIsTyped(t *testing.T) {
 		openEntryForm(t, p, sectionConnections, "wiki")
 		openPathList(t, p)
 		helpRoundTrip(t, p, "the path list")
-		press(t, p, "a", "?")
+		press(t, p, "n", "?")
 		if p.screen != screenPaths || !strings.Contains(p.pathInput.Value(), "?") {
 			t.Fatalf("? in the typed path: screen %v value %q, want it as text", p.screen, p.pathInput.Value())
 		}
@@ -455,7 +455,7 @@ func TestFootersNameTheHelpAndCommandsWhereTheyWork(t *testing.T) {
 	openEntryForm(t, m, sectionConnections, "gh-a")
 	openTargetList(t, m)
 	want(m, "the target list", ": cmds", "? help")
-	press(t, m, "a")
+	press(t, m, "n")
 	want(m, "the add menu", ": cmds", "? help")
 	press(t, m, "x")
 	if strings.Contains(flat(m), "? help") || strings.Contains(flat(m), ": cmds") {

@@ -82,12 +82,12 @@ func TestATypedTargetOrPathAsksBeforeItIsDropped(t *testing.T) {
 		"gh": {Service: "wiki", Credential: "reader", Target: "repos/octo/a"}})
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	press(t, m, "esc")
 	if m.screen != screenTargets || m.targetEdit >= 0 {
 		t.Fatalf("esc on an empty entry asked or stayed: screen %v", m.screen)
 	}
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "repos/octo/b")
 	press(t, m, "esc")
 	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "typed target was not taken") {
@@ -111,7 +111,7 @@ func TestATypedTargetOrPathAsksBeforeItIsDropped(t *testing.T) {
 	if m.screen != screenTargets || m.targetEdit >= 0 || m.targetList.all[0] != "repos/octo/a" {
 		t.Fatalf("d did not drop the edit: screen %v, targets %v", m.screen, m.targetList.all)
 	}
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "repos/octo/b")
 	press(t, m, "esc", "f2")
 	if m.fail != "" || m.screen != screenList {
@@ -125,7 +125,7 @@ func TestATypedTargetOrPathAsksBeforeItIsDropped(t *testing.T) {
 	m, _ = toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, t.TempDir())
 	press(t, m, "esc")
 	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "typed path was not taken") {
@@ -159,7 +159,7 @@ func TestTicksAndAHalfBuiltTargetAskTheSameQuestion(t *testing.T) {
 	}
 
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "esc")
 	if view := screenOf(m); m.screen != screenLeave ||
@@ -200,7 +200,7 @@ func TestCtrlCQuitsAtOnceWithoutChanges(t *testing.T) {
 		},
 		"setup before a provider is chosen": func(t *testing.T, m *Model) {
 			m.screen = screenNav
-			press(t, m, "c")
+			press(t, m, "g")
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -267,7 +267,7 @@ func TestCtrlCAsksWhenSomethingIsUnsaved(t *testing.T) {
 			"gh": {Service: "wiki", Credential: "reader", Target: "repos/octo/a"}})
 		openConnection(t, m, "gh")
 		openTargetList(t, m)
-		press(t, m, "a")
+		press(t, m, "n")
 		typeText(t, m, "repos/octo/b")
 		press(t, m, "ctrl+c")
 		if m.quitting || m.screen != screenLeave {

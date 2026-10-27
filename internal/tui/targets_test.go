@@ -37,7 +37,7 @@ func openTargetList(t *testing.T, m *Model) {
 // addTarget adds one target in the open target list, the way a person does.
 func addTarget(t *testing.T, m *Model, value string) {
 	t.Helper()
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, value)
 	press(t, m, "enter")
 }
@@ -226,7 +226,7 @@ func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
 	}
 	openTargetList(t, m)
 	addTarget(t, m, "1/Sales")
-	press(t, m, "a")
+	press(t, m, "n")
 	if m.targetEdit >= 0 || !strings.Contains(m.fail, "one base only") {
 		t.Fatalf("a second base was offered: editing %d, error %q", m.targetEdit, m.fail)
 	}
@@ -268,7 +268,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "f2", "f2")
+	press(t, m, "g", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
@@ -313,7 +313,7 @@ func TestOneF2SavesTheTargetsFromEveryState(t *testing.T) {
 	m, path := toolsModel(t, reg, map[string]config.Connection{"gh": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "octo/a")
 	press(t, m, "f2")
 	if m.fail == "" || m.targetEdit < 0 || m.screen != screenTargets {
@@ -403,7 +403,7 @@ func TestTheGuidedSetupTakesTargetsWithOneF2(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "f2", "f2")
+	press(t, m, "g", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
@@ -422,7 +422,7 @@ func TestTheGuidedSetupTakesTargetsWithOneF2(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, "F2 next step") {
 		t.Fatalf("the setup list does not say what F2 does:\n%s", view)
 	}
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "repos/octo/b")
 	press(t, m, "f2")
 	if m.fail != "" || m.wizard.step != stepEffects {
@@ -487,7 +487,7 @@ func pickRow(t *testing.T, m *Model, text string) {
 // for a step written as =value, the typed value.
 func build(t *testing.T, m *Model, kind string, steps ...string) {
 	t.Helper()
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new "+kind)
 	press(t, m, "enter")
 	for _, step := range steps {
@@ -515,7 +515,7 @@ func TestAddingOffersTheTargetsOfTheSameService(t *testing.T) {
 		t.Fatalf("service = %q, want wiki", m.fieldValue("service"))
 	}
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	if m.targetAdd == nil {
 		t.Fatalf("a did not open the add menu: editing %d", m.targetEdit)
 	}
@@ -533,7 +533,7 @@ func TestAddingOffersTheTargetsOfTheSameService(t *testing.T) {
 	if m.targetAdd != nil || !reflect.DeepEqual(m.targetList.all, []string{"repos/octo/b"}) {
 		t.Fatalf("picking did not take the target: %v, error %q", m.targetList.all, m.fail)
 	}
-	press(t, m, "a")
+	press(t, m, "n")
 	if rows := strings.Join(addRows(m), "\n"); strings.Contains(rows, "repos/octo/b") ||
 		!strings.Contains(rows, "users/octo/projects/2") {
 		t.Fatalf("the menu offers a listed target again or lost another:\n%s", rows)
@@ -551,7 +551,7 @@ func TestTheBuilderWritesEveryGitHubKind(t *testing.T) {
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
 
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter")
 	if view := screenOf(m); !strings.Contains(view, "New repository · OWNER") ||
@@ -616,7 +616,7 @@ func TestTheBuilderStepsBackAndHandsOverWhatIsRefused(t *testing.T) {
 	if m.screen != screenTargets || m.targetAdd != nil || len(m.targetList.all) != 3 {
 		t.Fatalf("d did not drop the builder: screen %v, targets %v", m.screen, m.targetList.all)
 	}
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new project")
 	press(t, m, "enter")
 	pickRow(t, m, "orgs")
@@ -642,7 +642,7 @@ func TestF2SavesFromTheMenuAndTheBuilder(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter")
 	press(t, m, "f2")
@@ -661,7 +661,7 @@ func TestF2SavesFromTheMenuAndTheBuilder(t *testing.T) {
 
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, "repos/octo")
 	press(t, m, "f2")
 	if m.targetEdit < 0 || m.fail == "" {
@@ -692,7 +692,7 @@ func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "rows")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	if rows := strings.Join(addRows(m), "\n"); strings.Contains(rows, "new ") || !strings.Contains(rows, "Kunden") {
 		t.Fatalf("the menu offers %q", rows)
 	}
@@ -709,15 +709,15 @@ func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
 func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "enter", "f2", "f2")
+	press(t, m, "g", "enter", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "repos/octo/a")
 	press(t, m, "enter")
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "enter")
 	typeText(t, m, "c")
@@ -768,7 +768,7 @@ func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 	}
 
 	// Suggestions come before *, and a selected suggestion is no choice for F2 either.
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "enter")
 	if rows := addRows(m); rows[len(rows)-1] != "* (all)" || m.targetAdd.text[m.targetAdd.choices.matches[0]] != "a" {
@@ -789,7 +789,7 @@ func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 	// In the menu, F2 saves the list without the selected row.
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	pickRow(t, m, "new owner")
 	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || m.screen != screenList || len(saved.Targets) != 5 {

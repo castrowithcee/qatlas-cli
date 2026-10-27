@@ -115,9 +115,10 @@ var (
 // interceptedF are the function keys terminals and window systems take for themselves.
 var interceptedF = map[int]bool{1: true, 5: true, 10: true, 11: true, 12: true}
 
-// freeCtrl are the control keys no text line or terminal needs: the others edit text (ctrl+a, e, k, u, w),
-// stand for enter, tab, or backspace (ctrl+m, i, h), or control the terminal (ctrl+s, q, z).
-var freeCtrl = map[string]bool{"ctrl+g": true, "ctrl+l": true, "ctrl+o": true, "ctrl+r": true, "ctrl+t": true, "ctrl+x": true}
+// freeCtrl are the control keys no text line, terminal, or screen needs: the others edit text (ctrl+a, e, k,
+// u, w), stand for enter, tab, or backspace (ctrl+m, i, h), control the terminal (ctrl+s, q, z), or belong to
+// a screen's own action (ctrl+d, n, p in text lines, ctrl+t and ctrl+r in the target picker).
+var freeCtrl = map[string]bool{"ctrl+g": true, "ctrl+l": true, "ctrl+o": true, "ctrl+x": true}
 
 // Normalize returns the spelling the terminal library reports for key: trimmed, and lower case for names
 // such as F3 or Ctrl+G; a single character keeps its case.
@@ -167,8 +168,13 @@ func (k Keys) Check(action, key string) (string, error) {
 			return "", fmt.Errorf("%s: terminals take F1, F5, F10, F11, and F12 for themselves", key)
 		}
 	case ctrlKey.MatchString(key):
+		if Reserved != nil {
+			if owner := Reserved(key); owner != "" {
+				return "", fmt.Errorf("%s: already the key of %s", key, owner)
+			}
+		}
 		if !freeCtrl[key] {
-			return "", fmt.Errorf("%s: text lines or the terminal use it; free are ctrl+g, l, o, r, t, and x", key)
+			return "", fmt.Errorf("%s: text lines, the terminal, or a screen use it; free are ctrl+g, l, o, and x", key)
 		}
 	default:
 		return "", fmt.Errorf("%s: not a single key; use a character, F2 to F20, or ctrl with a letter", key)
@@ -245,7 +251,7 @@ func (k Keys) file() *keysFile {
 
 // loadKeys applies the keys of a file. Every key is first checked against the rules of its action alone,
 // then the final assignment is checked for two actions on one key, so a swap such as save on ctrl+l and
-// lock on ctrl+r is valid as a whole. A key that breaks a rule, or collides, keeps the default of its
+// lock on ctrl+o is valid as a whole. A key that breaks a rule, or collides, keeps the default of its
 // action and adds a warning that names the reason; the result is always free of collisions.
 func loadKeys(path string, given map[string]*string, warnings []string) (Keys, []string) {
 	keys, fromFile := DefaultKeys(), map[string]bool{}

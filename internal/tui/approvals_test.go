@@ -653,7 +653,7 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	for _, want := range []string{
 		"tools:        2 new, 1 removed",
 		"+ github.pull-request-checks.list", "+ github.pull-requests.get", "- github.repositories.archive",
-		"unchanged: 57", "e unchanged",
+		"unchanged: 57", "space unchanged",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("collapsed view lacks %q:\n%s", want, view)
@@ -671,9 +671,9 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	}
 
 	m.approvalDetail, m.screen = "gh", screenConfirm
-	press(t, m, "e")
+	press(t, m, "space")
 	if !m.approvalExpanded {
-		t.Fatal("e did not expand the unchanged entries")
+		t.Fatal("space did not expand the unchanged entries")
 	}
 	view = m.approvalChangeView(title, change)
 	assertViewFits(t, view, m.width, m.height)
@@ -695,9 +695,9 @@ func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
 	if len(seen) != 57 {
 		t.Errorf("scrolling reached %d of 57 unchanged tools", len(seen))
 	}
-	press(t, m, "e")
+	press(t, m, "space")
 	if m.approvalExpanded {
-		t.Error("e did not fold the unchanged entries again")
+		t.Error("space did not fold the unchanged entries again")
 	}
 }
 

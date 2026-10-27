@@ -115,19 +115,37 @@ func wantInView(t *testing.T, m *Model, what string, wants ...string) {
 	}
 }
 
+// openFindingsLine reaches the hint line about the renames found, below the last row, and presses enter on it.
+func openFindingsLine(t *testing.T, m *Model) {
+	t.Helper()
+	press(t, m, "end", "down")
+	if !m.noticeFocused() {
+		t.Fatalf("down from the last row did not reach the hint line:\n%s", screenOf(m))
+	}
+	press(t, m, "enter")
+}
+
+// runRenamesCommand runs the command that opens the findings from the command line.
+func runRenamesCommand(t *testing.T, m *Model) {
+	t.Helper()
+	press(t, m, ":")
+	typeText(t, m, "renames")
+	press(t, m, "enter")
+}
+
 func TestHandRenamedConnectionIsNoticedAndAdopted(t *testing.T) {
 	s := newFindScene(t)
 	s.renameByHand(t, "connection", "personal", "main")
 	m := s.open(t)
 
-	wantInView(t, m, "Approvals", "renames found in the vault: 1 renamed by hand", "f renames")
+	wantInView(t, m, "Approvals", "renames found in the vault: 1 renamed by hand", "this line (enter) reviews them")
 	openSectionByName(t, m, sectionConnections)
 	m.list.selectName("main")
-	wantInView(t, m, "the entry", "connection main was renamed by hand from personal", "f renames")
+	wantInView(t, m, "the entry", "connection main was renamed by hand from personal", "this line (enter) offers to adopt")
 
-	press(t, m, "f")
+	openFindingsLine(t, m)
 	if m.screen != screenFindings {
-		t.Fatalf("f = screen %v, want the findings:\n%s", m.screen, screenOf(m))
+		t.Fatalf("enter on the hint line = screen %v, want the findings:\n%s", m.screen, screenOf(m))
 	}
 	wantInView(t, m, "the findings", "connection  personal -> main, renamed by hand", "enter adopt")
 
@@ -210,7 +228,7 @@ func TestUnfinishedConnectionRenameIsNoticedAndFinished(t *testing.T) {
 	m.list.selectName("main")
 	wantInView(t, m, "the entry", "connection main has an unfinished rename to personal")
 
-	press(t, m, "f")
+	openFindingsLine(t, m)
 	wantInView(t, m, "the findings", "connection  main -> personal, unfinished", "enter finish")
 	if strings.Contains(screenOf(m), "b put back") {
 		t.Error("a connection's rename is offered to be put back")
@@ -242,8 +260,8 @@ func TestHandRenamedCredentialIsNoticedAndAdopted(t *testing.T) {
 
 	openSectionByName(t, m, sectionCredentials)
 	m.list.selectName("reader2")
-	wantInView(t, m, "the entry", "credential reader2 was renamed by hand from reader", "f renames")
-	press(t, m, "f")
+	wantInView(t, m, "the entry", "credential reader2 was renamed by hand from reader", "this line (enter) offers to adopt")
+	openFindingsLine(t, m)
 	wantInView(t, m, "the findings", "credential  reader -> reader2, renamed by hand")
 
 	pump(t, m, "enter")
@@ -280,7 +298,7 @@ func TestUnfinishedCredentialRenameIsFinishedOrPutBack(t *testing.T) {
 		openSectionByName(t, m, sectionCredentials)
 		m.list.selectName("reader")
 		wantInView(t, m, "the entry", "credential reader has an unfinished rename to reader2")
-		press(t, m, "f")
+		openFindingsLine(t, m)
 		wantInView(t, m, "the findings", "credential  reader -> reader2, unfinished", "enter finish", "b put back")
 
 		pump(t, m, "enter")
@@ -302,7 +320,7 @@ func TestUnfinishedCredentialRenameIsFinishedOrPutBack(t *testing.T) {
 		m := s.open(t)
 		openSectionByName(t, m, sectionCredentials)
 		m.list.selectName("reader")
-		press(t, m, "f")
+		openFindingsLine(t, m)
 		pump(t, m, "b")
 		if m.screen != screenRename || m.rename == nil || !m.rename.plan.Revert {
 			t.Fatalf("b = screen %v, want the dry run of putting back:\n%s", m.screen, screenOf(m))
@@ -341,7 +359,7 @@ func TestAmbiguousFindingHasNoAction(t *testing.T) {
 
 	openSectionByName(t, m, sectionApprovals)
 	wantInView(t, m, "Approvals", "2 ambiguous")
-	press(t, m, "f")
+	openFindingsLine(t, m)
 	wantInView(t, m, "the findings", "connection  other, ambiguous", "no action here")
 	if strings.Contains(screenOf(m), "enter adopt") || strings.Contains(screenOf(m), "enter finish") {
 		t.Errorf("an ambiguous finding offers an action:\n%s", screenOf(m))
@@ -362,9 +380,9 @@ func TestFindingsNeedTheAdminSession(t *testing.T) {
 
 	openSectionByName(t, m, sectionConnections)
 	m.list.selectName("main")
-	press(t, m, "f")
+	openFindingsLine(t, m)
 	if m.screen != screenFindings {
-		t.Fatalf("f = screen %v, want the findings (reading needs no admin session)", m.screen)
+		t.Fatalf("enter on the hint line = screen %v, want the findings (reading needs no admin session)", m.screen)
 	}
 	press(t, m, "enter")
 	if m.screen != screenAdminAuth || m.rename != nil {
@@ -389,17 +407,21 @@ func TestFindingsWithNothingFoundOrLocked(t *testing.T) {
 	s := newFindScene(t)
 	m := s.open(t)
 	openSectionByName(t, m, sectionConnections)
-	if strings.Contains(screenOf(m), "f renames") {
-		t.Errorf("the keys offer f with nothing found:\n%s", screenOf(m))
+	if strings.Contains(screenOf(m), "this line (enter)") {
+		t.Errorf("the list offers the hint line with nothing found:\n%s", screenOf(m))
 	}
-	press(t, m, "f")
+	press(t, m, "end", "down")
+	if m.noticeFocus {
+		t.Error("down reaches a hint line that is not there")
+	}
+	runRenamesCommand(t, m)
 	if m.screen != screenList || !strings.Contains(m.status, "No renames found") {
-		t.Errorf("f with nothing found = screen %v status %q", m.screen, m.status)
+		t.Errorf("the renames command with nothing found = screen %v status %q", m.screen, m.status)
 	}
 
 	locked := openApprovalModel(t, s.store, s.dir)
 	openSectionByName(t, locked, sectionConnections)
-	press(t, locked, "f")
+	runRenamesCommand(t, locked)
 	if locked.screen != screenList || !strings.Contains(locked.status, "locked") {
 		t.Errorf("f with a locked vault = screen %v status %q", locked.screen, locked.status)
 	}

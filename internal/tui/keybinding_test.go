@@ -112,7 +112,7 @@ func TestSettingsBindsKeysAndFootersFollow(t *testing.T) {
 		t.Fatalf("the footer does not show the new save key:\n%s", view)
 	}
 	focusKeyRow(t, m, "save key")
-	press(t, m, "r")
+	press(t, m, "d")
 	if m.fieldValue("save key") != "f2" {
 		t.Fatalf("r left save at %q, want the standard", m.fieldValue("save key"))
 	}
@@ -207,13 +207,14 @@ func TestStoredKeyNamesReachTheEditorUnchanged(t *testing.T) {
 		{"\x1b[17;2~", "f18", uiprefs.ActionSave}, {"\x1b[18;2~", "f19", uiprefs.ActionSave},
 		{"\x1b[19;2~", "f20", uiprefs.ActionSave}, {"\x1b[[B", "f2", uiprefs.ActionSave}, {"\x1b[[D", "f4", uiprefs.ActionSave},
 		{"\x07", "ctrl+g", uiprefs.ActionSave}, {"\x0c", "ctrl+l", uiprefs.ActionLock}, {"\x0f", "ctrl+o", uiprefs.ActionSave},
-		{"\x12", "ctrl+r", uiprefs.ActionSave}, {"\x14", "ctrl+t", uiprefs.ActionSave}, {"\x18", "ctrl+x", uiprefs.ActionSave},
+		{"\x12", "ctrl+r", ""}, {"\x14", "ctrl+t", ""}, {"\x18", "ctrl+x", uiprefs.ActionSave},
 		{"?", "?", uiprefs.ActionHelp}, {":", ":", uiprefs.ActionCommand}, {"!", "!", uiprefs.ActionHelp},
 	}
 	var stream strings.Builder
 	var want []string
 	for _, k := range keys {
-		if _, err := uiprefs.DefaultKeys().Check(k.action, k.name); err != nil {
+		// ctrl+r and ctrl+t belong to the target picker: they reach the editor by name, but no binding holds them.
+		if _, err := uiprefs.DefaultKeys().Check(k.action, k.name); err != nil && k.action != "" {
 			t.Errorf("%s is no key a binding may hold: %v", k.name, err)
 		}
 		stream.WriteString(k.sequence)

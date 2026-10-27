@@ -334,7 +334,7 @@ func (m *Model) updateBar(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	case keyIs(key, actUp) || keyIs(key, actBack):
 		m.barFocus = 0
 		m.focusNav()
-	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd) || keyIs(key, actSearch) || key.String() == "c" || key.String() == "u" || keyIs(key, actQuit) || key.String() == "n":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd) || keyIs(key, actSearch) || keyIs(key, actSetup) || keyIs(key, actUpdate) || keyIs(key, actQuit) || keyIs(key, actNew):
 		// These belong to the rows or to the screen, not to a field: the rows take them over.
 		m.barFocus = 0
 		return nil, false

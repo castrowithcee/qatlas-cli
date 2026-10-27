@@ -278,9 +278,9 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 	lines := factLinesIn(facts, inner, factColumn(facts, inner), func(s string) string { return s })
 	keys := "o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 	if len(lines) > 0 && approvalHasKept(change) {
-		keys = "e unchanged · " + keys
+		keys = "space unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "e fold unchanged · o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
+			keys = "space fold unchanged · o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
 		}
 	}
 	room := m.approvalRoom(keys, len(lines))

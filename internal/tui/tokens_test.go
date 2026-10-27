@@ -263,28 +263,28 @@ func TestTokenValueIsShownOnlyOnRequest(t *testing.T) {
 	}
 	view := screenOf(m)
 	if strings.Contains(view, token.Value) || !strings.Contains(view, "●●●●") ||
-		!strings.Contains(view, "s reveal/hide") {
-		t.Errorf("the detail does not mask the value behind s:\n%s", view)
+		!strings.Contains(view, "v reveal/hide") {
+		t.Errorf("the detail does not mask the value behind v:\n%s", view)
 	}
 
-	pump(t, m, "s")
+	pump(t, m, "v")
 	if !strings.Contains(screenOf(m), token.Value) {
-		t.Errorf("s in an admin session does not show the value:\n%s", screenOf(m))
+		t.Errorf("v in an admin session does not show the value:\n%s", screenOf(m))
 	}
 	assertNoTokenValue(t, m)
-	pump(t, m, "s")
+	pump(t, m, "v")
 	if strings.Contains(screenOf(m), token.Value) {
-		t.Error("a second s does not hide the value again")
+		t.Error("a second v does not hide the value again")
 	}
 
-	pump(t, m, "s")
+	pump(t, m, "v")
 	m.admin.End()
 	if strings.Contains(screenOf(m), token.Value) {
 		t.Error("the value stays shown after the admin session lapsed")
 	}
-	pump(t, m, "s")
+	pump(t, m, "v")
 	if m.screen != screenAdminAuth || m.adminAuth.locked {
-		t.Fatalf("s after the session lapsed = screen %v, want the admin passphrase dialog", m.screen)
+		t.Fatalf("v after the session lapsed = screen %v, want the admin passphrase dialog", m.screen)
 	}
 	unlockWithAdminPassphrase(t, m, tokenPassphrase)
 	if m.screen != screenConfirm || !strings.Contains(screenOf(m), token.Value) {

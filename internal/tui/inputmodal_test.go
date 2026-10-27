@@ -198,7 +198,7 @@ func TestPathModalCompletes(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "gh")
 	openPathList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, filepath.Join(root, "al"))
 
 	view := m.render()

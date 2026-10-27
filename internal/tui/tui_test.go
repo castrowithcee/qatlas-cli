@@ -149,6 +149,8 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	case "esc":
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 	case "ctrl+l":
 		return tea.KeyPressMsg{Code: 'l', Mod: tea.ModCtrl}
 	case "ctrl+c":
@@ -686,7 +688,7 @@ func TestOnlyTheOverviewNamesTheNextStep(t *testing.T) {
 		t.Errorf("the list shows a next step:\n%s", view)
 	}
 	openSectionByName(t, m, sectionOverview)
-	if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "press c to set up a connection step by step") {
+	if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "press g to set up a connection step by step") {
 		t.Errorf("the Overview shows no next step:\n%s", view)
 	}
 }
@@ -746,7 +748,7 @@ func TestDirectSectionKeys(t *testing.T) {
 	// yet closes with one escape.
 	for _, from := range []screen{screenList, screenNav} {
 		m.screen = from
-		press(t, m, "c")
+		press(t, m, "g")
 		if m.wizard == nil || m.screen != screenProviders {
 			t.Fatalf("c from screen %v opened screen %v, want the setup's provider table", from, m.screen)
 		}
@@ -781,7 +783,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	typeText(t, m, "https://wiki.example.invalid")
 	step("f2", ":")
 	typeText(t, m, "go credentials")
-	step("enter", "n")
+	step("enter", "n", "enter")
 	typeText(t, m, "reader")
 	step("tab", "tab")
 	selectChoice(t, m, storageEnv)
@@ -1842,7 +1844,7 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 		t.Errorf("the header names the config path: %q", row)
 	}
 	for _, want := range []string{
-		"c setup",
+		"g setup",
 		"1 Overview",
 		"2 Connections",
 		"3 Activity",

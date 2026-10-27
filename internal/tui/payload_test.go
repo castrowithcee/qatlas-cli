@@ -104,7 +104,7 @@ func (h *payloadHarness) addField(t *testing.T, name, value string) {
 func (h *payloadHarness) startPayload(t *testing.T, name, storage, description string) {
 	t.Helper()
 	openSectionByName(t, h.m, sectionCredentials)
-	h.press(t, "s")
+	h.press(t, "n", "down", "enter")
 	if h.m.screen != screenForm || !h.m.isPayloadForm() {
 		t.Fatalf("s opened screen %v, want the payload form", h.m.screen)
 	}
@@ -345,7 +345,7 @@ func TestPayloadSecretIsNotSavedWithoutTheAdminSession(t *testing.T) {
 	m, store := newEncryptedVaultModel(t, dir, passphrase, true)
 
 	openSectionByName(t, m, sectionCredentials)
-	pump(t, m, "s")
+	pump(t, m, "n", "down", "enter")
 	typeText(t, m, "billing")
 	press(t, m, "tab")
 	selectChoice(t, m, storageVault)
@@ -461,7 +461,7 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 	h := newPayloadHarness(t, true)
 	// In the payload form itself.
 	openSectionByName(t, h.m, sectionCredentials)
-	pump(t, h.m, "s")
+	pump(t, h.m, "n", "down", "enter")
 	if !strings.Contains(h.m.render(), "no encrypted vault binds this release") {
 		t.Errorf("the payload form does not say the binding is weaker:\n%s", h.m.render())
 	}
@@ -594,7 +594,7 @@ func TestPayloadSecretListAndFormFitNarrowTerminals(t *testing.T) {
 			press(t, h.m, "tab")
 			assertViewFits(t, h.m.render(), width, 30)
 		}
-		press(t, h.m, "esc", "s")
+		press(t, h.m, "esc", "n", "down", "enter")
 		assertViewFits(t, h.m.render(), width, 30)
 		if !strings.Contains(h.m.render(), "payload secret") {
 			t.Errorf("width %d: the form does not say what it is:\n%s", width, h.m.render())

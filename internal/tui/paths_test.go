@@ -26,7 +26,7 @@ func openPathList(t *testing.T, m *Model) {
 // addPath adds one path in the open path list, the way a person does.
 func addPath(t *testing.T, m *Model, value string) {
 	t.Helper()
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, value)
 	press(t, m, "enter")
 }
@@ -192,7 +192,7 @@ func TestAPathThatDoesNotExistIsSaved(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "not", "there")
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	typeText(t, m, missing)
 	pump(t, m, "f2")
 	if m.fail != "" {
@@ -222,7 +222,7 @@ func TestTabCompletesDirectoriesOnly(t *testing.T) {
 	wideEnoughFor(m, root)
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	if view := screenOf(m); !strings.Contains(view, root+sep) || !strings.Contains(view, "tab complete") {
 		t.Fatalf("the start directory is not suggested:\n%s", view)
 	}
@@ -267,7 +267,7 @@ func TestTabCompletesFromTheHomeDirectory(t *testing.T) {
 	m, _ := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	s := string(filepath.Separator)
 	typeText(t, m, "~"+s+"pr")
 	if view := screenOf(m); !strings.Contains(view, "~"+s+"projects"+s) || strings.Contains(view, "notes.txt") {

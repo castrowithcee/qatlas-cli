@@ -269,7 +269,7 @@ func TestGermanKeyRows(t *testing.T) {
 	}
 	focusField(t, m, "help key")
 	view = m.render()
-	if !strings.Contains(view, "öffnet die Hilfe; enter belegt neu") || !strings.Contains(view, "r Standard") {
+	if !strings.Contains(view, "öffnet die Hilfe; enter belegt neu") || !strings.Contains(view, "d Standard") {
 		t.Errorf("the focused key row lacks its hint or footer:\n%s", view)
 	}
 	press(t, m, "enter")
