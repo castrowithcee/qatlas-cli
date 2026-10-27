@@ -8,7 +8,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Infomaniak kDrive files
@@ -46,6 +46,17 @@ never which entries a page holds, so it does not change the cursor binding.
   [Scope](README.md#scope)), so their entries are never limited this way.
 - Lists are cut at 100 entries, `parents` at 64 folders, and user and team identifiers at 1000; a cut list sets
   its `<name>_truncated` flag, so it is never mistaken for a complete one.
+
+## Exclusions
+
+The rules are in [Exclusions](README.md#exclusions). On a drive with excluded files or folders:
+
+- `files.get`, `files.download`, `files.copy`, and `files.trash` refuse a folder above an excluded object,
+  because the zip archive, the copy, and the trash would take the excluded content along. `files.move`,
+  `files.rename`, `folders.create`, and `files.upload` into it stay possible.
+- `files.stat` and `files.list` leave out `sharelink` and `dropbox` of such a folder, and the rewind keeps no
+  `directory_name` or `rewind_name`, as under a subtree binding. `path` and `parents` of reachable objects stay.
+- A folder's `size` and a drive's `used_size` are totals of Infomaniak and still count excluded content.
 
 ## Changes
 

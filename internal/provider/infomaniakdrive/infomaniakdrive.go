@@ -124,6 +124,8 @@ type Client struct {
 	auth    string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	// ancestors holds, per drive, the folders above its excluded objects once a call has read them.
+	ancestors map[int64]map[int64]bool
 }
 
 // Open resolves the token of one selected connection and returns a client for its bound account and drive
@@ -502,7 +504,8 @@ func Register(reg *capability.Registry) error {
 				"repeatable allow-list of drive/DRIVE_ID targets of that account and of drive/DRIVE_ID/files/FILE_ID " +
 				"targets, each limiting access to one folder or file of a drive; without a drive or files target, " +
 				"every kDrive of the bound account is reachable. A drive bound only by files targets is read with " +
-				"one extra request per file or folder identifier to prove it lies inside them. A drive_id argument outside a configured allow-list is " +
+				"one extra request per file or folder identifier to prove it lies inside them; so is a drive with " +
+				"excluded files or folders, whose trash tools are refused. A drive_id argument outside a configured allow-list is " +
 				"refused locally, before any request is sent; every files.list, files.stat, and files.get call " +
 				"also confirms with Infomaniak itself, in one extra request, that the drive actually belongs to " +
 				"the bound account, and is refused before the file endpoint is called when it does not or when " +
@@ -519,14 +522,16 @@ func Register(reg *capability.Registry) error {
 				Forms:       []string{"drive/DRIVE_ID"},
 				Parents:     []string{"account"},
 				Top:         true,
+				Excludable:  true,
 			}, {
 				Name: "files",
 				Description: "one folder or file of a bound drive, with everything below a folder; optional, and " +
 					"may be listed more than once. The drive of it is reachable, but only inside this folder or " +
 					"file unless the drive is also listed whole",
-				Forms:   []string{"drive/DRIVE_ID/files/FILE_ID"},
-				Parents: []string{"drive"},
-				Nested:  true,
+				Forms:      []string{"drive/DRIVE_ID/files/FILE_ID"},
+				Parents:    []string{"drive"},
+				Nested:     true,
+				Excludable: true,
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

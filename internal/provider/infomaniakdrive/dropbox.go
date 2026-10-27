@@ -261,6 +261,9 @@ func invokeDropboxGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
+	if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+		return nil, err
+	}
 	return client.GetDropbox(ctx, input.DriveID, input.FileID, input.With)
 }
 

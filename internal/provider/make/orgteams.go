@@ -80,7 +80,8 @@ var teamsList = capability.Descriptor{
 	ID: Provider + ".teams.list", Version: 1, Title: "List the teams of the bound Make organization",
 	Description: "List the teams of the organization this connection is bound to, page by page with a numeric " +
 		"offset; personal spaces only with include_private_spaces, marked by type personal. Only on an " +
-		"organization connection; a team connection refuses it. Needs the teams:read scope",
+		"organization connection; a team connection refuses it. Teams the connection excludes are left out of " +
+		"the page, which can then hold fewer teams than the limit. Needs the teams:read scope",
 	Tags: []string{"make", "teams", "list", "organization", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"offset":{"type":"integer","minimum":0},` +
@@ -271,7 +272,7 @@ func invokeTeamsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	result := &TeamsList{OrganizationID: client.scope.orgID, Teams: make([]TeamView, 0, len(page.Teams)),
 		Offset: offset, HasMore: full, Truncated: full}
 	for _, t := range page.Teams {
-		if t.ID <= 0 || !client.belongsToOrg(t) || len(result.Teams) >= limit {
+		if t.ID <= 0 || !client.belongsToOrg(t) || len(result.Teams) >= limit || client.scope.excludesTeam(t.ID) {
 			continue
 		}
 		result.Teams = append(result.Teams, teamViewOf(t))
@@ -306,6 +307,16 @@ func readTeamArguments(raw json.RawMessage, op string) (teamArguments, error) {
 }
 
 func teamPath(teamID int64) string { return "/teams/" + strconv.FormatInt(teamID, 10) }
+
+// refuseExcludedTeam refuses a team_id the connection excludes before any secret is read, with the message of
+// a team outside the organization.
+func refuseExcludedTeam(resolved *config.Resolved, teamID int64) error {
+	bound, err := anyScope(resolved)
+	if err == nil && bound.excludesTeam(teamID) {
+		return invalidRequest(foreignTeamMsg)
+	}
+	return nil
+}
 
 // bindTeam reads one team live and binds it to the bound organization. A team of another organization, an
 // unreadable organization, and a personal space are all refused with the same message that names nothing.
@@ -378,6 +389,9 @@ func invokeTeamsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if input.Name == nil && input.OperationsLimit == nil {
 		return nil, invalidRequest("name or operations_limit is required")
 	}
+	if err := refuseExcludedTeam(resolved, input.TeamID); err != nil {
+		return nil, err
+	}
 	client, err := openOrganization(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -415,6 +429,9 @@ func invokeTeamsDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	if !input.Confirmed {
 		return nil, invalidRequest("confirmed must be true: deleting a team also deletes its scenarios, " +
 			"webhooks, and variables")
+	}
+	if err := refuseExcludedTeam(resolved, input.TeamID); err != nil {
+		return nil, err
 	}
 	client, err := openOrganization(ctx, resolved, secrets, red)
 	if err != nil {

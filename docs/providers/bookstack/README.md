@@ -55,8 +55,10 @@ or comment is proven through its page, a move through its source and its target.
 `invalid-request` that names neither the object nor a target. Filters sent to BookStack only narrow a list:
 BookStack silently ignores a filter it does not know, so every row and hit is checked on the client against its
 own book, chapter, and page, and `limit` and `offset` count the remaining rows. A filtered listing sends at most
-200 requests; a server that delivers more fails the call as `invalid-provider-response`. A connection without
-targets sends no proof read.
+200 requests; a server that delivers more fails the call as `invalid-provider-response`. A page included in the
+`html` of a page (see [Pages](content.md#pages)) is proven with one read per call, which also supplies its content
+for the next level; a page the targets exclude by its identifier alone, as with only `page/` targets, is not
+read. A connection without targets sends no proof read.
 
 Without `book_id` and `chapter_id`, `pages.list` and `content.search` use the only bound book or the only bound
 chapter, and `chapters.list` the only bound book. A connection bound to pages alone lists these pages; its search
