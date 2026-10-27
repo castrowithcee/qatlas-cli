@@ -358,8 +358,9 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := client.verifyDriveAccount(ctx, "list files", input.DriveID); err != nil {
 		return nil, err
 	}
-	if !defaulted {
+	if !defaulted || client.scope.hasFileExcludes(input.DriveID) {
 		// The entries of a folder inside the targets lie inside them too, so they need no proof of their own.
+		// A folder from the targets still needs one where it could lie below an exclusion.
 		if err := client.proveObjects(ctx, "list files", input.DriveID, folderID); err != nil {
 			return nil, err
 		}
@@ -422,6 +423,10 @@ func (c *Client) listFolder(ctx context.Context, driveID, folderID int64, cursor
 	}
 	entries := make([]Entry, 0, len(items))
 	for _, item := range items {
+		// A direct child is dropped by its identifier alone: it needs no read, and the page keeps its cursor.
+		if c.scope.excludesFile(driveID, item.ID) {
+			continue
+		}
 		entries = append(entries, c.entryWith(driveID, item, with))
 	}
 	return &FolderPage{DriveID: driveID, FolderID: folderID, Entries: entries, Cursor: meta.Cursor,
