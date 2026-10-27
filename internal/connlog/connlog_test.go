@@ -153,3 +153,22 @@ func TestNewRecorderWritesUnderTheVaultNextToTheConfig(t *testing.T) {
 		t.Fatalf("log files = %v, want one under the vault directory", files)
 	}
 }
+
+func TestRecordedExclusionChangeCarriesNoValue(t *testing.T) {
+	dir := t.TempDir()
+	before, after := configWith("kept"), configWith("kept")
+	conn := after.Connections["kept"]
+	conn.Exclude = []string{"repos/o/secret-object"}
+	conn.TargetLabels = map[string]string{"repos/o/secret-object": "secret-label"}
+	after.Connections["kept"] = conn
+	if err := (&Recorder{Writer: invokelog.New(dir, 90), Surface: SurfaceTUI}).Record(before, after); err != nil {
+		t.Fatalf("Record() = %v", err)
+	}
+	lines := logLines(t, dir)
+	if len(lines) != 1 || !strings.Contains(lines[0], `"connection":"kept"`) {
+		t.Fatalf("entries = %v, want one for the connection", lines)
+	}
+	if strings.Contains(lines[0], "secret-object") || strings.Contains(lines[0], "secret-label") {
+		t.Errorf("the log carries an exclusion: %s", lines[0])
+	}
+}

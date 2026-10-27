@@ -58,6 +58,21 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			Description: "fixed tables, optionally with a view",
 		},
 	},
+	"excluder": {
+		ID: "excluder", Name: "Excluder",
+		SecretRoles: []SecretRole{{Name: "token", Description: "token"}},
+		Target: TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
+			Kinds: []TargetKind{
+				{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true},
+				{Name: "org", Forms: []string{"orgs/ORG"}},
+			},
+			Validate: func(target string) error {
+				if target == "*" || strings.HasPrefix(target, "repos/") || strings.HasPrefix(target, "orgs/") {
+					return nil
+				}
+				return errors.New("an excluder target must name a repository or an organisation")
+			}},
+	},
 	"nextcloud": {
 		ID: "nextcloud", Name: "Nextcloud",
 		SecretRoles: []SecretRole{

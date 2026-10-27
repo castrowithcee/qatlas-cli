@@ -137,6 +137,7 @@ func (c *Client) ListPins(ctx context.Context, channelID string, page, limit int
 	}
 	entries := list.ordered(channelID)
 	window, pages, total := windowOf(entries, page, limit)
+	c.guardEntries(ctx, op, window)
 	return &PinsPage{ChannelID: channelID, Messages: window, Page: page, Pages: pages, Total: total,
 		Count: len(window)}, nil
 }

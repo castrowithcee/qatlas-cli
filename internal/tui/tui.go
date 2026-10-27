@@ -418,6 +418,11 @@ type Model struct {
 	// detailFocus is set while the detail pane of a list has the focus, detailTab is the tab it shows then.
 	detailFocus bool
 	detailTab   detailTab
+	// detailPane scrolls the text of the detail pane that is longer than the pane, infoPane the one of the
+	// explanation pane beside a form; info scrolls the explanation overlay.
+	detailPane paneScroll
+	infoPane   paneScroll
+	info       textScroll
 	// dd is the open list of a dropdown field of a bar (see dropdown.go).
 	dd *dropdown
 
@@ -901,7 +906,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if keyIs(msg, actForceQuit) {
 				return m, m.interrupt()
 			}
-			m.updateInfo(msg.String())
+			m.updateInfo(msg)
 			return m, nil
 		}
 		if !fits && m.activeScreenTooSmall() {
@@ -3223,7 +3228,22 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		// SetConnection drops the labels of targets the list no longer holds.
 		labels := targetLabelsOf(m.fields)
+		// The form does not edit exclusions: they carry over from the connection it was opened on (the
+		// original also when renamed or copied), with their labels. Dropping them would widen the connection.
+		var exclude []string
+		if source, ok := m.cfg.Connections[m.formSource()]; ok {
+			exclude = source.ExcludeValues()
+			for _, value := range exclude {
+				if label, ok := source.TargetLabels[value]; ok {
+					if labels == nil {
+						labels = map[string]string{}
+					}
+					labels[value] = label
+				}
+			}
+		}
 		return cfg.SetConnection(name, config.Connection{
+			Exclude:        exclude,
 			Service:        m.fieldValue("service"),
 			Credential:     m.fieldValue("credential"),
 			Target:         target,
@@ -3242,6 +3262,15 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		return cfg.SetDefault(name, m.fieldValue("connection"))
 	}
 	return nil
+}
+
+// formSource is the name of the entry the open form was started from: the one being edited, or the one a
+// new entry is copied from.
+func (m *Model) formSource() string {
+	if m.editing != "" {
+		return m.editing
+	}
+	return m.copyFrom
 }
 
 // connectionState is the value of the state row for a connection.
@@ -4180,6 +4209,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = "enter review · up/{back} rows · {command} cmds · {help} help · q quit"
 	case m.barFocus > 0:
 		keys = m.barKeys()
+	case m.detailFocused() && m.detailPane.more:
+		keys = "←/→ tab · tab next · shift+tab rows · up/down move · pgup/pgdn scroll · enter edit · {back} rows · {command} cmds · {help} help · q quit"
 	case m.detailFocused():
 		keys = "←/→ tab · tab next · shift+tab rows · up/down move · enter edit · {back} rows · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals && m.vaultLocked():

@@ -124,11 +124,15 @@ type Credential struct {
 // and never a selector; see validateFiles.
 type Connection struct {
 	// ID is the stable identity of the connection; see Service.ID.
-	ID          string   `yaml:"id,omitempty"`
-	Service     string   `yaml:"service"`
-	Credential  string   `yaml:"credential"`
-	Target      string   `yaml:"target,omitempty"`
-	Targets     []string `yaml:"targets,omitempty"`
+	ID         string   `yaml:"id,omitempty"`
+	Service    string   `yaml:"service"`
+	Credential string   `yaml:"credential"`
+	Target     string   `yaml:"target,omitempty"`
+	Targets    []string `yaml:"targets,omitempty"`
+	// Exclude lists entries, spelled like targets, that the connection takes out of what its targets
+	// reach. It is read only by a provider that declares exclusions (see TargetKind.Excludable), never
+	// widens the targets, and is no target: TargetValues, reach and tool offer do not see it.
+	Exclude     []string `yaml:"exclude,omitempty"`
 	Description string   `yaml:"description,omitempty"`
 	Effects     []Effect `yaml:"effects,omitempty"`
 	Tools       []string `yaml:"tools,omitempty"`
@@ -198,6 +202,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Credential     string            `yaml:"credential"`
 		Target         string            `yaml:"target,omitempty"`
 		Targets        []string          `yaml:"targets,omitempty"`
+		Exclude        []string          `yaml:"exclude,omitempty"`
 		Description    string            `yaml:"description,omitempty"`
 		Effects        *[]Effect         `yaml:"effects,omitempty"`
 		Tools          *[]string         `yaml:"tools,omitempty"`
@@ -220,7 +225,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
+		Exclude: c.Exclude, Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
 		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled, ActiveUntil: activeUntil,
 		TargetLabels: c.TargetLabels}, nil
 }
@@ -790,6 +795,16 @@ func (c *Config) Validate() error {
 				report(problem(SectionConnections, name, "targets", CodeWildcardNotAlone,
 					"wildcard %q must be the only target", metadata.Target.Wildcard))
 			}
+			if len(conn.Exclude) > 0 {
+				if !metadata.Target.Excludes() {
+					report(problem(SectionConnections, name, "exclude", CodeExcludeUnsupported,
+						"provider %q does not support exclusions", service.Provider).with("provider", service.Provider))
+				} else {
+					for _, finding := range metadata.Target.CheckExcludes(conn.Exclude, targets) {
+						report(excludeProblem(name, finding))
+					}
+				}
+			}
 			if known && conn.Tools != nil {
 				c.validateTools(name, service.Provider, metadata, report)
 			}
@@ -956,13 +971,38 @@ func (c Connection) TargetValues() []string {
 	return []string{c.Target}
 }
 
+// ExcludeValues returns the configured exclusions in declaration order, a copy the caller may change. They
+// are never part of TargetValues.
+func (c Connection) ExcludeValues() []string {
+	return append([]string(nil), c.Exclude...)
+}
+
+// excludeProblem renders one finding of TargetMetadata.CheckExcludes. It never quotes the value.
+func excludeProblem(name string, finding ExcludeFinding) Problem {
+	var p Problem
+	switch finding.Fault {
+	case ExcludeEmpty:
+		p = problem(SectionConnections, name, "exclude", CodeEmptyExclude, "exclusions must not be empty")
+	case ExcludeDuplicate:
+		p = problem(SectionConnections, name, "exclude", CodeDuplicateExclude, "an exclusion is listed more than once")
+	case ExcludeIsTarget:
+		p = problem(SectionConnections, name, "exclude", CodeExcludeIsTarget, "an exclusion equals a target")
+	case ExcludeWildcard:
+		p = problem(SectionConnections, name, "exclude", CodeExcludeWildcard, "an exclusion must not be a wildcard")
+	default:
+		p = problem(SectionConnections, name, "exclude", CodeInvalidExclude,
+			"an exclusion is not in a form the provider accepts for exclusions")
+	}
+	return p.at(finding.Index)
+}
+
 // PruneTargetLabels returns the labels of the connection whose target is still one of its targets, as a copy
 // that shares nothing with the connection, or nil when none is left. It is the one place that decides a label
 // is orphaned; every write by Qatlas goes through it (see Config.SetConnection), while loading never repairs a
 // hand-written orphan but reports it (see validateTargetLabels).
 func (c Connection) PruneTargetLabels() map[string]string {
 	var kept map[string]string
-	for _, target := range c.TargetValues() {
+	for _, target := range c.labelKeys() {
 		if label, ok := c.TargetLabels[target]; ok {
 			if kept == nil {
 				kept = map[string]string{}
@@ -973,6 +1013,12 @@ func (c Connection) PruneTargetLabels() map[string]string {
 	return kept
 }
 
+// labelKeys returns the values a label may name: the targets and the exclusions, which a person also wants
+// to recognise.
+func (c Connection) labelKeys() []string {
+	return append(c.TargetValues(), c.Exclude...)
+}
+
 // validateTargetLabels checks the labels of one connection: each names a target of the connection and is one
 // non-empty line. A problem never quotes a target or a label, both are free text.
 func validateTargetLabels(name string, conn Connection, report func(Problem)) {
@@ -980,7 +1026,7 @@ func validateTargetLabels(name string, conn Connection, report func(Problem)) {
 		return
 	}
 	targets := map[string]bool{}
-	for _, target := range conn.TargetValues() {
+	for _, target := range conn.labelKeys() {
 		targets[target] = true
 	}
 	keys := make([]string, 0, len(conn.TargetLabels))

@@ -518,6 +518,7 @@ var textDE = map[textID]string{
 	footerID("space unchanged"):                                "space Unverändertes",
 	footerID("space fold unchanged"):                           "space Unverändertes einklappen",
 	footerID("up/down scroll"):                                 "up/down scrollen",
+	footerID("pgup/pgdn scroll"):                               "pgup/pgdn scrollen",
 	footerID("y approve all"):                                  "y alle freigeben",
 	tRenameLabelID:                                             "id",
 	tRenameLabelEntry:                                          "Eintrag",

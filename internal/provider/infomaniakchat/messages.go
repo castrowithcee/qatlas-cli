@@ -537,9 +537,11 @@ func (c *Client) ListMessages(ctx context.Context, channelID string, window mess
 	}
 	if window.sinceMs > 0 {
 		entries, more := list.changed(channelID, limit)
+		c.guardEntries(ctx, op, entries)
 		return &MessagesPage{ChannelID: channelID, Messages: entries, Page: 1, HasMore: more, Count: len(entries)}, nil
 	}
 	entries := list.ordered(channelID)
+	c.guardEntries(ctx, op, entries)
 	if window.before != "" || window.after != "" {
 		return &MessagesPage{ChannelID: channelID, Messages: entries, Page: 1,
 			HasMore: list.HasNext || len(list.Order) >= limit, Count: len(entries)}, nil
@@ -624,6 +626,7 @@ func (c *Client) ReadThread(ctx context.Context, postID, channelID, cursor strin
 		return nil, err
 	}
 	entries := list.ordered(channelID)
+	c.guardEntries(ctx, op, entries)
 	thread := &Thread{PostID: postID, ChannelID: channelID, Messages: entries, HasMore: list.HasNext, Count: len(entries)}
 	if list.HasNext && list.NextPostID != "" {
 		thread.Cursor = list.NextPostID
@@ -815,7 +818,9 @@ func invokeMessagesGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return messageEntryOf(post), nil
+	entry := messageEntryOf(post)
+	client.newPreviewGuard(ctx, op).apply(&entry)
+	return entry, nil
 }
 
 func invokeMessagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
