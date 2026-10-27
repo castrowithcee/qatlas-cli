@@ -4026,7 +4026,7 @@ func (m *Model) listView() string {
 	m.hitList(header, start, end, row)
 	if m.paneWidth() > 0 {
 		room := m.height - strings.Count(footer, "\n") - 1
-		return m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room)
+		return m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room, m.titleRows())
 	}
 	b.WriteString(footer)
 	return b.String()
@@ -4066,7 +4066,8 @@ func (m *Model) listFrame() (string, string) {
 		case total > 0:
 			position = fmt.Sprintf("%d/%d", pos, total)
 		}
-		head.WriteString(panelTop(fmt.Sprintf("%s (%d)", m.section.title(), total), position, room, m.tableFocused()) + "\n")
+		head.WriteString(m.titled(fmt.Sprintf("%s (%d)", m.section.title(), total), position, room+4))
+		head.WriteString(panelTop("", "", room, m.tableFocused()) + "\n")
 	} else {
 		title := styles.title.Render(m.section.title())
 		switch {

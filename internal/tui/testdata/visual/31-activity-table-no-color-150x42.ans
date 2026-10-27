@@ -1,6 +1,8 @@
 [1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                                   [2m[?] help[0m  [2m[:] cmd[0m
 [1m  [0m[2m 1 Overview [0m [2m 2 Connections [0m [1m[3 Activity][0m [2m 4 Access [0m [2m 5 Library [0m [2m 6 Settings [0m
 [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+[1mLogs[0m
+
   [1m[Table][0m [2m Activity [0m [2m Details [0m                                                                                                            [1m? unverified[0m
 > [1m Mode: All ▾ [0m    [2m(all recorded days)[0m     Way: all ▾      Client: all ▾      Tool: all ▾      Conn: all ▾      Effect: all ▾      Result: all ▾ 
                                                                                                                         [2m / search…                    [0m
@@ -36,7 +38,5 @@
 [2m│[0m   [2m? unverified[0m  [2m2026-02-11 14:14+00[0m  [2mMCP[0m  -       bookstack.pages.list    wiki-main       [1mnot-found[0m        [2m-[0m      308ms                            [2m│[0m
 [2m│[0m   [2m? unverified[0m  [2m2026-02-11 16:27+00[0m  [2mCLI[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      339ms                            [2m│[0m
 [2m│[0m   [2m? unverified[0m  [2m2026-02-11 08:40+00[0m  [2mMCP[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m      370ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-12 08:34+00[0m  [2mMCP[0m  -       nextcloud.files.upload  cloud-files     [1mok[0m               [2m-[0m      198ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-12 10:47+00[0m  [2mMCP[0m  -       telegram.messages.send  alerts-bot      [1mok[0m               [2m-[0m      229ms                            [2m│[0m
 [2m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
 [1menter[0m[2m open[0m  [1mf[0m[2m filter[0m  [1ms[0m[2m summary[0m  [1mm[0m[2m MCP sessions[0m  [1m/[0m[2m search[0m  [1m1-8[0m[2m section[0m  [1mesc[0m[2m back[0m  [1m:[0m[2m cmds[0m  [1m?[0m[2m help[0m  [1mq[0m[2m quit[0m            [1mleft/right[0m[2m change mode[0m  [2m1/180 · 0%[0m

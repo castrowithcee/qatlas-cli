@@ -393,10 +393,19 @@ func (m *Model) hitBar(lines []string, top int, specs []barSpec) {
 	}
 }
 
+// listBarOffset is the number of lines above the filter bar of the list screen: its title, the gap under it
+// and the top border of the frame.
+func (m *Model) listBarOffset() int {
+	if m.tableFramed() {
+		return m.titleRows() + 1
+	}
+	return 1
+}
+
 // hitList makes the rows of the list screen, and its filter bar, clickable.
 func (m *Model) hitList(header string, start, end int, row func(i int) string) {
 	if m.listBarShown() && !m.list.editing {
-		m.hitBarFields(m.workspaceTop() + 1)
+		m.hitBarFields(m.workspaceTop() + m.listBarOffset())
 	}
 	m.hitRows(m.hitTop(header), m.listWidth(), start, end, row, m.clickListRow)
 }

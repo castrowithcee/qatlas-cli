@@ -7,14 +7,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// A list screen draws its table in a panel titled with the section and its entry count, the column names in
+// A list screen draws its table in a panel under a title line with the section, its entry count and the position, the column names in
 // capitals above the rows, each group headed by its provider mark, and the entries below it.
 func TestTablesStandInAPanelWithTitleCountAndGroupHeads(t *testing.T) {
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)
 	lines := strings.Split(screenOf(m), "\n")
-	if !strings.HasPrefix(lines[0], "╭") && !strings.HasPrefix(lines[0], "╔") || !strings.Contains(lines[0], "Connections (3)") {
-		t.Errorf("the table has no panel titled with its count:\n%s", screenOf(m))
+	if !strings.HasPrefix(lines[0], "Connections (3)") || !strings.HasSuffix(strings.TrimSpace(lines[0]), "1/3") {
+		t.Errorf("the table has no title line with its count and position:\n%s", screenOf(m))
+	}
+	if top := lines[m.titleRows()]; !strings.HasPrefix(top, "╭") && !strings.HasPrefix(top, "╔") {
+		t.Errorf("the table frame does not follow the title line:\n%s", screenOf(m))
 	}
 	view := screenOf(m)
 	for _, want := range []string{"NAME", "STATE", "▾ ■ bookstack (1)", "▾ ■ tracker (2)", "╰"} {
