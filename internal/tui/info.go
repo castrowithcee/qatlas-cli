@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -233,14 +234,32 @@ func (m *Model) openInfo() bool {
 		return false
 	}
 	m.infoOpen, m.infoShown = true, s
+	m.info.reset()
 	return true
 }
 
-// updateInfo handles the keys while the overlay is open: the key that closes it, and nothing else.
-func (m *Model) updateInfo(key string) {
+// updateInfo handles the keys while the overlay is open: the key that closes it, and the keys that scroll a
+// text longer than the overlay.
+func (m *Model) updateInfo(msg tea.KeyPressMsg) {
+	key := msg.String()
 	if key == keyOf(actBack) || key == keyOf(actInfo) || (infoExtra != "" && key == infoExtra) {
 		m.infoOpen = false
+		return
 	}
+	_, _, room := m.infoLayout()
+	m.info.scroll(msg, room)
+}
+
+// infoLayout is the text of the overlay wrapped into its inner width, and the rows it shows of it: all of them
+// while they fit, otherwise one less, which the position line takes.
+func (m *Model) infoLayout() ([]string, int, int) {
+	inner := min(modalMaxInner, max(m.termWidth-8, 10))
+	lines := m.infoShown.lines(inner)
+	room := max(m.termHeight-8, 3)
+	if len(lines) > room {
+		room--
+	}
+	return lines, inner, room
 }
 
 // paneScreen reports whether the current screen is a form or a picker, which carry the pane.
@@ -276,6 +295,8 @@ func (m *Model) screenView() string {
 		off = max(min(m.formTop-m.workspaceTop(), m.height-helpPaneMinRows), 0)
 	}
 	pane := strings.Repeat("\n", off) + m.pane(helpPaneWidth-2, max(m.height-off, helpPaneMinRows))
+	top := m.workspaceTop() + off
+	m.infoPane.x0, m.infoPane.y0, m.infoPane.x1, m.infoPane.y1 = full-helpPaneWidth+2, top, full, top+strings.Count(pane, "\n")+1-off
 	return lipgloss.JoinHorizontal(lipgloss.Top, padBlock(left, full-helpPaneWidth), "  ", pane)
 }
 
@@ -289,7 +310,7 @@ func padBlock(block string, width int) string {
 }
 
 // pane draws the explanation of the focused row in a frame of width cells and at most rows rows; text that
-// does not fit ends in "...", and the info key shows all of it.
+// does not fit scrolls with the wheel over the pane, and the info key shows it in an overlay with keys.
 func (m *Model) pane(width, rows int) string {
 	s := m.infoSubject()
 	inner := width - 4
@@ -297,14 +318,20 @@ func (m *Model) pane(width, rows int) string {
 	if s.empty() {
 		lines = infoSubject{long: tr(tInfoNoFurtherExplanationForThis)}.lines(inner)
 	}
+	key := s.title + "\n" + s.long
 	rows = max(rows-2, 1)
 	title := truncateDots(s.title, inner-2)
 	if m.screen == screenForm {
 		// A form's pane is as high as its text.
 		rows, title = min(rows, max(len(lines), 1)), tr(tFormHelpTitle)
 	}
+	lines, position := m.infoPane.fit(key, lines, rows)
+	if position != "" {
+		lines = append(slices.Clone(lines), position)
+	}
 	if len(lines) > rows {
-		lines = lines[:rows]
+		// A pane of one row has no room for the position line and cuts.
+		lines = slices.Clone(lines[:rows])
 		lines[rows-1] = truncateDots(lines[rows-1]+" ...", inner)
 	}
 	for i, l := range lines {
@@ -350,13 +377,9 @@ func (m *Model) moreBehind(f field, hint string) bool {
 // explanation takes the whole workspace.
 func (m *Model) infoView() string {
 	s := m.infoShown
-	inner := min(modalMaxInner, max(m.termWidth-8, 10))
-	lines := s.lines(inner)
-	maxRows := max(m.termHeight-8, 3)
-	if len(lines) > maxRows {
-		lines = lines[:maxRows]
-		lines[maxRows-1] = truncateDots(lines[maxRows-1]+" ...", inner)
-	}
+	text, inner, room := m.infoLayout()
+	lines := m.info.window(text, room, false)
+	position := m.info.position(len(text), room)
 	if s.term.ID != "" {
 		// The term the text ends with is named in bold where its paragraph starts.
 		head := termName(s.term) + ": "
@@ -366,7 +389,12 @@ func (m *Model) infoView() string {
 			}
 		}
 	}
-	lines = append(lines, "", keyHintGroupFoot(footerText("esc close")))
+	keys := footerText("esc close")
+	if position != "" {
+		lines = append(lines, styles.hint.Render(position))
+		keys = footerText("up/down scroll") + " · " + keys
+	}
+	lines = append(lines, "", keyHintGroupFoot(keys))
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "")
 	}
