@@ -1417,44 +1417,49 @@ func TestTabClickInTransferAndSelftestStopsAtTheFirstQuestion(t *testing.T) {
 	}
 }
 
-// A long config path (the temporary directories of some systems are) is cut for the button before the button
-// gives way; the keys go first and the header keeps its rows.
-func TestBackButtonOutranksALongPathAndTheKeys(t *testing.T) {
+// A long config path (the temporary directories of some systems are) does not touch the header; where the
+// banner of a release leaves too little room, the keys go before the button, and the header keeps one row.
+func TestBackButtonOutranksTheKeysBesideABannerAndIgnoresALongPath(t *testing.T) {
 	deep := filepath.Join(t.TempDir(), strings.Repeat("deep-directory-", 7))
 	if err := os.MkdirAll(deep, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// The temporary root of a test is made on first use, so the model is built in a subtest that finds the
 	// long directory first.
-	t.Run("long", func(t *testing.T) { backOutranksALongPath(t, deep) })
+	t.Run("long", func(t *testing.T) { backOutranksTheKeys(t, deep) })
 }
 
-func backOutranksALongPath(t *testing.T, deep string) {
+func backOutranksTheKeys(t *testing.T, deep string) {
 	t.Setenv("TMPDIR", deep)
 	m := sizedModel(groupModel(t), 120, 40)
+	fake := newerRelease()
+	m.updater, m.release = fake, fake.check
 	openSectionByName(t, m, sectionServices)
 	pressNew(t, m)
 	row := frameLines(m)[0]
-	if !strings.Contains(row, backText) || strings.Contains(row, "["+keyLabel(actHelp)+"]") || !strings.Contains(row, "…") {
-		t.Fatalf("header = %q, want the cut path and the button without the keys", row)
-	}
-	with := len(m.headerLines())
-	m.backdrop = true
-	without := len(m.headerLines())
-	m.backdrop = false
-	if with != without || with != 1 {
-		t.Errorf("header rows %d with the button, %d without, want 1", with, without)
+	if !strings.Contains(row, backText) || !strings.Contains(row, "["+keyLabel(actHelp)+"]") || strings.Contains(row, "deep-directory") {
+		t.Fatalf("header = %q, want the button and the keys and no path", row)
 	}
 	clickOn(t, m, backText)
 	if m.screen != screenList {
-		t.Errorf("click on the button of a cut path: screen %v", m.screen)
+		t.Errorf("click on the button: screen %v", m.screen)
 	}
-	// At the smallest width the path keeps its pathRoom and the button takes what is left, in the same row.
-	m = sizedModel(m, minimumWidth, minimumHeight)
-	m.backdrop = true
-	bare := len(m.headerLines())
-	m.backdrop = false
-	if rows := len(m.headerLines()); rows != bare || ansi.StringWidth(frameLines(m)[0]) > minimumWidth {
-		t.Errorf("at %d columns the button changed the rows (%d against %d): %q", minimumWidth, rows, bare, frameLines(m)[0])
+	pressNew(t, m)
+	keysGone := false
+	for width := 120; width >= minimumWidth; width-- {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+		row := frameLines(m)[0]
+		hints := strings.Contains(row, "["+keyLabel(actHelp)+"]")
+		button := strings.Contains(row, backText)
+		if len(m.headerLines()) != 1 || ansi.StringWidth(row) > width {
+			t.Fatalf("width %d: the header is not one row within the terminal: %q", width, row)
+		}
+		if hints && !button {
+			t.Fatalf("width %d: keys without the button: %q", width, row)
+		}
+		keysGone = keysGone || (button && !hints)
+	}
+	if !keysGone {
+		t.Error("the banner never took the room of the keys before the button's")
 	}
 }

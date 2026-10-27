@@ -162,6 +162,16 @@ func probe(ctx context.Context, p *product, origin string, token func() (string,
 	return parsed, nil
 }
 
+// knownVersion is the version of the instance, from this process's cache or one read of /version.
+func (c *Client) knownVersion(ctx context.Context) (version, error) {
+	if v, ok := cachedVersionOf(c.product, c.origin); ok {
+		return v, nil
+	}
+	return probe(ctx, c.product, c.origin, func() (string, error) {
+		return strings.TrimPrefix(c.auth, "token "), nil
+	})
+}
+
 // requireVersion refuses an operation the instance's version does not have, before the operation's own
 // request. It reads the version only when this process holds none for the instance, without a credential
 // unless the instance refuses that. The message names the version the operation needs, never the instance's.

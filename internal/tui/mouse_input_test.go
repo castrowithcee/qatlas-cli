@@ -92,6 +92,8 @@ func runPaused(t *testing.T, model *Model, gap time.Duration, chunks ...string) 
 			return tea.QuitMsg{}
 		}
 		switch msg := msg.(type) {
+		case tea.MouseMsg:
+			seen = append(seen, "mouse")
 		case tea.KeyPressMsg:
 			seen = append(seen, msg.String())
 		case keysMsg:
@@ -165,6 +167,50 @@ func TestSplitMouseReportsMakeNoTextInAField(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// A report cut at any byte, the cut after its escape byte included, reaches the model as a mouse event when the
+// pieces follow each other within the input reader's escape wait: the reader joins them, no key and no text
+// comes of it, and nothing in Qatlas waits for them. A machine that stalls the reader for longer than that wait
+// splits the report for real, so a run is repeated twice before it counts as failed; the missing join fails
+// every run.
+func TestMouseReportsSplitWithinTheEscapeWaitStayMouseEvents(t *testing.T) {
+	const quick = 5 * time.Millisecond
+	for _, report := range splitReports {
+		stream := report + report
+		want := 2 * strings.Count(report, "\x1b")
+		for i := 1; i < len(report); i++ {
+			t.Run(fmt.Sprintf("%q/%d", report, i), func(t *testing.T) {
+				var keys []string
+				for try := 0; try < 3; try++ {
+					m := formWithTextField(t)
+					before := m.formState()
+					keys = runPaused(t, m, quick, stream[:i], stream[i:])
+					if m.formState() != before {
+						t.Fatalf("field changed after keys %q", keys)
+					}
+					if len(keys) == want && strings.Count(strings.Join(keys, ","), "mouse") == want {
+						return
+					}
+				}
+				t.Errorf("keys %q, want %d mouse events", keys, want)
+			})
+		}
+	}
+}
+
+// An escape without anything after it is a key: it closes an unchanged form and asks before it drops input.
+func TestALoneEscapeStillLeavesAForm(t *testing.T) {
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	if keys := runInput(t, m, "\x1b", pause); len(keys) != 1 || keys[0] != "esc" || m.screen != screenList {
+		t.Errorf("unchanged form: keys %q, screen %v, want esc and the list", keys, m.screen)
+	}
+	m = formWithTextField(t)
+	if keys := runInput(t, m, "\x1b", pause); len(keys) != 1 || keys[0] != "esc" || m.screen != screenLeave {
+		t.Errorf("changed form: keys %q, screen %v, want esc and the leave question", keys, m.screen)
 	}
 }
 

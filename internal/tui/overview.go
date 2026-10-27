@@ -325,8 +325,8 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 	}
 	// The header already shows the vault state; only a missing vault is told here, since the header is
 	// silent about it. The state lines start with the running version, which is shown even without a
-	// known update.
-	state := []string{styles.hint.Render(m.overviewVersionLine())}
+	// known update, and the config path.
+	state := []string{styles.hint.Render(m.overviewStateLine(width))}
 	vaultNone := m.vaultHeaderText() == ""
 	if banner := m.updateBanner(m.usable(0)); banner != "" {
 		state = append(state, styles.ok.Render(banner))
@@ -501,6 +501,24 @@ func (m *Model) setupUpdateKey(key tea.KeyPressMsg) bool {
 // overviewVersionLine is the dimmed state line naming the running version.
 func (m *Model) overviewVersionLine() string {
 	return "qatlas " + m.runningVersion()
+}
+
+// overviewPathRoom is the least room the config path gets beside the version; with less it is left out.
+const overviewPathRoom = 8
+
+// overviewStateLine is the version line followed by the config path, cut at its start to the room left, with
+// the note that the file is still to be created when that fits too.
+func (m *Model) overviewStateLine(width int) string {
+	line := m.overviewVersionLine()
+	suffix := ""
+	if !m.configExists {
+		suffix = tr(tHeaderCreated)
+	}
+	room := width - lipgloss.Width(line) - lipgloss.Width(headerSep)
+	if room < overviewPathRoom {
+		return line
+	}
+	return line + headerSep + fitPath(m.configPath(), suffix, room)
 }
 
 // runningVersion is the version this editor runs; models built without one report dev.
