@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Make: hooks
@@ -22,7 +22,11 @@ that names a `hook_id` validates it locally (positive integer), reads the hook f
 an invalid request, without naming its real team, when its `teamId` is not the bound team, before any ping, log, or
 URL request is sent. On a connection with a scenario allow-list the hook tools are narrower than the scenario
 tools: only hooks assigned to a listed scenario are listed or reachable, and an unassigned hook is not. A hook
-names no folder, so a folder target reaches no hook. `make.hooks.ping` reads the hook's status (attached, learning,
+names no folder, so a folder target reaches no hook. A hook assigned to an excluded scenario, or to one in an
+excluded folder, is left out of the list and refused by every tool that names it, hook queue and `url` included; an
+unassigned hook stays reachable. The scenario's folder is read once per scenario and call, only when a folder is
+excluded. `make.hooks.delete` leaves excluded scenarios out of the scenarios it lists when Make refuses the deletion
+until they are confirmed. `make.hooks.ping` reads the hook's status (attached, learning,
 gone) and sends no data to the hook.
 
 The trigger URL, a mailhook address, the hook's `udid`, and `ping.address` are trigger secrets: anyone who
@@ -37,7 +41,7 @@ bodies, or udids; Make's log detail with the request and answer content is not o
 `make.hooks.get` reports only the documented keys of a hook's `data`; further keys Make may add are left out. The
 sort of `make.hooks.logs` and `make.hook-queue.list` offers only the direction, because Make documents no values
 for the sort field. `view_for_scenario_id` of `make.hooks.list` obeys the scenario allow-list: only a listed
-scenario is accepted, and it is refused before any request.
+scenario is accepted, and it is refused before any request; the same refusal applies to an excluded scenario.
 
 ### Hook queue
 

@@ -78,7 +78,8 @@ var organizationUsage = capability.Descriptor{
 	ID: Provider + ".organization.usage", Version: 1, Title: "Read the usage of the bound Make organization",
 	Description: "Read the daily operations, data transfer, and centicredits of the organization this " +
 		"connection is bound to for Make's last 30 days, by default in the caller's timezone; changes nothing. " +
-		"Financial data. Only on an organization connection. Needs the organizations:read scope",
+		"Financial data. Only on an organization connection; the usage still includes teams the connection " +
+		"excludes. Needs the organizations:read scope",
 	Tags: []string{"make", "organization", "usage", "billing"}, Risk: billingReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(usageInputSchema), Arguments: usageArguments,
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"organization_id":{"type":"integer"},` +

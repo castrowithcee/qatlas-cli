@@ -221,13 +221,19 @@ type EntryWith struct {
 
 // reach is how far the connection reaches into one drive: the whole drive, or only its files targets.
 type reach struct {
-	whole    bool
+	whole bool
+	// names says that names beyond the targets may be shown; a drive with exclusions hides them.
+	names    bool
 	isTarget func(fileID int64) bool
+	// isAncestor says that excluded objects lie below the file. It is true for every file of a drive with
+	// exclusions whose ancestors no call has read.
+	isAncestor func(fileID int64) bool
 }
 
 func (c *Client) reachOf(driveID int64) reach {
-	return reach{whole: c.scope.wholeDrive(driveID),
-		isTarget: func(fileID int64) bool { return c.scope.isSubtreeRoot(driveID, fileID) }}
+	return reach{whole: c.scope.wholeDrive(driveID), names: c.scope.showsNames(driveID),
+		isTarget:   func(fileID int64) bool { return c.scope.isSubtreeRoot(driveID, fileID) },
+		isAncestor: func(fileID int64) bool { return c.hidesLinks(driveID, fileID) }}
 }
 
 // entryWith maps one file or folder and adds the members its with values asked for.
@@ -322,7 +328,7 @@ func (f fileJSON) applyWith(entry *Entry, with []string, r reach) {
 	}
 	if asked("rewind") && w.Rewind != nil {
 		// The files listings offer no rewind.directory, rewind.sanitizer or rewind.summary.
-		entry.Rewind = rewindEntryOf(*w.Rewind, false, false, false, r.whole)
+		entry.Rewind = rewindEntryOf(*w.Rewind, false, false, false, r.names)
 	}
 	if asked("users") {
 		entry.Users, entry.UsersTruncated = capList(slices.Clone(w.Users), maxIdentifiers)
@@ -334,14 +340,15 @@ func (f fileJSON) applyWith(entry *Entry, with []string, r reach) {
 		"parents.teams") && f.Parents != nil {
 		entry.Parents, entry.ParentsTruncated = parentsOf(*f.Parents, with, r)
 	}
-	if asked("sharelink", "sharelink.views") && w.Sharelink != nil {
+	// Share links and dropboxes of a folder with excluded objects below it are not shown.
+	if asked("sharelink", "sharelink.views") && w.Sharelink != nil && !r.isAncestor(f.ID) {
 		link := cleaned(valuePointer(w.Sharelink))
 		if !asked("sharelink.views") {
 			link.Views = nil
 		}
 		entry.Sharelink = link
 	}
-	if asked("dropbox", "dropbox.capabilities") && w.Dropbox != nil {
+	if asked("dropbox", "dropbox.capabilities") && w.Dropbox != nil && !r.isAncestor(f.ID) {
 		dropbox := cleaned(valuePointer(w.Dropbox))
 		if !asked("dropbox.capabilities") {
 			dropbox.Capabilities = nil

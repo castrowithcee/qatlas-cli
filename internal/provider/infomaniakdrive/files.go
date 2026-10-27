@@ -91,7 +91,8 @@ var filesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Infomaniak kDrive folder contents",
 	Description: "List the immediate children of one folder of a drive this connection may reach, one page " +
-		"at a time with an opaque cursor; never reads file content",
+		"at a time with an opaque cursor; never reads file content. A folder's size is a total kept by Infomaniak " +
+		"and counts excluded content where the connection excludes files or folders",
 	Tags:     []string{"infomaniak", "kdrive", "files", "list", "folder"},
 	Risk:     filesReadRisk,
 	Provider: Provider,
@@ -128,7 +129,8 @@ var filesStat = capability.Descriptor{
 	Version: 1,
 	Title:   "Get Infomaniak kDrive file or folder metadata",
 	Description: "Read the metadata of exactly one file or folder of a drive this connection may reach; file " +
-		"content is never read",
+		"content is never read. A folder's size is a total kept by Infomaniak and counts excluded content where " +
+		"the connection excludes files or folders",
 	Tags:     []string{"infomaniak", "kdrive", "files", "stat", "metadata"},
 	Risk:     filesReadRisk,
 	Provider: Provider,
@@ -416,6 +418,9 @@ func (c *Client) listFolder(ctx context.Context, driveID, folderID int64, cursor
 	if len(with) > 0 {
 		query.Set("with", withQuery("", with))
 	}
+	if err := c.loadAncestorsFor(ctx, op, driveID, with); err != nil {
+		return nil, err
+	}
 	var items []fileJSON
 	var meta navigatorJSON
 	if err := c.doInto(ctx, op, path, query, &items, &meta); err != nil {
@@ -502,6 +507,10 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, err
 	}
 	if err := client.proveObjects(ctx, "get file content", input.DriveID, input.FileID); err != nil {
+		return nil, err
+	}
+	// A folder is sent as a zip archive of everything below it.
+	if err := client.refuseAncestor(ctx, "get file content", input.DriveID, input.FileID); err != nil {
 		return nil, err
 	}
 	return client.GetFileContent(ctx, input.DriveID, input.FileID)

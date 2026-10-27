@@ -2,6 +2,7 @@ package infomaniakmail
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -35,6 +36,12 @@ type scope struct {
 	folders []string // exact names: folder/PATH
 	trees   []string // folder/PATH/*: the folder NAME and its subfolders
 	senders []string // lower case
+
+	// Exclusions of the connection. They are never targets: they only take folders and senders out of what the
+	// targets reach, and an exclusion always wins.
+	exFolders []string // folder/PATH: exactly this folder, its subfolders stay reachable
+	exTrees   []string // folder/PATH/*: the folder NAME and its subfolders
+	exSenders []string // lower case
 }
 
 // unrestricted reports whether no folder target is configured, so every folder of the mailbox is reachable.
@@ -65,6 +72,9 @@ func (s scope) allowsExact(name string) bool {
 // subfolder depends on the server's hierarchy delimiter, so session.folderOK decides it after login. Without a
 // folder/PATH/* target it is exact.
 func (s scope) allowsFolder(name string) bool {
+	if s.excludesFolder(name, "") {
+		return false
+	}
 	if s.allowsExact(name) {
 		return true
 	}
@@ -81,6 +91,9 @@ func (s scope) allowsFolder(name string) bool {
 // folder/PATH/* target followed by the hierarchy delimiter. An empty delimiter (a flat hierarchy) admits only
 // the targets themselves.
 func (s scope) allowsFolderDelim(name, delim string) bool {
+	if s.excludesFolder(name, delim) {
+		return false
+	}
 	if s.allowsExact(name) {
 		return true
 	}
@@ -96,11 +109,46 @@ func (s scope) allowsFolderDelim(name, delim string) bool {
 	return false
 }
 
+// excludesFolder reports whether an exclusion covers the folder: a folder/PATH or folder/PATH/* naming it, or,
+// with the hierarchy delimiter, a folder/PATH/* naming one of its parents. Without a delimiter only the
+// exclusions that name the folder itself apply.
+func (s scope) excludesFolder(name, delim string) bool {
+	name = normalizeFolder(name)
+	if slices.Contains(s.exFolders, name) || slices.Contains(s.exTrees, name) {
+		return true
+	}
+	if delim == "" {
+		return false
+	}
+	for _, tree := range s.exTrees {
+		if strings.HasPrefix(name, tree+delim) && len(name) > len(tree)+len(delim) {
+			return true
+		}
+	}
+	return false
+}
+
+// mayBeExcluded reports whether the folder is longer than and begins with the name of an excluded
+// folder/PATH/* tree, which is a subfolder of it depending on the server's delimiter.
+func (s scope) mayBeExcluded(name string) bool {
+	name = normalizeFolder(name)
+	return slices.ContainsFunc(s.exTrees, func(tree string) bool {
+		return len(name) > len(tree) && strings.HasPrefix(name, tree)
+	})
+}
+
+// hasFolderExcludes reports whether any folder exclusion is configured.
+func (s scope) hasFolderExcludes() bool { return len(s.exFolders)+len(s.exTrees) > 0 }
+
+// allowsSender reports whether an address is admitted: not excluded, and on the sender list when there is one.
 func (s scope) allowsSender(address string) bool {
+	address = strings.ToLower(address)
+	if slices.Contains(s.exSenders, address) {
+		return false
+	}
 	if len(s.senders) == 0 {
 		return true
 	}
-	address = strings.ToLower(address)
 	for _, allowed := range s.senders {
 		if allowed == address {
 			return true
@@ -120,13 +168,17 @@ func normalizeFolder(name string) string {
 
 // scopeOf reads the mailbox, folder, and sender targets of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseScope(values)
+	return parseScopeExcluding(provider.TargetsOf(resolved), provider.ExcludesOf(resolved))
 }
 
-// parseScope reads the configured targets: exactly one mailbox/ADDRESS, and zero or more folder/PATH and
-// sender/ADDRESS entries, none named twice within its own kind. No error ever quotes a configured value.
-func parseScope(values []string) (scope, error) {
+// parseScope reads the configured targets without exclusions.
+func parseScope(values []string) (scope, error) { return parseScopeExcluding(values, nil) }
+
+// parseScopeExcluding reads the configured targets: exactly one mailbox/ADDRESS, and zero or more folder/PATH
+// and sender/ADDRESS entries, none named twice within its own kind. An exclusion is a folder/PATH,
+// folder/PATH/*, or sender/ADDRESS, named once and never equal to a target. It does not rely on the core
+// validation, so an invalid exclusion fails closed here too. No error ever quotes a configured value.
+func parseScopeExcluding(values, excludes []string) (scope, error) {
 	var bound scope
 	seenFolders, seenTrees, seenSenders := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, raw := range values {
@@ -169,7 +221,40 @@ func parseScope(values []string) (scope, error) {
 	if len(bound.senders) > maxSenderTargets {
 		return scope{}, errors.New("an Infomaniak Mail connection may list at most 50 sender targets")
 	}
-	return bound, nil
+	return bound.withExcludes(excludes)
+}
+
+// withExcludes reads the exclusions of the connection into the scope.
+func (s scope) withExcludes(excludes []string) (scope, error) {
+	errInvalid := errors.New("an Infomaniak Mail exclusion must be folder/PATH, folder/PATH/*, or sender/ADDRESS, " +
+		"named once and different from every target")
+	named := func(list []string, value string) bool { return slices.Contains(list, value) }
+	for _, raw := range excludes {
+		kind, value, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return scope{}, errInvalid
+		}
+		switch kind {
+		case "folder":
+			if named(s.exFolders, value) || named(s.folders, value) {
+				return scope{}, errInvalid
+			}
+			s.exFolders = append(s.exFolders, value)
+		case "tree":
+			if named(s.exTrees, value) || named(s.trees, value) {
+				return scope{}, errInvalid
+			}
+			s.exTrees = append(s.exTrees, value)
+		case "sender":
+			if named(s.exSenders, value) || named(s.senders, value) {
+				return scope{}, errInvalid
+			}
+			s.exSenders = append(s.exSenders, value)
+		default:
+			return scope{}, errInvalid
+		}
+	}
+	return s, nil
 }
 
 // validateTarget checks the form of one configured target in isolation.

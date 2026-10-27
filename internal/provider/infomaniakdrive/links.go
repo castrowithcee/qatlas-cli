@@ -313,6 +313,9 @@ func invokeLinksGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
+	if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+		return nil, err
+	}
 	return client.GetLink(ctx, input.DriveID, input.FileID, input.With)
 }
 
@@ -399,6 +402,18 @@ func (c *Client) listLinks(ctx context.Context, driveID int64, cursor string, li
 		return nil, err
 	}
 	query := url.Values{"limit": {strconv.Itoa(limit)}, "with": {withQuery("sharelink", with)}}
+	// On a drive with exclusions every row is proven by its own parents; the entry shows them only if asked.
+	excluding := c.scope.hasFileExcludes(driveID)
+	if excluding && !slices.Contains(with, "parents") {
+		query.Set("with", query.Get("with")+",parents")
+	}
+	var ancestors map[int64]bool
+	if excluding {
+		var err error
+		if ancestors, err = c.loadAncestors(ctx, op, driveID); err != nil {
+			return nil, err
+		}
+	}
 	if cursor != "" {
 		query.Set("cursor", cursor)
 	}
@@ -414,6 +429,9 @@ func (c *Client) listLinks(ctx context.Context, driveID int64, cursor string, li
 	entryWith := slices.DeleteFunc(slices.Clone(with), func(v string) bool { return strings.HasPrefix(v, "sharelink") })
 	entries := make([]LinkEntry, 0, len(items))
 	for _, item := range items {
+		if excluding && !c.notExcluded(driveID, item.ID, &item.fileJSON) || ancestors[item.ID] {
+			continue
+		}
 		entry := LinkEntry{Entry: c.entryWith(driveID, item.fileJSON, entryWith)}
 		if item.Sharelink != nil && item.Sharelink.FileID == item.ID {
 			if link, ok := linkOf(*item.Sharelink); ok {

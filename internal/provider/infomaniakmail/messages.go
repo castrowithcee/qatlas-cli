@@ -116,7 +116,7 @@ var messagesList = capability.Descriptor{
 			"; a keyword cannot be in both lists"},
 		{Name: "sender", Description: "Only messages from this address (the From filter, not the " +
 			"ENVELOPE Sender that the output field sender reports); when the connection has a sender " +
-			"allow-list, the address must be on it"},
+			"allow-list, the address must be on it, and an excluded address is refused"},
 		{Name: "uid_from", Description: "Lowest UID of the window; needs uidvalidity"},
 		{Name: "uid_to", Description: "Highest UID of the window, at most " + strconv.Itoa(maxUIDWindow) +
 			" UIDs above uid_from; needs uidvalidity"},
@@ -137,7 +137,8 @@ var messagesList = capability.Descriptor{
 		{Name: "flags", Description: "IMAP flags of the message, bounded"},
 		{Name: "size", Description: "Message size in bytes"},
 		{Name: "count", Description: "Messages returned"},
-		{Name: "matched", Description: "Messages the folder search found in the window before the limit"},
+		{Name: "matched", Description: "Messages the folder search found in the window before the limit and before " +
+			"messages of excluded senders are left out, so it can exceed the messages that can be listed"},
 		{Name: "has_more", Description: "True when the search found more messages than limit; they are older"},
 	}, envelopeFields...),
 	Examples: []capability.Example{{Description: "List the newest unread messages of the inbox",
@@ -451,14 +452,15 @@ func (c *Client) ListMessages(ctx context.Context, q query) (*MessagesPage, erro
 	return page, nil
 }
 
-// fromAllowed applies the sender allow-list to the parsed From addresses. With a list, a message needs at
-// least one From address and every one must be on it.
+// fromAllowed applies the sender exclusions and allow-list to the parsed From addresses. A message with an
+// excluded From address is never allowed. With a list, a message needs at least one From address and every
+// one must be on it.
 func (c *Client) fromAllowed(from []imap.Address) bool {
-	if len(c.scope.senders) == 0 {
+	if len(c.scope.senders) == 0 && len(c.scope.exSenders) == 0 {
 		return true
 	}
 	if len(from) == 0 {
-		return false
+		return len(c.scope.senders) == 0
 	}
 	for i := range from {
 		if !c.scope.allowsSender(from[i].Addr()) {

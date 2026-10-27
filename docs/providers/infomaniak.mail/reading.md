@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-22
+updated: 2026-10-27
 ---
 
 # Reading messages
@@ -17,11 +17,12 @@ The read tools of [Infomaniak Mail](README.md). Reading changes nothing, see
 
 ## Listing messages
 
-`infomaniak.mail.messages.list` takes a `folder` and typed filters, all combined with AND. The server compares
-dates only. Nothing but these typed values ever reaches the SEARCH; there is no raw IMAP command. The
-descriptor lists the filters with their bounds and exclusions. With a sender allow-list, the `sender` filter
-must name an address on it. Results are the newest matches first. `matched` is the number of hits before
-`limit`, and `has_more` is true when older matches were left out.
+`infomaniak.mail.messages.list` takes a `folder` and typed filters, all combined with AND. The server compares dates
+only. Nothing but these typed values ever reaches the SEARCH; there is no raw IMAP command. The descriptor lists the
+filters with their bounds and exclusions. With a sender allow-list, the `sender` filter must name an address on it, and
+never an excluded one. Results are the newest matches first. `matched` is the number of hits before `limit` and before
+the messages of excluded senders are left out, so it can exceed what is listed; and `has_more` is true when older
+matches were left out.
 
 Limits of the filters:
 

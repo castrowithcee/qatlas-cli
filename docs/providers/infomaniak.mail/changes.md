@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-22
+updated: 2026-10-27
 ---
 
 # Changing a message
@@ -34,12 +34,11 @@ Rules that hold for every change:
   from the mailbox; `move` because it changes the UID and folder of a message, which every earlier reference
   loses; `flag` is held to the same rule because it changes mailbox state the person sees in every client, and
   the rule is the narrower of the two readings.
-- **Folders.** The source folder and, for `move`, the destination must both be inside the folder targets. A
-  folder outside them, a destination equal to the source, a wildcard, and a missing `uid` or `uidvalidity` are
-  refused as invalid requests **before** a secret is read and before any connection is opened, without naming
-  the foreign or any allowed folder. After the folder is opened, the `uidvalidity` is compared and the sender
-  list applies: a message from a sender outside the list answers `not-found`, exactly like a missing UID,
-  and nothing changes.
+- **Folders.** The source folder and, for `move`, the destination must both be inside the folder targets and not
+  excluded. A folder outside them, a destination equal to the source, a wildcard, and a missing `uid` or `uidvalidity`
+  are refused as invalid requests **before** a secret is read and before any connection is opened, without naming the
+  foreign or any allowed folder. After the folder is opened, the `uidvalidity` is compared and the sender list applies:
+  a message from a sender outside the list answers `not-found`, exactly like a missing UID, and nothing changes.
 - **SELECT, not EXAMINE.** A change opens its folder with `SELECT`; the message is read with `ENVELOPE`,
   `FLAGS`, `RFC822.SIZE`, and `BODYSTRUCTURE` only, so preparing the change sets no flag. Reads keep using
   `EXAMINE`.
@@ -58,7 +57,7 @@ Rules that hold for every change:
 
 **Trash.** `messages.delete` moves the message to the one folder the server marks with the SPECIAL-USE attribute
 `\Trash` in `LIST`. No folder is chosen by name. If the server does not offer `SPECIAL-USE`, marks no folder or
-more than one as `\Trash`, or the trash folder is outside the connection's folder targets, the call is
+more than one as `\Trash`, or the trash folder is outside the connection's folder targets or excluded, the call is
 refused as an invalid request without naming a folder and nothing is sent that changes the mailbox. A message
 that is already in the trash folder is not deleted again; use `messages.expunge`.
 

@@ -1,13 +1,13 @@
 ---
 description: >
   Describes the Infomaniak Mail provider: IMAP access to exactly one mailbox with a mailbox password, the
-  fixed endpoints, the required mailbox target and the optional folder and sender allow-lists, the target picker,
-  the tool overview with its profiles and tools list requirements, the read-only access, the error classes,
-  the handling of untrusted message data, and the boundaries of what this provider does.
+  fixed endpoints, the required mailbox target, the optional folder and sender allow-lists and exclusions, the
+  target picker, the tool overview with its profiles and tools list requirements, the read-only access, the error
+  classes, the handling of untrusted message data, and the boundaries of what this provider does.
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Infomaniak Mail
@@ -82,7 +82,7 @@ it. For any other folder that begins with `PATH`, a call sends one extra `LIST "
 login and before the folder is opened or a message is moved there; where a LIST answer is read anyway
 (`folders.list`, the trash, drafts, and sent folder lookup) its delimiter is used instead. Every folder of a call,
 including a move destination, is checked against it; a failed question refuses the call without naming a folder. A
-connection without a `folder/PATH/*` target never sends it.
+connection without a `folder/PATH/*` target or exclusion never sends it.
 
 Without a sender target, every sender is listed. With one, only messages whose parsed From address is on the list are
 returned or read; `messages.get` and `attachments.get` answer `not-found`, with no detail, for a message from another
@@ -90,6 +90,29 @@ sender, exactly as for a UID that does not exist: a message needs at least one F
 must be on the list. This is checked locally on the parsed address of each envelope; a server-side SEARCH alone is
 never trusted for it, since IMAP searches match substrings (a lookalike address or a display name that contains an
 allowed address would match).
+
+### Exclusions
+
+`exclude` takes folders and senders out of what the targets reach, and an exclusion always wins. It takes
+`folder/PATH` (exactly that folder; its subfolders stay reachable), `folder/PATH/*` (the folder and its subfolders,
+with the delimiter rule above), and `sender/ADDRESS`. The mailbox cannot be excluded. An entry is invalid, without
+quoting it, when it has another form, is empty, is named twice, or equals a target; the provider checks this again
+when it reads the configuration. Exclusions never remove a tool from the offer.
+
+An excluded folder behaves like a folder without IMAP rights ([RFC 4314](https://www.rfc-editor.org/rfc/rfc4314)):
+every tool that takes a folder, and `messages.move` for its destination, refuses it as an invalid request without
+naming a folder or an exclusion. An exact name is refused before a secret is read and before any connection; a
+name that begins with the `PATH` of an excluded `folder/PATH/*` is decided with the delimiter, as for a target.
+`folders.list` leaves excluded folders out and decides `\HasChildren` and `\HasNoChildren` again from the folders it
+shows ([RFC 9051 section 7.3.1](https://www.rfc-editor.org/rfc/rfc9051#section-7.3.1)); the name of a shown
+subfolder can still contain the name of an excluded parent. The trash, drafts, and Sent folder lookups treat an
+excluded folder like one outside the targets.
+
+A message is excluded when any of its parsed From addresses is an excluded sender, compared like a sender target.
+Listings leave it out; `messages.get`, `attachments.get`, and every change answer `not-found` as for a UID that does
+not exist. This is decided locally; a server-side `NOT FROM` is never sent, and a `sender` filter naming an excluded
+address is refused before any connection. Excluding the mailbox's own address as a sender makes `messages.send` and
+the draft tools refuse, since the mailbox is the only sender they use.
 
 ## Choosing targets
 
@@ -151,7 +174,7 @@ such as a lost connection, has none.
 | --- | --- |
 | `auth` | the mailbox address or password was rejected, or the password is unusable; see [Fixing errors](setup.md#fixing-errors) |
 | `permission` | the mailbox may not perform the operation |
-| `not-found` | the mailbox holds no such folder, message, or attachment part, or does not show it; also a message from a sender outside the allow-list |
+| `not-found` | the mailbox holds no such folder, message, or attachment part, or does not show it; also a message from a sender outside the allow-list or from an excluded sender |
 | `unreachable` | the server could not be reached, is unavailable, or closed the connection |
 | `tls` | the TLS connection or certificate check failed |
 | `timeout` | the server did not answer in time (30 seconds per operation, 30 minutes for an attachment written to a local file or a draft above 1 MiB) |
@@ -159,13 +182,13 @@ such as a lost connection, has none.
 | `invalid-provider-response` | an answer lacked an envelope, structure, or part, or an attachment did not decode |
 | `provider-error` | every other rejection, a server without `MOVE` or `UIDPLUS` for a change that needs it, a server without STARTTLS or a refused SMTP step, and a message the SMTP server declined |
 
-A folder or sender outside the connection's targets, a malformed argument, a header value with a control character, a
-draft above its limits, a folder that is not the drafts folder, an inline attachment above 4 MiB, a `uidvalidity` that
-no longer matches, a trash, drafts, or Sent folder that cannot be identified inside the targets, a reply header that
-is no valid Message-ID, and a draft that `drafts.send` cannot validate are invalid requests, never provider errors. A
-change whose outcome is unknown reports that it may have been applied, with the class of the failure (`timeout` or
-`unreachable`); a send that is unclear after the end of DATA says the message may have been sent. Replacing an
-existing local file without confirmation asks for the confirmation.
+A folder or sender outside the connection's targets or excluded, a malformed argument, a header value with a control
+character, a draft above its limits, a folder that is not the drafts folder, an inline attachment above 4 MiB, a
+`uidvalidity` that no longer matches, a trash, drafts, or Sent folder that cannot be identified inside the targets, a
+reply header that is no valid Message-ID, and a draft that `drafts.send` cannot validate are invalid requests, never
+provider errors. A change whose outcome is unknown reports that it may have been applied, with the class of the failure
+(`timeout` or `unreachable`); a send that is unclear after the end of DATA says the message may have been sent.
+Replacing an existing local file without confirmation asks for the confirmation.
 
 ## Untrusted data
 
