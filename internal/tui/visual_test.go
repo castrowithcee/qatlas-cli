@@ -124,6 +124,7 @@ func visualModel(t *testing.T, fixtures string, width, height int, theme, backgr
 	store := config.NewStore("config.yaml", providerRegistry(t, 8))
 	m, err := New(testService(store, secrets, nil), store, nil, secrets, nil)
 	mustNoError(t, err)
+	m.version = "1.2.3"
 	m.now = func() time.Time { return visualNow }
 	m.logs = newLogView(visualNow)
 	m.prefs = uiprefs.Default()

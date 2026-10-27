@@ -284,6 +284,15 @@ func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
 	}
 }
 
+func TestUpdatePageNamesRunningVersion(t *testing.T) {
+	m, _ := lockedVaultModel(t)
+	m.version = "1.2.3"
+	openSectionByName(t, m, sectionUpdate)
+	if view := m.render(); !strings.Contains(view, "qatlas 1.2.3") {
+		t.Errorf("the Update page does not name the running version:\n%s", view)
+	}
+}
+
 // The long explanation of the icons preference and of its nerdfont value show the glyphs and where to get a font.
 func TestIconsExplanationShowsTestCharactersAndFontHint(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {

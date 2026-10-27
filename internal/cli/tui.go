@@ -373,7 +373,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			prefs, prefsWarnings := uiprefs.Load(prefsPath)
 			return classifyUserError(tui.Run(tui.Options{
 				Service: svc, Store: store, Tester: connectionTester(store, opts, reg), Secrets: secrets,
-				Redactor: opts.Redactor, Updater: tuiUpdater(opts, buildVersion), Restart: tuiRestart(),
+				Redactor: opts.Redactor, Version: buildVersion, Updater: tuiUpdater(opts, buildVersion), Restart: tuiRestart(),
 				SelfTest: tuiSelfTest(buildVersion), Prefs: prefs, PrefsWarnings: prefsWarnings,
 				SavePrefs: func(p uiprefs.Prefs) error { return uiprefs.Save(prefsPath, p) },
 				In:        os.Stdin, Out: os.Stdout,

@@ -620,6 +620,7 @@ type Model struct {
 	// version installed since, which takes effect only after a restart. updateFrom is the screen the update
 	// question returns to.
 	updater    Updater
+	version    string
 	release    selfupdate.Result
 	updating   bool
 	updated    string
@@ -4931,6 +4932,8 @@ type Options struct {
 	Tester   Tester
 	Secrets  Secrets
 	Redactor *redact.Redactor
+	// Version is the running qatlas version; empty is read as dev.
+	Version string
 	// Updater may be nil, in which case the editor does not look for a newer release.
 	Updater Updater
 	// Restart may be nil, in which case an installed release waits for a restart by hand.
@@ -4963,6 +4966,7 @@ func Run(opts Options) error {
 		return err
 	}
 	model.updater = opts.Updater
+	model.version = opts.Version
 	model.restart = opts.Restart
 	model.selftest = opts.SelfTest
 	model.prefs = prefs
