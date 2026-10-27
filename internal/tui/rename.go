@@ -93,31 +93,31 @@ func (m *Model) updateRename(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if r.plan != nil {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			return m.requireAdmin(m.runRename)
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.cancelRename()
-		case "down":
+		case keyIs(key, actDown):
 			r.offset++
-		case "up":
+		case keyIs(key, actUp):
 			r.offset = max(r.offset-1, 0)
-		case "pgdown":
+		case keyIs(key, actPageDown):
 			r.offset += max(m.height/2, 1)
-		case "pgup":
+		case keyIs(key, actPageUp):
 			r.offset = max(r.offset-max(m.height/2, 1), 0)
-		case "home":
+		case keyIs(key, actHome):
 			r.offset = 0
-		case "end":
+		case keyIs(key, actEnd):
 			r.offset = 1 << 20
 		}
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.cancelRename()
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		return m.requireAdmin(m.planRename)
 	}
 	var cmd tea.Cmd

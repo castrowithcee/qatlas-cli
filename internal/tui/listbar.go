@@ -308,33 +308,33 @@ func (m *Model) openBarDropdown(field int) {
 func (m *Model) updateBar(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	kinds := barKinds(m.section)
 	field := m.barFocus - 1
-	switch key.String() {
-	case "left", "right":
+	switch {
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		by := 1
-		if key.String() == "left" {
+		if keyIs(key, actLeft) {
 			by = -1
 		}
 		m.stepBar(kinds[field], by)
-	case "tab":
+	case keyIs(key, actNext):
 		if field == len(kinds)-1 {
 			m.barFocus = 0
 			m.focusNav()
 			return nil, true
 		}
 		m.barFocus++
-	case "shift+tab":
+	case keyIs(key, actPrev):
 		m.barFocus--
 		if m.barFocus == 0 && m.paneWidth() > 0 {
 			m.detailFocus, m.detailTab = true, tabOverview
 		}
-	case "enter":
+	case keyIs(key, actEnter):
 		m.openBarDropdown(field)
-	case "down":
+	case keyIs(key, actDown):
 		m.barFocus = 0
-	case "up", keyOf(actBack):
+	case keyIs(key, actUp) || keyIs(key, actBack):
 		m.barFocus = 0
 		m.focusNav()
-	case "pgup", "pgdown", "home", "end", "/", "c", "u", "q", "n":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd) || keyIs(key, actSearch) || key.String() == "c" || key.String() == "u" || keyIs(key, actQuit) || key.String() == "n":
 		// These belong to the rows or to the screen, not to a field: the rows take them over.
 		m.barFocus = 0
 		return nil, false

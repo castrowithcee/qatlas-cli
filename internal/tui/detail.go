@@ -84,17 +84,17 @@ func (m *Model) marksEntry() bool {
 // updateDetail is a key while the pane has the focus: left/right change the tab, tab goes on to the filter
 // bar (or the tab line), shift+tab and the back key return to the rows. Every other key is the rows'.
 func (m *Model) updateDetail(key tea.KeyPressMsg) (tea.Cmd, bool) {
-	switch key.String() {
-	case "left", "right":
+	switch {
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		if m.marksEntry() {
 			by := 1
-			if key.String() == "left" {
+			if keyIs(key, actLeft) {
 				by = -1
 			}
 			m.detailTab = min(max(m.detailTab+detailTab(by), 0), tabCount-1)
 		}
 		return nil, true
-	case "tab":
+	case keyIs(key, actNext):
 		m.leaveDetail()
 		if m.listBarShown() {
 			m.barFocus = 1
@@ -102,7 +102,7 @@ func (m *Model) updateDetail(key tea.KeyPressMsg) (tea.Cmd, bool) {
 			m.focusNav()
 		}
 		return nil, true
-	case "shift+tab", keyOf(actBack):
+	case keyIs(key, actPrev) || keyIs(key, actBack):
 		m.leaveDetail()
 		return nil, true
 	}

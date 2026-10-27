@@ -223,6 +223,8 @@ var textDE = map[textID]string{
 	tKeyHelpPageDown:                   "Seite runter",
 	tKeyHelpNext:                       "Nächstes Feld",
 	tKeyHelpPrev:                       "Voriges Feld",
+	tKeyHelpTopicNext:                  "Nächstes Thema",
+	tKeyHelpTopicPrev:                  "Voriges Thema",
 	tKeyHelpEnter:                      "Öffnen oder bestätigen",
 	tKeyHelpSpace:                      "Umschalten",
 	tKeyHelpSearch:                     "Suchen",

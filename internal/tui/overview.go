@@ -455,34 +455,47 @@ func (m *Model) updateOverview(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
+	if m.setupUpdateKey(key) {
+		return nil
+	}
 	_, items, _ := m.overviewLines()
-	switch key.String() {
-	case "q":
+	switch {
+	case keyIs(key, actQuit):
 		return m.quit()
-	case "c":
-		m.askSetupTemplate()
-	case "u":
-		m.askUpdate()
-	case keyOf(actBack), "tab", "shift+tab":
+	case keyIs(key, actBack) || keyIs(key, actNext) || keyIs(key, actPrev):
 		m.focusNav()
-	case "up":
+	case keyIs(key, actUp):
 		if m.overviewCursor <= 0 {
 			m.focusNav()
 			return nil
 		}
 		m.overviewCursor--
-	case "down":
+	case keyIs(key, actDown):
 		m.overviewCursor = min(m.overviewCursor+1, len(items)-1)
-	case "pgup", "home":
+	case keyIs(key, actPageUp) || keyIs(key, actHome):
 		m.overviewCursor = 0
-	case "pgdown", "end":
+	case keyIs(key, actPageDown) || keyIs(key, actEnd):
 		m.overviewCursor = len(items) - 1
-	case "enter":
+	case keyIs(key, actEnter):
 		if m.overviewCursor >= 0 && m.overviewCursor < len(items) {
 			return m.openSection(items[m.overviewCursor].target)
 		}
 	}
 	return nil
+}
+
+// setupUpdateKey handles c (guided setup) and u (update), which mean the same on the Overview, the tab line
+// and every list. It reports whether the key was one of them.
+func (m *Model) setupUpdateKey(key tea.KeyPressMsg) bool {
+	switch {
+	case key.String() == "c":
+		m.askSetupTemplate()
+	case key.String() == "u":
+		m.askUpdate()
+	default:
+		return false
+	}
+	return true
 }
 
 // overviewVersionLine is the dimmed state line naming the running version.

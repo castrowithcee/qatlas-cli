@@ -95,7 +95,7 @@ func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
 	// The other rows of the form are what the key must not collide with, so a rebinding in several steps
 	// checks against what is shown, not against what was saved.
 	name := key.String()
-	if name == "space" {
+	if name == keyOf(actSpace) {
 		// The rules name the space bar by its character, as bindings always have been.
 		name = " "
 	}

@@ -216,6 +216,8 @@ const (
 	tKeyHelpPageDown                         textID = "keyhelp.pagedown"
 	tKeyHelpNext                             textID = "keyhelp.next"
 	tKeyHelpPrev                             textID = "keyhelp.prev"
+	tKeyHelpTopicNext                        textID = "keyhelp.topicnext"
+	tKeyHelpTopicPrev                        textID = "keyhelp.topicprev"
 	tKeyHelpEnter                            textID = "keyhelp.enter"
 	tKeyHelpSpace                            textID = "keyhelp.space"
 	tKeyHelpSearch                           textID = "keyhelp.search"

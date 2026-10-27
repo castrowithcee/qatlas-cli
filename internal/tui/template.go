@@ -171,17 +171,17 @@ func (m *Model) updateTemplate(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if !t.picking {
-		switch key.String() {
-		case keyOf(actBack):
+		switch {
+		case keyIs(key, actBack):
 			m.template = nil
 			m.screen = t.from
-		case "up", "down":
+		case keyIs(key, actUp) || keyIs(key, actDown):
 			t.index = 1 - t.index
-		case "pgup", "home":
+		case keyIs(key, actPageUp) || keyIs(key, actHome):
 			t.index = 0
-		case "pgdown", "end":
+		case keyIs(key, actPageDown) || keyIs(key, actEnd):
 			t.index = 1
-		case "enter":
+		case keyIs(key, actEnter):
 			if t.index == 1 {
 				t.picking = true
 				m.templateList.reset(m.templateNames(t.setup))
@@ -198,11 +198,11 @@ func (m *Model) updateTemplate(key tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		t.picking = false
 		m.templateList.stopFilter()
-	case "enter":
+	case keyIs(key, actEnter):
 		source, ok := m.templateList.selected()
 		if !ok {
 			return nil
@@ -214,13 +214,13 @@ func (m *Model) updateTemplate(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		return m.openCopy(source)
-	case "up":
+	case keyIs(key, actUp):
 		m.templateList.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.templateList.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.templateWindow()
-		m.templateList.page(key.String(), start, end)
+		m.templateList.page(key, start, end)
 	default:
 		return m.templateList.updateFilter(key)
 	}

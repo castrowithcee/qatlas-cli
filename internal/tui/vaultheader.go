@@ -193,15 +193,15 @@ func (m *Model) openVaultUnlockPrompt(back screen) {
 // updateVaultUnlockPrompt handles the masked entry of the 'ctrl+l' unlock dialog.
 func (m *Model) updateVaultUnlockPrompt(key tea.KeyPressMsg) tea.Cmd {
 	u := m.vaultUnlock
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		back := u.back
 		u.input.Reset()
 		m.vaultUnlock = nil
 		m.screen = back
 		m.status = tr(tCancelled)
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		if m.vaultBusy {
 			// The scrypt work of an earlier attempt on this very dialog is still running.
 			return nil
