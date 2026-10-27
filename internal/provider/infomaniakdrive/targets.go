@@ -2,6 +2,7 @@ package infomaniakdrive
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,10 @@ type scope struct {
 	accountID int64
 	drives    []int64
 	files     []fileTarget
+	// excludedDrives and excludedFiles are the exclusions of the connection. They are kept apart from the
+	// targets on purpose: they take objects out of what the targets reach and never decide what is bound.
+	excludedDrives []int64
+	excludedFiles  []fileTarget
 }
 
 // fileTarget is one folder or file of one drive a connection is limited to. A file identifier is unique
@@ -41,6 +46,9 @@ func (s scope) unrestricted() bool { return len(s.drives) == 0 && len(s.files) =
 // allowsDrive reports whether a drive belongs to this connection's boundary, wholly or as the drive of a
 // files target.
 func (s scope) allowsDrive(driveID int64) bool {
+	if slices.Contains(s.excludedDrives, driveID) {
+		return false
+	}
 	if s.wholeDrive(driveID) {
 		return true
 	}
@@ -86,16 +94,63 @@ func (s scope) isSubtreeRoot(driveID, fileID int64) bool {
 	return false
 }
 
-// scopeOf reads the bound account and drive allow-list of one connection.
+// hasFileExcludes reports whether a drive has an excluded file or folder, which makes every object
+// identifier of that drive need a proof against the exclusions.
+func (s scope) hasFileExcludes(driveID int64) bool {
+	return slices.ContainsFunc(s.excludedFiles, func(f fileTarget) bool { return f.driveID == driveID })
+}
+
+// excludesFile reports whether a file or folder is itself excluded.
+func (s scope) excludesFile(driveID, fileID int64) bool {
+	return slices.Contains(s.excludedFiles, fileTarget{driveID: driveID, fileID: fileID})
+}
+
+// scopeOf reads the bound account, drive allow-list, and exclusions of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseAllowlist(values)
+	return parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved))
 }
 
 // parseAllowlist reads the configured targets of one connection: exactly one account/ACCOUNT_ID, and zero or
 // more drive/DRIVE_ID and drive/DRIVE_ID/files/FILE_ID entries, none named twice. No error ever quotes a
 // configured value.
-func parseAllowlist(values []string) (scope, error) {
+func parseAllowlist(values []string) (scope, error) { return parseScope(values, nil) }
+
+// parseScope is parseAllowlist with the exclusions of the connection. An exclusion is a drive/DRIVE_ID or a
+// drive/DRIVE_ID/files/FILE_ID other than the drive's root, never the account, named once and never equal to a
+// target. The checks do not rely on the core validation, so an invalid exclusion fails closed here too.
+func parseScope(values, excludes []string) (scope, error) {
+	bound, err := parseTargets(values)
+	if err != nil {
+		return scope{}, err
+	}
+	for _, raw := range excludes {
+		excluded, err := parseAnyTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return scope{}, errors.New("an Infomaniak exclusion must be drive/DRIVE_ID or drive/DRIVE_ID/files/FILE_ID")
+		}
+		switch excluded.kind {
+		case "drive":
+			if slices.Contains(bound.excludedDrives, excluded.id) || slices.Contains(bound.drives, excluded.id) {
+				return scope{}, errors.New("an Infomaniak exclusion must be named once and differ from every target")
+			}
+			bound.excludedDrives = append(bound.excludedDrives, excluded.id)
+		case "files":
+			file := fileTarget{driveID: excluded.id, fileID: excluded.fileID}
+			if file.fileID == rootFileID {
+				return scope{}, errors.New("an Infomaniak exclusion cannot be the root of a drive, exclude the drive instead")
+			}
+			if slices.Contains(bound.excludedFiles, file) || slices.Contains(bound.files, file) {
+				return scope{}, errors.New("an Infomaniak exclusion must be named once and differ from every target")
+			}
+			bound.excludedFiles = append(bound.excludedFiles, file)
+		default:
+			return scope{}, errors.New("an Infomaniak exclusion must be drive/DRIVE_ID or drive/DRIVE_ID/files/FILE_ID")
+		}
+	}
+	return bound, nil
+}
+
+func parseTargets(values []string) (scope, error) {
 	var bound scope
 	accountSet := false
 	seenDrives := map[int64]bool{}
