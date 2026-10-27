@@ -17,7 +17,10 @@ import (
 // in such a subtree before the tool has any effect. The proof is one read of the object with its parents.
 // It fails closed, and no refusal names the identifier or the name of the object.
 
-const outsideSubtree = "the file or folder is outside the targets of this connection"
+const (
+	outsideSubtree  = "the file or folder is outside the targets of this connection"
+	needsWholeDrive = "this tool needs the whole drive in the targets of this connection"
+)
 
 // readWithParents reads one object together with all folders above it, once.
 func (c *Client) readWithParents(ctx context.Context, op string, driveID, fileID int64) (*fileJSON, error) {
@@ -144,6 +147,9 @@ func (c *Client) statProven(ctx context.Context, driveID, fileID int64, with []s
 	if !c.proven(driveID, fileID, item) {
 		return nil, invalidRequest(outsideSubtree)
 	}
+	if err := c.loadAncestorsFor(ctx, op, driveID, with); err != nil {
+		return nil, err
+	}
 	entry := c.entryWith(driveID, *item, with)
 	return &entry, nil
 }
@@ -169,7 +175,7 @@ func requireWholeDrive(resolved *config.Resolved, driveID int64) error {
 		return providerError("open", err.Error())
 	}
 	if !bound.wholeDrive(driveID) {
-		return invalidRequest("this tool needs the whole drive in the targets of this connection")
+		return invalidRequest(needsWholeDrive)
 	}
 	return nil
 }
