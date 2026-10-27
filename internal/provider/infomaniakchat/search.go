@@ -267,6 +267,7 @@ func (c *Client) SearchMessages(ctx context.Context, input *searchArguments) (*S
 			matches[id] = terms
 		}
 	}
+	c.guardEntries(ctx, op, entries)
 	return &SearchedMessages{TeamID: input.TeamID, Messages: entries, Matches: matches, Page: input.Page,
 		HasMore: len(list.Order) >= input.Limit, Count: len(entries)}, nil
 }
