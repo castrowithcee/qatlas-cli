@@ -93,6 +93,22 @@ func TestSegmentMarksAndDeleteRefuseSegmentsOutsideTheTargets(t *testing.T) {
 	}
 }
 
+func TestSegmentForAllWebsitesIsReadableButNotChangeableOnSingleWebsiteTargets(t *testing.T) {
+	for _, tool := range []string{"delete", "star", "unstar"} {
+		var calls []call
+		env := newSegmentsEnvironment(t, &calls, segmentToolAnswers(markAnswers()).handler(t))
+		if _, err := env.invoke("matomo.segments.get", "seg-deleter", `{"idSegment":1}`); err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		calls = nil
+		_, err := env.change("matomo.segments."+tool, "seg-deleter", `{"idSegment":1}`)
+		if classOf(err) != provider.ClassNotFound || countMethod(calls, "SegmentEditor.get") != 1 ||
+			countMethod(calls, "SegmentEditor."+tool) != 0 {
+			t.Errorf("%s: err = %v, requests = %s", tool, err, methods(calls))
+		}
+	}
+}
+
 func TestSegmentMarkAndDeleteFailuresAreNotRepeated(t *testing.T) {
 	for _, tool := range []string{"delete", "star", "unstar"} {
 		var calls []call

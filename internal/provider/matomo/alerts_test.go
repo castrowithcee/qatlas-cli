@@ -66,6 +66,8 @@ var storedAlerts = []string{
 	alertRow("2", "Alert two", `["1","2"]`),
 	alertRow("3", "Alert three", `[1,3]`),
 	alertRow("4", "Alert four", `[2]`),
+	// Alert 8 watches only a website outside the targets of al-tools.
+	alertRow("8", "Alert eight", `[3]`),
 }
 
 var storedTriggered = []string{
@@ -79,6 +81,8 @@ func alertAnswer(c call) *http.Response {
 	switch id := c.form.Get("idAlert"); id {
 	case "1", "2", "3", "4":
 		return ok(storedAlerts[int(id[0]-'1')])
+	case "8":
+		return ok(storedAlerts[4])
 	case "5":
 		return failure("You are not the owner of the Alert with ID 5 " + bodyCanary)
 	case "6":
@@ -185,17 +189,21 @@ func TestAlertToolsAreRegisteredWithTheirRiskAndProfile(t *testing.T) {
 	}
 }
 
-func TestAlertsListFiltersAlertsOfOtherWebsitesAndPages(t *testing.T) {
+func TestAlertsListKeepsAlertsWithAReachableWebsiteAndPages(t *testing.T) {
 	var calls []call
 	env := newAlertEnvironment(t, &calls, alertAnswers(nil).handler(t))
 	result, err := env.invoke("matomo.alerts.list", "al-tools", `{}`)
-	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{1, 2, 4}) {
+	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{1, 2, 3, 4}) {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 	noAlertLeak(t, "result", result)
 	var out AlertsResult
 	_ = json.Unmarshal([]byte(result), &out)
 	second := out.Alerts[1]
+	// An alert that also watches a website outside the targets keeps its full list of websites.
+	if !slices.Equal(out.Alerts[2].IDSites, []int{1, 3}) {
+		t.Errorf("third = %+v", out.Alerts[2])
+	}
 	if !out.Alerts[0].MsTeamsWebhookSet || second.Name != "Alert two" || second.Login != "admin" || second.Period != "week" ||
 		second.Report != "Actions_getPageUrls" || second.ReportMatched != "/home" || second.MetricMatched == nil ||
 		*second.MetricMatched != 100 || second.ComparedTo == nil || *second.ComparedTo != 1 || second.EmailMe == nil ||
@@ -216,7 +224,7 @@ func TestAlertsListFiltersAlertsOfOtherWebsitesAndPages(t *testing.T) {
 	}
 	next := out.NextCursor
 	result, err = env.invoke("matomo.alerts.list", "al-tools", `{"cursor":"`+next+`"}`)
-	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{4}) {
+	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{3, 4}) {
 		t.Errorf("page two: %s, err = %v", result, err)
 	}
 	if _, err := env.invoke("matomo.alerts.list", "al-tools", `{"idSite":1,"cursor":"`+next+`"}`); !isInvalidRequest(err) {
@@ -228,9 +236,9 @@ func TestAlertsListFiltersAlertsOfOtherWebsitesAndPages(t *testing.T) {
 		sent.form.Get("idSites") != "2" || sent.form.Get("ifSuperUserReturnAllAlerts") != "1" {
 		t.Errorf("filters: %s, err = %v, request = %v", result, err, sent.form)
 	}
-	// A connection bound to one website lists only alerts that watch that website alone.
+	// A connection bound to one website lists the alerts that watch that website, also with other websites.
 	result, err = env.invoke("matomo.alerts.list", "al-one", `{}`)
-	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{4}) {
+	if err != nil || !slices.Equal(alertIDsOf(t, result), []int{2, 4}) {
 		t.Errorf("one website: %s, err = %v", result, err)
 	}
 	if _, err = env.invoke("matomo.alerts.list", "al-general", `{}`); err != nil ||
@@ -275,8 +283,9 @@ func TestAlertsListTriggeredKeepsEntriesInsideTheTargets(t *testing.T) {
 	var calls []call
 	env := newAlertEnvironment(t, &calls, alertAnswers(nil).handler(t))
 	result, err := env.invoke("matomo.alerts.list-triggered", "al-tools", `{}`)
-	// Entry 12 belongs to an alert that also watches website 3, entry 13 is for website 3.
-	if err != nil || !slices.Equal(triggeredIDsOf(t, result), []int{11, 14}) {
+	// Only the website of the entry counts: entry 12 is for website 2 though its alert also watches website 3;
+	// entry 13 is for website 3.
+	if err != nil || !slices.Equal(triggeredIDsOf(t, result), []int{11, 12, 14}) {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 	noAlertLeak(t, "result", result)
@@ -292,9 +301,9 @@ func TestAlertsListTriggeredKeepsEntriesInsideTheTargets(t *testing.T) {
 		sent.rawQuery != "" || sent.form.Has("token_auth") {
 		t.Errorf("request = %+v", sent)
 	}
-	result, err = env.invoke("matomo.alerts.list-triggered", "al-tools", `{"idSite":2,"limit":1}`)
+	result, err = env.invoke("matomo.alerts.list-triggered", "al-tools", `{"idSite":2,"limit":2}`)
 	_ = json.Unmarshal([]byte(result), &out)
-	if err != nil || !slices.Equal(triggeredIDsOf(t, result), []int{14}) || out.HasMore ||
+	if err != nil || !slices.Equal(triggeredIDsOf(t, result), []int{12, 14}) || out.HasMore ||
 		lastCall(calls, "CustomAlerts.getTriggeredAlerts").form.Get("idSites") != "2" {
 		t.Errorf("website 2: %s, err = %v", result, err)
 	}
@@ -343,10 +352,10 @@ func TestAlertsRefuseBeforeSecretAndRequest(t *testing.T) {
 	var calls []call
 	env := newAlertEnvironment(t, &calls, alertAnswers(nil).handler(t))
 	for tool, arguments := range map[string][]string{
-		"matomo.alerts.get": {`{}`, `{"idAlert":0}`, `{"idAlert":"2"}`, `{"idSite":3,"idAlert":2}`, `{"idSite":2,"idAlert":2,"login":"x"}`},
+		"matomo.alerts.get": {`{}`, `{"idAlert":0}`, `{"idAlert":"2"}`, `{"idSite":3,"idAlert":2}`, `{"idSite":3,"idAlert":3}`, `{"idSite":2,"idAlert":2,"login":"x"}`},
 		"matomo.alerts.get-past-values": {`{"idAlert":2}`, `{"idAlert":2,"subPeriodN":-1}`, `{"idAlert":2,"subPeriodN":1001}`,
-			`{"idSite":3,"idAlert":2,"subPeriodN":1}`, `{"idAlert":2,"subPeriodN":1,"period":"day"}`},
-		"matomo.alerts.delete": {`{}`, `{"idAlert":0}`, `{"idSite":3,"idAlert":2}`, `{"idAlert":2,"msTeamsWebhookUrl":"x"}`},
+			`{"idSite":3,"idAlert":2,"subPeriodN":1}`, `{"idSite":3,"idAlert":3,"subPeriodN":1}`, `{"idAlert":2,"subPeriodN":1,"period":"day"}`},
+		"matomo.alerts.delete": {`{}`, `{"idAlert":0}`, `{"idSite":3,"idAlert":2}`, `{"idSite":3,"idAlert":3}`, `{"idAlert":2,"msTeamsWebhookUrl":"x"}`},
 	} {
 		for _, arguments := range arguments {
 			if _, err := env.change(tool, "al-tools", arguments); err == nil {
@@ -369,14 +378,14 @@ func TestAlertsRefuseBeforeSecretAndRequest(t *testing.T) {
 
 func TestAlertOfAnotherWebsiteIsRefusedAfterOneProvingReadWithoutFurtherRequest(t *testing.T) {
 	for _, c := range []struct{ tool, connection, arguments string }{
-		// Alert 3 also watches website 3, which lies outside the targets.
-		{"get", "al-tools", `{"idSite":1,"idAlert":3}`},
-		{"get-past-values", "al-tools", `{"idSite":1,"idAlert":3,"subPeriodN":0}`},
-		{"delete", "al-tools", `{"idSite":1,"idAlert":3}`},
-		// Alert 2 also watches website 1, outside the targets of al-one.
-		{"get", "al-one", `{"idAlert":2}`},
-		{"get-past-values", "al-one", `{"idAlert":2,"subPeriodN":0}`},
-		{"delete", "al-one", `{"idAlert":2}`},
+		// Alert 8 watches only website 3, outside the targets.
+		{"get", "al-tools", `{"idSite":1,"idAlert":8}`},
+		{"get-past-values", "al-tools", `{"idSite":1,"idAlert":8,"subPeriodN":0}`},
+		{"delete", "al-tools", `{"idSite":1,"idAlert":8}`},
+		// Alert 3 does not watch website 2.
+		{"get", "al-one", `{"idAlert":3}`},
+		{"get-past-values", "al-one", `{"idAlert":3,"subPeriodN":0}`},
+		{"delete", "al-one", `{"idAlert":3}`},
 		// Alert 1 does not watch website 2.
 		{"get", "al-tools", `{"idSite":2,"idAlert":1}`},
 		{"get-past-values", "al-tools", `{"idSite":2,"idAlert":1,"subPeriodN":0}`},
@@ -401,6 +410,28 @@ func TestAlertOfAnotherWebsiteIsRefusedAfterOneProvingReadWithoutFurtherRequest(
 	if _, err := env.change("matomo.alerts.delete", "al-tools", `{"idSite":1,"idAlert":6}`); classOf(err) != provider.ClassInvalidResponse ||
 		countMethod(calls, "CustomAlerts.deleteAlert") != 0 {
 		t.Errorf("mismatched row: err = %v", err)
+	}
+}
+
+func TestAlertWithAWebsiteOutsideTheTargetsStillServesTheReachableOne(t *testing.T) {
+	var calls []call
+	env := newAlertEnvironment(t, &calls, alertAnswers(nil).handler(t))
+	result, err := env.invoke("matomo.alerts.get", "al-tools", `{"idSite":1,"idAlert":3}`)
+	var got AlertDefinition
+	_ = json.Unmarshal([]byte(result), &got)
+	if err != nil || !slices.Equal(got.IDSites, []int{1, 3}) {
+		t.Errorf("get: %s, err = %v", result, err)
+	}
+	// The values of website 3 are left out.
+	result, err = env.invoke("matomo.alerts.get-past-values", "al-tools", `{"idSite":1,"idAlert":3,"subPeriodN":0}`)
+	if err != nil || result != `{"idAlert":3,"values":[{"idSite":1,"value":12.5}]}` {
+		t.Errorf("past values: %s, err = %v", result, err)
+	}
+	// The deletion follows the proving read; Matomo checks the ownership.
+	result, err = env.change("matomo.alerts.delete", "al-tools", `{"idSite":1,"idAlert":3}`)
+	if err != nil || result != `{"deleted":true,"idAlert":3,"id_sites":[1,3]}` ||
+		countMethod(calls, "CustomAlerts.deleteAlert") != 1 {
+		t.Errorf("delete: %s, err = %v", result, err)
 	}
 }
 

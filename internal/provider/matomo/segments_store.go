@@ -37,10 +37,19 @@ func segmentChangeRisk(effect capability.Effect, idempotency capability.Idempote
 		OpenWorld: true, DataSensitivity: segmentsSensitive}
 }
 
-// reachesSegment reports whether a segment bound to the website is inside the scope: a segment of one website
-// needs that website among the targets, and a segment of all websites (0) needs a binding to all websites.
-// Matomo itself shows a token only the segments of websites it may view.
-func (s scope) reachesSegment(site int) bool {
+// readsSegment reports whether a segment bound to the website may be read: a segment of one website needs that
+// website among the targets, and a segment of all websites (0) is shown to any connection that reaches a
+// website, as SegmentEditor does for every website the token views.
+func (s scope) readsSegment(site int) bool {
+	if site == 0 {
+		return s.reachesSites()
+	}
+	return s.allows(site)
+}
+
+// writesSegment reports whether a segment bound to the website may be changed: a segment of all websites (0)
+// needs a binding to all websites, as Matomo allows it only to a Super User.
+func (s scope) writesSegment(site int) bool {
 	if site == 0 {
 		return s.allSites
 	}
@@ -165,9 +174,8 @@ func segmentFields(prefix string) []capability.Field {
 var segmentsList = capability.Descriptor{
 	ID: Provider + ".segments.list", Version: 1, Title: "List Matomo segments",
 	Description: "List the saved segments the token may use, in batches in the order Matomo gives them (own " +
-		"segments first); with idSite only the segments of that website and those for all websites; segments are " +
-		"cut to the connection's targets, so a connection bound to single websites sees no segment for all " +
-		"websites; names and definitions are untrusted",
+		"segments first); with idSite only the segments of that website and those for all websites; segments of " +
+		"websites outside the connection's targets are left out; names and definitions are untrusted",
 	Tags: []string{"matomo", "segments", "saved", "list"}, Risk: readRisk(segmentsSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,` + pagingKeys +
 		`},"additionalProperties":false}`),
@@ -189,8 +197,8 @@ var segmentsList = capability.Descriptor{
 var segmentsGet = capability.Descriptor{
 	ID: Provider + ".segments.get", Version: 1, Title: "Get a Matomo segment",
 	Description: "Read one saved segment by its instance-wide ID with its definition and settings; a view right " +
-		"on its website is enough; a segment of a website outside the connection's targets, or for all websites " +
-		"on a connection bound to single websites, is not found; names and definitions are untrusted",
+		"on its website is enough; a segment of a website outside the connection's targets is not found; names and " +
+		"definitions are untrusted",
 	Tags: []string{"matomo", "segments", "saved", "get"}, Risk: readRisk(segmentsSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSegmentSchema + `},` +
 		`"required":["idSegment"],"additionalProperties":false}`),
@@ -351,7 +359,7 @@ func invokeSegmentsList(ctx context.Context, resolved *config.Resolved, secrets 
 			continue
 		}
 		segment, ok := stored.segment()
-		if !ok || !bound.reachesSegment(segment.EnableOnlyIDSite) ||
+		if !ok || !bound.readsSegment(segment.EnableOnlyIDSite) ||
 			site > 0 && segment.EnableOnlyIDSite != 0 && segment.EnableOnlyIDSite != site {
 			continue
 		}
@@ -364,9 +372,9 @@ func invokeSegmentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	return &SegmentsResult{IDSite: site, Segments: batch, HasMore: next != "", NextCursor: next}, nil
 }
 
-// fetchSegment reads one segment by its instance-wide ID and proves it against the targets. A segment outside
-// them is not found, so the answer does not tell whether it exists.
-func (c *Client) fetchSegment(ctx context.Context, op string, req requirement, id int) (Segment, error) {
+// fetchSegment reads one segment by its instance-wide ID and proves it against the targets, for reading or, with
+// write, for changing it. A segment outside them is not found, so the answer does not tell whether it exists.
+func (c *Client) fetchSegment(ctx context.Context, op string, req requirement, id int, write bool) (Segment, error) {
 	var answer json.RawMessage
 	params := url.Values{"idSegment": {strconv.Itoa(id)}}
 	if err := c.call(ctx, op, req, "SegmentEditor.get", params, &answer); err != nil {
@@ -386,7 +394,11 @@ func (c *Client) fetchSegment(ctx context.Context, op string, req requirement, i
 	if !ok || segment.ID != id {
 		return Segment{}, provider.InvalidResponse(op, "Matomo returned another segment than asked for")
 	}
-	if !c.scope.reachesSegment(segment.EnableOnlyIDSite) {
+	reach := c.scope.readsSegment
+	if write {
+		reach = c.scope.writesSegment
+	}
+	if !reach(segment.EnableOnlyIDSite) {
 		return Segment{}, notFound
 	}
 	return segment, nil
@@ -416,7 +428,7 @@ func invokeSegmentsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	segment, err := client.fetchSegment(ctx, op, segmentsRequirement(segmentsGet.ID), id)
+	segment, err := client.fetchSegment(ctx, op, segmentsRequirement(segmentsGet.ID), id, false)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +582,7 @@ func invokeSegmentsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	// Segment IDs count for the whole instance, so one read proves that the segment lies inside the targets
 	// before anything is changed.
 	req := segmentsRequirement(segmentsUpdate.ID)
-	current, err := client.fetchSegment(ctx, op, req, id)
+	current, err := client.fetchSegment(ctx, op, req, id, true)
 	if err != nil {
 		return nil, err
 	}
