@@ -355,29 +355,106 @@ func spanItems(items []string, start int, sep string, width int) []navSpan {
 	return spans
 }
 
+// barLeaveSteps bounds the esc presses a click on a bar makes, so a screen whose esc changes nothing cannot
+// loop; the deepest stack of screens is a few levels.
+const barLeaveSteps = 6
+
+// backShown reports whether esc leads one level back from the screen shown now, which is where the back button
+// stands. It is false on the top level of an area (the tab line, a list, Logs, the page form of a setting),
+// whose esc only returns to the tab line, and wherever a question, a dialog or an overlay is open and esc
+// answers that instead.
+func (m *Model) backShown() bool {
+	if m.backdrop || m.infoOpen || m.keyCapture || m.dd != nil || m.testResultShown() {
+		return false
+	}
+	if _, ok := keyByName(keyOf(actBack)); !ok {
+		return false
+	}
+	switch m.screen {
+	case screenForm:
+		if m.payloadRemoveAsk || m.payloadSaving || (m.wizard != nil && m.wizard.saving) {
+			return false
+		}
+		return m.wizard != nil || !m.section.isPage()
+	case screenSummary:
+		return m.wizard != nil && !m.wizard.saving
+	case screenConfirm:
+		return (m.approvalDetail != "" && !m.approveAllConfirm) || (m.tokenDetail != "" && m.tokenRevoke == "")
+	case screenHelp:
+		return !m.helpOverlay()
+	case screenTargets:
+		return !m.targetRemove
+	case screenPaths:
+		return !m.pathRemove
+	case screenTemplate:
+		return m.template != nil
+	case screenRename:
+		return m.rename != nil && m.rename.plan == nil
+	case screenTransfer:
+		// The questions about approving and deleting are answered with esc, not left; a write in flight
+		// ignores it.
+		if e := m.imp; e != nil {
+			return e.working == "" && e.step != importApprove && e.step != importDelete
+		}
+		return m.export != nil && !m.export.writing
+	case screenSelftest:
+		// A running test is ended by esc; once it is ending, esc does nothing.
+		return m.st != nil && !m.st.cancelling
+	case screenPicker, screenProviders, screenLogDetail, screenFindings:
+		return true
+	}
+	return false
+}
+
+// pressBack is a press of the key bound to esc; the click on the back button and the climb out of a deeper
+// screen use it so they meet every rule the key meets.
+func (m *Model) pressBack() tea.Cmd {
+	key, ok := keyByName(keyOf(actBack))
+	if !ok {
+		return nil
+	}
+	return m.press(key)
+}
+
+// registerBack makes the back button of the header clickable.
+func (m *Model) registerBack(span navSpan) {
+	m.addFrameHit(span.x0, 0, span.x1, 1, m.pressBack)
+}
+
 // leaveForBar prepares the screen for a click on the tab line or the option bar: it is allowed where the keys
-// reach the bars, and from a form without unsaved input, which it closes the way esc does. A form with unsaved
-// input is answered with the question esc asks, and the click goes no further. It reports whether the click may
-// go on.
+// reach the bars, and from a form without unsaved input, which it closes the way esc does. From a deeper
+// screen it presses esc, one level after the other, up to one of those; a question that esc raises on the way
+// (unsaved input) is the end of the click, as a typed search line, a dialog or a save in flight is. It reports
+// whether the click may go on.
 func (m *Model) leaveForBar() (cmd tea.Cmd, ok bool) {
 	if m.wizard != nil || m.infoOpen {
 		return nil, false
 	}
-	switch m.screen {
-	case screenNav:
-		return nil, true
-	case screenList, screenLogs:
-		return nil, !m.typing()
-	case screenForm:
-		if m.payloadRemoveAsk || m.payloadSaving {
-			return nil, false
+	var cmds []tea.Cmd
+	for range barLeaveSteps {
+		switch m.screen {
+		case screenNav:
+			return tea.Batch(cmds...), true
+		case screenList, screenLogs:
+			return tea.Batch(cmds...), !m.typing()
+		case screenForm:
+			if m.payloadRemoveAsk || m.payloadSaving {
+				return tea.Batch(cmds...), false
+			}
+			if m.dirty() {
+				return tea.Batch(append(cmds, m.requestLeave())...), false
+			}
+			return tea.Batch(append(cmds, m.abandon())...), true
 		}
-		if m.dirty() {
-			return m.requestLeave(), false
+		// A search line of a picker or table and the lines of the transfer steps are left by esc at once;
+		// every other typed line first ends its own editing, which a click does not do.
+		if !m.backShown() || (m.typing() && m.screen != screenPicker && m.screen != screenProviders &&
+			m.screen != screenTransfer) {
+			break
 		}
-		return m.abandon(), true
+		cmds = append(cmds, m.pressBack())
 	}
-	return nil, false
+	return tea.Batch(cmds...), false
 }
 
 // clickArea is a click on an area of the tab line.

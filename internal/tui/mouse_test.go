@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
+	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
@@ -1021,5 +1026,435 @@ func TestQueuedWheelPairsMoveOneRowEach(t *testing.T) {
 	}
 	if m.list.cursor != 2 {
 		t.Errorf("four queued events moved the cursor to %d, want 2", m.list.cursor)
+	}
+}
+
+const backText = "[esc] back"
+
+func backInHeader(m *Model) bool { return strings.Contains(frameLines(m)[0], backText) }
+
+// backCase opens one screen and says whether esc leads one level back from it.
+type backCase struct {
+	name string
+	open func(t *testing.T) *Model
+	back bool
+}
+
+func backCases() []backCase {
+	cleanForm := func(t *testing.T) *Model {
+		m := sizedModel(groupModel(t), 160, 40)
+		openSectionByName(t, m, sectionServices)
+		pressNew(t, m)
+		return m
+	}
+	return []backCase{
+		{"tab line", func(t *testing.T) *Model {
+			m := sizedModel(groupModel(t), 160, 40)
+			m.screen = screenNav
+			return m
+		}, false},
+		{"list", func(t *testing.T) *Model {
+			m := sizedModel(groupModel(t), 160, 40)
+			openSectionByName(t, m, sectionServices)
+			return m
+		}, false},
+		{"settings page form", func(t *testing.T) *Model {
+			m := sizedModel(groupModel(t), 160, 40)
+			openSectionByName(t, m, sectionGeneral)
+			return m
+		}, false},
+		{"entry form", cleanForm, true},
+		{"provider table", func(t *testing.T) *Model {
+			m := cleanForm(t)
+			clickOn(t, m, labelText(providerLabel))
+			return m
+		}, true},
+		{"help over the workspace", func(t *testing.T) *Model {
+			m := sizedModel(groupModel(t), 160, 18)
+			openSectionByName(t, m, sectionServices)
+			press(t, m, "?")
+			return m
+		}, true},
+		{"help as an overlay", func(t *testing.T) *Model {
+			m := sizedModel(groupModel(t), 160, 40)
+			openSectionByName(t, m, sectionServices)
+			press(t, m, "?")
+			return m
+		}, false},
+		{"leave question", func(t *testing.T) *Model {
+			m := cleanForm(t)
+			typeText(t, m, "draft")
+			press(t, m, "esc")
+			return m
+		}, false},
+		{"log detail", func(t *testing.T) *Model {
+			f := newLogFixture(t)
+			f.append("cli", "", "op.one", "wiki", "success")
+			m := sizedModel(f.model(true, f.localToday()), 160, 40)
+			press(t, m, "down", "enter")
+			return m
+		}, true},
+		{"target list", func(t *testing.T) *Model {
+			m := targetsScreen(t)
+			return m
+		}, true},
+	}
+}
+
+func targetsScreen(t *testing.T) *Model {
+	t.Helper()
+	reg := targetsRegistry(t, github.Register)
+	m, _ := toolsModel(t, reg, map[string]config.Connection{
+		"gh": {Service: "wiki", Credential: "reader", Target: "repos/octo/a"}})
+	sizedModel(m, 160, 40)
+	openConnection(t, m, "gh")
+	openTargetList(t, m)
+	return m
+}
+
+// The button stands exactly where esc leads one level back, and is a hint-styled bracketed word.
+func TestBackButtonStandsWhereEscGoesOneLevelBack(t *testing.T) {
+	for _, c := range backCases() {
+		m := c.open(t)
+		if got := m.backShown(); got != c.back {
+			t.Errorf("%s: backShown = %v, want %v", c.name, got, c.back)
+		}
+		if got := backInHeader(m); got != c.back {
+			t.Errorf("%s: button in the header = %v, want %v:\n%s", c.name, got, c.back, frameLines(m)[0])
+		}
+	}
+}
+
+func TestBackButtonStandsOnTheDetailScreensOfAccess(t *testing.T) {
+	store, dir, v := newTokenFixture(t)
+	fixtureToken(t, v, "ci-valid", nil, "personal")
+	m := openApprovalModel(t, store, dir)
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	openTokensUnlocked(t, m)
+	m.tokenDetail, m.screen = "ci-valid", screenConfirm
+	if !backInHeader(m) {
+		t.Errorf("token detail has no back button:\n%s", frameLines(m)[0])
+	}
+	m.tokenRevoke = "ci-valid"
+	if backInHeader(m) {
+		t.Errorf("the revoke question shows a back button")
+	}
+	m.tokenRevoke = ""
+	clickOn(t, m, backText)
+	if m.screen != screenList || m.tokenDetail != "" {
+		t.Errorf("click on the button in the token detail: screen %v detail %q", m.screen, m.tokenDetail)
+	}
+	m.approvalDetail, m.screen = "personal", screenConfirm
+	if !backInHeader(m) {
+		t.Errorf("approval detail has no back button:\n%s", frameLines(m)[0])
+	}
+	clickOn(t, m, "2 Connections")
+	if m.section != sectionConnections || m.screen != screenNav || m.approvalDetail != "" {
+		t.Errorf("tab click from the approval detail: section %v screen %v detail %q", m.section, m.screen, m.approvalDetail)
+	}
+	m.openSection(sectionTokens)
+	m.tokenDetail, m.screen = "ci-valid", screenConfirm
+	clickOn(t, m, "2 Connections")
+	if m.section != sectionConnections || m.screen != screenNav || m.tokenDetail != "" {
+		t.Errorf("tab click from the token detail: section %v screen %v detail %q", m.section, m.screen, m.tokenDetail)
+	}
+}
+
+// A click on the button does what esc does, the question for unsaved input included.
+func TestBackButtonClickIsEsc(t *testing.T) {
+	m := sizedModel(groupModel(t), 160, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	clickOn(t, m, backText)
+	if m.screen != screenList {
+		t.Fatalf("click on an unchanged form: screen %v, want the list", m.screen)
+	}
+	pressNew(t, m)
+	typeText(t, m, "draft")
+	clickOn(t, m, backText)
+	if m.screen != screenLeave {
+		t.Fatalf("click on a changed form: screen %v, want the leave question", m.screen)
+	}
+	if backInHeader(m) {
+		t.Errorf("the leave question shows the button")
+	}
+	press(t, m, "esc")
+	if m.screen != screenForm || m.fields[0].value() != "draft" {
+		t.Fatalf("esc on the question: screen %v value %q, want the form as it was", m.screen, m.fields[0].value())
+	}
+	clickOn(t, m, backText)
+	press(t, m, "d")
+	if m.screen != screenList {
+		t.Fatalf("discarding: screen %v, want the list", m.screen)
+	}
+}
+
+func TestBackButtonClickFromADeeperScreenIsOneEsc(t *testing.T) {
+	m := targetsScreen(t)
+	clickOn(t, m, backText)
+	if m.screen != screenForm {
+		t.Fatalf("click in the target list: screen %v, want the form", m.screen)
+	}
+}
+
+// A click on a tab leaves every level by the way of esc and reaches the area.
+func TestTabClickWorksFromEveryLevel(t *testing.T) {
+	for _, c := range backCases() {
+		if !c.back || c.name == "help as an overlay" {
+			continue
+		}
+		m := c.open(t)
+		clickOn(t, m, "6 Settings")
+		if m.section.area() != areaSettings || m.screen != screenNav {
+			t.Errorf("%s: after the click on Settings: section %v screen %v", c.name, m.section, m.screen)
+		}
+	}
+}
+
+func TestTabClickFromAPickerKeepsUnsavedInputBehindTheQuestion(t *testing.T) {
+	open := func(typed bool) *Model {
+		m, _, _ := newModel(t)
+		seedConnections(t, m, numberedConnections(5)...)
+		m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+		if typed {
+			openDefaultForm(t, m)
+		} else {
+			openSectionByName(t, m, sectionDefaults)
+			press(t, m, "n")
+			focusField(t, m, "connection")
+		}
+		press(t, m, "/")
+		if m.screen != screenPicker {
+			t.Fatalf("screen %v, want the picker", m.screen)
+		}
+		return m
+	}
+	m := open(false)
+	clickOn(t, m, "6 Settings")
+	if m.section.area() != areaSettings || m.screen != screenNav {
+		t.Errorf("an unchanged form: section %v screen %v, want the Settings tab line", m.section, m.screen)
+	}
+	m = open(true)
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenLeave || m.section != sectionDefaults {
+		t.Errorf("a changed form: screen %v section %v, want the leave question over Defaults", m.screen, m.section)
+	}
+}
+
+// A click on a tab does nothing where esc would only end a typed line, a dialog or a question.
+func TestTabClickDoesNothingWhileTypingOrAsked(t *testing.T) {
+	m := targetsScreen(t)
+	press(t, m, "a")
+	typeText(t, m, "repos/octo/x")
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenTargets || !m.typing() {
+		t.Errorf("a click while a target is typed: screen %v typing %v", m.screen, m.typing())
+	}
+	m = sizedModel(groupModel(t), 160, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	typeText(t, m, "draft")
+	press(t, m, "esc")
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenLeave || m.section != sectionServices {
+		t.Errorf("a click over the question: screen %v section %v", m.screen, m.section)
+	}
+}
+
+func TestBackButtonWithoutColourIsText(t *testing.T) {
+	withNoColor(t)
+	m := sizedModel(groupModel(t), 160, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	row := strings.Split(m.render(), "\n")[0]
+	if !strings.Contains(row, backText) || row != ansi.Strip(row) {
+		t.Errorf("NO_COLOR header = %q, want the button as plain text", row)
+	}
+}
+
+// At the smallest size the header keeps its rows; the button gives way to the path and the keys of the footer.
+func TestBackButtonGivesWayAtTheSmallestSize(t *testing.T) {
+	m := sizedModel(groupModel(t), minimumWidth, minimumHeight)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	with := len(m.headerLines())
+	m.backdrop = true
+	without := len(m.headerLines())
+	m.backdrop = false
+	if with != without {
+		t.Errorf("the button changed the rows of the header: %d against %d", with, without)
+	}
+	if lines := frameLines(m); len(lines) != minimumHeight {
+		t.Errorf("frame has %d rows, want %d", len(lines), minimumHeight)
+	}
+	if row := frameLines(m)[0]; ansi.StringWidth(row) > minimumWidth {
+		t.Errorf("the header row is wider than the terminal: %q", row)
+	}
+}
+
+// With less room the help and command keys leave before the button does.
+func TestBackButtonOutlastsTheHeaderHints(t *testing.T) {
+	m := sizedModel(groupModel(t), 160, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	for width := 160; width >= minimumWidth; width-- {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+		row := frameLines(m)[0]
+		hints := strings.Contains(row, "["+keyLabel(actHelp)+"]")
+		if hints && !strings.Contains(row, backText) {
+			t.Fatalf("width %d: hints without the button: %q", width, row)
+		}
+		// The button neither adds a row nor moves the path.
+		with := len(m.headerLines())
+		m.backdrop = true
+		bare := ansi.Strip(m.headerLines()[0])
+		without := len(m.headerLines())
+		m.backdrop = false
+		if with != without {
+			t.Fatalf("width %d: %d header rows with the button, %d without", width, with, without)
+		}
+		if at := strings.Index(row, backText); at >= 0 && !strings.Contains(row, "…") && !strings.HasPrefix(bare, strings.TrimRight(row[:at], " ")) {
+			t.Fatalf("width %d: the button moved the left part: %q against %q", width, row, bare)
+		}
+	}
+}
+
+func transferAndSelftestCases() []backCase {
+	passed := func(_ *Model, _ chan struct{}) (*selftest.Report, error) { return fakeReport("alpha"), nil }
+	size := func(open func(t *testing.T) *Model) func(t *testing.T) *Model {
+		return func(t *testing.T) *Model { return sizedModel(open(t), 160, 40) }
+	}
+	return []backCase{
+		{"export select", size(exportAt(exportSelect, exportWithout)), true},
+		{"export mode", size(exportAt(exportMode, exportWithout)), true},
+		{"export preview", size(exportAt(exportPreview, exportWithout)), true},
+		{"import mode", size(importAt(importMode)), true},
+		{"import preview", size(importAt(importPreview)), true},
+		{"selftest running", size(selftestAt(nil)), true},
+		{"selftest result", size(selftestAt(passed)), true},
+	}
+}
+
+func TestBackButtonStandsInTheStepsOfTransferAndSelftest(t *testing.T) {
+	for _, c := range transferAndSelftestCases() {
+		m := c.open(t)
+		if !m.backShown() || !backInHeader(m) {
+			t.Errorf("%s: no back button (screen %v):\n%s", c.name, m.screen, frameLines(m)[0])
+		}
+	}
+	// Where esc is locked or answers a question, there is no button.
+	m := sizedModel(exportAt(exportPreview, exportWithout)(t), 160, 40)
+	m.export.writing = true
+	if m.backShown() {
+		t.Error("the button stands while the export is written")
+	}
+	m = sizedModel(importAt(importMode)(t), 160, 40)
+	m.imp.working = "writing"
+	if m.backShown() {
+		t.Error("the button stands while the import works")
+	}
+	m.imp.working = ""
+	for _, step := range []importStep{importApprove, importDelete} {
+		m.imp.step = step
+		if m.backShown() {
+			t.Errorf("the button stands on the import question %v", step)
+		}
+	}
+	m = sizedModel(selftestAt(nil)(t), 160, 40)
+	press(t, m, "esc")
+	if !m.st.cancelling || m.backShown() {
+		t.Error("the button stands while the selftest is ending")
+	}
+}
+
+func TestBackButtonClickInTransferAndSelftestIsEsc(t *testing.T) {
+	m := sizedModel(exportAt(exportMode, exportWithout)(t), 160, 40)
+	clickOn(t, m, backText)
+	if m.screen != screenTransfer || m.export == nil || m.export.step != exportSelect {
+		t.Fatalf("click on the export mode: screen %v, want the selection", m.screen)
+	}
+	if m.export.ticked() == 0 {
+		t.Fatal("the fixture ticks nothing")
+	}
+	clickOn(t, m, backText)
+	if m.screen != screenLeave {
+		t.Fatalf("click on a ticked selection: screen %v, want the question esc asks", m.screen)
+	}
+	m = sizedModel(selftestAt(nil)(t), 160, 40)
+	clickOn(t, m, backText)
+	if !m.st.cancelling {
+		t.Error("click on the running selftest did not end it")
+	}
+}
+
+func TestTabClickInTransferAndSelftestStopsAtTheFirstQuestion(t *testing.T) {
+	m := sizedModel(exportAt(exportSelect, exportWithout)(t), 160, 40)
+	clickOn(t, m, "6 Settings")
+	if m.export != nil || m.section.area() != areaSettings || m.screen != screenNav {
+		t.Errorf("an untouched export: export %v section %v screen %v, want the Settings tab line", m.export != nil, m.section, m.screen)
+	}
+	m = sizedModel(exportAt(exportPreview, exportWithout)(t), 160, 40)
+	before := m.section
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenLeave || m.section != before {
+		t.Errorf("an export with ticks: screen %v section %v, want the leave question", m.screen, m.section)
+	}
+	m = sizedModel(exportAt(exportPreview, exportWithout)(t), 160, 40)
+	m.export.writing = true
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenTransfer || m.section != before {
+		t.Errorf("a write in flight: screen %v section %v, want no effect", m.screen, m.section)
+	}
+	m = sizedModel(selftestAt(func(_ *Model, _ chan struct{}) (*selftest.Report, error) { return fakeReport("alpha"), nil })(t), 160, 40)
+	clickOn(t, m, "6 Settings")
+	if m.st != nil || m.section.area() != areaSettings || m.screen != screenNav {
+		t.Errorf("a finished selftest: section %v screen %v, want the Settings tab line", m.section, m.screen)
+	}
+	m = sizedModel(selftestAt(nil)(t), 160, 40)
+	clickOn(t, m, "6 Settings")
+	if m.screen != screenSelftest || !m.st.cancelling {
+		t.Errorf("a running selftest: screen %v, want it ending and still shown", m.screen)
+	}
+}
+
+// A long config path (the temporary directories of some systems are) is cut for the button before the button
+// gives way; the keys go first and the header keeps its rows.
+func TestBackButtonOutranksALongPathAndTheKeys(t *testing.T) {
+	deep := filepath.Join(t.TempDir(), strings.Repeat("deep-directory-", 7))
+	if err := os.MkdirAll(deep, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The temporary root of a test is made on first use, so the model is built in a subtest that finds the
+	// long directory first.
+	t.Run("long", func(t *testing.T) { backOutranksALongPath(t, deep) })
+}
+
+func backOutranksALongPath(t *testing.T, deep string) {
+	t.Setenv("TMPDIR", deep)
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	row := frameLines(m)[0]
+	if !strings.Contains(row, backText) || strings.Contains(row, "["+keyLabel(actHelp)+"]") || !strings.Contains(row, "…") {
+		t.Fatalf("header = %q, want the cut path and the button without the keys", row)
+	}
+	with := len(m.headerLines())
+	m.backdrop = true
+	without := len(m.headerLines())
+	m.backdrop = false
+	if with != without || with != 1 {
+		t.Errorf("header rows %d with the button, %d without, want 1", with, without)
+	}
+	clickOn(t, m, backText)
+	if m.screen != screenList {
+		t.Errorf("click on the button of a cut path: screen %v", m.screen)
+	}
+	// At the smallest width the path keeps its pathRoom and the button takes what is left, in the same row.
+	m = sizedModel(m, minimumWidth, minimumHeight)
+	m.backdrop = true
+	bare := len(m.headerLines())
+	m.backdrop = false
+	if rows := len(m.headerLines()); rows != bare || ansi.StringWidth(frameLines(m)[0]) > minimumWidth {
+		t.Errorf("at %d columns the button changed the rows (%d against %d): %q", minimumWidth, rows, bare, frameLines(m)[0])
 	}
 }
