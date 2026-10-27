@@ -1390,6 +1390,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 	return &config.Resolved{
 		Name: name, ID: connection.ID, Provider: service.Provider, BaseURL: c.config.ServiceBaseURL(service), Options: service.Options,
 		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
+		Exclude: connection.ExcludeValues(),
 		Service: connection.Service, Credential: connection.Credential,
 		Secrets:        c.config.Credentials[connection.Credential],
 		Effects:        c.config.ConnectionEffects(name),
