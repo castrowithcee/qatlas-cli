@@ -938,6 +938,7 @@ var textEN = map[textID]string{
 	tDetailRunning:                                  "running",
 	tDetailConnections:                              "%d connections",
 	tInfoNoFurtherExplanationForThis:                "no further explanation for this row",
+	tDocGuide:                                       "Setup guide and token rights:",
 	tPathPathKept:                                   "Path kept",
 	tPathAPathMustNotBe:                             "a path must not be empty; esc cancels the entry",
 	tPathDirectory:                                  "directory: %s",

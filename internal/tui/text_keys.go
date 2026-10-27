@@ -734,6 +734,7 @@ const (
 	tDetailRunning                           textID = "DetailRunning"
 	tDetailConnections                       textID = "DetailConnections"
 	tInfoNoFurtherExplanationForThis         textID = "InfoNoFurtherExplanationForThis"
+	tDocGuide                                textID = "DocGuide"
 	tPathPathKept                            textID = "PathPathKept"
 	tPathAPathMustNotBe                      textID = "PathAPathMustNotBe"
 	tPathDirectory                           textID = "PathDirectory"

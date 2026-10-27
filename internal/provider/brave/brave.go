@@ -144,6 +144,8 @@ func noTarget(string) error {
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Brave Search", DefaultBaseURL: apiRoot,
+		// Brave has no setup page; its own page is the user page.
+		DocPage: "brave/README.md",
 		Description: "Web, news, local, and AI-grounding search and AI answers through the Brave Search API " +
 			"with a subscription key",
 		DefaultEffects: []config.Effect{config.EffectRead},

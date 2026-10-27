@@ -127,7 +127,11 @@ func factsText(facts []styledFact) []string {
 
 // infoText is the explanation as the overlay shows it, without the wrapping.
 func infoText(s infoSubject) string {
-	return strings.Join(append([]string{s.title}, s.paragraphs()...), "\n\n")
+	parts := append([]string{s.title}, s.paragraphs()...)
+	if s.doc != "" {
+		parts = append(parts, tr(tDocGuide)+" "+s.doc)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // logDetailText is the detail screen of one log entry.

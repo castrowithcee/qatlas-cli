@@ -552,9 +552,19 @@ type ProviderMetadata struct {
 	ServiceLevel bool
 	SecretRoles  []SecretRole
 	Target       TargetMetadata
+	// DocPage is the user page of the provider below docs/providers; empty means <ID>/setup.md.
+	DocPage string
 	// LocalFiles states which directions of local file access at least one tool of the provider has. It is
 	// derived from the registered operations and never declared by hand.
 	LocalFiles LocalFilesSupport
+}
+
+// DocPath is the user page of the provider below docs/providers.
+func (m ProviderMetadata) DocPath() string {
+	if m.DocPage != "" {
+		return m.DocPage
+	}
+	return m.ID + "/setup.md"
 }
 
 // RecommendedProfile returns the profile a new connection of this provider starts with.
