@@ -162,6 +162,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".admin-runners.update", p.id+".admin-workflow-runs.list",
 				p.id+".admin-workflow-jobs.list", p.id+".admin-packages.list")
 		}
+		want = append(want, p.id+".admin-users.list", p.id+".admin-users.update", p.id+".admin-users.rename",
+			p.id+".admin-users.delete")
 		want = append(want, p.id+".topics.search", p.id+".repository-topics.list", p.id+".repository-topics.set",
 			p.id+".repository-topics.add", p.id+".repository-topics.remove", p.id+".gitignore-templates.list",
 			p.id+".gitignore-templates.get", p.id+".label-templates.list", p.id+".label-templates.get",

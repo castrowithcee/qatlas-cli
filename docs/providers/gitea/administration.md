@@ -1,12 +1,13 @@
 ---
 description: >
   Describes the instance administration tools of the Gitea and Forgejo providers: the runners of the whole instance,
-  the jobs waiting for a runner, the instance-wide lists of workflow runs, workflow jobs, and packages, the binding to
-  connections without targets, the listed-only deletion of a runner, and the product differences.
+  the jobs waiting for a runner, the instance-wide lists of workflow runs, workflow jobs, and packages, the
+  administration of user accounts, the binding to connections without targets, the listed-only tools, and the
+  product differences.
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Instance administration
@@ -23,6 +24,9 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-packages.list` | read, Gitea 28 and later | Gitea |
 | `admin-runners.update` | update | Gitea |
 | `admin-runners.delete` | delete, listed only | both |
+| `admin-users.list` | read | both |
+| `admin-users.update` | update | both |
+| `admin-users.rename`, `admin-users.delete` | update and delete, listed only | both |
 
 ## Binding
 
@@ -59,8 +63,27 @@ the packages of one owner are described in [Packages](packages.md).
 Names and versions are untrusted data; an address with user info or a query is left out. Gitea 1.27 has no such
 route, so the tool is refused there before its request and names the version it needs.
 
+## Users
+
+`admin-users.list` lists the accounts of the whole instance with the person members of the user object, as
+[Users](users.md) describes them. Sign-in name, authentication source, last sign-in, and security state of an
+account are neither returned nor available as a filter, since a filter would disclose them. The filters differ by
+product: Gitea filters by keyword, visibility, and the flags `is_active`, `is_admin`, and `is_restricted` and sorts by
+attribute and order; Forgejo only sorts.
+
+`admin-users.update` locks or unlocks an account (`prohibit_login`, `active`), restricts it, and changes its limits,
+visibility, and profile texts; only the given members are sent, and `hide_email` and `pronouns` exist on Forgejo
+only. It never sends what hands over an account (password, email address, sign-in name, authentication source,
+forced password change) or raises it to the host (administrator right, Git hooks, local import). Gitea documents
+`source_id` as required but keeps the source when it is absent, so the tool omits it. An answer for another user
+than the requested one is refused as `invalid-provider-response`.
+
+`admin-users.rename` renames an account. `admin-users.delete` removes it for good; with `purge`, the instance also
+removes everything the account owns. Both are offered only by a connection whose `tools` list names them and are in
+no setup profile. Creating an account is not offered.
+
 ## Changes
 
-`admin-runners.update` and `admin-runners.delete` need confirmation, send exactly one request, and are never
-repeated; when the outcome is open, the message says that the change may have been applied. No tool of this group
-is in a setup profile.
+`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users` that change need confirmation, send
+exactly one request, and are never repeated; when the outcome is open, the message says that the change may have
+been applied. No tool of this group is in a setup profile.
