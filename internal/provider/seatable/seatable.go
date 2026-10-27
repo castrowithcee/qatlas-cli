@@ -1381,7 +1381,7 @@ func (c *Client) changeRows(ctx context.Context, op, method, table string, paylo
 	if values != nil {
 		sets = []map[string]json.RawMessage{values}
 	}
-	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets, false)
+	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets)
 	if err != nil {
 		return err
 	}
@@ -1390,10 +1390,10 @@ func (c *Client) changeRows(ctx context.Context, op, method, table string, paylo
 
 // prepareRows validates the column sets of a row mutation against the base metadata, binds the payload to
 // the selected table, and returns the route, the base token, and the encoded body. It performs no change.
-// A single-row and a batch mutation share it; noLinks additionally refuses link columns, which only the
-// link tools may write.
+// A single-row and a batch mutation share it; link columns are refused because only the link tools may
+// write them.
 func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[string]any,
-	sets []map[string]json.RawMessage, noLinks bool) (string, string, []byte, error) {
+	sets []map[string]json.RawMessage) (string, string, []byte, error) {
 	for _, values := range sets {
 		if len(values) == 0 {
 			return "", "", nil, providerError(op, "at least one column value is required")
@@ -1413,7 +1413,7 @@ func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[
 		return "", "", nil, err
 	}
 	if len(sets) > 0 {
-		if err := c.checkColumns(ctx, op, selected, sets, noLinks); err != nil {
+		if err := c.checkColumns(ctx, op, selected, sets); err != nil {
 			return "", "", nil, err
 		}
 	}
@@ -1426,7 +1426,7 @@ func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[
 }
 
 func (c *Client) checkColumns(ctx context.Context, op string, selected target,
-	sets []map[string]json.RawMessage, noLinks bool) error {
+	sets []map[string]json.RawMessage) error {
 	document, err := c.metadata(ctx, op)
 	if err != nil {
 		return err
@@ -1445,7 +1445,7 @@ func (c *Client) checkColumns(ctx context.Context, op string, selected target,
 				if !ok {
 					return providerError(op, "the selected SeaTable table does not define every requested column")
 				}
-				if noLinks && column.Type == "link" {
+				if column.Type == "link" {
 					return providerError(op, "link columns cannot be written here, use the link tools")
 				}
 			}

@@ -444,7 +444,7 @@ func (c *Client) UploadFile(ctx context.Context, input FileInput, name string, s
 	}
 	path, token, encoded, err := c.prepareRows(ctx, op, input.Table, map[string]any{"updates": []any{
 		map[string]any{"row_id": input.RowID, "row": map[string]json.RawMessage{input.Column: cell}}}},
-		[]map[string]json.RawMessage{{input.Column: cell}}, true)
+		[]map[string]json.RawMessage{{input.Column: cell}})
 	if err != nil {
 		return nil, appendHint(err, fileUncertain)
 	}
