@@ -308,6 +308,11 @@ func (c *Client) ListScenarios(ctx context.Context, offset, limit int, filter Sc
 		"pg[limit]":  {strconv.Itoa(limit)},
 		"cols[]":     scenarioColumns,
 	}
+	if excluded, err := c.inExcludedFolder(ctx, op, filter.FolderID); err != nil {
+		return nil, err
+	} else if excluded {
+		return &ScenariosPage{Scenarios: []ScenarioSummary{}, Offset: offset}, nil
+	}
 	filter.apply(query)
 	var page scenariosPageJSON
 	if err := c.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
@@ -645,6 +650,11 @@ func invokeScenariosCreate(ctx context.Context, resolved *config.Resolved, secre
 func (c *Client) CreateScenario(ctx context.Context, blueprint, scheduling json.RawMessage, folderID int64,
 	description string, confirmNewApp bool) (*ScenarioSummary, error) {
 	const op = "create scenario"
+	if excluded, err := c.inExcludedFolder(ctx, op, folderID); err != nil {
+		return nil, err
+	} else if excluded {
+		return nil, invalidRequest("folder_id is outside the targets of this connection")
+	}
 	body := map[string]any{
 		"teamId":     c.scope.teamID,
 		"blueprint":  string(blueprint),

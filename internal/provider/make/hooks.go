@@ -395,12 +395,19 @@ func rawBool(raw json.RawMessage) *bool {
 
 // allowsHook applies the bound team and, narrower than the scenario tools, the scenario allow-list: with a
 // list configured, only a hook assigned to a listed scenario is reachable, never an unassigned one. A hook
-// names no folder, so a folder target reaches no hook at all.
-func (c *Client) allowsHook(h hookJSON) bool {
+// names no folder, so a folder target reaches no hook at all. A hook assigned to an excluded scenario, or to
+// one filed in an excluded folder, is out of reach; an unassigned hook stays reachable.
+func (c *Client) allowsHook(ctx context.Context, op string, h hookJSON) (bool, error) {
 	if !c.scope.allowsTeam(h.TeamID) || len(c.scope.folders) > 0 {
-		return false
+		return false, nil
 	}
-	return len(c.scope.scenarios) == 0 || (h.ScenarioID != 0 && c.scope.listsScenario(h.ScenarioID))
+	if h.ScenarioID != 0 {
+		excluded, err := c.scenarioIDExcluded(ctx, op, h.ScenarioID)
+		if err != nil || excluded {
+			return false, err
+		}
+	}
+	return len(c.scope.scenarios) == 0 || (h.ScenarioID != 0 && c.scope.listsScenario(h.ScenarioID)), nil
 }
 
 type hooksListArguments struct {
@@ -457,6 +464,15 @@ func (c *Client) ListHooks(ctx context.Context, offset, limit int, filter HooksF
 		(len(c.scope.scenarios) > 0 && !c.scope.listsScenario(filter.ViewForScenarioID))) {
 		return nil, invalidRequest("view_for_scenario_id must be a positive scenario id inside the targets of this connection")
 	}
+	if filter.ViewForScenarioID > 0 {
+		excluded, err := c.scenarioIDExcluded(ctx, op, filter.ViewForScenarioID)
+		if err != nil {
+			return nil, err
+		}
+		if excluded {
+			return nil, invalidRequest("view_for_scenario_id must be a positive scenario id inside the targets of this connection")
+		}
+	}
 	if (filter.SortBy != "" && filter.SortBy != "name" && filter.SortBy != "hookName") ||
 		(filter.SortDir != "" && filter.SortDir != "asc" && filter.SortDir != "desc") {
 		return nil, invalidRequest("sort_by must be name or hookName and sort_dir asc or desc")
@@ -489,7 +505,11 @@ func (c *Client) ListHooks(ctx context.Context, offset, limit int, filter HooksF
 	}
 	hooks := make([]HookSummary, 0, len(page.Hooks))
 	for _, h := range page.Hooks {
-		if c.allowsHook(h) {
+		allowed, err := c.allowsHook(ctx, op, h)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
 			hooks = append(hooks, hookDetailOf(h))
 		}
 	}
@@ -513,7 +533,14 @@ func (c *Client) fetchHook(ctx context.Context, op string, hookID int64) (*hookJ
 	if err := c.get(ctx, op, path, nil, &wrapper, needHooksRead); err != nil {
 		return nil, err
 	}
-	if wrapper.Hook.ID != hookID || !c.allowsHook(wrapper.Hook) {
+	if wrapper.Hook.ID != hookID {
+		return nil, invalidRequest("hook_id is outside the targets of this connection")
+	}
+	allowed, err := c.allowsHook(ctx, op, wrapper.Hook)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
 		return nil, invalidRequest("hook_id is outside the targets of this connection")
 	}
 	return &wrapper.Hook, nil
