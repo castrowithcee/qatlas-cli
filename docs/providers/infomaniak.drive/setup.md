@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Set up Infomaniak kDrive
@@ -189,4 +189,5 @@ permission: this Infomaniak token may not perform this operation; check its scop
 | `invalid-request`: drive_id is outside the targets of this connection | The drive is not in the connection's targets | Not a token problem. Pass a drive the connection allows, or add it; see [Scope](README.md#scope). |
 | `invalid-request`: drive_id belongs to another Infomaniak account than the one this connection is bound to | The drive is real but belongs to another account | Use the account ID of the drive's owner in the target, or a connection bound to that account. |
 | `invalid-request`: the file or folder is outside the targets of this connection | The connection is limited to folders and the file lies elsewhere | Not a token problem. Add the folder as a target. |
+| `invalid-request`: this tool needs the whole drive in the targets of this connection | The tool is a trash tool and the drive has excluded files or folders, or the drive is bound only to folders | Not a token problem. The trash cannot show where an entry lay, so it stays closed on such a drive. Remove the exclusions of files or folders of that drive if you need the trash. |
 | `invalid-request`: a user_id is not a user of this drive, or a team_id is not a team with users in this drive | The ID is not an active user, or a team without an active user, of this drive | Use the identifiers of active users of the drive, as the Infomaniak Manager shows them; see [Access](sharing.md#access). |

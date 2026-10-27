@@ -132,7 +132,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"comments":` + commentTreeSchema + `,"comments_truncated":{"type":"boolean"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"},"order":{"type":"integer"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"}}},"comments":` + commentTreeSchema + `,"comments_truncated":{"type":"boolean"},"html_withheld":{"type":"boolean"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Page identifier"},
@@ -142,7 +142,7 @@ var (
 			{Name: "chapter_id", Description: "Identifier of the containing chapter, 0 when there is none"},
 			{Name: "created_at", Description: "Creation timestamp"},
 			{Name: "updated_at", Description: "Last change timestamp"},
-			{Name: "html", Description: "Rendered page content, untrusted data"},
+			{Name: "html", Description: "Rendered page content, untrusted data; on a connection with targets an include of a page outside them is empty"},
 			{Name: "markdown", Description: "Markdown page content when the page uses the Markdown editor, untrusted data"},
 			{Name: "raw_html", Description: "HTML as stored, what the editor shows, untrusted data"},
 			{Name: "priority", Description: "Position among the siblings in the book or chapter"},
@@ -156,6 +156,7 @@ var (
 			{Name: "owned_by", Description: "Owner as id, name and slug"},
 			{Name: "comments", Description: commentTreeDescription},
 			{Name: "comments_truncated", Description: "True when the comment tree or a comment text was cut"},
+			{Name: "html_withheld", Description: "True when html is left empty because the pages it includes could not be checked against the targets"},
 		},
 		Examples: []capability.Example{{
 			Description: "Read page 42",
@@ -564,6 +565,12 @@ type Client struct {
 	// shelfBooks holds the books on the bound shelves read in this call, shelvesRead those shelves.
 	shelfBooks  map[int64]bool
 	shelvesRead map[int64]bool
+	// included holds the pages included by a page of this call, includeReads and includedBytes what was read
+	// for them.
+	included      map[int64]*includedPage
+	includeReads  int
+	exportedBytes int
+	includedBytes int
 }
 
 // Open builds a client for a resolved connection. The secrets come from the resolver, which owns the
@@ -654,6 +661,9 @@ type pageJSON struct {
 
 	// Comments is only read by a page read.
 	Comments *commentTreeJSON `json:"comments"`
+
+	// htmlWithheld marks an html left empty because its includes could not be checked against the targets.
+	htmlWithheld bool
 }
 
 type listJSON struct {
@@ -835,8 +845,21 @@ func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) 
 			return output.Object{}, c.scope.outside(outsidePage)
 		}
 	}
-
+	if err := c.scopeHTML(ctx, &page); errors.Is(err, errIncludeLimit) {
+		withholdHTML(&page)
+	} else if err != nil {
+		return output.Object{}, err
+	}
 	return pageDetail(page), nil
+}
+
+// changedPage is the result of a page write. The change has taken effect, so a failed include check withholds
+// html instead of failing the call.
+func (c *Client) changedPage(ctx context.Context, page pageJSON) output.Object {
+	if c.scopeHTML(ctx, &page) != nil {
+		withholdHTML(&page)
+	}
+	return pageObject(page)
 }
 
 func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
@@ -856,7 +879,7 @@ func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Obj
 	if err := c.mutate(ctx, "create page", http.MethodPost, "/api/pages", input, &page, argNames(pagesCreate)); err != nil {
 		return output.Object{}, err
 	}
-	return pageObject(page), nil
+	return c.changedPage(ctx, page), nil
 }
 
 func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) (output.Object, error) {
@@ -887,7 +910,7 @@ func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) 
 	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page, argNames(pagesUpdate)); err != nil {
 		return output.Object{}, err
 	}
-	return pageObject(page), nil
+	return c.changedPage(ctx, page), nil
 }
 
 func (c *Client) DeletePage(ctx context.Context, id string) error {
@@ -923,6 +946,9 @@ func pageFields(page pageJSON, detail bool) output.Object {
 		{Name: "tags", Value: tags(page.Tags)},
 		{Name: "created_by", Value: user(page.CreatedBy)}, {Name: "updated_by", Value: user(page.UpdatedBy)},
 		{Name: "owned_by", Value: user(page.OwnedBy)},
+	}
+	if page.htmlWithheld {
+		fields = append(fields, output.Field{Name: "html_withheld", Value: true})
 	}
 	if detail {
 		if tree, cut := commentTree(page.Comments); tree != nil {

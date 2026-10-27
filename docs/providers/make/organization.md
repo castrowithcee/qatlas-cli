@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Make: team and organization
@@ -44,6 +44,12 @@ and a personal space, is refused as an invalid request without naming it, and no
 `make.teams.list` pages by `offset` and `limit` and sets `has_more` when a page came back full, because Make reports no
 total count. It leaves personal spaces out unless `include_private_spaces` is set; those carry `type: personal`, and
 update and delete still refuse them. Make documents no values for the sort field; only the direction is offered.
+
+An excluded team (`exclude: [team/TEAM_ID]`) is left out of `make.teams.list`, so a page can hold fewer teams than
+its limit while `has_more` still follows the full page Make sent. `make.teams.update` and `make.teams.delete` refuse
+it with the message of a team outside the organization, before a secret is read. The exclusion stops there:
+`make.organization.*` (usage and subscription included), the organization variables, and the organization members
+still cover the whole organization, including excluded teams.
 
 Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout,
 a connection reset, a 5xx, or an unreadable answer is reported as uncertain. **Deleting a team also deletes all of

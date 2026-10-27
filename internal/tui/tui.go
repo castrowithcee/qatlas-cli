@@ -906,6 +906,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if keyIs(msg, actForceQuit) {
 				return m, m.interrupt()
 			}
+			if keyIs(msg, actCopy) {
+				return m, m.copyCurrent()
+			}
 			m.updateInfo(msg)
 			return m, nil
 		}
@@ -961,6 +964,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.infoPressed(msg) && m.openInfo() {
 			return m, nil
+		}
+		// Like the other letters, c is text wherever text is typed.
+		if keyIs(msg, actCopy) && m.helpReachable() {
+			if cmd := m.copyCurrent(); cmd != nil {
+				return m, cmd
+			}
 		}
 		msg = m.moveKey(msg)
 		var cmd tea.Cmd
@@ -4844,8 +4853,12 @@ func (m *Model) testLine() string {
 			tr(tFormOkOkAcceptedTheConnection, m.testName, providerName))
 	case m.testClass != "":
 		explanation := provider.Explain(m.testClass, providerName)
-		return "\n" + m.wrapped(styles.fail,
+		line := "\n" + m.wrapped(styles.fail,
 			tr(tFormFailed, m.testName, m.testClass, explanation))
+		if failDocHelps(m.testClass) {
+			line += m.docText(m.testProvider())
+		}
+		return line
 	}
 	return ""
 }

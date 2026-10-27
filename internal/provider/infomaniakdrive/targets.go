@@ -100,6 +100,23 @@ func (s scope) hasFileExcludes(driveID int64) bool {
 	return slices.ContainsFunc(s.excludedFiles, func(f fileTarget) bool { return f.driveID == driveID })
 }
 
+// showsNames reports whether the connection may see names the drive holds beyond its targets: it binds the
+// whole drive and excludes no file or folder of it. Names outside the reach could belong to excluded objects.
+func (s scope) showsNames(driveID int64) bool {
+	return s.wholeDrive(driveID) && !s.hasFileExcludes(driveID)
+}
+
+// excludedIn returns the excluded files and folders of one drive.
+func (s scope) excludedIn(driveID int64) []int64 {
+	var ids []int64
+	for _, file := range s.excludedFiles {
+		if file.driveID == driveID {
+			ids = append(ids, file.fileID)
+		}
+	}
+	return ids
+}
+
 // excludesFile reports whether a file or folder is itself excluded.
 func (s scope) excludesFile(driveID, fileID int64) bool {
 	return slices.Contains(s.excludedFiles, fileTarget{driveID: driveID, fileID: fileID})

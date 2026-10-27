@@ -279,7 +279,8 @@ const (
 	ExcludeDuplicate
 	// ExcludeIsTarget equals a target of the connection.
 	ExcludeIsTarget
-	// ExcludeWildcard is the provider's wildcard or has a segment "*".
+	// ExcludeWildcard is the provider's wildcard or "*", or has a segment "*" that no form of an excludable kind
+	// spells at that place.
 	ExcludeWildcard
 	// ExcludeForm is not spelled in a form of an excludable kind or fails the provider's Validate.
 	ExcludeForm
@@ -311,7 +312,10 @@ func (t TargetMetadata) CheckExcludes(excludes, targets []string) []ExcludeFindi
 			fault = ExcludeDuplicate
 		case isTarget[strings.TrimSpace(value)]:
 			fault = ExcludeIsTarget
-		case value == t.Wildcard || slices.Contains(strings.Split(value, "/"), "*"):
+		case value == t.Wildcard || value == "*" ||
+			slices.Contains(strings.Split(value, "/"), "*") && !t.excludableForm(value):
+			// A "*" a form spells literally, such as the subtree mark of folder/PATH/*, belongs to the form; a "*"
+			// in place of a placeholder would be a pattern.
 			fault = ExcludeWildcard
 		case !t.excludableForm(value):
 			fault = ExcludeForm
@@ -548,9 +552,19 @@ type ProviderMetadata struct {
 	ServiceLevel bool
 	SecretRoles  []SecretRole
 	Target       TargetMetadata
+	// DocPage is the user page of the provider below docs/providers; empty means <ID>/setup.md.
+	DocPage string
 	// LocalFiles states which directions of local file access at least one tool of the provider has. It is
 	// derived from the registered operations and never declared by hand.
 	LocalFiles LocalFilesSupport
+}
+
+// DocPath is the user page of the provider below docs/providers.
+func (m ProviderMetadata) DocPath() string {
+	if m.DocPage != "" {
+		return m.DocPage
+	}
+	return m.ID + "/setup.md"
 }
 
 // RecommendedProfile returns the profile a new connection of this provider starts with.

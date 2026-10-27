@@ -381,14 +381,24 @@ func (c *Client) pageAllowed(ctx context.Context, id int64, ref bookRef) (bool, 
 // pageInScope proves a page by identifier: a bound page needs no read, any other one is read once as evidence
 // of its chapter and book. An unbound connection reads nothing.
 func (c *Client) pageInScope(ctx context.Context, id int64) (bool, error) {
+	return c.pageReached(ctx, id, func() (bookRef, error) {
+		var ref bookRef
+		err := c.get(ctx, "get page", "/api/pages/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission)
+		return ref, err
+	})
+}
+
+// pageReached is the reach of a page by identifier; evidence reads the page only when the targets alone cannot
+// decide, so a caller that needs more of the page reads it once.
+func (c *Client) pageReached(ctx context.Context, id int64, evidence func() (bookRef, error)) (bool, error) {
 	if !c.scope.bound() || c.scope.hasPage(id) {
 		return true, nil
 	}
 	if !c.scope.mayReachPage(id) {
 		return false, nil
 	}
-	var ref bookRef
-	if err := c.get(ctx, "get page", "/api/pages/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission); err != nil {
+	ref, err := evidence()
+	if err != nil {
 		return false, err
 	}
 	return c.pageAllowed(ctx, id, ref)

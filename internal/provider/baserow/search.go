@@ -289,6 +289,9 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 		if !ok || !usableFieldName(field.Name) {
 			return nil, invalidRequest("a filter names a field that is unknown or cannot be used")
 		}
+		if client.lookupOutside(field, byID) {
+			return nil, invalidRequest("a lookup field through a link into a table outside the targets cannot be filtered")
+		}
 		if client.linkOutside(field) && !maskedLinkFilterTypes[f.Type] {
 			return nil, invalidRequest("a filter type on a link field into a table outside the targets is limited to empty, not_empty, link_row_has, and link_row_has_not")
 		}
@@ -306,6 +309,9 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 		if !ok || !usableFieldName(field.Name) {
 			return nil, invalidRequest("order_by names a field that is unknown or cannot be used")
 		}
+		if client.lookupOutside(field, byID) {
+			return nil, invalidRequest("a lookup field through a link into a table outside the targets cannot be sorted")
+		}
 		if client.linkOutside(field) {
 			return nil, invalidRequest("a link field into a table outside the targets cannot be sorted")
 		}
@@ -322,8 +328,8 @@ func invokeRowsSearch(ctx context.Context, resolved *config.Resolved, secrets *s
 	}
 	if input.Search != "" {
 		for _, field := range fields {
-			if client.linkOutside(field) {
-				return nil, invalidRequest("search is not available on a table with a link field into a table outside the targets")
+			if client.linkOutside(field) || client.lookupOutside(field, byID) {
+				return nil, invalidRequest("search is not available on a table with a link or lookup field into a table outside the targets")
 			}
 		}
 	}

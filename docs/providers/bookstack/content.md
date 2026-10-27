@@ -106,6 +106,15 @@ carry them.
 [Books and chapters](#books-and-chapters). The comment tree of a page reports at most 500 comments and 10 levels; a cut tree is marked `comments_truncated`, and each comment text is capped like in `comments.get`. Comment texts are personal and untrusted data. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
 
+Page includes (`{{@ID}}`, `{{@ID#section}}`) are resolved by BookStack in `html` up to three levels. On a
+connection with targets an include of a page outside them is empty in `html` on every level, as for a user
+without read access; `raw_html` and `markdown` keep the placeholder, and writing one stays allowed. For a page
+with such an include Qatlas builds `html` itself from the stored HTML by BookStack's insertion rules. Limit:
+that `html` is unfiltered like `raw_html`, because BookStack's content filter, unique heading ids, and theme
+hooks cannot be reproduced; every other page keeps BookStack's `html` unchanged. Includes beyond what one call
+checks leave `html` empty and set `html_withheld`; after `pages.create` or `pages.update` a failed check does the
+same instead of failing the write, which has taken effect.
+
 `revision_count` and `editor` of a page can be neither filtered nor sorted, because BookStack does not offer them as listing fields.
 
 `pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and
@@ -157,6 +166,15 @@ is untrusted data and limited to 8 MiB: a larger export is refused with a hint t
 profile; the connection must release the directory for writing, and an existing file is replaced only with
 confirmation. The answer never carries the content. A ZIP export
 contains the attachments and images of the exported content.
+
+BookStack inserts page includes (`{{@ID}}`, see [Pages](#pages)) into every export format, `markdown` too, by
+what the token may read. On a connection with targets both tools therefore read the stored HTML of every page
+the export contains (the page, the pages of a chapter, all pages of a book), however many, and of the pages
+they include up to three levels, once per page and call. They refuse the export as `invalid-request` before any
+export request if one include names a page outside the targets, or if the includes need more reads than one
+call allows (50 pages that are only included). A `rate-limited` answer while reading is reported as such; export
+smaller items then. A connection without targets reads nothing extra. Images of other pages are embedded by
+BookStack by its own storage rights; Qatlas does not check them.
 
 The token rights are listed under [Content](setup.md#content). On a connection with targets the item is proven first (see [Targets](README.md#targets)).
 

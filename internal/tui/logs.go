@@ -1446,18 +1446,50 @@ func (m *Model) logDetailView() string {
 		return m.keyHint("{back} back · {command} cmds · {help} help")
 	}
 	row := lv.rows[lv.detail]
-	e := row.line.Entry
-	title := tr(tLogEntryFile, row.date)
-	if row.line.Parsed && !e.Time.IsZero() {
-		title = tr(tLogEntryTime, e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700"))
-	}
 	var b strings.Builder
-	head := m.wrapped(styles.title, title) + "\n\n"
+	head := m.wrapped(styles.title, m.logDetailTitle(row)) + "\n\n"
 	m.formCol = m.labelColumn(logLabel("status"), logLabel("UTC file"), logLabel("sequence"), logLabel("day"), logLabel("kind"),
 		logLabel("through"), logLabel("way"), logLabel("client"), logLabel("tool"), logLabel("connection"),
 		logLabel("effect"), logLabel("result"), logLabel("duration"), logLabel("request"), logLabel("response"))
 	defer func() { m.formCol = 0 }()
-	field := func(label, value string) { b.WriteString(m.formRow(false, logLabel(label), value) + "\n") }
+	for _, f := range m.logDetailFields(row) {
+		b.WriteString(m.formRow(false, f.label, f.value) + "\n")
+	}
+	// The fields are laid out first and shown from the scroll position on, so a long message scrolls and
+	// nothing is cut; a longer text gains the position line and the scroll keys.
+	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+	keys := "{back} back · 1-8 section · {command} cmds · {help} help"
+	// The lines after the last field are the key line and the notes, and at least the empty line the view
+	// ends in.
+	tail := func(keys string) int { return strings.Count(m.keyHint(keys)+m.notes(), "\n") + 1 }
+	room := m.height - strings.Count(head, "\n") - tail(keys)
+	position := ""
+	if total := len(lines); total > room {
+		keys = "up/down scroll · " + keys
+		room = max(m.height-strings.Count(head, "\n")-tail(keys)-1, 1)
+		lv.page = room
+		lines = lv.view.window(lines, room, false)
+		position = m.wrapped(styles.hint, lv.view.position(total, room)) + "\n"
+	} else {
+		lv.view.reset()
+	}
+	return head + strings.Join(lines, "\n") + "\n" + position + m.keyHint(keys)
+}
+
+// logDetailTitle is the heading of the detail screen of one entry.
+func (m *Model) logDetailTitle(row logRow) string {
+	if row.line.Parsed && !row.line.Entry.Time.IsZero() {
+		return tr(tLogEntryTime, row.line.Entry.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700"))
+	}
+	return tr(tLogEntryFile, row.date)
+}
+
+// logDetailFields are the labelled values of the detail screen of one entry, every one made safe by logText
+// or taken from a cell that was.
+func (m *Model) logDetailFields(row logRow) []detailFact {
+	e := row.line.Entry
+	var fields []detailFact
+	field := func(label, value string) { fields = append(fields, detailFact{logLabel(label), value}) }
 	field("status", row.status.label()+" ("+m.logReason(row.line)+")")
 	field("UTC file", row.date)
 	if row.line.Parsed {
@@ -1490,25 +1522,7 @@ func (m *Model) logDetailView() string {
 		field("request", formatBytes(e.ReqBytes))
 		field("response", formatBytes(e.RespBytes))
 	}
-	// The fields are laid out first and shown from the scroll position on, so a long message scrolls and
-	// nothing is cut; a longer text gains the position line and the scroll keys.
-	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
-	keys := "{back} back · 1-8 section · {command} cmds · {help} help"
-	// The lines after the last field are the key line and the notes, and at least the empty line the view
-	// ends in.
-	tail := func(keys string) int { return strings.Count(m.keyHint(keys)+m.notes(), "\n") + 1 }
-	room := m.height - strings.Count(head, "\n") - tail(keys)
-	position := ""
-	if total := len(lines); total > room {
-		keys = "up/down scroll · " + keys
-		room = max(m.height-strings.Count(head, "\n")-tail(keys)-1, 1)
-		lv.page = room
-		lines = lv.view.window(lines, room, false)
-		position = m.wrapped(styles.hint, lv.view.position(total, room)) + "\n"
-	} else {
-		lv.view.reset()
-	}
-	return head + strings.Join(lines, "\n") + "\n" + position + m.keyHint(keys)
+	return fields
 }
 
 // logReason says why a line has its status.
