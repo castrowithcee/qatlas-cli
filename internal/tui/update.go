@@ -109,15 +109,15 @@ func (m *Model) updateBlocker() string {
 }
 
 func (m *Model) updateUpdateConfirm(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case "y":
+	switch {
+	case keyIs(key, actYes):
 		m.screen = m.updateFrom
 		if work := m.updateBlocker(); work != "" {
 			m.status = tr(tUpdateWaitConfirm, work)
 			return nil
 		}
 		return m.startUpdate()
-	case "n", keyOf(actBack):
+	case keyIs(key, actNo) || keyIs(key, actBack):
 		m.screen = m.updateFrom
 		m.status = tr(tUpdateNotInstalled)
 	}

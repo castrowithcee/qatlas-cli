@@ -199,11 +199,11 @@ func (*restartCommand) SetStderr(io.Writer) {}
 // updateRestart answers the question that asks before a restart drops unsaved input. y restarts and drops
 // it; anything that keeps the editor leaves it as it was, on the old version.
 func (m *Model) updateRestartConfirm(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case "y":
+	switch {
+	case keyIs(key, actYes):
 		m.screen = m.restartBack
 		return m.restartNow()
-	case "n", keyOf(actBack):
+	case keyIs(key, actNo) || keyIs(key, actBack):
 		m.screen = m.restartBack
 		m.status = m.restartHint()
 	}

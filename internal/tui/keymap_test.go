@@ -28,6 +28,7 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 		actForceQuit: "ctrl+c", actUp: "up", actDown: "down", actLeft: "left", actRight: "right", actHome: "home",
 		actEnd: "end", actPageUp: "pgup", actPageDown: "pgdown", actNext: "tab", actPrev: "shift+tab",
 		actVimUp: "k", actVimDown: "j", actVimLeft: "h", actVimRight: "l",
+		actTopicNext: "tab", actTopicPrev: "shift+tab",
 		actEnter: "enter", actSpace: "space", actSearch: "/", actQuit: "q", actYes: "y", actNo: "n", actDiscard: "d",
 	}
 	if len(keymap) != len(want) {
@@ -243,52 +244,86 @@ func TestCheckRefusesTheKeysOfTheTable(t *testing.T) {
 // of a String() with one.
 var keyLiteral = regexp.MustCompile(`^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*"[^"]*"\s*[,:]|\.String\(\)\s*[!=]=\s*"`)
 
-// keyLiteralDebt are the files that still switch on literal key values; the screens have not moved to the
-// keymap yet. Each follow-up step removes files from this list; it never grows.
+// keyLiteralDebt are the files that still switch on literal letter or ctrl keys; those actions are not in the
+// keymap yet. Each follow-up step removes files from this list; it never grows. The names of tableKeys are
+// banned in these files too (see TestTableKeysAreNeverLiterals).
 var keyLiteralDebt = []string{
-	"admin.go",
-	"commandline.go",
-	"detail.go",
-	"dropdown.go",
-	"help.go",
-	"inputmodal.go",
 	"keybinding.go",
-	"list.go",
 	"listbar.go",
 	"logs.go",
-	"mouse.go",
 	"overview.go",
 	"pathinput.go",
 	"paths.go",
 	"payload.go",
-	"providers.go",
-	"rename.go",
 	"renamefind.go",
-	"restart.go",
-	"secrets.go",
 	"selftest.go",
 	"setup.go",
-	"target_builder.go",
 	"targetpick.go",
 	"targets.go",
-	"template.go",
 	"tokens.go",
-	"transfer.go",
-	"transfer_import.go",
 	"tui.go",
-	"update.go",
-	"vaultheader.go",
 }
 
-// nonKeySwitches are files whose string cases are no keys (names, colour codes, footer groups); a file
-// that also has key literals is on keyLiteralDebt as well.
-var nonKeySwitches = []string{"canvas.go", "footer.go", "logs.go", "template.go", "tui.go"}
+// nonKeySwitches are files whose string cases are no keys (names, colour codes, footer groups, filter
+// states); a file that also has key literals is on keyLiteralDebt as well.
+var nonKeySwitches = []string{"canvas.go", "footer.go", "logs.go", "mouse.go", "template.go", "tui.go"}
+
+// tableKeys are the key names whose actions the keymap owns: moves, confirmations and answers, the global
+// escape and interrupt. No file but keymap.go spells one as a key value, not even a file on keyLiteralDebt.
+// n is the answer "no" but also the letter action "new", which is still a literal; only its answer form
+// (a case item) is banned.
+var tableKeys = []string{"up", "down", "left", "right", "home", "end", "pgup", "pgdown", "tab", "shift+tab",
+	"enter", "space", "/", "q", "y", "n", "esc", "ctrl+c"}
 
 // Key values live in the keymap: outside it, only the files of the two exception lists spell one.
 func TestKeyLiteralsStayInTheKeymap(t *testing.T) {
 	for _, f := range keyLiteralFindings(t, "*.go") {
 		t.Errorf("%s", f)
 	}
+}
+
+// The keys of the table have no literal anywhere: a case item or a comparison that spells one fails, in a
+// file of the exception lists as much as in any other.
+func TestTableKeysAreNeverLiterals(t *testing.T) {
+	for _, f := range tableKeyFindings(t, "*.go") {
+		t.Errorf("%s", f)
+	}
+}
+
+// tableKeyFindings lists the lines of the files matching glob that spell a key of the table as a literal.
+func tableKeyFindings(t *testing.T, glob string) []string {
+	t.Helper()
+	files, err := filepath.Glob(glob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []string
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" {
+			continue
+		}
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(src), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "//") {
+				continue
+			}
+			for _, k := range tableKeys {
+				q := regexp.QuoteMeta(`"` + k + `"`)
+				item := `^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*` + q + `\s*[,:]`
+				pattern := item + `|[!=]=\s*` + q + `|` + q + `\s*[!=]=`
+				if k == "n" {
+					pattern = item
+				}
+				if regexp.MustCompile(pattern).MatchString(line) {
+					found = append(found, f+":"+strconv.Itoa(i+1)+" spells the table key "+k+"; use the keymap: "+strings.TrimSpace(line))
+				}
+			}
+		}
+	}
+	return found
 }
 
 // keyLiteralFindings lists the key literals of the files matching glob that no exception list covers.

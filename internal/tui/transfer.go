@@ -229,53 +229,55 @@ func (m *Model) updateExport(key tea.KeyPressMsg) tea.Cmd {
 	case exportPassphrase:
 		return m.updateExportPassphrase(key)
 	case exportPlainConfirm:
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.clearMessages()
 			m.askExportTarget()
-		case "n":
+		case keyIs(key, actNo):
 			m.clearMessages()
 			e.step = exportMode
 		}
 	case exportTarget:
 		return m.updateExportTarget(key)
 	case exportPreview:
-		switch key.String() {
-		case keyOf(actSave):
+		switch {
+		case keyIs(key, actSave):
 			m.clearMessages()
 			return m.requireAdmin(m.runExport)
 		default:
-			e.scroll(key.String(), m.height)
+			e.scroll(key, m.height)
 		}
 	case exportResult:
-		switch key.String() {
-		case "enter":
+		switch {
+		case keyIs(key, actEnter):
 			path := e.target
 			m.closeExport()
 			m.status = tr(tExported, m.redactor.Apply(path))
 		default:
-			e.scroll(key.String(), m.height)
+			e.scroll(key, m.height)
 		}
 	}
 	return nil
 }
 
-func (e *exportState) scroll(key string, height int) { e.offset = scrollOffset(e.offset, key, height) }
+func (e *exportState) scroll(key tea.KeyPressMsg, height int) {
+	e.offset = scrollOffset(e.offset, key, height)
+}
 
 // scrollOffset is the first shown line after a scroll key; the view clamps it to the lines there are.
-func scrollOffset(offset int, key string, height int) int {
-	switch key {
-	case "down":
+func scrollOffset(offset int, key tea.KeyPressMsg, height int) int {
+	switch {
+	case keyIs(key, actDown):
 		return offset + 1
-	case "up":
+	case keyIs(key, actUp):
 		return max(offset-1, 0)
-	case "pgdown":
+	case keyIs(key, actPageDown):
 		return offset + max(height/2, 1)
-	case "pgup":
+	case keyIs(key, actPageUp):
 		return max(offset-max(height/2, 1), 0)
-	case "home":
+	case keyIs(key, actHome):
 		return 0
-	case "end":
+	case keyIs(key, actEnd):
 		return 1 << 20
 	}
 	return offset
@@ -283,19 +285,19 @@ func scrollOffset(offset int, key string, height int) int {
 
 func (m *Model) updateExportSelect(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
-	switch key.String() {
-	case "up":
+	switch {
+	case keyIs(key, actUp):
 		e.rows.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		e.rows.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.exportRowWindow()
-		e.rows.page(key.String(), start, end)
-	case "space":
+		e.rows.page(key, start, end)
+	case keyIs(key, actSpace):
 		if name, ok := e.rows.selected(); ok {
 			e.marks[name] = !e.marks[name]
 		}
-	case "enter":
+	case keyIs(key, actEnter):
 		m.clearMessages()
 		sel := e.selection()
 		if !sel.All && !sel.Defaults && !sel.ProviderNotes &&
@@ -381,12 +383,12 @@ func (m *Model) exportBack() tea.Cmd {
 
 func (m *Model) updateExportMode(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
-	switch key.String() {
-	case "up":
+	switch {
+	case keyIs(key, actUp):
 		e.modeCursor = wrap(e.modeCursor-1, len(exportModeRows()))
-	case "down":
+	case keyIs(key, actDown):
 		e.modeCursor = wrap(e.modeCursor+1, len(exportModeRows()))
-	case "enter":
+	case keyIs(key, actEnter):
 		m.clearMessages()
 		e.kind = exportKind(e.modeCursor)
 		if e.kind == exportWithout {
@@ -422,7 +424,7 @@ func maskedInput() textinput.Model {
 // updateExportPassphrase takes the export passphrase twice; a difference asks again from the start.
 func (m *Model) updateExportPassphrase(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
-	if key.String() != "enter" {
+	if !keyIs(key, actEnter) {
 		return e.input.update(key)
 	}
 	typed := e.input.Value()
@@ -457,7 +459,7 @@ func (m *Model) askExportTarget() {
 
 func (m *Model) updateExportTarget(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
-	if key.String() != "enter" {
+	if !keyIs(key, actEnter) {
 		return e.input.update(key)
 	}
 	m.clearMessages()

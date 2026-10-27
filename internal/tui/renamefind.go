@@ -223,20 +223,20 @@ func (m *Model) updateFindings(key tea.KeyPressMsg) tea.Cmd {
 		m.screen = screenList
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.closeFindings()
-	case "up":
+	case keyIs(key, actUp):
 		s.cursor = wrap(s.cursor-1, len(s.items))
-	case "down":
+	case keyIs(key, actDown):
 		s.cursor = wrap(s.cursor+1, len(s.items))
-	case "home":
+	case keyIs(key, actHome):
 		s.cursor = 0
-	case "end":
+	case keyIs(key, actEnd):
 		s.cursor = len(s.items) - 1
-	case "enter":
+	case keyIs(key, actEnter):
 		return m.askFinding(false)
-	case "b":
+	case key.String() == "b":
 		return m.askFinding(true)
 	}
 	return nil

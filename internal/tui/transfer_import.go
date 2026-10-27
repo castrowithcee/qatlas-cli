@@ -200,36 +200,36 @@ func (m *Model) updateImport(key tea.KeyPressMsg) tea.Cmd {
 	case importMode:
 		return m.updateImportMode(key)
 	case importPreview:
-		switch key.String() {
-		case keyOf(actSave):
+		switch {
+		case keyIs(key, actSave):
 			m.clearMessages()
 			return m.requireAdmin(m.beginImportWrite)
 		default:
-			e.offset = scrollOffset(e.offset, key.String(), m.height)
+			e.offset = scrollOffset(e.offset, key, m.height)
 		}
 	case importResult:
-		if key.String() == "enter" {
+		if keyIs(key, actEnter) {
 			m.importNext()
 			return nil
 		}
-		e.offset = scrollOffset(e.offset, key.String(), m.height)
+		e.offset = scrollOffset(e.offset, key, m.height)
 	case importApprove:
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			return m.runImportApprove()
-		case "n":
+		case keyIs(key, actNo):
 			m.declineImportApproval()
 		default:
-			e.offset = scrollOffset(e.offset, key.String(), m.height)
+			e.offset = scrollOffset(e.offset, key, m.height)
 		}
 	case importDelete:
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.deleteImportSource(true)
-		case "n":
+		case keyIs(key, actNo):
 			m.deleteImportSource(false)
 		default:
-			e.offset = scrollOffset(e.offset, key.String(), m.height)
+			e.offset = scrollOffset(e.offset, key, m.height)
 		}
 	}
 	return nil
@@ -271,7 +271,7 @@ func (m *Model) importBack() tea.Cmd {
 
 func (m *Model) updateImportFile(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
-	if key.String() != "enter" {
+	if !keyIs(key, actEnter) {
 		return e.input.update(key)
 	}
 	m.clearMessages()
@@ -289,7 +289,7 @@ func (m *Model) updateImportFile(key tea.KeyPressMsg) tea.Cmd {
 
 func (m *Model) updateImportPassphrase(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
-	if key.String() != "enter" {
+	if !keyIs(key, actEnter) {
 		return e.input.update(key)
 	}
 	typed := e.input.Value()
@@ -306,12 +306,12 @@ func (m *Model) updateImportPassphrase(key tea.KeyPressMsg) tea.Cmd {
 
 func (m *Model) updateImportMode(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
-	switch key.String() {
-	case "up":
+	switch {
+	case keyIs(key, actUp):
 		e.modeCursor = wrap(e.modeCursor-1, len(importModeRows))
-	case "down":
+	case keyIs(key, actDown):
 		e.modeCursor = wrap(e.modeCursor+1, len(importModeRows))
-	case "enter":
+	case keyIs(key, actEnter):
 		m.clearMessages()
 		return m.planImport(importModeRows[e.modeCursor].mode, planFinal)
 	}

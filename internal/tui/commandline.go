@@ -257,19 +257,19 @@ func (m *Model) closeCommandLine() {
 func (m *Model) updateCommandLine(key tea.KeyPressMsg) tea.Cmd {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.closeCommandLine()
 		return nil
-	case "up", "shift+tab":
+	case keyIs(key, actUp) || keyIs(key, actPrev):
 		cl.cursor = wrap(cl.cursor-1, max(len(matches), 1))
 		cl.msg = ""
 		return nil
-	case "down", "tab":
+	case keyIs(key, actDown) || keyIs(key, actNext):
 		cl.cursor = wrap(cl.cursor+1, max(len(matches), 1))
 		cl.msg = ""
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		if len(matches) == 0 {
 			cl.msg = tr(tCmdUnknown, strings.TrimSpace(cl.input.Value()))
 			return nil

@@ -44,6 +44,9 @@ const (
 	actVimLeft  action = "vimleft"
 	actVimRight action = "vimright"
 
+	actTopicNext action = "topicnext"
+	actTopicPrev action = "topicprev"
+
 	actYes     action = "yes"
 	actNo      action = "no"
 	actDiscard action = "discard"
@@ -59,11 +62,13 @@ const (
 	levelMove    keyLevel = "move"
 	levelConfirm keyLevel = "confirm"
 	levelVim     keyLevel = "vim"
+	levelHelp    keyLevel = "help"
 )
 
 // keyDefs is the key table: every action with its level, default keys, and the catalog text of its help.
 // Keys are the names bubbletea reports (tea.KeyPressMsg.String). The vim letters are entries of their own
 // that only moveKey reads: on a screen that reads text they are text, so the movement bindings hold arrows only.
+// The help level holds the keys only the help overlay knows; tab there steps through topics, not fields.
 var keyDefs = []struct {
 	act   action
 	level keyLevel
@@ -98,6 +103,9 @@ var keyDefs = []struct {
 	{actVimDown, levelVim, []string{"j"}, tKeyHelpDown},
 	{actVimLeft, levelVim, []string{"h"}, tKeyHelpLeft},
 	{actVimRight, levelVim, []string{"l"}, tKeyHelpRight},
+
+	{actTopicNext, levelHelp, []string{"tab"}, tKeyHelpTopicNext},
+	{actTopicPrev, levelHelp, []string{"shift+tab"}, tKeyHelpTopicPrev},
 
 	{actYes, levelConfirm, []string{"y"}, tKeyHelpYes},
 	{actNo, levelConfirm, []string{"n"}, tKeyHelpNo},

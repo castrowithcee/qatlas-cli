@@ -83,16 +83,17 @@ func (p *pathField) set(value string) {
 // update handles one key. tab, up and down act on the suggestions; every other key goes to the text input,
 // and the suggestions follow when the text changed.
 func (p *pathField) update(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case "tab":
+	switch {
+	case keyIs(key, actNext):
+		// Completion takes the next-field key: a path line is one field, so tab never moves on from it.
 		if p.mode != pathPlain {
 			p.complete()
 			return nil
 		}
-	case "up", "ctrl+p", "down", "ctrl+n":
+	case keyIs(key, actUp) || keyIs(key, actDown) || key.String() == "ctrl+p" || key.String() == "ctrl+n":
 		if p.mode != pathPlain {
 			step := 1
-			if k := key.String(); k == "up" || k == "ctrl+p" {
+			if keyIs(key, actUp) || key.String() == "ctrl+p" {
 				step = -1
 			}
 			p.move(step)
