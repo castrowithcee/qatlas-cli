@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
@@ -41,7 +42,11 @@ func TestRelationListShowsForeignIssuesByIdentifierOnly(t *testing.T) {
 			e := newEnvironment(t, p, relationServer(p, nil))
 			result, err := e.invoke(t, r.list, "repo", `{"number":7,"limit":3}`)
 			issues, _ := result["issues"].([]any)
-			if err != nil || len(issues) != 3 || result["has_more"] != true || result["next_cursor"] == nil {
+			shown := 3
+			if r.relation.omitsForeign {
+				shown = 1
+			}
+			if err != nil || len(issues) != shown || result["has_more"] != true || result["next_cursor"] == nil {
 				t.Fatalf("%s %s: %v, %v", p.id, r.relation.group, result, err)
 			}
 			path := "GET /api/v1/repos/acme/widget/issues/7/" + strings.TrimPrefix(r.relation.group, "issue-")
@@ -52,15 +57,22 @@ func TestRelationListShowsForeignIssuesByIdentifierOnly(t *testing.T) {
 			if inside["title"] != "Crash on start" || inside["withheld"] != nil || inside["body"] == nil {
 				t.Errorf("%s inside = %v", p.id, inside)
 			}
-			outside, _ := issues[1].(map[string]any)
-			repository, _ := outside["repository"].(map[string]any)
-			if !reflect.DeepEqual(outside, map[string]any{"number": float64(9), "withheld": true,
-				"repository": map[string]any{"full_name": "other/place"}}) || repository["id"] != nil {
-				t.Errorf("%s outside = %v", p.id, outside)
-			}
-			unknown, _ := issues[2].(map[string]any)
-			if !reflect.DeepEqual(unknown, map[string]any{"number": float64(12), "withheld": true}) {
-				t.Errorf("%s unknown = %v", p.id, unknown)
+			if r.relation.omitsForeign {
+				if encoded, _ := json.Marshal(issues); strings.Contains(string(encoded), "other/place") ||
+					strings.Contains(string(encoded), "no repository") {
+					t.Errorf("%s: blocks list shows a foreign entry: %s", p.id, encoded)
+				}
+			} else {
+				outside, _ := issues[1].(map[string]any)
+				repository, _ := outside["repository"].(map[string]any)
+				if !reflect.DeepEqual(outside, map[string]any{"number": float64(9), "withheld": true,
+					"repository": map[string]any{"full_name": "other/place"}}) || repository["id"] != nil {
+					t.Errorf("%s outside = %v", p.id, outside)
+				}
+				unknown, _ := issues[2].(map[string]any)
+				if !reflect.DeepEqual(unknown, map[string]any{"number": float64(12), "withheld": true}) {
+					t.Errorf("%s unknown = %v", p.id, unknown)
+				}
 			}
 			cursor, _ := result["next_cursor"].(string)
 			if _, err := e.invoke(t, r.list, "repo", `{"number":7,"cursor":"`+cursor+`"}`); err != nil ||

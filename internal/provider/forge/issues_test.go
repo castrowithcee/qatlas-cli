@@ -516,6 +516,46 @@ func TestIssueTimelineShowsOtherObjectsByIdentifiersOnly(t *testing.T) {
 	}
 }
 
+func TestIssueTimelineLeavesOutReferencesFromOutsideTheTargets(t *testing.T) {
+	ref := func(id int, kind, repository string) string {
+		source := `"ref_issue":{"id":50,"number":4`
+		if repository != "" {
+			source += `,"repository":{"full_name":"` + repository + `"}`
+		}
+		return `{"id":` + strconv.Itoa(id) + `,"type":"` + kind + `",` + source + `}}`
+	}
+	events := "[" + ref(1, "issue_ref", "other/place") + "," + ref(2, "pull_ref", "acme/widget") + "," +
+		ref(3, "comment_ref", "Acme/Widget") + "," + ref(4, "issue_ref", "") + "," + ref(5, "pull_ref", "other/place") + "," +
+		ref(6, "comment_ref", "other/place") + `,{"id":7,"type":"commit_ref","ref_commit_sha":"abc"},` +
+		`{"id":8,"type":"dependent_issue","dependent_issue":{"id":51,"number":5,"repository":{"full_name":"other/place"}}},` +
+		`{"id":9,"type":"comment","body":"hi"}]`
+	ids := func(result map[string]any) []float64 {
+		var got []float64
+		list, _ := result["events"].([]any)
+		for _, event := range list {
+			row, _ := event.(map[string]any)
+			id, _ := row["id"].(float64)
+			got = append(got, id)
+		}
+		return got
+	}
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response { return jsonResponse(200, events, "X-Total-Count", "90") })
+		result, err := e.invoke(t, issueTimelineList, "repo", `{"number":7,"limit":9}`)
+		if err != nil {
+			t.Fatalf("%s: %v", p.id, err)
+		}
+		if got := ids(result); !reflect.DeepEqual(got, []float64{2, 3, 7, 8, 9}) || result["has_more"] != true {
+			t.Errorf("%s: scoped timeline = %v %v", p.id, got, result)
+		}
+		open := newEnvironment(t, p, func(c call) *http.Response { return jsonResponse(200, events) })
+		result, err = open.invoke(t, issueTimelineList, "open", `{"repository":"acme/widget","number":7}`)
+		if got := ids(result); err != nil || len(got) != 9 {
+			t.Errorf("%s: open timeline = %v %v", p.id, got, err)
+		}
+	}
+}
+
 // A change is sent once and never repeated. An open outcome says so; a refusal that proves nothing happened
 // does not.
 func TestAChangeWithAnOpenOutcomeIsNeverRepeated(t *testing.T) {
