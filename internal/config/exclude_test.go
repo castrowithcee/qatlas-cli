@@ -65,19 +65,21 @@ func TestExcludeValidity(t *testing.T) {
 		exclude []string
 		want    []string
 	}{
-		"valid":               {[]string{"repos/a/b"}, []string{"repos/a/c"}, nil},
-		"outside all target":  {[]string{"repos/a/b"}, []string{"repos/z/z"}, nil},
-		"wildcard target":     {[]string{"*"}, []string{"repos/a/c"}, nil},
-		"empty":               {[]string{"repos/a/b"}, []string{""}, []string{CodeEmptyExclude}},
-		"blank":               {[]string{"repos/a/b"}, []string{"  "}, []string{CodeEmptyExclude}},
-		"duplicate":           {[]string{"repos/a/b"}, []string{"repos/a/c", "repos/a/c"}, []string{CodeDuplicateExclude}},
-		"is target":           {[]string{"repos/a/b", "repos/a/c"}, []string{"repos/a/c"}, []string{CodeExcludeIsTarget}},
-		"provider wildcard":   {[]string{"repos/a/b"}, []string{"*"}, []string{CodeExcludeWildcard}},
-		"wildcard segment":    {[]string{"repos/a/b"}, []string{"repos/*/c"}, []string{CodeExcludeWildcard}},
-		"trailing wildcard":   {[]string{"repos/a/b"}, []string{"repos/a/*"}, []string{CodeExcludeWildcard}},
-		"kind not excludable": {[]string{"repos/a/b"}, []string{"orgs/x"}, []string{CodeInvalidExclude}},
-		"no form":             {[]string{"repos/a/b"}, []string{"repos/a"}, []string{CodeInvalidExclude}},
-		"surrounding space":   {[]string{"repos/a/b"}, []string{" repos/a/c"}, []string{CodeInvalidExclude}},
+		"valid":                {[]string{"repos/a/b"}, []string{"repos/a/c"}, nil},
+		"outside all target":   {[]string{"repos/a/b"}, []string{"repos/z/z"}, nil},
+		"wildcard target":      {[]string{"*"}, []string{"repos/a/c"}, nil},
+		"empty":                {[]string{"repos/a/b"}, []string{""}, []string{CodeEmptyExclude}},
+		"blank":                {[]string{"repos/a/b"}, []string{"  "}, []string{CodeEmptyExclude}},
+		"duplicate":            {[]string{"repos/a/b"}, []string{"repos/a/c", "repos/a/c"}, []string{CodeDuplicateExclude}},
+		"is target":            {[]string{"repos/a/b", "repos/a/c"}, []string{"repos/a/c"}, []string{CodeExcludeIsTarget}},
+		"provider wildcard":    {[]string{"repos/a/b"}, []string{"*"}, []string{CodeExcludeWildcard}},
+		"wildcard segment":     {[]string{"repos/a/b"}, []string{"repos/*/c"}, []string{CodeExcludeWildcard}},
+		"form spells the star": {[]string{"repos/a/b"}, []string{"repos/a/*"}, nil},
+		"star for placeholder": {[]string{"repos/a/b"}, []string{"repos/*/*"}, []string{CodeExcludeWildcard}},
+		"star of other kind":   {[]string{"repos/a/b"}, []string{"orgs/*"}, []string{CodeExcludeWildcard}},
+		"kind not excludable":  {[]string{"repos/a/b"}, []string{"orgs/x"}, []string{CodeInvalidExclude}},
+		"no form":              {[]string{"repos/a/b"}, []string{"repos/a"}, []string{CodeInvalidExclude}},
+		"surrounding space":    {[]string{"repos/a/b"}, []string{" repos/a/c"}, []string{CodeInvalidExclude}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := excludeCodes(excludeConfig(t, tc.targets, tc.exclude...))
@@ -85,6 +87,14 @@ func TestExcludeValidity(t *testing.T) {
 				t.Errorf("codes = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExcludeStarAloneIsAWildcardEvenWhereAFormSpellsIt(t *testing.T) {
+	meta := TargetMetadata{Kinds: []TargetKind{{Name: "all", Forms: []string{"*"}, Excludable: true}}}
+	got := meta.CheckExcludes([]string{"*"}, nil)
+	if len(got) != 1 || got[0].Fault != ExcludeWildcard {
+		t.Errorf("findings = %v, want one wildcard", got)
 	}
 }
 
