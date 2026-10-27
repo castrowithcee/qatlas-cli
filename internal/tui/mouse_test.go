@@ -675,9 +675,11 @@ func TestATooSmallTerminalIgnoresTheMouse(t *testing.T) {
 	// A screen that does not fit the workspace shows the notice, and takes no clicks either.
 	m = sizedModel(heatModel(t, activityLog(t)), 40, minimumHeight)
 	m.setLogTab(logTabDetails)
+	// A note of several lines takes the rows the compact summary still needs.
+	m.status = strings.Repeat("a long note ", 12)
 	m.render()
 	if !m.tooSmall {
-		t.Fatalf("the Details tab fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.render()))
+		t.Fatalf("the Details tab with a long note fits the smallest terminal; the notice is not shown:\n%s", ansi.Strip(m.render()))
 	}
 	cursor, area, screen := m.list.cursor, m.section.area(), m.screen
 	for row := 0; row < minimumHeight; row++ {
