@@ -113,11 +113,11 @@ type themeDef struct {
 // themes are the themes the General page offers, the default first. Every theme but terminal paints the
 // screen, so its colours never meet a terminal background they were not chosen for. A scheme with known
 // colours joins as one more entry whose palette is mixPalette over them.
-var themes = []themeDef{
+var themes = append([]themeDef{
 	{uiprefs.ThemeTerminal, false, terminalPalette},
 	{uiprefs.ThemeQatlasDark, true, func(p colorProfile) palette { return paletteOf(true, p) }},
 	{uiprefs.ThemeQatlasLight, true, func(p colorProfile) palette { return paletteOf(false, p) }},
-}
+}, builtinThemes()...)
 
 // themeNamed is the theme of a name; a name no theme has gives the default and false.
 func themeNamed(name string) (themeDef, bool) {
@@ -240,5 +240,7 @@ func applyTheme(name string) {
 		return
 	}
 	t, _ := themeNamed(name)
-	setTheme(buildTheme(t.palette(currentProfile()), t.paints))
+	p := t.palette(currentProfile())
+	// A palette without a base names no colour to paint (a scheme with 16 colours falls back to the terminal's).
+	setTheme(buildTheme(p, t.paints && p.base != ""))
 }
