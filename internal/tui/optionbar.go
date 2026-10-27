@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // The option bar is a row of fields, each a label and a few fixed alternatives (see arch "Optionsleisten").

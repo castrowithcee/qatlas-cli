@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
@@ -451,7 +451,7 @@ func (m *Model) overviewKeys() string {
 // updateOverview handles the keys of the Overview with the focus on its lines: up and down move over the
 // counts and the steps, enter opens the area of the selected line, and up from the first line, tab, and esc
 // return to the tab line.
-func (m *Model) updateOverview(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateOverview(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}

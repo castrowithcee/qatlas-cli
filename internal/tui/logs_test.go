@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"

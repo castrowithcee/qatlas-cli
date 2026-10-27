@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -185,8 +185,8 @@ type restartCommand struct{ run func() error }
 func (c *restartCommand) Run() error {
 	err := c.run()
 	if err != nil {
-		// Bubble Tea's renderer stops its ticker in a goroutine only after the release returned; restoring
-		// at once lets that late stop hit the restarted ticker, and the screen never redraws again.
+		// Bubble Tea stops its render ticker in a goroutine only after the release returned; restoring at
+		// once lets that late stop hit the restarted ticker, and the screen never redraws again.
 		time.Sleep(restartSettle)
 	}
 	return err
@@ -198,7 +198,7 @@ func (*restartCommand) SetStderr(io.Writer) {}
 
 // updateRestart answers the question that asks before a restart drops unsaved input. y restarts and drops
 // it; anything that keeps the editor leaves it as it was, on the old version.
-func (m *Model) updateRestartConfirm(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateRestartConfirm(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case "y":
 		m.screen = m.restartBack

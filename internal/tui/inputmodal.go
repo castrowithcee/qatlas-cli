@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // promptDialog is the one shape of every short input dialog and of the result of a connection test: a
@@ -136,7 +136,7 @@ func (m *Model) testResultShown() bool {
 }
 
 // testResultKey closes the result of a connection test; every other key waits behind it.
-func (m *Model) testResultKey(key tea.KeyMsg) {
+func (m *Model) testResultKey(key tea.KeyPressMsg) {
 	switch key.String() {
 	case "enter", keyOf(actBack):
 		m.testClass = ""

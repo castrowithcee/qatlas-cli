@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
@@ -193,7 +193,7 @@ func (m *Model) infoReachable() bool {
 
 // infoPressed reports whether the key press asks for the explanation. The letter works only where the
 // screen reads no text; the extra key is none, so it works wherever there is something to explain.
-func (m *Model) infoPressed(key tea.KeyMsg) bool {
+func (m *Model) infoPressed(key tea.KeyPressMsg) bool {
 	switch key.String() {
 	case keyOf(actInfo):
 		return m.infoReachable()

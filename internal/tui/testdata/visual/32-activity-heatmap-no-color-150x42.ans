@@ -1,30 +1,30 @@
-[1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                                   [2m[?] help[0m  [2m[:] cmd[0m
-[1m  [0m[2m 1 Overview [0m [2m 2 Connections [0m [1m[3 Activity][0m [2m 4 Access [0m [2m 5 Library [0m [2m 6 Settings [0m
-[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
-[1mLogs[0m
+[1mQatlas[m  [1m●[m vault unlocked  [2m●[m admin off  [2mconfig.yaml[m                                                                                   [2m[?] help[m  [2m[:] cmd[m
+[1m  [m[2m 1 Overview [m [2m 2 Connections [m [1m[3 Activity][m [2m 4 Access [m [2m 5 Library [m [2m 6 Settings [m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[1mLogs[m
 
-╔═[1m[0m═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
-║ > [2m Table [0m [1;7m[Activity][0m [2m Details [0m                                                                                                        [1m? unverified[0m ║
-║    Mode: All ▾     [2m(all recorded days)[0m     Way: all ▾      Client: all ▾      Tool: all ▾      Conn: all ▾      Effect: all ▾      Result: all ▾   ║
-║                                                                                                                     [2m / search…                    [0m ║
-║   Calls [1m180[0m · success [1m70%[0m · errors [1m54[0m[2m · 2025-12-18 to 2026-03-18[0m                                                                                   ║
-║   [2m       Mon  Tue  Wed  Thu  Fri  Sat  Sun [0m                                                                                                        ║
-║   [2mDec 15 [0m               ···· ···· ···· ····                                                                                                        ║
-║   [2mDec 22 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mDec 29 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mJan 05 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mJan 12 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mJan 19 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mJan 26 [0m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
-║   [2mFeb 02 [0m···· ···· ···· ···· ···· ▓▓▓▓ ▒▒▒▒                                                                                                        ║
-║   [2mFeb 09 [0m████ ░░░░ ▓▓▓▓ ░░░░ ···· ▒▒▒▒ ░░░░                                                                                                        ║
-║   [2mFeb 16 [0m···· ▓▓▓▓ ▒▒▒▒ ████ ░░░░ ▓▓▓▓ ░░░░                                                                                                        ║
-║   [2mFeb 23 [0m████ ···· ░░░░ ···· ▓▓▓▓ ▒▒▒▒ ████                                                                                                        ║
-║   [2mMar 02 [0m░░░░ ▓▓▓▓ ░░░░ ████ ▒▒▒▒ ···· ····                                                                                                        ║
-║   [2mMar 09 [0m▓▓▓▓ ▒▒▒▒ ████ ░░░░ ▓▓▓▓ ░░░░ ████                                                                                                        ║
-║   [2mMar 16 [0m▒▒▒▒ ░░░░ ····                                                                                                                            ║
-║   [2mless [0m·· ░░ ▒▒ ▓▓ ██[2m more[0m[2m (levels by quartile of the busy days)[0m                                                                                   ║
-║   [2m× outside retention · ✗ altered entries · … gap in the chain[0m                                                                                     ║
+╔═[1m[m═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║ > [2m Table [m [1;7m[Activity][m [2m Details [m                                                                                                        [1m? unverified[m ║
+║    Mode: All ▾     [2m(all recorded days)[m     Way: all ▾      Client: all ▾      Tool: all ▾      Conn: all ▾      Effect: all ▾      Result: all ▾   ║
+║                                                                                                                     [2m / search…                    [m ║
+║   Calls [1m180[m · success [1m70%[m · errors [1m54[m[2m · 2025-12-18 to 2026-03-18[m                                                                                   ║
+║   [2m       Mon  Tue  Wed  Thu  Fri  Sat  Sun [m                                                                                                        ║
+║   [2mDec 15 [m               ···· ···· ···· ····                                                                                                        ║
+║   [2mDec 22 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mDec 29 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mJan 05 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mJan 12 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mJan 19 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mJan 26 [m···· ···· ···· ···· ···· ···· ····                                                                                                        ║
+║   [2mFeb 02 [m···· ···· ···· ···· ···· ▓▓▓▓ ▒▒▒▒                                                                                                        ║
+║   [2mFeb 09 [m████ ░░░░ ▓▓▓▓ ░░░░ ···· ▒▒▒▒ ░░░░                                                                                                        ║
+║   [2mFeb 16 [m···· ▓▓▓▓ ▒▒▒▒ ████ ░░░░ ▓▓▓▓ ░░░░                                                                                                        ║
+║   [2mFeb 23 [m████ ···· ░░░░ ···· ▓▓▓▓ ▒▒▒▒ ████                                                                                                        ║
+║   [2mMar 02 [m░░░░ ▓▓▓▓ ░░░░ ████ ▒▒▒▒ ···· ····                                                                                                        ║
+║   [2mMar 09 [m▓▓▓▓ ▒▒▒▒ ████ ░░░░ ▓▓▓▓ ░░░░ ████                                                                                                        ║
+║   [2mMar 16 [m▒▒▒▒ ░░░░ ····                                                                                                                            ║
+║   [2mless [m·· ░░ ▒▒ ▓▓ ██[2m more[m[2m (levels by quartile of the busy days)[m                                                                                   ║
+║   [2m× outside retention · ✗ altered entries · … gap in the chain[m                                                                                     ║
 ╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 
 
@@ -39,4 +39,4 @@
 
 
 
-[1mf[0m[2m filter[0m  [1ms[0m[2m summary[0m  [1mm[0m[2m MCP sessions[0m  [1m/[0m[2m search[0m  [1m1-8[0m[2m section[0m  [1mesc[0m[2m back[0m  [1m:[0m[2m cmds[0m  [1m?[0m[2m help[0m  [1mq[0m[2m quit[0m                     [1mleft/right[0m[2m change tab[0m  [1mtab[0m[2m next field[0m
+[1mf[m[2m filter[m  [1ms[m[2m summary[m  [1mm[m[2m MCP sessions[m  [1m/[m[2m search[m  [1m1-8[m[2m section[m  [1mesc[m[2m back[m  [1m:[m[2m cmds[m  [1m?[m[2m help[m  [1mq[m[2m quit[m                     [1mleft/right[m[2m change tab[m  [1mtab[m[2m next field[m

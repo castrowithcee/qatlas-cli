@@ -4,7 +4,7 @@ import (
 	"hash/fnv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Shared building blocks of the screens. Every block returns lines of exactly the requested width in cells,
@@ -104,7 +104,7 @@ func keepBackground(text string, bg colour) string {
 	if set == "" {
 		return text
 	}
-	return set + strings.ReplaceAll(text, "\x1b[0m", "\x1b[0m"+set)
+	return set + afterResets(text, set)
 }
 
 // keepStyle makes a finished line keep style across the resets of its own styles, like keepBackground does
@@ -118,7 +118,13 @@ func keepStyle(text string, style lipgloss.Style) string {
 	if set == "" {
 		return text
 	}
-	return strings.ReplaceAll(text, "\x1b[0m", "\x1b[0m"+set)
+	return afterResets(text, set)
+}
+
+// afterResets puts set behind every full reset of text, in both spellings: Lip Gloss writes the short one,
+// paintCanvas the long one.
+func afterResets(text, set string) string {
+	return strings.NewReplacer("\x1b[0m", "\x1b[0m"+set, "\x1b[m", "\x1b[m"+set).Replace(text)
 }
 
 // surfaceRow draws a finished input row as a field: cut or padded to width cells on the surface colour.

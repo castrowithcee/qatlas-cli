@@ -10,7 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -447,7 +447,7 @@ func (m *Model) pickCells(e *pickEntry) []string {
 }
 
 // updatePick handles the picker. Every printable key belongs to the search.
-func (m *Model) updatePick(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updatePick(key tea.KeyPressMsg) tea.Cmd {
 	p := m.targetPick
 	lv := p.top()
 	m.clearMessages()

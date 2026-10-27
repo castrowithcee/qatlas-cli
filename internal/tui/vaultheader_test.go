@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -182,7 +182,7 @@ func TestVaultHeaderReadsWithoutColour(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.build(t)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-			text := m.vaultHeaderText()
+			text := shown(m.vaultHeaderText())
 			if strings.Contains(text, "\x1b") {
 				t.Errorf("NO_COLOR still emits escape sequences: %q", text)
 			}

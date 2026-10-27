@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -118,7 +118,7 @@ func BenchmarkScaleList(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					model.Update(tea.KeyMsg{Type: tea.KeyDown})
+					model.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 					model.render()
 				}
 			})
@@ -126,9 +126,9 @@ func BenchmarkScaleList(b *testing.B) {
 				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					model.openSection(sectionConnections)
-					model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+					model.Update(tea.KeyPressMsg{Code: '/', Text: string('/')})
 					for _, r := range "conn-001" {
-						model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+						model.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 					}
 					model.render()
 				}
@@ -144,9 +144,9 @@ func TestScaleModelSmall(t *testing.T) {
 	if got := model.entryTotal(); got != 25 {
 		t.Fatalf("connections = %d, want 25", got)
 	}
-	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	model.Update(tea.KeyPressMsg{Code: '/', Text: string('/')})
 	for _, r := range "conn-0001" {
-		model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		model.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	if got := len(shownEntries(model)); got != 10 {
 		t.Fatalf("matches = %d, want 10", got)

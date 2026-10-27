@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -350,7 +350,7 @@ func (m *Model) askSecret(role string) {
 }
 
 // updateSecret handles the masked prompt.
-func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateSecret(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		m.secretInput.Reset()
@@ -379,7 +379,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	}
 
 	var cmd tea.Cmd
-	m.secretInput, cmd = m.secretInput.Update(key)
+	m.secretInput, cmd = m.secretInput.Update(inputMsg(key))
 	return cmd
 }
 
@@ -496,7 +496,7 @@ func (m *Model) openVaultOfferFor(title, hint string, optional, twice bool,
 // passphrase, and, while twice is set, the second time asks for the same one again to confirm it. A
 // mismatch is an error that leaves the prompt open, back at the first entry, rather than closing it or
 // writing anything.
-func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateVaultOffer(key tea.KeyPressMsg) tea.Cmd {
 	o := m.vaultOffer
 	switch key.String() {
 	case keyOf(actBack):
@@ -540,7 +540,7 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 	}
 
 	var cmd tea.Cmd
-	o.input, cmd = o.input.Update(key)
+	o.input, cmd = o.input.Update(inputMsg(key))
 	return cmd
 }
 
@@ -929,7 +929,7 @@ func (m *Model) secretKeys() string {
 }
 
 // secretRowKey handles the keys of a focused secret row.
-func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
+func (m *Model) secretRowKey(role string, key tea.KeyPressMsg) tea.Cmd {
 	action := key.String()
 	if action != "enter" && action != keyOf(actDelete) {
 		return nil

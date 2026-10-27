@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/brave"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // A provider without targets is edited and saved like any other: its target row says there is nothing to

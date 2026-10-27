@@ -1,6 +1,13 @@
 package tui
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"os"
+	"strings"
+	"unicode"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+)
 
 // typing reports whether the current screen reads typed text right now. Letters are text there, so neither
 // the vim movement keys, ? nor : mean anything else.
@@ -66,19 +73,101 @@ func (m *Model) helpReachable() bool {
 
 // moveKey turns the vim movement keys into the arrow keys on a screen that reads no text, so every screen
 // moves the same way and no handler needs to know the letters.
-func (m *Model) moveKey(key tea.KeyMsg) tea.KeyMsg {
-	if key.Type != tea.KeyRunes || key.Alt || key.Paste || len(key.Runes) != 1 || m.typing() {
+func (m *Model) moveKey(key tea.KeyPressMsg) tea.KeyPressMsg {
+	if m.typing() {
 		return key
 	}
-	switch key.Runes[0] {
-	case 'h':
-		return tea.KeyMsg{Type: tea.KeyLeft}
-	case 'j':
-		return tea.KeyMsg{Type: tea.KeyDown}
-	case 'k':
-		return tea.KeyMsg{Type: tea.KeyUp}
-	case 'l':
-		return tea.KeyMsg{Type: tea.KeyRight}
+	switch key.String() {
+	case "h":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "j":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "k":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "l":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
 	}
 	return key
 }
+
+// pasteCode is the code of the key a paste travels as; no key of a keyboard has it.
+const pasteCode rune = -1
+
+// pasteKey is a paste as the key it travels as through the key handlers of the screens. It is named after the
+// pasted text in brackets, so no key binding matches it, and inputMsg hands it to a text field as a paste.
+func pasteKey(content string) tea.KeyPressMsg {
+	return tea.KeyPressMsg{Code: pasteCode, Text: "[" + content + "]"}
+}
+
+// pasted returns the text of a paste key and whether key is one.
+func pasted(key tea.KeyPressMsg) (string, bool) {
+	if key.Code != pasteCode || len(key.Text) < 2 {
+		return "", false
+	}
+	return key.Text[1 : len(key.Text)-1], true
+}
+
+// inputMsg is what a text field is handed for key: a paste key as the paste it stands for, and alt with a
+// character the field binds nothing to as that character, which a field has always typed.
+func inputMsg(key tea.KeyPressMsg) tea.Msg {
+	if content, ok := pasted(key); ok {
+		return tea.PasteMsg{Content: content}
+	}
+	if key.Text != "" || key.Mod&^tea.ModShift != tea.ModAlt || !unicode.IsPrint(key.Code) || inputBinds(key) {
+		return key
+	}
+	if key.Mod.Contains(tea.ModShift) {
+		return textKey(string(unicode.ToUpper(key.Code)))
+	}
+	return textKey(string(key.Code))
+}
+
+// legacyKey names a key as the terminal library always named it where its input reader now names it
+// otherwise: the shifted F1 to F8 of xterm-like terminals are F13 to F20, as a stored key binding knows them.
+func legacyKey(key tea.KeyPressMsg) tea.KeyPressMsg {
+	if key.Mod&^tea.ModAlt == tea.ModShift && key.Code >= tea.KeyF1 && key.Code <= tea.KeyF8 {
+		key.Code += tea.KeyF13 - tea.KeyF1
+		key.Mod &^= tea.ModShift
+	}
+	return key
+}
+
+// linuxFunctionKey is F1 to F5 of the Linux console, which sends them as "\x1b[[" and a letter from A to E; the
+// input reader reports the two apart.
+func linuxFunctionKey(key tea.KeyPressMsg) (tea.KeyPressMsg, bool) {
+	if len(key.Text) != 1 || key.Text[0] < 'A' || key.Text[0] > 'E' {
+		return key, false
+	}
+	return tea.KeyPressMsg{Code: tea.KeyF1 + rune(key.Text[0]-'A')}, true
+}
+
+// textKey is the key press of typed text.
+func textKey(text string) tea.KeyPressMsg {
+	code := tea.KeyExtended
+	if runes := []rune(text); len(runes) == 1 {
+		code = runes[0]
+	}
+	return tea.KeyPressMsg{Code: code, Text: text}
+}
+
+// keyboardModes removes what Bubble Tea writes to switch the keyboard enhancements of the terminal on, off, or
+// to ask about them: modifyOtherKeys and the Kitty keyboard protocol. With them a terminal reports keys such as
+// ctrl+i, shift+enter or the keypad's enter under names of their own; without them every key keeps the name
+// the legacy encoding gives it, the name every key binding, stored ones included, was taken under.
+var keyboardModes = strings.NewReplacer(ansi.SetModifyOtherKeys2, "", ansi.ResetModifyOtherKeys, "",
+	ansi.PushKittyKeyboard(1), "", ansi.PopKittyKeyboard(1), "", ansi.RequestKittyKeyboard, "")
+
+// legacyKeys is the terminal output of the editor without the keyboard enhancements. Bubble Tea writes each
+// frame, and each set of terminal modes, in one write, so no sequence is split between two.
+type legacyKeys struct{ f *os.File }
+
+func (o legacyKeys) Write(p []byte) (int, error) {
+	if _, err := o.f.WriteString(keyboardModes.Replace(string(p))); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (o legacyKeys) Read(p []byte) (int, error) { return o.f.Read(p) }
+func (o legacyKeys) Close() error               { return o.f.Close() }
+func (o legacyKeys) Fd() uintptr                { return o.f.Fd() }

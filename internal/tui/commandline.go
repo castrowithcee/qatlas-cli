@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -254,7 +254,7 @@ func (m *Model) closeCommandLine() {
 	m.cmdline = nil
 }
 
-func (m *Model) updateCommandLine(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateCommandLine(key tea.KeyPressMsg) tea.Cmd {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
 	switch key.String() {
@@ -283,7 +283,7 @@ func (m *Model) updateCommandLine(key tea.KeyMsg) tea.Cmd {
 		return c.run(m)
 	}
 	before := cl.input.Value()
-	cl.input, _ = cl.input.Update(key)
+	cl.input, _ = cl.input.Update(inputMsg(key))
 	if cl.input.Value() != before {
 		cl.cursor, cl.msg = 0, ""
 	}
@@ -299,7 +299,7 @@ func (m *Model) commandLineView() string {
 	if cl.msg != "" {
 		foot = "\n" + m.wrapped(styles.fail, tr(tNoteError, cl.msg)) + foot
 	}
-	head := m.wrapped(styles.title, tr(tCmdHead)) + "\n\n" + cl.input.View() + "\n\n"
+	head := m.wrapped(styles.title, tr(tCmdHead)) + "\n\n" + inputView(cl.input) + "\n\n"
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 1)
 	if len(matches) == 0 {
 		return head + m.wrapped(styles.hint, tr(tCmdNoMatch)) + "\n" + foot
@@ -342,7 +342,7 @@ func (m *Model) paletteLines(inner, room int) ([]string, []int) {
 	}
 	field := cl.input
 	setInputWidth(&field, max(inner-3, 1))
-	lines := []string{surfaceRow(" "+field.View(), inner), ""}
+	lines := []string{surfaceRow(" "+inputView(field), inner), ""}
 	index := []int{-1, -1}
 	fixed := len(lines) + 1 + len(foot) + len(msg)
 	rows := max(min(room-fixed, paletteMaxRows, max(len(matches), 1)), 1)
@@ -406,5 +406,5 @@ func (m *Model) pickCommand(i int) tea.Cmd {
 		return nil
 	}
 	m.cmdline.cursor = i
-	return m.updateCommandLine(tea.KeyMsg{Type: tea.KeyEnter})
+	return m.updateCommandLine(tea.KeyPressMsg{Code: tea.KeyEnter})
 }

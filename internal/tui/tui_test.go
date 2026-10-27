@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -140,30 +139,30 @@ func addVaultCredential(t *testing.T, m *Model, name string) {
 }
 
 // keyMsg is the event a terminal sends for one key.
-func keyMsg(k string) tea.KeyMsg {
+func keyMsg(k string) tea.KeyPressMsg {
 	switch k {
 	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "shift+tab":
-		return tea.KeyMsg{Type: tea.KeyShiftTab}
+		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	case "esc":
-		return tea.KeyMsg{Type: tea.KeyEsc}
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "ctrl+l":
-		return tea.KeyMsg{Type: tea.KeyCtrlL}
+		return tea.KeyPressMsg{Code: 'l', Mod: tea.ModCtrl}
 	case "ctrl+c":
-		return tea.KeyMsg{Type: tea.KeyCtrlC}
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "up":
-		return tea.KeyMsg{Type: tea.KeyUp}
+		return tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
-		return tea.KeyMsg{Type: tea.KeyDown}
+		return tea.KeyPressMsg{Code: tea.KeyDown}
 	case "left":
-		return tea.KeyMsg{Type: tea.KeyLeft}
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
 	case "right":
-		return tea.KeyMsg{Type: tea.KeyRight}
+		return tea.KeyPressMsg{Code: tea.KeyRight}
 	default:
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+		return textKey(k)
 	}
 }
 
@@ -190,7 +189,7 @@ func pump(t *testing.T, m *Model, keys ...string) {
 func typeText(t *testing.T, m *Model, text string) {
 	t.Helper()
 	for _, r := range text {
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 }
 
@@ -198,8 +197,8 @@ func typeText(t *testing.T, m *Model, text string) {
 // key presses instead of one per character, since every key press redraws the screen to check its size.
 func clearField(t *testing.T, m *Model) {
 	t.Helper()
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	m.Update(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl})
 }
 
 // openSectionByName navigates from the tab line to a section the way a person does: the digit of its area,
@@ -657,7 +656,7 @@ func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 		for a := area(0); a < areaCount; a++ {
 			m.section, m.screen = areaSections[a][0], screenList
-			line := m.navLine()
+			line := shown(m.navLine())
 			if strings.Contains(line, "\x1b") {
 				t.Fatalf("width %d: the tab line carries colour codes: %q", width, line)
 			}
@@ -671,7 +670,7 @@ func TestTabLineKeepsTheActiveTabWhole(t *testing.T) {
 				t.Errorf("width %d: the tab line is %d cells wide: %q", width, got, line)
 			}
 			m.screen = screenNav
-			if line := m.navLine(); !strings.HasPrefix(line, "> ") {
+			if line := shown(m.navLine()); !strings.HasPrefix(line, "> ") {
 				t.Errorf("width %d: the focused tab line has no marker: %q", width, line)
 			}
 		}
@@ -725,7 +724,7 @@ func TestDirectSectionKeys(t *testing.T) {
 		if m.screen != screenForm || m.editing != "wiki" {
 			t.Fatalf("enter did not open wiki: screen %v", m.screen)
 		}
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + want)}, Alt: true})
+		m.Update(tea.KeyPressMsg{Code: rune('1' + want), Mod: tea.ModAlt})
 		if m.screen != screenForm || m.editing != "wiki" || m.section != sectionServices {
 			t.Errorf("alt+%d in a form = screen %v section %v, want no effect", want+1, m.screen, m.section)
 		}
@@ -1129,14 +1128,15 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 }
 
 // screenOf is the workspace as the user reads it, with the footer under it and without the header, tab line
-// and rule above it. The frame itself is tested on its own, through View.
+// and rule above it, as the terminal of the current colour profile is sent it. The frame itself is tested on
+// its own, through View.
 func screenOf(m *Model) string {
 	if m.quitting || m.terminalTooSmall() {
 		return m.render()
 	}
 	m.screenKeys, m.screenPos = "", ""
 	view := leftOfPane(m, m.workspaceView())
-	return view + "\n" + m.footerLine()
+	return shown(view + "\n" + m.footerLine())
 }
 
 // flatText is a view as one line of words, where the spacing between groups of keys does not matter.
@@ -1144,7 +1144,7 @@ func flatText(view string) string { return strings.Join(strings.Fields(view), " 
 
 // withFooter is a view drawn by a single screen function with the footer under it, which the keys of that
 // screen went to.
-func withFooter(m *Model, view string) string { return view + "\n" + m.footerLine() }
+func withFooter(m *Model, view string) string { return shown(view + "\n" + m.footerLine()) }
 
 // explained is the whole explanation of the focused row as one line of words: what the pane and the overlay
 // show, while the form itself shows one line of hint.
@@ -1512,7 +1512,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	}
 	// The cursor sits past the last character, so the text input draws one more cell after the value; the
 	// frame of the field pads the line, so the cell is looked for as the input draws it.
-	if !strings.Contains(atEnd, m.fields[m.focus].input.View()) {
+	if !strings.Contains(atEnd, shown(m.fields[m.focus].input.View())) {
 		t.Errorf("no cursor cell behind the value, the field is drawn from the plain value:\n%s", atEnd)
 	}
 
@@ -1526,13 +1526,13 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	}
 
 	// A cursor that is only visible while a blink timer runs would vanish; this one is always drawn.
-	if got := m.fields[m.focus].input.Cursor.Mode(); got != cursor.CursorStatic {
-		t.Errorf("cursor mode = %v, want a static one", got)
+	if m.fields[m.focus].input.Styles().Cursor.Blink {
+		t.Error("the cursor blinks, want a static one")
 	}
-	if m.fields[m.focus].input.Cursor.Blink {
+	if !strings.Contains(m.fields[m.focus].input.View(), "\x1b[7m") {
 		t.Error("the cursor of the focused field is currently not drawn")
 	}
-	if !m.fields[0].input.Cursor.Blink {
+	if strings.Contains(m.fields[0].input.View(), "\x1b[7m") {
 		t.Error("an unfocused field should not draw a cursor")
 	}
 }
@@ -2450,10 +2450,14 @@ func sectionViews(m *Model) string {
 	return b.String()
 }
 
-// View hands the drawing to render unchanged.
+// View hands the drawing to render unchanged, inline below the prompt.
 func TestViewWrapsRender(t *testing.T) {
 	m, _, _ := newModel(t)
-	if got, want := m.View(), m.render(); got != want {
+	view := m.View()
+	if got, want := view.Content, m.render(); got != want {
 		t.Fatalf("View differs from render:\n%q\n%q", got, want)
+	}
+	if view.AltScreen {
+		t.Error("the view asks for the alternate screen")
 	}
 }

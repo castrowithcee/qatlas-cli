@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -159,7 +159,7 @@ type barPart struct {
 func searchContent(l *filterList, room int) string {
 	switch {
 	case l.editing:
-		return "/ " + fitInput(l.input, max(room-3, 1)).View()
+		return "/ " + inputView(fitInput(l.input, max(room-3, 1)))
 	case l.query() != "":
 		return "/ " + truncateCells(l.query(), max(room-3, 1))
 	}
@@ -305,7 +305,7 @@ func (m *Model) openBarDropdown(field int) {
 // updateBar is a key on the focused filter bar. left/right change the value of the field, tab and shift+tab
 // step through the fields, and leaving the bar at either end lands on the next stop: the tab line after the
 // last field, the rows before the first.
-func (m *Model) updateBar(key tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) updateBar(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	kinds := barKinds(m.section)
 	field := m.barFocus - 1
 	switch key.String() {

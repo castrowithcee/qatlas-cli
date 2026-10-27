@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -49,7 +49,7 @@ func TestColoursStepDownWithTheProfile(t *testing.T) {
 		profile16:        "94",
 	} {
 		setProfile(profile)
-		if out := st.Render("x"); !strings.Contains(out, want) {
+		if out := shown(st.Render("x")); !strings.Contains(out, want) {
 			t.Errorf("profile %v: %q lacks %q", profile, out, want)
 		}
 	}

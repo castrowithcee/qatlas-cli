@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // The sections of a form. A form with two or more of them shows a list of the sections at its left, or,

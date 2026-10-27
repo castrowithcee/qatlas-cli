@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 )
@@ -82,7 +82,7 @@ func (p *pathField) set(value string) {
 
 // update handles one key. tab, up and down act on the suggestions; every other key goes to the text input,
 // and the suggestions follow when the text changed.
-func (p *pathField) update(key tea.KeyMsg) tea.Cmd {
+func (p *pathField) update(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case "tab":
 		if p.mode != pathPlain {
@@ -101,7 +101,7 @@ func (p *pathField) update(key tea.KeyMsg) tea.Cmd {
 	}
 	before := p.Value()
 	var cmd tea.Cmd
-	p.Model, cmd = p.Model.Update(key)
+	p.Model, cmd = p.Model.Update(inputMsg(key))
 	if p.Value() != before {
 		p.refresh()
 	}
@@ -248,7 +248,7 @@ func (m *Model) pathLinesIn(room int, label string, p *pathField) string {
 	in := fitInput(p.Model, width)
 	// The text input pads to its width, so the line is cut back to the room there is.
 	var b strings.Builder
-	b.WriteString(prefix + lipgloss.NewStyle().MaxWidth(width).Render(in.View()) + "\n")
+	b.WriteString(prefix + lipgloss.NewStyle().MaxWidth(width).Render(inputView(in)) + "\n")
 	suggestions, current := p.shown()
 	for i, suggestion := range suggestions {
 		b.WriteString(m.rowIn(room, i == current, suggestion) + "\n")

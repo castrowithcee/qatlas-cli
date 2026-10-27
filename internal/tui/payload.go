@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -119,7 +119,7 @@ func (m *Model) payloadRows() []int {
 
 // payloadKey handles the keys that are specific to a payload form: enter on the new-field row adds a field,
 // ctrl+d on a value row removes it.
-func (m *Model) payloadKey(key tea.KeyMsg) bool {
+func (m *Model) payloadKey(key tea.KeyPressMsg) bool {
 	switch current := m.fields[m.focus]; {
 	case current.kind == fieldPayloadNew && key.String() == "enter":
 		m.addPayloadField()
