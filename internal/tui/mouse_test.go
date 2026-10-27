@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1323,7 +1325,7 @@ func TestBackButtonOutlastsTheHeaderHints(t *testing.T) {
 		if with != without {
 			t.Fatalf("width %d: %d header rows with the button, %d without", width, with, without)
 		}
-		if at := strings.Index(row, backText); at >= 0 && !strings.HasPrefix(bare, strings.TrimRight(row[:at], " ")) {
+		if at := strings.Index(row, backText); at >= 0 && !strings.Contains(row, "…") && !strings.HasPrefix(bare, strings.TrimRight(row[:at], " ")) {
 			t.Fatalf("width %d: the button moved the left part: %q against %q", width, row, bare)
 		}
 	}
@@ -1424,5 +1426,47 @@ func TestTabClickInTransferAndSelftestStopsAtTheFirstQuestion(t *testing.T) {
 	clickOn(t, m, "6 Settings")
 	if m.screen != screenSelftest || !m.st.cancelling {
 		t.Errorf("a running selftest: screen %v, want it ending and still shown", m.screen)
+	}
+}
+
+// A long config path (the temporary directories of some systems are) is cut for the button before the button
+// gives way; the keys go first and the header keeps its rows.
+func TestBackButtonOutranksALongPathAndTheKeys(t *testing.T) {
+	deep := filepath.Join(t.TempDir(), strings.Repeat("deep-directory-", 7))
+	if err := os.MkdirAll(deep, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// The temporary root of a test is made on first use, so the model is built in a subtest that finds the
+	// long directory first.
+	t.Run("long", func(t *testing.T) { backOutranksALongPath(t, deep) })
+}
+
+func backOutranksALongPath(t *testing.T, deep string) {
+	t.Setenv("TMPDIR", deep)
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	row := frameLines(m)[0]
+	if !strings.Contains(row, backText) || strings.Contains(row, "["+keyLabel(actHelp)+"]") || !strings.Contains(row, "…") {
+		t.Fatalf("header = %q, want the cut path and the button without the keys", row)
+	}
+	with := len(m.headerLines())
+	m.backdrop = true
+	without := len(m.headerLines())
+	m.backdrop = false
+	if with != without || with != 1 {
+		t.Errorf("header rows %d with the button, %d without, want 1", with, without)
+	}
+	clickOn(t, m, backText)
+	if m.screen != screenList {
+		t.Errorf("click on the button of a cut path: screen %v", m.screen)
+	}
+	// At the smallest width the path keeps its pathRoom and the button takes what is left, in the same row.
+	m = sizedModel(m, minimumWidth, minimumHeight)
+	m.backdrop = true
+	bare := len(m.headerLines())
+	m.backdrop = false
+	if rows := len(m.headerLines()); rows != bare || ansi.StringWidth(frameLines(m)[0]) > minimumWidth {
+		t.Errorf("at %d columns the button changed the rows (%d against %d): %q", minimumWidth, rows, bare, frameLines(m)[0])
 	}
 }

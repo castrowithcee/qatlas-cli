@@ -115,8 +115,21 @@ func (m *Model) headerLayout() ([]string, navSpan) {
 		var back navSpan
 		if shown == path || shown == path+suffix {
 			line, back = placeRight(line, rights, width)
+			if back.x1 > back.x0 || len(rights) == 0 || rights[len(rights)-1].back.x1 == 0 {
+				return []string{line}, back
+			}
 		}
-		return []string{line}, back
+		// The button outranks the whole path: it takes its room first, and the path is cut to what is left
+		// as long as that keeps pathRoom; the keys stand only where the whole path fits.
+		if len(rights) > 0 && rights[len(rights)-1].back.x1 > 0 {
+			button := rights[len(rights)-1:]
+			if left := room - sep - lipgloss.Width(button[0].text); left >= pathMin {
+				cut := lines[0] + headerSep + styles.hint.Render(fitPath(path, suffix, left))
+				cut, back = placeRight(cut, button, width)
+				return []string{cut}, back
+			}
+		}
+		return []string{line}, navSpan{}
 	}
 	var back navSpan
 	if len(lines) == 1 {
