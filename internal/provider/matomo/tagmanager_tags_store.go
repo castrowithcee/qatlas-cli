@@ -56,8 +56,9 @@ const (
 
 const tagGuard = "Only tags of the types Matomo and ThemeColor are offered; every other type can send data to a " +
 	"third party and stays with the Matomo user interface. A Matomo tag must refer in matomoConfig, as {{Name}}, " +
-	"to a variable of the draft of the type MatomoConfiguration whose matomoUrl and idSite are written out and " +
-	"name this connection's Matomo and the selected website; otherwise the tool refuses before it changes anything. " +
+	"to a variable of the draft of the type MatomoConfiguration that meets the rule of the variable tools (matomoUrl " +
+	"and idSite name this connection's Matomo and the selected website, setApiUrl and customRequestProcessing are " +
+	"empty, endpoints are plain paths); otherwise the tool refuses before it changes anything. " +
 	"Only the draft changes: the tool reads the container first, takes the draft from it, and never accepts a " +
 	"version, so nothing is published"
 
@@ -401,12 +402,12 @@ func readTag(ctx context.Context, client *Client, op, tool string, site int, con
 }
 
 // checkTrackingTarget proves with one read of the variables of the draft that the configuration variable named
-// by the reference holds this connection's Matomo and the selected website as written-out values.
+// by the reference meets the rule of the variable tools for such a variable.
 func checkTrackingTarget(ctx context.Context, client *Client, op, tool, baseURL string, site int, container string,
 	draft int, name string) error {
-	refused := invalidArgument("matomoConfig must refer to a variable of the draft of the type " + configVariableType +
-		" whose matomoUrl and idSite are written out and name this connection's Matomo and the selected website; " +
-		"nothing was changed")
+	refused := invalidArgument("matomoConfig must refer to exactly one variable of the draft of the type " + configVariableType +
+		" that names this connection's Matomo and the selected website in matomoUrl and idSite, keeps setApiUrl " +
+		"and customRequestProcessing empty, and has tracker and script endpoints that are plain paths; nothing was changed")
 	params := url.Values{"idSite": {strconv.Itoa(site)}, "idContainer": {container},
 		"idContainerVersion": {strconv.Itoa(draft)}}
 	var answer json.RawMessage
@@ -438,7 +439,7 @@ func checkTrackingTarget(ctx context.Context, client *Client, op, tool, baseURL 
 	if !ok {
 		return invalid
 	}
-	if !trackingTargetMatches(baseURL, site, stored) {
+	if checkConfigurationVariable(baseURL, site, stored) != nil {
 		return refused
 	}
 	return nil

@@ -326,6 +326,13 @@ func TestTagManagerTagMatomoTagIsRefusedWithoutMutationForAnyOtherTrackingTarget
 		"reference site":     configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"{{Site}}"}`),
 		"missing site":       configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/"}`),
 		"empty parameters":   configVariable("Main", "MatomoConfiguration", `[]`),
+		"foreign api url":    configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","setApiUrl":"https://evil.example.org/matomo/"}`),
+		"request processing": configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","customRequestProcessing":"return 1;"}`),
+		"protocol relative":  configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","trackingEndpoint":"//evil.example.org/"}`),
+		"absolute endpoint":  configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","trackingEndpointCustom":"https://evil.example.org/m.php"}`),
+		"leading slash":      configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","trackingEndpointCustom":"/evil.example.org/m.php"}`),
+		"parent path":        configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","jsEndpointCustom":"../evil.example.org/m.js"}`),
+		"numeric endpoint":   configVariable("Main", "MatomoConfiguration", `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","jsEndpoint":5}`),
 		"wrong type":         configVariable("Main", "Constant", good),
 		"other name":         configVariable("Other", "MatomoConfiguration", good),
 		"other site row":     strings.Replace(configVariable("Main", "MatomoConfiguration", good), `"idsite":1`, `"idsite":9`, 1),
@@ -390,16 +397,36 @@ func TestTagManagerTagMatomoTargetAcceptsTheSameAddressInOtherSpellings(t *testi
 		"upper case host":   `{"matomoUrl":"HTTPS://Analytics.Example.Test/matomo/","idSite":"1"}`,
 		"default port":      `{"matomoUrl":"https://analytics.example.test:443/matomo/","idSite":"1"}`,
 		"numeric site":      `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":1}`,
+		"empty code fields": `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","setApiUrl":"","customRequestProcessing":"","trackingEndpoint":"","jsEndpointCustom":""}`,
+		"plain endpoints":   `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","trackingEndpoint":"matomo.php","trackingEndpointCustom":"tracker/m.php","jsEndpoint":"matomo.js","jsEndpointCustom":"js/m.js"}`,
+		"other settings":    `{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","enableLinkTracking":true,"cookieDomain":"*.example.test","requireConsent":"1"}`,
 	} {
-		var calls []call
-		env := newTagStoreEnvironment(t, &calls, tagStoreAnswers(answers{
-			"TagManager.getContainerVariables": func(call) *http.Response {
-				return ok(`[` + configVariable("Main", "MatomoConfiguration", parameters) + `]`)
-			},
-		}).handler(t))
-		if _, err := env.change("matomo.tag-manager-tags.resume", "tms", tagStoreTools[2].arguments); err != nil {
-			t.Errorf("%s: %v", name, err)
+		for _, tool := range tagStoreTools {
+			var calls []call
+			env := newTagStoreEnvironment(t, &calls, tagStoreAnswers(answers{
+				"TagManager.getContainerVariables": func(call) *http.Response {
+					return ok(`[` + configVariable("Main", "MatomoConfiguration", parameters) + `]`)
+				},
+			}).handler(t))
+			if _, err := env.change(tool.id, "tms", tool.arguments); err != nil {
+				t.Errorf("%s %s: %v", tool.id, name, err)
+			}
 		}
+	}
+}
+
+func TestTagManagerTagResumeRefusesAStoredValidTagWhoseVariableNowSetsAnApiUrl(t *testing.T) {
+	var calls []call
+	env := newTagStoreEnvironment(t, &calls, tagStoreAnswers(answers{
+		"TagManager.getContainerVariables": func(call) *http.Response {
+			return ok(`[` + configVariable("Main", "MatomoConfiguration",
+				`{"matomoUrl":"https://analytics.example.test/matomo/","idSite":"1","setApiUrl":"https://evil.example.org/"}`) + `]`)
+		},
+	}).handler(t))
+	_, err := env.change("matomo.tag-manager-tags.resume", "tms", tagStoreTools[2].arguments)
+	if err == nil || !isInvalidRequest(err) || !noMutation(calls) || strings.Contains(err.Error(), "evil.example.org") ||
+		countMethod(calls, "TagManager.getContainerVariables") != 1 {
+		t.Errorf("resume: err = %v", err)
 	}
 }
 
