@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Infomaniak kDrive trash
@@ -24,6 +24,10 @@ in the [tool overview](README.md#tools); the other changes are described in [fil
 - `trash.restore` takes `destination_id`, a required folder of the same drive (the root is `1`), because the
   specification requires `destination_directory_id` in the request body; Qatlas offers no restore to a place
   outside the drive. Restoring is the only trash change that needs just the `update` effect.
+- On a drive with excluded files or folders, `trash.list`, `trash.restore`, `trash.delete`, and `trash.empty` are
+  refused before the secret is read, as for a drive bound only by `files` targets: an entry no longer shows
+  where it lay, so it cannot be told from an excluded one. `files.trash` stays, except for a folder above an
+  excluded object, see [Exclusions](files.md#exclusions).
 - The same rules as for the other changes apply: the drive goes through the checks under [Scope](README.md#scope) before the one
   request, `files.trash` proves its `file_id` like any object, the four other trash tools act on the whole drive, a refusal names no foreign value, an unclear outcome is reported
   and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports

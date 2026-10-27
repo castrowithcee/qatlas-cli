@@ -3,7 +3,9 @@ package infomaniakmail
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -137,6 +139,9 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 		}
 		byName[name] = folder
 	}
+	if c.scope.hasFolderExcludes() {
+		refreshChildren(byName)
+	}
 	names := make([]string, 0, len(byName))
 	for name := range byName {
 		names = append(names, name)
@@ -152,4 +157,35 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 	}
 	page.Count = len(page.Folders)
 	return page, nil
+}
+
+// refreshChildren decides \HasChildren and \HasNoChildren again from the folders that stay visible, so an
+// attribute never tells that a hidden subfolder exists (RFC 9051 section 7.3.1: the flag reports the
+// children the listing can show). A folder the server gave neither attribute keeps its attributes.
+func refreshChildren(byName map[string]Folder) {
+	hasChildren, hasNoChildren := string(imap.MailboxAttrHasChildren), string(imap.MailboxAttrHasNoChildren)
+	for name, folder := range byName {
+		at := slices.IndexFunc(folder.Attributes, func(attr string) bool {
+			return strings.EqualFold(attr, hasChildren) || strings.EqualFold(attr, hasNoChildren)
+		})
+		if at < 0 {
+			continue
+		}
+		visible := false
+		if folder.Delimiter != "" {
+			for other := range byName {
+				if strings.HasPrefix(other, name+folder.Delimiter) {
+					visible = true
+					break
+				}
+			}
+		}
+		attrs := slices.Clone(folder.Attributes)
+		attrs[at] = hasNoChildren
+		if visible {
+			attrs[at] = hasChildren
+		}
+		folder.Attributes = attrs
+		byName[name] = folder
+	}
 }

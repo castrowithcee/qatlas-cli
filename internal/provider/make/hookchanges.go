@@ -125,14 +125,18 @@ func (c *Client) afterChange(ctx context.Context, op string, id int64) (*hookJSO
 	if err := c.get(ctx, op, "/hooks/"+strconv.FormatInt(id, 10), nil, &wrapper, needHooksRead); err != nil {
 		return nil, err
 	}
-	return c.verifyHookAfterChange(op, id, &wrapper.Hook)
+	return c.verifyHookAfterChange(ctx, op, id, &wrapper.Hook)
 }
 
-func (c *Client) verifyHookAfterChange(op string, id int64, h *hookJSON) (*hookJSON, error) {
+func (c *Client) verifyHookAfterChange(ctx context.Context, op string, id int64, h *hookJSON) (*hookJSON, error) {
 	if h.ID != id {
 		return nil, invalidResponse(op, "Make did not report the changed hook"+uncertain)
 	}
-	if !c.allowsHook(*h) {
+	allowed, err := c.allowsHook(ctx, op, *h)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
 		return nil, providerError(op, "Make did not keep the result inside this connection's targets; "+
 			"the change already took effect")
 	}
@@ -164,7 +168,7 @@ func invokeHooksRename(ctx context.Context, resolved *config.Resolved, secrets *
 		map[string]any{"name": input.Name}, &wrapper, needHooksWrite, uncertain); err != nil {
 		return nil, err
 	}
-	hook, err := client.verifyHookAfterChange(op, id, &wrapper.Hook)
+	hook, err := client.verifyHookAfterChange(ctx, op, id, &wrapper.Hook)
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +256,8 @@ func invokeHooksDelete(ctx context.Context, resolved *config.Resolved, secrets *
 		needHooksWrite, uncertain)
 	client.wantRefusal = false
 	if err != nil {
-		scenarios := client.refusedScenarios(*hook)
-		if client.refusalStatus == 0 || len(scenarios) == 0 {
+		scenarios, listErr := client.refusedScenarios(ctx, op, *hook)
+		if client.refusalStatus == 0 || listErr != nil || len(scenarios) == 0 {
 			return nil, err
 		}
 		return &HookDeletion{HookID: id, ConfirmationRequired: true, Scenarios: scenarios}, nil
@@ -265,8 +269,9 @@ func invokeHooksDelete(ctx context.Context, resolved *config.Resolved, secrets *
 }
 
 // refusedScenarios collects the scenarios of a refused deletion: those Make's refusal body lists, if any,
-// plus the one the hook read reports. Names are masked and bounded; the list is capped.
-func (c *Client) refusedScenarios(hook hookJSON) []AffectedScenario {
+// plus the one the hook read reports, without any excluded scenario. Names are masked and bounded; the list is
+// capped.
+func (c *Client) refusedScenarios(ctx context.Context, op string, hook hookJSON) ([]AffectedScenario, error) {
 	type scenarioRef struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
@@ -290,11 +295,18 @@ func (c *Client) refusedScenarios(hook hookJSON) []AffectedScenario {
 			continue
 		}
 		seen[ref.ID] = true
+		excluded, err := c.scenarioIDExcluded(ctx, op, ref.ID)
+		if err != nil {
+			return nil, err
+		}
+		if excluded {
+			continue
+		}
 		name := maskSecrets(ref.Name, parts)
 		if len(name) > maxAffectedNameLength {
 			name = name[:maxAffectedNameLength]
 		}
 		out = append(out, AffectedScenario{ID: ref.ID, Name: strings.ToValidUTF8(name, "")})
 	}
-	return out
+	return out, nil
 }

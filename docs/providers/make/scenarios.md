@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Make: scenarios and runs
@@ -26,7 +26,7 @@ SeaTable provider's own offset pagination uses. The descriptors state the fields
 is valid only together with `folder_id`, and on runs `status` and `display_status` exclude each other; an invalid
 filter is refused before any request. Every returned page is still defensively re-filtered against this
 connection's own team and, for runs, organization, and every returned scenario row against the folder and scenario
-targets, whatever filter asked for it, `ids`, `folder_id`, and `deleted` included.
+targets and exclusions, whatever filter asked for it, `ids`, `folder_id`, and `deleted` included.
 
 `customProperties` are free objects. One that exceeds the depth, entry, or length limit is left out and marked,
 never cut, because a cut object would pass a partial value off as the whole one.
@@ -83,7 +83,8 @@ on-demand run.
 `make.scenarios.update`'s `folder_id` moves a scenario into a folder; `clear_folder` removes its folder
 assignment instead (Make's own PATCH accepts `folderId: null` for that). The two are mutually exclusive, and
 `make.scenarios.update` refuses a call that gives neither `folder_id`, `clear_folder`, `name`, `blueprint`,
-nor `scheduling`: there would be nothing left to change.
+nor `scheduling`: there would be nothing left to change. A `folder_id` below an excluded folder is refused before the
+request, see [Exclusions](README.md#exclusions).
 
 ## Runs and their errors
 

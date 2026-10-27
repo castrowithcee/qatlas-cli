@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-22
+updated: 2026-10-27
 ---
 
 # Sending
@@ -30,11 +30,11 @@ over SMTP and then store a copy in the Sent folder.
   inside TLS, with the mailbox address and the same mailbox password as the IMAP login; the password stays in
   the redactor and never appears in an error. The server's reply is handled as described under
   [Errors](README.md#errors).
-- **Sender binding.** `From` is the mailbox of the connection and nothing else, and it is also the envelope
-  sender (`MAIL FROM`). There is no `from` argument. A connection with sender targets must list its own
-  mailbox, otherwise nothing is sent (the narrower reading: the mailbox is the only sender, so the list can
-  only allow or forbid sending as a whole). `drafts.send` additionally refuses a draft whose `From` is not that
-  mailbox.
+- **Sender binding.** `From` is the mailbox of the connection and nothing else, and it is also the envelope sender
+  (`MAIL FROM`). There is no `from` argument. A connection with sender targets must list its own mailbox, otherwise
+  nothing is sent (the narrower reading: the mailbox is the only sender, so the list can only allow or forbid sending as
+  a whole); excluding the mailbox as a sender forbids it. `drafts.send` additionally refuses a draft whose `From` is not
+  that mailbox.
 - **Recipients and Bcc.** The envelope recipients are the typed `to`, `cc`, and `bcc` only, at most 50 together,
   plain addresses without display names, each once (compared case-insensitively). `Bcc` is never written into
   the sent message: those addresses are only `RCPT TO`. The stored copy is the sent message and therefore has
@@ -59,15 +59,15 @@ over SMTP and then store a copy in the Sent folder.
   message may have been sent and must be checked in the Sent folder and with the recipients; nothing is
   repeated and no copy is stored. A message is also not marked or deduplicated afterwards, so a deliberate second
   call sends again and needs its own confirmation.
-- **Sent folder.** The copy is stored with one `APPEND` and the flag `\Seen` in the one folder the server marks
-  with SPECIAL-USE `\Sent`, found like the [trash](changes.md#changing-a-message) and [drafts](drafts.md) folders:
-  never by name, one only, inside the folder targets. The folder is determined **before** anything is sent; if it
-  cannot be identified, the call is refused
-  as an invalid request and nothing is sent (the narrower of the two readings: no message without a copy).
-  If the `APPEND` fails after a successful submission, the message is still sent: the call returns a result,
-  not an error, with `copy_stored: false` and a `note` that says the message was sent, the copy may be missing, and
-  it must not be sent again. Nothing is repeated. Whether Infomaniak stores a copy of mail submitted over SMTP by
-  itself, which would make the `APPEND` redundant, is not settled and is checked in the live test.
+- **Sent folder.** The copy is stored with one `APPEND` and the flag `\Seen` in the one folder the server marks with
+  SPECIAL-USE `\Sent`, found like the [trash](changes.md#changing-a-message) and [drafts](drafts.md) folders: never by
+  name, one only, inside the folder targets and not excluded. The folder is determined **before** anything is sent; if
+  it cannot be identified, the call is refused as an invalid request and nothing is sent (the narrower of the two
+  readings: no message without a copy). If the `APPEND` fails after a successful submission, the message is still sent:
+  the call returns a result, not an error, with `copy_stored: false` and a `note` that says the message was sent, the
+  copy may be missing, and it must not be sent again. Nothing is repeated. Whether Infomaniak stores a copy of mail
+  submitted over SMTP by itself, which would make the `APPEND` redundant, is not settled and is checked in the live
+  test.
 - **drafts.send.** The draft must be in the drafts folder (the one `\Drafts` folder) and carry `\Draft`,
   otherwise `not-found` and nothing happens. It is read with `BODY.PEEK` and never sent raw. Only a draft in the
   structure Qatlas writes is accepted: exactly the headers `From`, `To`, `Cc`, `Bcc`, `Subject`, `Date`,

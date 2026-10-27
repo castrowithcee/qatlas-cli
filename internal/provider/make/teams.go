@@ -49,7 +49,8 @@ var teamDetailSchema = `{"type":"object","properties":{` +
 var teamGet = capability.Descriptor{
 	ID: Provider + ".team.get", Version: 1, Title: "Get the bound Make team",
 	Description: "Read the bound team's name, type, organization, pause state, and limits and consumption; takes no " +
-		"arguments, because the team is always the connection's own",
+		"arguments, because the team is always the connection's own. Counts such as active_scenarios still " +
+		"include scenarios the connection excludes",
 	Tags: []string{"make", "team", "get", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(emptyInput), OutputSchema: json.RawMessage(teamDetailSchema),
 	Fields: []capability.Field{
@@ -72,7 +73,7 @@ var teamGet = capability.Descriptor{
 var teamUsage = capability.Descriptor{
 	ID: Provider + ".team.usage", Version: 1, Title: "Get the bound Make team's usage",
 	Description: "Read the bound team's daily usage records (Make documents the last 30 days), by default cut " +
-		"at midnight in the caller's timezone",
+		"at midnight in the caller's timezone. The usage still includes scenarios the connection excludes",
 	Tags: []string{"make", "team", "usage", "automation"}, Risk: makeReadRisk, Provider: Provider,
 	InputSchema: json.RawMessage(usageInputSchema), Arguments: usageArguments,
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"team_id":{"type":"integer"},` +

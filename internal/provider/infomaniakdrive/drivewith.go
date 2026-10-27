@@ -283,8 +283,8 @@ type rewindJSON struct {
 }
 
 // RewindEntry is the rewind of a drive, loaded by with=rewind and its parts. directory, directory_name and
-// rewind_name are left out for a drive bound only by files targets, because they can name a folder outside
-// the targets.
+// rewind_name are left out for a drive bound only by files targets or with excluded files or folders,
+// because they can name a folder outside the reach.
 type RewindEntry struct {
 	ID            int64            `json:"id,omitempty"`
 	Status        string           `json:"status,omitempty"`
@@ -354,7 +354,7 @@ type withData struct {
 
 // applyWith copies the members the caller asked for into the entry, bounded and cleaned. A member
 // Infomaniak reports without its with value having been asked for is dropped.
-func (w withData) applyWith(entry *DriveEntry, with []string, wholeDrive bool) {
+func (w withData) applyWith(entry *DriveEntry, with []string, showNames bool) {
 	asked := func(values ...string) bool {
 		for _, value := range values {
 			if slices.Contains(with, value) {
@@ -439,7 +439,7 @@ func (w withData) applyWith(entry *DriveEntry, with []string, wholeDrive bool) {
 	}
 	if asked("rewind", "rewind.directory", "rewind.sanitizer", "rewind.summary") && w.Rewind != nil {
 		entry.Rewind = rewindEntryOf(*w.Rewind, asked("rewind.directory"), asked("rewind.sanitizer"),
-			asked("rewind.summary"), wholeDrive)
+			asked("rewind.summary"), showNames)
 	}
 	if asked("bill_reference") {
 		entry.BillReference = boundedText(w.BillReference, 1024)
@@ -452,7 +452,7 @@ func (w withData) applyWith(entry *DriveEntry, with []string, wholeDrive bool) {
 	}
 }
 
-func rewindEntryOf(r rewindJSON, directory, sanitizer, summary, wholeDrive bool) *RewindEntry {
+func rewindEntryOf(r rewindJSON, directory, sanitizer, summary, showNames bool) *RewindEntry {
 	entry := &RewindEntry{
 		ID: r.ID, Status: boundedText(r.Status, 64), Mode: boundedText(r.Mode, 64),
 		Archiving: boundedText(r.Archiving, 64), DirectoryID: valuePointer(r.DirectoryID),
@@ -460,7 +460,7 @@ func rewindEntryOf(r rewindJSON, directory, sanitizer, summary, wholeDrive bool)
 		FinishedAt: r.FinishedAt, ExpiresAt: r.ExpiresAt, CreatedBy: valuePointer(r.CreatedBy),
 		IsApproved: valuePointer(r.IsApproved), ApprovalAt: r.ApprovalAt,
 	}
-	if wholeDrive {
+	if showNames {
 		entry.DirectoryName = boundedText(r.DirectoryName, 1024)
 		entry.RewindName = boundedText(r.RewindName, 1024)
 		if directory && r.Directory != nil {

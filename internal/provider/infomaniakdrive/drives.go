@@ -101,7 +101,8 @@ var drivesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Infomaniak kDrives",
 	Description: "List the kDrives of the Infomaniak account this connection is bound to, restricted to its " +
-		"drive allow-list when it has one; page by page, transparently",
+		"drive allow-list when it has one; page by page, transparently. A drive's used_size is a total kept by " +
+		"Infomaniak and counts excluded content where the connection excludes files or folders",
 	Tags:     []string{"infomaniak", "kdrive", "drives", "list"},
 	Risk:     drivesReadRisk,
 	Provider: Provider,
@@ -367,7 +368,7 @@ func (c *Client) ListDrives(ctx context.Context, page int, filter DriveFilter) (
 		if d.AccountID != c.scope.accountID || !c.scope.allowsDrive(d.ID) {
 			continue
 		}
-		entries = append(entries, driveEntryOf(d, filter.With, c.scope.wholeDrive(d.ID)))
+		entries = append(entries, driveEntryOf(d, filter.With, c.scope.showsNames(d.ID)))
 	}
 	return &DrivesPage{
 		Drives: entries, Page: meta.Page, Pages: meta.Pages, Total: meta.Total, Count: len(entries),
@@ -377,9 +378,9 @@ func (c *Client) ListDrives(ctx context.Context, page int, filter DriveFilter) (
 
 // driveEntryOf maps one admitted drive. Foreign texts are cleaned of control characters and bounded.
 //
-// wholeDrive tells whether the connection reaches the entire drive; for a drive bound only by files targets
-// the with-loaded rewind members that can name a folder outside the targets are left out.
-func driveEntryOf(d driveJSON, with []string, wholeDrive bool) DriveEntry {
+// showNames tells whether the connection reaches the entire drive without exclusions; otherwise the
+// with-loaded rewind members that can name a folder outside the reach are left out.
+func driveEntryOf(d driveJSON, with []string, showNames bool) DriveEntry {
 	entry := DriveEntry{
 		ID: d.ID, Name: bounded(d.Name), Size: d.Size, UsedSize: d.UsedSize, InMaintenance: d.InMaintenance,
 		CreatedAt: timestampOf(d.CreatedAt), UpdatedAt: timestampOf(d.UpdatedAt),
@@ -402,7 +403,7 @@ func driveEntryOf(d driveJSON, with []string, wholeDrive bool) DriveEntry {
 			Description: boundedText(kind.Description, 1024),
 		})
 	}
-	d.applyWith(&entry, with, wholeDrive)
+	d.applyWith(&entry, with, showNames)
 	return entry
 }
 

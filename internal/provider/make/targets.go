@@ -35,6 +35,11 @@ type scope struct {
 	orgID     int64 // 0 means no organization target was configured
 	scenarios []int64
 	folders   []int64
+	// excluded* are the connection's exclusions. They are never targets: restricted, mayAllowScenario, and
+	// reaches ignore them, so an exclusion removes objects without ever narrowing which tools are offered.
+	excludedScenarios []int64
+	excludedFolders   []int64
+	excludedTeams     []int64
 }
 
 // organizationMode reports whether the connection is bound to an organization instead of a team.
@@ -62,6 +67,15 @@ func (s scope) allowsScenario(scenario scenarioJSON) bool {
 		(scenario.FolderID != 0 && slices.Contains(s.folders, scenario.FolderID))
 }
 
+// excludesScenario reports whether the scenario is itself excluded; scenarios below an excluded folder need
+// the folder tree, see (*Client).scenarioExcluded.
+func (s scope) excludesScenario(scenarioID int64) bool {
+	return slices.Contains(s.excludedScenarios, scenarioID)
+}
+
+// excludesTeam reports whether an organization connection excludes the team.
+func (s scope) excludesTeam(teamID int64) bool { return slices.Contains(s.excludedTeams, teamID) }
+
 // allowsTeam reports whether a reported team ID matches the one team this connection is bound to.
 func (s scope) allowsTeam(teamID int64) bool { return teamID == s.teamID }
 
@@ -69,17 +83,18 @@ func (s scope) allowsTeam(teamID int64) bool { return teamID == s.teamID }
 // configured, otherwise only the one bound.
 func (s scope) allowsOrg(orgID int64) bool { return s.orgID == 0 || orgID == s.orgID }
 
-// scopeOf reads the bound team, organization, and scenario targets of one connection.
+// scopeOf reads the bound team, organization, and scenario targets and the exclusions of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseScope(values)
+	return parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved)...)
 }
 
 // parseScope reads the configured targets of one connection: either exactly one team/TEAM_ID, at most one
 // organization/ORG_ID, and zero or more scenario/SCENARIO_ID and folder/FOLDER_ID entries (team mode), or no
 // team and exactly one organization/ORG_ID (organization mode), none named twice within its own kind.
-// No error ever quotes a configured value.
-func parseScope(values []string) (scope, error) {
+// The optional exclusions are scenario/ID and folder/ID in team mode and team/ID in organization mode, each
+// named once and never equal to a target. The checks do not rely on the core validation, which knows no
+// connection mode, so an invalid exclusion fails closed here too. No error ever quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
 	var bound scope
 	teamSet, orgSet := false, false
 	seenScenarios, seenFolders := map[int64]bool{}, map[int64]bool{}
@@ -125,7 +140,38 @@ func parseScope(values []string) (scope, error) {
 			return scope{}, errors.New("a Make connection bound to an organization cannot target folders")
 		}
 	}
+	if err := bound.parseExcludes(excludes); err != nil {
+		return scope{}, err
+	}
 	return bound, nil
+}
+
+// parseExcludes reads the exclusions into the scope, which already holds the targets.
+func (s *scope) parseExcludes(excludes []string) error {
+	invalid := errors.New("a Make exclusion must be scenario/SCENARIO_ID or folder/FOLDER_ID in a team " +
+		"connection, or team/TEAM_ID in an organization connection, named once and different from every target")
+	for _, raw := range excludes {
+		kind, id, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return invalid
+		}
+		var excluded, targets *[]int64
+		switch {
+		case kind == "scenario" && !s.organizationMode():
+			excluded, targets = &s.excludedScenarios, &s.scenarios
+		case kind == "folder" && !s.organizationMode():
+			excluded, targets = &s.excludedFolders, &s.folders
+		case kind == "team" && s.organizationMode():
+			excluded, targets = &s.excludedTeams, nil
+		default:
+			return invalid
+		}
+		if slices.Contains(*excluded, id) || (targets != nil && slices.Contains(*targets, id)) {
+			return invalid
+		}
+		*excluded = append(*excluded, id)
+	}
+	return nil
 }
 
 // validateTarget checks the form of one configured target in isolation, before configuration validation
@@ -226,7 +272,7 @@ func selectScenario(resolved *config.Resolved, scenarioID int64) error {
 	if scenarioID <= 0 {
 		return invalidRequest("scenario_id must be a positive integer")
 	}
-	if !bound.mayAllowScenario(scenarioID) {
+	if !bound.mayAllowScenario(scenarioID) || bound.excludesScenario(scenarioID) {
 		return invalidRequest("scenario_id is outside the targets of this connection")
 	}
 	return nil

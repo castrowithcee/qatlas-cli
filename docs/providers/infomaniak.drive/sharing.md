@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Infomaniak kDrive sharing
@@ -37,6 +37,19 @@ allow-list requirements are listed in the [tool overview](README.md#tools).
   dropped connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the link before trying again. `asynchronous` is a
   `pending` change. A 403 is reported as `permission`; see
   [Fixing errors](setup.md#fixing-errors).
+
+## Exclusions
+
+The rules are in [Exclusions](README.md#exclusions). On a drive with excluded files or folders, a folder above
+an excluded object (an ancestor) is handled so that no link or access reaches the excluded content:
+
+- `links.get` and `dropbox.get` refuse an ancestor like an object outside the targets. `links.delete` and
+  `dropbox.delete` stay possible, since they only narrow access.
+- `links.list` also asks for `parents` and drops every row that is excluded, below an excluded folder, an
+  ancestor, or without `parents`; `count` drops, `cursor` and `has_more` stay. The entry shows `parents` only
+  where `with` asks for them.
+- `access.grant` and `access.update` refuse an ancestor, since the right is inherited by everything below it.
+  `access.get` and `access.revoke` stay possible.
 
 ## Dropbox
 

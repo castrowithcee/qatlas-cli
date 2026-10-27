@@ -8,7 +8,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Infomaniak kDrive
@@ -85,6 +85,27 @@ A target itself cannot be moved or put in the trash; renaming it is allowed. `tr
 `trash.delete`, `trash.empty`, and `links.list` act on a whole drive and are not reachable under a drive bound
 only by `files` targets. Without `folder_id`, `files.list` lists the one `files` target of such a drive; with
 several, `folder_id` is required. An object moved between the proof and the action is not caught.
+
+### Exclusions
+
+`exclude` lists `drive/DRIVE_ID` and `drive/DRIVE_ID/files/FILE_ID` entries that take a drive, or a folder or
+file with everything below it, out of what the targets reach. It never takes the account, a drive's root `1`, a
+target, or an entry named twice; an exclusion beats a target, and it removes no tool from the offer.
+
+- An excluded drive is out of reach of every tool and missing from `drives.list`, a target included.
+- On a drive with excluded files or folders, every object identifier of a call is read with `with=parents`, also
+  on a drive bound whole, as the third check above; an excluded or unproven object is refused with the message
+  of an object outside the targets, which names neither it nor the exclusion. `files.list` drops excluded
+  children by identifier without a read.
+- A folder above an excluded object (an ancestor) stays reachable, but a tool that would act on everything
+  below it, or give access to it, refuses it: see [files](files.md#exclusions) and [sharing](sharing.md#exclusions).
+  A call that needs the ancestors reads each excluded object of the drive once with its parents and reuses the
+  answer. An excluded object Infomaniak does not find adds none; one it refuses to show or answers unreadably
+  refuses the call.
+- The trash cannot tell an entry's former place, so its tools are refused, see [trash](trash.md).
+- Totals Infomaniak keeps, such as a folder's `size` and a drive's `used_size`, still count excluded content;
+  the descriptions of `files.list`, `files.stat`, and `drives.list` say so.
+- A connection without exclusions keeps its reads.
 
 The ownership check doubles the number of requests a single `files.*` call spends against the shared 60
 requests per minute budget. `infomaniak.drive.drives.list` needs none: Infomaniak answers it scoped to one
@@ -256,8 +277,9 @@ restricted drives than a Business kSuite account, which shows up only as fewer o
 
 ## Boundary
 
-Under a drive bound only by `files` targets, a rewind, of the drive or of a folder, reports `directory_id` but
-not the `directory`, `directory_name`, or `rewind_name`, because they can name a folder outside the targets.
+Under a drive bound only by `files` targets or with excluded files or folders, a rewind, of the drive or of a
+folder, reports `directory_id` but not the `directory`, `directory_name`, or `rewind_name`, because they can name a
+folder outside the reach.
 
 Values that grant access without an account are left out of the file, trash, and link listings, except the
 `url` of the `link` of `links.list`; see [Related data](files.md#related-data).
