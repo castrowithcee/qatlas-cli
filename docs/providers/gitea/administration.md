@@ -35,6 +35,8 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-unadopted.list` | read | both |
 | `admin-unadopted.adopt` | create | both |
 | `admin-unadopted.delete` | delete, listed only | both |
+| `admin-cron.list` | read | both |
+| `admin-cron.run` | execute | both |
 
 ## Binding
 
@@ -117,9 +119,15 @@ files of one directory as a repository and is not idempotent. `admin-unadopted.d
 directory for good; it is offered only by a connection whose `tools` list names it. Both take `owner` and `repo`,
 are in no setup profile, and are refused for any other name.
 
+### Cron tasks
+
+`admin-cron.list` lists one batch of the cron tasks of the instance with `name`, `schedule`, `next`, `prev`, and
+`exec_times`; names and schedules are untrusted data. `admin-cron.run` starts one task now by the name the list
+reports; it is not idempotent and is in no setup profile.
+
 ## Changes
 
-`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`, `admin-orgs`,
-`admin-repositories`, and `admin-unadopted` that change need confirmation, send exactly one request, and are never
-repeated; when the outcome is open, the message says that the change may have been applied. No tool of this group is
-in a setup profile.
+`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`,
+`admin-orgs`, `admin-repositories`, `admin-unadopted`, and `admin-cron` that change need confirmation, send
+exactly one request, and are never repeated; when the outcome is open, the message says that the change may have
+been applied. No tool of this group is in a setup profile.
