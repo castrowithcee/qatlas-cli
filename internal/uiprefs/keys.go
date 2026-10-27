@@ -29,6 +29,10 @@ type Keys struct {
 	Lock    string
 }
 
+// Reserved, when set, names the action that owns a key no binding may take, or "" when the key is free. The
+// editor sets it to its key table, so a key it gives to any other action cannot be bound here.
+var Reserved func(key string) string
+
 // Fixed keys of other actions and of the editor that no binding may take.
 const (
 	infoLetter = "i"
@@ -168,6 +172,11 @@ func (k Keys) Check(action, key string) (string, error) {
 		}
 	default:
 		return "", fmt.Errorf("%s: not a single key; use a character, F2 to F20, or ctrl with a letter", key)
+	}
+	if Reserved != nil {
+		if owner := Reserved(key); owner != "" {
+			return "", fmt.Errorf("%s: already the key of %s", key, owner)
+		}
 	}
 	return key, nil
 }

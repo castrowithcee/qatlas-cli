@@ -71,21 +71,19 @@ func (m *Model) helpReachable() bool {
 	return !m.typing()
 }
 
-// moveKey turns the vim movement keys into the arrow keys on a screen that reads no text, so every screen
-// moves the same way and no handler needs to know the letters.
+// moveKey turns the vim keys into the arrow keys on a screen that reads no text, so
+// every screen moves the same way and no handler needs to know the letters.
 func (m *Model) moveKey(key tea.KeyPressMsg) tea.KeyPressMsg {
 	if m.typing() {
 		return key
 	}
-	switch key.String() {
-	case "h":
-		return tea.KeyPressMsg{Code: tea.KeyLeft}
-	case "j":
-		return tea.KeyPressMsg{Code: tea.KeyDown}
-	case "k":
-		return tea.KeyPressMsg{Code: tea.KeyUp}
-	case "l":
-		return tea.KeyPressMsg{Code: tea.KeyRight}
+	for _, d := range []struct {
+		act  action
+		code rune
+	}{{actVimLeft, tea.KeyLeft}, {actVimDown, tea.KeyDown}, {actVimUp, tea.KeyUp}, {actVimRight, tea.KeyRight}} {
+		if keyIs(key, d.act) {
+			return tea.KeyPressMsg{Code: d.code}
+		}
 	}
 	return key
 }

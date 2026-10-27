@@ -2,8 +2,8 @@
 description: >
   Describes the instance administration tools of the Gitea and Forgejo providers: the runners of the whole instance,
   the jobs waiting for a runner, the instance-wide lists of workflow runs, workflow jobs, and packages, the
-  administration of user accounts, the binding to connections without targets, the listed-only tools, and the
-  product differences.
+  administration of user accounts, organizations and repositories created for them, the binding to
+  connections without targets, the listed-only tools, and the product differences.
 type: knowledge
 edit: shared
 created: 2026-10-24
@@ -30,6 +30,8 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-emails.list`, `admin-emails.search` | read | both |
 | `admin-user-emails.list` | read | Forgejo |
 | `admin-user-emails.delete` | delete, listed only | Forgejo |
+| `admin-orgs.list` | read | both |
+| `admin-orgs.create`, `admin-repositories.create` | create | both |
 
 ## Binding
 
@@ -93,8 +95,17 @@ paging and capped. `admin-user-emails.delete` removes up to 20 distinct addresse
 is offered only by a connection whose `tools` list names it and is in no setup profile. Adding an address is not
 offered. The two tools of `admin-user-emails` exist on Forgejo only.
 
+### Organizations and repositories
+
+`admin-orgs.list` lists all organizations of the instance, hidden ones included, with the members of
+[Organizations](organizations.md). `admin-orgs.create` and `admin-repositories.create` create an organization or a
+repository for the existing account `username`; the settings, limits, and exclusions are those of `orgs.create` and
+`repositories.create` (see [Repositories](repositories.md)), except that the owner is `username` and a new
+organization is named by `organization`. Both are not idempotent, are in no setup profile, and are refused as
+`invalid-provider-response` when the answer names another organization or repository.
+
 ## Changes
 
-`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users` and `admin-user-emails` that change
-need confirmation, send exactly one request, and are never repeated; when the outcome is open, the message says that
-the change may have been applied. No tool of this group is in a setup profile.
+`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`, `admin-orgs`,
+and `admin-repositories` that change need confirmation, send exactly one request, and are never repeated; when the
+outcome is open, the message says that the change may have been applied. No tool of this group is in a setup profile.
