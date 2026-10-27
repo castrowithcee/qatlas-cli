@@ -93,11 +93,6 @@ func heightWithANote(lang i18n.Lang, vault string, s section) int {
 		return 17
 	case s == sectionLogs:
 		return 16
-	case s == sectionDefaults && (vault == "unencrypted" || vault == "unlocked"):
-		return 15
-	case lang == i18n.German && vault == "unencrypted" && (s == sectionApprovals || s == sectionTokens),
-		lang == i18n.German && vault == "unlocked" && s == sectionTokens:
-		return 15
 	}
 	return minimumHeight
 }
@@ -136,8 +131,8 @@ func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
 	})
 }
 
-// The header names every vault and admin state, and the workspace height follows each change of it: the
-// admin text can push the header onto a second line in a narrow terminal.
+// The header names every vault and admin state, and the workspace height follows each change of it. At the
+// smallest width a long admin text is cut with an ellipsis; its first word stays.
 func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 	for _, vc := range vaultCases(t) {
 		for _, width := range []int{minimumWidth, 79, 150} {
@@ -179,8 +174,12 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 			step.do()
 			unlocked.Update(vaultTickMsg{})
 			header := strings.Join(strings.Fields(strings.Join(unlocked.headerLines(), " ")), " ")
-			if !strings.Contains(header, step.want) {
-				t.Errorf("width %d, %s: header %q lacks %q", width, step.name, header, step.want)
+			want := step.want
+			if width == minimumWidth {
+				want = strings.Fields(want)[0] + " "
+			}
+			if !strings.Contains(header, want) {
+				t.Errorf("width %d, %s: header %q lacks %q", width, step.name, header, want)
 			}
 			if unlocked.height != workspaceRows(unlocked) {
 				t.Errorf("width %d, %s: workspace height %d, want %d", width, step.name, unlocked.height, workspaceRows(unlocked))
@@ -208,9 +207,9 @@ func TestHeaderNamesTheBoundKeys(t *testing.T) {
 	if !strings.Contains(got, "[ctrl+g] help") || !strings.Contains(got, "[ctrl+k] cmd") || strings.Contains(got, "[?]") {
 		t.Errorf("header %q does not follow the keymap", got)
 	}
-	m.Update(tea.WindowSizeMsg{Width: 60, Height: 30})
+	m.Update(tea.WindowSizeMsg{Width: 30, Height: 30})
 	if got := m.headerLines()[0]; strings.Contains(got, "cmd") {
-		t.Errorf("header %q keeps the hints although the path needs the room", got)
+		t.Errorf("header %q keeps the hints although they do not fit", got)
 	}
 }
 
@@ -311,4 +310,39 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	if !strings.Contains(ansi.Strip(header), "●") {
 		t.Errorf("header %q has no status mark", header)
 	}
+}
+
+// From the smallest width on the header is one row in every vault state, with the admin text that asks for
+// every change too, in both languages, and it never names the config path.
+func TestHeaderIsOneRowWithoutThePathAtTheSmallestWidth(t *testing.T) {
+	eachLanguage(t, func(t *testing.T) {
+		for _, vc := range vaultCases(t) {
+			for _, each := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/each-change=%v", vc.name, each), func(t *testing.T) {
+					m := vc.m
+					cfg := m.cfg.Clone()
+					cfg.Vault.AdminTimeout = ""
+					if each {
+						cfg.Vault.AdminTimeout = "0"
+					}
+					m.cfg = cfg
+					for _, width := range []int{minimumWidth, minimumWidth + 1, 60} {
+						m.Update(tea.WindowSizeMsg{Width: width, Height: minimumHeight})
+						lines := m.headerLines()
+						if len(lines) != 1 || ansi.StringWidth(lines[0]) > width {
+							t.Fatalf("width %d: header %q is not one row within the terminal", width, lines)
+						}
+						if row := ansi.Strip(lines[0]); strings.Contains(row, "config.yaml") || !strings.Contains(row, "Qatlas") {
+							t.Errorf("width %d: header %q", width, row)
+						}
+						if len(vc.words) > 0 {
+							if row := ansi.Strip(lines[0]); !strings.Contains(row, "●") {
+								t.Errorf("width %d: header %q lacks the vault mark", width, row)
+							}
+						}
+					}
+				})
+			}
+		}
+	})
 }
