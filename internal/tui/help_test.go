@@ -137,7 +137,7 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 	for _, noColor := range []bool{false, true} {
 		restoreRenderer(t)
 		t.Setenv("NO_COLOR", "")
-		applyColorScheme("dark", "")
+		useDarkColours()
 		if noColor {
 			withNoColor(t)
 		}

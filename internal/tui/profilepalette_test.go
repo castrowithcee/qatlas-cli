@@ -41,7 +41,7 @@ func TestHeatWithSixteenColoursUsesShadeGlyphs(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	setProfile(profile16)
-	setTheme(buildTheme(true, false, false))
+	setTheme(darkTheme())
 	seen := map[string]bool{}
 	for level := 0; level <= 4; level++ {
 		mark := heatBlock(level, 2)
@@ -60,7 +60,7 @@ func TestHeatWithSixteenColoursUsesShadeGlyphs(t *testing.T) {
 func TestLogStatusToneDimsOnlyUnverified(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
-	setTheme(buildTheme(true, false, false))
+	setTheme(darkTheme())
 	if got, want := colourOf(logStatusTone(logUnverified.label())), colourOf(styles.hint); got != want {
 		t.Errorf("unverified rows are %q, want the dimmed %q", got, want)
 	}
