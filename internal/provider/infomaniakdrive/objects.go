@@ -68,18 +68,57 @@ func refuseUnproven(err error) error {
 	return err
 }
 
-// proveObjects proves each object to lie in the subtree targets of the connection, one read each. A drive
-// bound as a whole needs no proof and no read.
-func (c *Client) proveObjects(ctx context.Context, op string, driveID int64, ids ...int64) error {
-	if c.scope.wholeDrive(driveID) {
-		return nil
+// notExcluded reports whether an object read with its parents is neither excluded nor below an excluded
+// folder. An answer without parents, or for another object than asked for, proves nothing. The drive's root
+// can be neither excluded nor below anything, so it needs no parents.
+func (c *Client) notExcluded(driveID, fileID int64, item *fileJSON) bool {
+	if item.ID != fileID {
+		return false
 	}
+	if !c.scope.hasFileExcludes(driveID) || fileID == rootFileID {
+		return true
+	}
+	if item.Parents == nil || c.scope.excludesFile(driveID, fileID) {
+		return false
+	}
+	for _, parent := range *item.Parents {
+		if c.scope.excludesFile(driveID, parent.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+// proven reports whether an object read with its parents lies in the targets and outside the exclusions.
+func (c *Client) proven(driveID, fileID int64, item *fileJSON) bool {
+	if !c.scope.wholeDrive(driveID) && !c.inSubtree(driveID, fileID, item) {
+		return false
+	}
+	return c.notExcluded(driveID, fileID, item)
+}
+
+// needsRead reports whether an object of a drive must be read to be proven: the drive is bound only as a
+// subtree, or has excluded files or folders that could contain the object. The root of a drive bound as a
+// whole is never excluded.
+func (c *Client) needsRead(driveID, fileID int64) bool {
+	if c.scope.wholeDrive(driveID) {
+		return fileID != rootFileID && c.scope.hasFileExcludes(driveID)
+	}
+	return true
+}
+
+// proveObjects proves each object to lie in the targets of the connection and outside its exclusions, one
+// read each. A drive bound as a whole without excluded files or folders needs no proof and no read.
+func (c *Client) proveObjects(ctx context.Context, op string, driveID int64, ids ...int64) error {
 	for _, id := range ids {
+		if !c.needsRead(driveID, id) {
+			continue
+		}
 		item, err := c.readWithParents(ctx, op, driveID, id)
 		if err != nil {
 			return refuseUnproven(err)
 		}
-		if !c.inSubtree(driveID, id, item) {
+		if !c.proven(driveID, id, item) {
 			return invalidRequest(outsideSubtree)
 		}
 	}
@@ -87,11 +126,12 @@ func (c *Client) proveObjects(ctx context.Context, op string, driveID int64, ids
 }
 
 // statProven reads the metadata of one object. Where the drive is bound only as a subtree, the same read
-// carries the parents and is the proof; there is no second read. with is joined with the parents the proof
-// needs; parents appear in the entry only when with asks for them.
+// carries the parents and is the proof; there is no second read. The same holds for a drive with excluded
+// files or folders. with is joined with the parents the proof needs; parents appear in the entry only when
+// with asks for them.
 func (c *Client) statProven(ctx context.Context, driveID, fileID int64, with []string) (*Entry, error) {
 	const op = "stat file"
-	if c.scope.wholeDrive(driveID) {
+	if !c.scope.hasFileExcludes(driveID) && c.scope.wholeDrive(driveID) {
 		return c.StatFile(ctx, driveID, fileID, with)
 	}
 	if err := checkValues(with, fileWithValues, "with"); err != nil {
@@ -101,7 +141,7 @@ func (c *Client) statProven(ctx context.Context, driveID, fileID int64, with []s
 	if err != nil {
 		return nil, refuseUnproven(err)
 	}
-	if !c.inSubtree(driveID, fileID, item) {
+	if !c.proven(driveID, fileID, item) {
 		return nil, invalidRequest(outsideSubtree)
 	}
 	entry := c.entryWith(driveID, *item, with)
