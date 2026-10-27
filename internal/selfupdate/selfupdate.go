@@ -35,11 +35,18 @@ const (
 	maxManpageSize    = 2 << 20
 	// requestTimeout only bounds a request that keeps trickling; a slow download that moves goes on.
 	requestTimeout = 30 * time.Minute
+	// stallTimeout ends a request that receives no byte for this long, waiting for the answer included.
+	stallTimeout = 30 * time.Second
 )
 
-// stallTimeout ends a request that receives no byte for this long, waiting for the answer included. A
-// variable only so a test need not wait it out.
-var stallTimeout = 30 * time.Second
+// stallTimer is the part of *time.Timer the stall watchdog uses.
+type stallTimer interface {
+	Reset(d time.Duration) bool
+	Stop() bool
+}
+
+// newStallTimer is a seam so a test can fire the watchdog without waiting on the wall clock.
+var newStallTimer = func(d time.Duration, f func()) stallTimer { return time.AfterFunc(d, f) }
 
 var ErrDevelopmentBuild = errors.New("self-update is unavailable in a dev build; install a tagged release first")
 
@@ -280,7 +287,7 @@ func (c *Client) request(ctx context.Context, rawURL string, limit int64, accept
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 	var stalled atomic.Bool
-	stall := time.AfterFunc(stallTimeout, func() {
+	stall := newStallTimer(stallTimeout, func() {
 		stalled.Store(true)
 		cancel()
 	})

@@ -9,20 +9,57 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
-func shortStall(t *testing.T) {
-	t.Helper()
-	saved := stallTimeout
-	stallTimeout = 150 * time.Millisecond
-	t.Cleanup(func() { stallTimeout = saved })
+// fakeStallTimer counts resets and fires only when the test says so.
+type fakeStallTimer struct {
+	mu     sync.Mutex
+	f      func()
+	resets int
+	reset  chan struct{}
 }
 
-// A slow download that keeps moving runs well past the stall timeout and reports its progress.
+func (f *fakeStallTimer) Reset(time.Duration) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resets++
+	select {
+	case f.reset <- struct{}{}:
+	default:
+	}
+	return true
+}
+
+func (f *fakeStallTimer) Stop() bool { return true }
+
+func (f *fakeStallTimer) Resets() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.resets
+}
+
+func (f *fakeStallTimer) Fire() { f.f() }
+
+// useFakeStallTimer installs a fake watchdog; the returned channel yields it once request creates it.
+func useFakeStallTimer(t *testing.T) <-chan *fakeStallTimer {
+	t.Helper()
+	saved := newStallTimer
+	created := make(chan *fakeStallTimer, 1)
+	newStallTimer = func(_ time.Duration, f func()) stallTimer {
+		timer := &fakeStallTimer{f: f, reset: make(chan struct{}, 1)}
+		created <- timer
+		return timer
+	}
+	t.Cleanup(func() { newStallTimer = saved })
+	return created
+}
+
+// A download that keeps moving is never cut off: every block resets the watchdog and progress rises.
 func TestRequestOutlastsTheStallTimeoutWhileDataFlows(t *testing.T) {
-	shortStall(t)
+	created := useFakeStallTimer(t)
 	chunk := bytes.Repeat([]byte("x"), 100)
 	const chunks = 8
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,21 +67,19 @@ func TestRequestOutlastsTheStallTimeoutWhileDataFlows(t *testing.T) {
 		for i := 0; i < chunks; i++ {
 			_, _ = w.Write(chunk)
 			w.(http.Flusher).Flush()
-			time.Sleep(60 * time.Millisecond)
 		}
 	}))
 	defer server.Close()
 	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
 	var dones []int64
 	var totals []int64
-	start := time.Now()
 	body, err := client.request(context.Background(), server.URL, 1<<20, "application/octet-stream",
 		func(done, total int64) { dones = append(dones, done); totals = append(totals, total) })
 	if err != nil {
-		t.Fatalf("request() = %v, want the whole slow download", err)
+		t.Fatalf("request() = %v, want the whole download", err)
 	}
-	if elapsed := time.Since(start); elapsed < 2*stallTimeout {
-		t.Fatalf("download took %v, want longer than the stall timeout to prove it was not cut off", elapsed)
+	if resets := (<-created).Resets(); resets < len(dones) || len(dones) < 1 {
+		t.Fatalf("watchdog reset %d times for %d progress reports, want one per block", resets, len(dones))
 	}
 	if len(body) != chunks*len(chunk) {
 		t.Fatalf("body has %d bytes, want %d", len(body), chunks*len(chunk))
@@ -61,7 +96,7 @@ func TestRequestOutlastsTheStallTimeoutWhileDataFlows(t *testing.T) {
 
 // A download that stops sending ends with the stall named, not with a bare cancellation.
 func TestRequestEndsAStalledDownload(t *testing.T) {
-	shortStall(t)
+	created := useFakeStallTimer(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "1000")
 		_, _ = w.Write([]byte("partial"))
@@ -70,6 +105,12 @@ func TestRequestEndsAStalledDownload(t *testing.T) {
 	}))
 	defer server.Close()
 	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
+	// Fire only after the partial block reset the watchdog, so the stall comes mid-download.
+	go func() {
+		timer := <-created
+		<-timer.reset
+		timer.Fire()
+	}()
 	_, err := client.request(context.Background(), server.URL, 1<<20, "application/octet-stream", nil)
 	if err == nil || !strings.Contains(err.Error(), "no data received") {
 		t.Fatalf("request() = %v, want the stall reported", err)
@@ -78,12 +119,19 @@ func TestRequestEndsAStalledDownload(t *testing.T) {
 
 // Waiting for an answer that never starts counts as a stall too.
 func TestRequestEndsWhenTheAnswerNeverStarts(t *testing.T) {
-	shortStall(t)
+	created := useFakeStallTimer(t)
+	arrived := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(arrived)
 		<-r.Context().Done()
 	}))
 	defer server.Close()
 	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
+	go func() {
+		timer := <-created
+		<-arrived
+		timer.Fire()
+	}()
 	_, err := client.request(context.Background(), server.URL, 1<<20, "application/octet-stream", nil)
 	if err == nil || !strings.Contains(err.Error(), "no data received") {
 		t.Fatalf("request() = %v, want the stall reported", err)
