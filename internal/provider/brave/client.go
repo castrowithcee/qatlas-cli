@@ -94,8 +94,9 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
+	// The streaming client has no timeout: the context of stream is its only bound.
 	return &Client{token: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
-		streaming: provider.NoRedirectClient(streamTimeout, transport), limiter: lim}, nil
+		streaming: provider.NoRedirectClient(0, transport), limiter: lim}, nil
 }
 
 // checkConnection refuses what no request may start from: no connection, a base URL other than the official
@@ -240,7 +241,7 @@ func (c *Client) stream(ctx context.Context, op, path string, body any, spacing 
 	case errors.Is(err, errUnfinished), errors.Is(err, io.ErrUnexpectedEOF):
 		return info, provider.InvalidResponse(op, "the Brave answer ended before it was complete"+billedNote)
 	}
-	// The client's own timeout and the deadline of ctx fire at the same moment; either is the deadline.
+	// The streaming client sets no timeout of its own, so a timeout here can only come from the transport.
 	failed = provider.Transport(op, "Brave", err)
 	switch {
 	case failed.Class == provider.ClassTimeout:
