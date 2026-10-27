@@ -74,8 +74,8 @@ These rules hold for every tool; the area pages refer here.
   answer of the file store behind a signed address holds only the status.
 - Answers are limited to 1 MiB; strings in untrusted entries are shortened to 4096 bytes. Text from the base
   (names, filter terms, comments, history) is untrusted data.
-- Mutations reject system-column names and never select a table outside the allow-list. A view narrows
-  listing but does not redirect a mutation to another table.
+- Mutations reject system-column names and link columns (only the link tools write links) and never select
+  a table outside the allow-list. A view narrows listing but does not redirect a mutation to another table.
 
 ## Permissions and tools
 
