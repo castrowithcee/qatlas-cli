@@ -35,6 +35,14 @@ var ansiSequence = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07
 // mouseOn is the sequence that turns on the cell motion mouse mode of the terminal.
 const mouseOn = "\x1b[?1002h"
 
+// The editor asks the terminal for its background colour before it starts, an OSC 11 query followed by a
+// primary device attributes query that every terminal answers. A real terminal answers both; left unanswered,
+// every start would wait for Lip Gloss's timeout, once on the input and once on the output.
+const (
+	backgroundQuery = "\x1b]11;?"
+	backgroundReply = "\x1b]11;rgb:0000/0000/0000\x1b\\\x1b[?62;c"
+)
+
 // updateRig is an editor with an unlocked-able vault running on a pseudo-terminal, beside a release server
 // that offers v2.0.0 as the program it is given.
 type updateRig struct {
@@ -149,11 +157,16 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 	r := &updateRig{t: t, bin: bin, program: program, master: master, cmd: cmd}
 	go func() {
 		buf := make([]byte, 4096)
+		answered := 0
 		for {
 			n, err := master.Read(buf)
 			r.mu.Lock()
 			r.raw.Write(buf[:n])
+			queries := strings.Count(r.raw.String(), backgroundQuery)
 			r.mu.Unlock()
+			for ; answered < queries; answered++ {
+				_, _ = io.WriteString(master, backgroundReply)
+			}
 			if err != nil {
 				return
 			}
@@ -306,8 +319,8 @@ func TestTUITakesTheMouseOnlyWhenThePreferenceAllowsIt(t *testing.T) {
 	}
 }
 
-// A restart that fails leaves the editor running on the terminal it had released; Bubble Tea does not turn
-// the mouse mode on again after that, so the editor does.
+// A restart that fails leaves the editor running on the terminal it had released; restoring it, Bubble Tea
+// turns the mouse mode of the last view on again.
 func TestTUIKeepsTheMouseAfterAFailedRestart(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the acceptance run starts the editor on a pseudo-terminal")

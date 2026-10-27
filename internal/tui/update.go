@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 )
@@ -108,7 +108,7 @@ func (m *Model) updateBlocker() string {
 	return ""
 }
 
-func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateUpdateConfirm(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case "y":
 		m.screen = m.updateFrom

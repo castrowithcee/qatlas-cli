@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -242,13 +242,13 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			m := tc.open(t)
-			lines := strings.Split(strings.TrimSpace(m.questionView()), "\n")
+			lines := strings.Split(strings.TrimSpace(shown(m.questionView())), "\n")
 			if !strings.HasPrefix(strings.TrimSpace(lines[0]), tc.title) ||
 				!strings.HasSuffix(strings.TrimSpace(lines[0]), "?") && !strings.Contains(lines[0], "secret for") {
 				t.Errorf("first line is not the question %q: %q", tc.title, lines[0])
 			}
-			if !strings.Contains(m.questionView(), tc.consequence) {
-				t.Errorf("consequence %q missing:\n%s", tc.consequence, m.questionView())
+			if !strings.Contains(shown(m.questionView()), tc.consequence) {
+				t.Errorf("consequence %q missing:\n%s", tc.consequence, shown(m.questionView()))
 			}
 			if footer := m.footerLine(); !strings.Contains(footer, "help") {
 				t.Errorf("the footer is not the key line: %q", footer)

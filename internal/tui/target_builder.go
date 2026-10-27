@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -428,7 +428,7 @@ func (m *Model) addAsk() string {
 }
 
 // updateAdd handles the menu and the builder. Every printable key belongs to the typed line.
-func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateAdd(key tea.KeyPressMsg) tea.Cmd {
 	a := m.targetAdd
 	switch key.String() {
 	case keyOf(actBack):

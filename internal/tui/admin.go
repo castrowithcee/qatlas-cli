@@ -11,8 +11,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -91,7 +91,7 @@ func (m *Model) openAdminPrompt(locked bool, back screen, action func() tea.Cmd)
 }
 
 // updateAdminAuth handles the masked entry of the admin passphrase dialog.
-func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateAdminAuth(key tea.KeyPressMsg) tea.Cmd {
 	a := m.adminAuth
 	switch key.String() {
 	case keyOf(actBack):
@@ -119,7 +119,7 @@ func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 	}
 
 	var cmd tea.Cmd
-	a.input, cmd = a.input.Update(key)
+	a.input, cmd = a.input.Update(inputMsg(key))
 	return cmd
 }
 

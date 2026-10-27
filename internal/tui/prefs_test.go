@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"io"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -96,5 +98,32 @@ func TestStartDefaultStaysOnOverview(t *testing.T) {
 	m.Init()
 	if m.section != sectionOverview {
 		t.Errorf("section = %v, want overview", m.section)
+	}
+}
+
+// NO_COLOR turns colour off with any value, also with one the colour library does not read as true, and the
+// editor then draws without a single escape sequence.
+func TestNoColorWithAnyValueDrawsWithoutColour(t *testing.T) {
+	restoreRenderer(t)
+	// A terminal the colour library would otherwise give every colour.
+	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "truecolor")
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("NO_COLOR", "")
+	if got := detectProfile(io.Discard); got != profileTrueColor {
+		t.Fatalf("without NO_COLOR the profile is %v, want true colour", got)
+	}
+	for _, value := range []string{"1", "yes"} {
+		t.Setenv("NO_COLOR", value)
+		setProfile(detectProfile(io.Discard))
+		applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundQatlas)
+		if toColorprofile(currentProfile()) != colorprofile.NoTTY {
+			t.Errorf("NO_COLOR=%s: profile %v, want no colour", value, currentProfile())
+		}
+		m := sizedModel(groupModel(t), 100, 30)
+		openSectionByName(t, m, sectionConnections)
+		if view := m.render(); strings.Contains(view, "\x1b") {
+			t.Errorf("NO_COLOR=%s: the screen carries escape sequences:\n%q", value, view)
+		}
 	}
 }

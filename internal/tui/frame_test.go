@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
@@ -221,7 +221,7 @@ func TestFooterGivesUpGroupsByRankAndKeepsHelp(t *testing.T) {
 	for width := 120; width >= 8; width-- {
 		m.termWidth = width
 		m.screenKeys = text
-		line := m.footerLine()
+		line := shown(m.footerLine())
 		if w := lipgloss.Width(line); w > width {
 			t.Fatalf("width %d: footer is %d cells: %q", width, w, line)
 		}
@@ -230,7 +230,7 @@ func TestFooterGivesUpGroupsByRankAndKeepsHelp(t *testing.T) {
 		}
 	}
 	m.termWidth, m.screenKeys = 40, text
-	line := m.footerLine()
+	line := shown(m.footerLine())
 	for _, want := range []string{"esc back", "? help"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("40 cells: footer %q lost %q", line, want)

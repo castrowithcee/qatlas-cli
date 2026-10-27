@@ -9,15 +9,27 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // chunkReader hands out its chunks one per Read, the way a terminal behind SSH or tmux delivers a short read,
-// then reports the end of the input.
+// then reports the end of the input. It waits gap before each of the first paused chunks after the first.
 type chunkReader struct {
 	mu     sync.Mutex
 	chunks [][]byte
+	gap    time.Duration
+	paused int
+	reads  int
 }
+
+// readerPause is a gap between two reads longer than the input reader waits for the rest of a sequence; the
+// reader then reports what it has, the way it meets a report a slow connection split. splitPause is barely
+// longer: should the reader still wait, it gets the report whole, which makes no text either.
+const (
+	readerPause = 2 * uv.DefaultEscTimeout
+	splitPause  = uv.DefaultEscTimeout + 10*time.Millisecond
+)
 
 // testClock is the clock of the filter in a test; a pause in the input moves it on.
 type testClock struct{ offset atomic.Int64 }
@@ -34,6 +46,10 @@ func (r *chunkReader) Read(p []byte) (int, error) {
 	if len(r.chunks) == 0 {
 		return 0, io.EOF
 	}
+	if r.reads > 0 && r.reads < r.paused {
+		time.Sleep(r.gap)
+	}
+	r.reads++
 	n := copy(p, r.chunks[0])
 	if n < len(r.chunks[0]) {
 		r.chunks[0] = r.chunks[0][n:]
@@ -47,12 +63,18 @@ func (r *chunkReader) Read(p []byte) (int, error) {
 // been handled when Run returns.
 const inputEnd = "\x1b[24~"
 
-// runInput feeds the chunks to a real program around model and returns once all of them were handled. The
-// production filter runs first; keys are the messages that reached the model.
+// runInput feeds the chunks to a real program around model, readerPause apart, and returns once all of them
+// were handled. The production filter runs first; keys are the messages that reached the model.
 func runInput(t *testing.T, model *Model, chunks ...string) (keys []string) {
 	t.Helper()
+	return runPaused(t, model, readerPause, chunks...)
+}
+
+// runPaused is runInput with the chunks gap apart.
+func runPaused(t *testing.T, model *Model, gap time.Duration, chunks ...string) (keys []string) {
+	t.Helper()
 	clock := &testClock{}
-	reader := &chunkReader{}
+	reader := &chunkReader{gap: gap, paused: len(chunks)}
 	for _, c := range chunks {
 		reader.chunks = append(reader.chunks, []byte(c))
 	}
@@ -60,17 +82,17 @@ func runInput(t *testing.T, model *Model, chunks ...string) (keys []string) {
 	fragments := newFragmentFilter(clock.now)
 	var seen []string
 	observe := func(m tea.Model, msg tea.Msg) tea.Msg {
-		if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyF11 {
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.Code == tea.KeyF11 {
 			clock.offset.Add(int64(time.Second))
-			time.Sleep(4 * altBracketHold)
+			time.Sleep(4 * bracketHold)
 			return nil
 		}
 		msg = fragments.filter(m, msg)
-		if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyF12 {
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.Code == tea.KeyF12 {
 			return tea.QuitMsg{}
 		}
 		switch msg := msg.(type) {
-		case tea.KeyMsg:
+		case tea.KeyPressMsg:
 			seen = append(seen, msg.String())
 		case keysMsg:
 			for _, key := range msg {
@@ -80,7 +102,7 @@ func runInput(t *testing.T, model *Model, chunks ...string) (keys []string) {
 		return msg
 	}
 	p := tea.NewProgram(model, tea.WithInput(reader), tea.WithOutput(io.Discard), tea.WithFilter(observe),
-		tea.WithoutSignals(), tea.WithMouseCellMotion())
+		tea.WithoutSignals())
 	fragments.program = p
 	done := make(chan error, 1)
 	go func() { _, err := p.Run(); done <- err }()
@@ -119,6 +141,8 @@ func passphrasePrompt(t *testing.T) *Model {
 	return m
 }
 
+// A report split between two reads, with a pause after which the input reader gives up waiting for its rest,
+// makes no text at any point of the split.
 func TestSplitMouseReportsMakeNoTextInAField(t *testing.T) {
 	for name, open := range map[string]func(*testing.T) *Model{"form field": formWithTextField, "passphrase": passphrasePrompt} {
 		for _, report := range splitReports {
@@ -130,7 +154,7 @@ func TestSplitMouseReportsMakeNoTextInAField(t *testing.T) {
 					if m.screen == screenVaultUnlock {
 						before = m.vaultUnlock.input.Value()
 					}
-					keys := runInput(t, m, stream[:i], stream[i:])
+					keys := runPaused(t, m, splitPause, stream[:i], stream[i:])
 					after := m.formState()
 					if m.screen == screenVaultUnlock {
 						after = m.vaultUnlock.input.Value()
@@ -186,13 +210,13 @@ func TestAWheelEventDrawsOnlyWhenTheFrameIsStale(t *testing.T) {
 	// A wheel event on the frame drawn last draws nothing; on a stale one it draws once.
 	m.render()
 	m.hits = append(m.hits, hit{x0: -1})
-	wheelAt(t, m, 60, 20, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 60, 20, tea.MouseWheelDown)
 	if !hasMarker(m) {
 		t.Errorf("a wheel event on a drawn frame drew it again")
 	}
 	m.drawn = false
 	m.hits = []hit{{x0: -1}}
-	wheelAt(t, m, 60, 20, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 60, 20, tea.MouseWheelDown)
 	if hasMarker(m) {
 		t.Errorf("a wheel event on a stale frame did not draw it")
 	}
@@ -205,4 +229,19 @@ func hasMarker(m *Model) bool {
 		}
 	}
 	return false
+}
+
+// A paste reaches the focused text field whole, through the filter as through the event loop alone, and no
+// key binding acts on what it holds.
+func TestAPasteReachesTheFocusedField(t *testing.T) {
+	m := formWithTextField(t)
+	runInput(t, m, "\x1b[200~ q enter\x1b[201~")
+	if got := fieldValue(m); got != "abc q enter" || m.quitting || m.screen != screenForm {
+		t.Errorf("after the paste the field holds %q on screen %v, quitting %v", got, m.screen, m.quitting)
+	}
+	m = formWithTextField(t)
+	m.Update(tea.PasteMsg{Content: "-pasted"})
+	if got := fieldValue(m); got != "abc-pasted" {
+		t.Errorf("a paste message leaves the field at %q", got)
+	}
 }

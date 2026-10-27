@@ -5,7 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -67,23 +68,12 @@ func (m *Model) hitRows(top, width, start, end int, row func(i int) string, act 
 // mouseEnabled reports whether the editor takes mouse input.
 func (m *Model) mouseEnabled() bool { return m.prefs.MouseEnabled() }
 
-// mouseSwitch is the command that makes the terminal's mouse mode follow a changed preference.
-func (m *Model) mouseSwitch(was bool) tea.Cmd {
-	switch now := m.mouseEnabled(); {
-	case now && !was:
-		return tea.EnableMouseCellMotion
-	case !now && was:
-		return tea.DisableMouse
-	}
-	return nil
-}
-
-// mouseResume turns the mouse mode on again after the terminal was released and restored, which leaves it off.
-func (m *Model) mouseResume() tea.Cmd {
+// mouseMode is the mouse mode the view asks the terminal for: cell motion while the editor takes the mouse.
+func (m *Model) mouseMode() tea.MouseMode {
 	if m.mouseEnabled() {
-		return tea.EnableMouseCellMotion
+		return tea.MouseModeCellMotion
 	}
-	return nil
+	return tea.MouseModeNone
 }
 
 // wheelText is how many rows one notch of the wheel moves in a text area; elsewhere it is one step.
@@ -107,7 +97,7 @@ type wheelSeen struct {
 
 // repeats reports whether the event is the release half of the notch seen last. It claims at most one event
 // per notch: after it dropped one, the next equal event is a notch of its own however close it is.
-func (w *wheelSeen) repeats(event tea.MouseEvent, now time.Time) bool {
+func (w *wheelSeen) repeats(event tea.Mouse, now time.Time) bool {
 	if w.ok && w.button == event.Button && w.x == event.X && w.y == event.Y && now.Sub(w.at) < wheelMerge {
 		w.ok = false
 		return true
@@ -119,12 +109,17 @@ func (w *wheelSeen) repeats(event tea.MouseEvent, now time.Time) bool {
 // release do nothing. A terminal too small for the screen, an editor with the mouse switched off, and the
 // capture of a new key take no mouse at all.
 func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
-	event := tea.MouseEvent(msg)
-	if m.quitting || !m.mouseEnabled() || m.terminalTooSmall() || m.keyCapture || event.Action != tea.MouseActionPress {
+	switch msg.(type) {
+	case tea.MouseClickMsg, tea.MouseWheelMsg:
+	default:
 		return nil
 	}
-	wheel := event.Button == tea.MouseButtonWheelUp || event.Button == tea.MouseButtonWheelDown
-	if !wheel && event.Button != tea.MouseButtonLeft {
+	event := msg.Mouse()
+	if m.quitting || !m.mouseEnabled() || m.terminalTooSmall() || m.keyCapture {
+		return nil
+	}
+	wheel := event.Button == tea.MouseWheelUp || event.Button == tea.MouseWheelDown
+	if !wheel && event.Button != tea.MouseLeft {
 		return nil
 	}
 	if wheel && m.wheelSeen.repeats(event, m.timeNow()) {
@@ -197,8 +192,8 @@ func (m *Model) atListTop() bool {
 // wheel scrolls: a notch is one press of up or down (three in a text area), and over the list of the sections
 // of a form it is a press of pgup or pgdown, which jump from section to section. On the tab line a notch down
 // goes into the content and nothing leads back out of it.
-func (m *Model) wheel(event tea.MouseEvent) tea.Cmd {
-	up := event.Button == tea.MouseButtonWheelUp
+func (m *Model) wheel(event tea.Mouse) tea.Cmd {
+	up := event.Button == tea.MouseWheelUp
 	if m.screen == screenNav {
 		if up {
 			return nil
@@ -210,7 +205,7 @@ func (m *Model) wheel(event tea.MouseEvent) tea.Cmd {
 			if m.screen != screenNav {
 				break
 			}
-			cmds = append(cmds, m.press(tea.KeyMsg{Type: tea.KeyDown}))
+			cmds = append(cmds, m.press(tea.KeyPressMsg{Code: tea.KeyDown}))
 		}
 		return tea.Batch(cmds...)
 	}
@@ -218,7 +213,7 @@ func (m *Model) wheel(event tea.MouseEvent) tea.Cmd {
 		return nil
 	}
 	m.touchAdminSessionIfActive()
-	key, times := tea.KeyDown, 1
+	key, times := rune(tea.KeyDown), 1
 	if up {
 		key = tea.KeyUp
 	}
@@ -235,15 +230,15 @@ func (m *Model) wheel(event tea.MouseEvent) tea.Cmd {
 	defer func() { wheelClamp = false }()
 	var cmds []tea.Cmd
 	for range times {
-		cmds = append(cmds, m.press(tea.KeyMsg{Type: key}))
+		cmds = append(cmds, m.press(tea.KeyPressMsg{Code: key}))
 	}
 	return tea.Batch(cmds...)
 }
 
 // press hands a key to the editor as if it had been typed. A mouse event never makes a character: a letter
 // is not passed on where the screen reads text.
-func (m *Model) press(key tea.KeyMsg) tea.Cmd {
-	if key.Type == tea.KeyRunes && m.typing() {
+func (m *Model) press(key tea.KeyPressMsg) tea.Cmd {
+	if key.Text != "" && m.typing() {
 		return nil
 	}
 	_, cmd := m.Update(key)
@@ -260,26 +255,26 @@ func (m *Model) pressName(name string) tea.Cmd {
 }
 
 // keyByName is the key press a footer's key name stands for, for the keys a dialog's buttons use.
-func keyByName(name string) (tea.KeyMsg, bool) {
+func keyByName(name string) (tea.KeyPressMsg, bool) {
 	switch name {
 	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}, true
+		return tea.KeyPressMsg{Code: tea.KeyEnter}, true
 	case "esc":
-		return tea.KeyMsg{Type: tea.KeyEsc}, true
+		return tea.KeyPressMsg{Code: tea.KeyEscape}, true
 	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}, true
+		return tea.KeyPressMsg{Code: tea.KeyTab}, true
 	}
 	if key, ok := functionKeys[strings.ToUpper(name)]; ok {
-		return tea.KeyMsg{Type: key}, true
+		return tea.KeyPressMsg{Code: key}, true
 	}
 	if runes := []rune(name); len(runes) == 1 && runes[0] > ' ' && !(runes[0] >= '0' && runes[0] <= '9') {
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: runes}, true
+		return tea.KeyPressMsg{Code: runes[0], Text: name}, true
 	}
-	return tea.KeyMsg{}, false
+	return tea.KeyPressMsg{}, false
 }
 
 // functionKeys are the function keys a dialog may name.
-var functionKeys = map[string]tea.KeyType{
+var functionKeys = map[string]rune{
 	"F2": tea.KeyF2, "F3": tea.KeyF3, "F4": tea.KeyF4, "F6": tea.KeyF6, "F7": tea.KeyF7, "F8": tea.KeyF8,
 	"F9": tea.KeyF9,
 }
@@ -521,7 +516,7 @@ func (m *Model) clickListRow(i int) tea.Cmd {
 		m.list.stopFilter()
 		return nil
 	}
-	enter := func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) }
+	enter := func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) }
 	if isGroupRow(m.list.matches[i]) {
 		m.list.cursor = i
 		return enter()
@@ -548,7 +543,7 @@ func (m *Model) clickOverview(i int) tea.Cmd {
 	default:
 		return nil
 	}
-	return markOrAct(&m.overviewCursor, i, focused, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) })
+	return markOrAct(&m.overviewCursor, i, focused, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
 }
 
 // hitPicker makes the values of the picker clickable. A click marks a value; a click on the marked one ticks it
@@ -561,9 +556,9 @@ func (m *Model) hitPicker(header string, start, end int) {
 		}
 		return markOrAct(&m.picker.cursor, i, true, func() tea.Cmd {
 			if m.pickerMarks != nil {
-				return m.updatePicker(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+				return m.updatePicker(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
 			}
-			return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+			return m.press(tea.KeyPressMsg{Code: tea.KeyEnter})
 		})
 	})
 	y := m.hitTop(header)
@@ -599,7 +594,7 @@ func (m *Model) hitTable(l *filterList, on screen, header string, start, end int
 		if m.screen != on || i >= len(l.matches) {
 			return nil
 		}
-		return markOrAct(&l.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) })
+		return markOrAct(&l.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
 	})
 }
 
@@ -688,7 +683,7 @@ func (m *Model) hitLogs(head string, start, end int) {
 			return lead
 		}
 		lv.focus = logFocusRows
-		return tea.Batch(lead, markOrAct(&lv.list.cursor, i, focused, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) }))
+		return tea.Batch(lead, markOrAct(&lv.list.cursor, i, focused, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) }))
 	})
 }
 
@@ -730,10 +725,10 @@ func (m *Model) clickField(i int) tea.Cmd {
 	}
 	switch f.kind {
 	case fieldChoice, fieldMultiChoice, fieldProvider, fieldToolList, fieldTargets, fieldPaths, fieldSecret:
-		return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+		return m.press(tea.KeyPressMsg{Code: tea.KeyEnter})
 	case fieldVaultAction, fieldKey:
 		if focused {
-			return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+			return m.press(tea.KeyPressMsg{Code: tea.KeyEnter})
 		}
 	}
 	return nil
@@ -742,9 +737,11 @@ func (m *Model) clickField(i int) tea.Cmd {
 // fragmentWindow is the longest gap between the pieces of one split mouse report. Typing is slower than this.
 const fragmentWindow = 200 * time.Millisecond
 
-// altBracketHold is how long alt+[ waits for the rest of a report before it counts as the key it is. The text
-// field types it as "[", so it cannot be let through first and taken back.
-const altBracketHold = 50 * time.Millisecond
+// bracketHold is how long a "[" that may open the rest of a report, alt+[ or a "[" after an escape, waits
+// for it before it counts as the key it is. The text field types it, so it cannot be let through first and
+// taken back. The input reader reports the "[" only after it waited for the rest itself, so the rest is
+// later here than at the terminal.
+const bracketHold = 100 * time.Millisecond
 
 // fragmentTail matches what a mouse report of the SGR form can still lack: the rest of its parameters and the
 // final M or m.
@@ -753,25 +750,30 @@ var fragmentTail = regexp.MustCompile(`^[0-9;]*[Mm]?`)
 // fragmentHead matches the start of such a report that is left once its escape byte went into a key of its own.
 var fragmentHead = regexp.MustCompile(`^(\[<|<)[0-9;]*[Mm]?`)
 
-// keysMsg delivers keys the filter held back, in order, as one message.
-type keysMsg []tea.KeyMsg
+// reportStart matches the start of such a report the input reader gave up on, its rest still to come.
+var reportStart = regexp.MustCompile(`^\x1b\[<[0-9;]*$`)
 
-// heldKeyMsg is the end of the hold of alt+[ number id.
+// keysMsg delivers keys the filter held back, in order, as one message.
+type keysMsg []tea.KeyPressMsg
+
+// heldKeyMsg is the end of the hold of the "[" number id.
 type heldKeyMsg struct{ id int }
 
-// fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read: the
-// input parser reports such a report as keys (an escape or alt+[ and then runes like "<65;12;5M"), and in a
-// text field they would be typed. A piece counts only when it follows the one before it within fragmentWindow
-// and fits the report form, so the same characters typed by hand, pasted, or standing alone pass unchanged.
-// Only alt+[ is held back, briefly; a lone escape is a real key and passes at once, so the report's escape byte
-// alone can still reach the model as esc.
+// fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read with a
+// pause between them longer than the input reader waits: the reader then reports the start it has as an
+// unknown sequence, or as an escape or alt+[, and the rest as typed characters like "<65;12;5M", which a text
+// field would take. A piece counts only when it follows the one before it within fragmentWindow and fits the
+// report form, so the same characters typed by hand, pasted, or standing alone pass unchanged. Only a "[" that
+// may open a piece is held back, briefly; a lone escape is a real key and passes at once, so the report's
+// escape byte alone can still reach the model as esc.
+// On the way it gives keys the names stored key bindings know (see legacyKey and linuxFunctionKey).
 type fragmentFilter struct {
 	now     func() time.Time
 	program *tea.Program
 
-	state string // "esc" or "alt+[" when that key came last, "tail" while a report lacks its end
+	state string // "esc" or "[" when that key came last, "tail" while a report lacks its end
 	at    time.Time
-	held  *tea.KeyMsg
+	held  *tea.KeyPressMsg
 	id    int
 }
 
@@ -780,6 +782,17 @@ func newFragmentFilter(now func() time.Time) *fragmentFilter {
 		now = time.Now
 	}
 	return &fragmentFilter{now: now}
+}
+
+// unknownSequence returns the bytes of an input sequence the input reader could not name.
+func unknownSequence(msg tea.Msg) (string, bool) {
+	switch u := msg.(type) {
+	case uv.UnknownEvent:
+		return string(u), true
+	case uv.UnknownCsiEvent:
+		return string(u), true
+	}
+	return "", false
 }
 
 // filter is the tea.WithFilter function. It runs in the event loop, one message at a time.
@@ -792,24 +805,45 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 		f.held = nil
 		return key
 	}
-	key, ok := msg.(tea.KeyMsg)
+	if unknown, ok := unknownSequence(msg); ok && (reportStart.MatchString(unknown) || unknown == "\x1b[[") {
+		f.state, f.at = "tail", f.now()
+		if unknown == "\x1b[[" {
+			f.state = "[["
+		}
+		if held := f.held; held != nil {
+			f.held = nil
+			return keysMsg{*held}
+		}
+		return nil
+	}
+	if paste, ok := msg.(tea.PasteMsg); ok {
+		msg = pasteKey(paste.Content)
+	}
+	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return msg
 	}
+	key = legacyKey(key)
 	at, last := f.now(), f.state
 	f.state = ""
 	if last != "" && at.Sub(f.at) > fragmentWindow {
 		last = ""
 	}
+	if last == "[[" {
+		if fn, ok := linuxFunctionKey(key); ok {
+			return fn
+		}
+	}
 	held := f.held
 	f.held = nil
-	text, plain := "", key.Type == tea.KeyRunes && !key.Alt && !key.Paste
+	_, isPaste := pasted(key)
+	text, plain := "", key.Text != "" && !key.Mod.Contains(tea.ModAlt) && !isPaste
 	if plain {
-		text = string(key.Runes)
+		text = key.Text
 	}
 	var n int
 	switch last {
-	case "alt+[":
+	case "[":
 		if plain && strings.HasPrefix(text, "<") {
 			n = len(fragmentHead.FindString(text))
 		}
@@ -829,19 +863,19 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 		if n == len(text) {
 			return nil
 		}
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text[n:])}
+		return textKey(text[n:])
 	}
-	// Not a piece: a held alt+[ was a key after all and goes first.
+	// Not a piece: a held "[" was a key after all and goes first.
 	switch {
-	case key.Paste:
-	case key.Type == tea.KeyEsc && !key.Alt:
+	case isPaste:
+	case key.Code == tea.KeyEscape && key.Mod == 0:
 		f.state, f.at = "esc", at
-	case key.Type == tea.KeyRunes && key.Alt && string(key.Runes) == "[" && f.program != nil:
-		f.state, f.at = "alt+[", at
+	case f.program != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == "esc" && text == "["):
+		f.state, f.at = "[", at
 		f.held = &key
 		f.id++
 		id, program := f.id, f.program
-		time.AfterFunc(altBracketHold, func() { program.Send(heldKeyMsg{id}) })
+		time.AfterFunc(bracketHold, func() { program.Send(heldKeyMsg{id}) })
 		if held != nil {
 			return keysMsg{*held}
 		}

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
@@ -825,7 +825,7 @@ func TestApprovalDetailShowsRenames(t *testing.T) {
 
 // colourOf is the sequence that starts the style, found by drawing a letter with it.
 func colourOf(style lipgloss.Style) string {
-	set := style.Render("x")
+	set := shown(style.Render("x"))
 	return set[:strings.Index(set, "x")]
 }
 
@@ -856,7 +856,7 @@ func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
 
 	withNoColor(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	view = m.approvalChangeView("Approve gh?", toolsChange())
+	view = shown(m.approvalChangeView("Approve gh?", toolsChange()))
 	if ansi.Strip(view) != view {
 		t.Errorf("NO_COLOR still emits escape sequences:\n%q", view)
 	}

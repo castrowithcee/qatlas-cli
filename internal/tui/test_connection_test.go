@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -37,7 +37,7 @@ func newTestableModel(t *testing.T, tester Tester, red *redact.Redactor) *Model 
 // runTest presses the test key and delivers the resulting command's message, the way the event loop does.
 func runTest(t *testing.T, m *Model) {
 	t.Helper()
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	if cmd == nil {
 		t.Fatal("pressing t produced no command")
 	}
@@ -118,7 +118,7 @@ func TestConnectionTestDoesNotBlock(t *testing.T) {
 		}
 	}, nil)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	if cmd == nil {
 		t.Fatal("pressing t produced no command")
 	}
@@ -161,7 +161,7 @@ func TestConnectionTestCancel(t *testing.T) {
 	}, nil)
 	before := len(m.cfg.Connections)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	done := make(chan tea.Msg, 1)
 	go func() { done <- cmd() }()
 
@@ -271,7 +271,7 @@ func TestConnectionTestGuards(t *testing.T) {
 		}, nil)
 		openSectionByName(t, m, sectionServices)
 
-		if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}); cmd != nil {
+		if _, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"}); cmd != nil {
 			t.Error("a command was produced outside the connections section")
 		}
 	})
@@ -288,7 +288,7 @@ func TestConnectionTestGuards(t *testing.T) {
 		}
 		openSectionByName(t, m, sectionConnections)
 
-		if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}); cmd != nil {
+		if _, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"}); cmd != nil {
 			t.Error("a command was produced for an empty list")
 		}
 	})
@@ -296,7 +296,7 @@ func TestConnectionTestGuards(t *testing.T) {
 	t.Run("without a tester the editor says so", func(t *testing.T) {
 		m := newTestableModel(t, nil, nil)
 
-		if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}); cmd != nil {
+		if _, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"}); cmd != nil {
 			t.Error("a command was produced without a tester")
 		}
 		if !strings.Contains(m.fail, "unavailable") {
@@ -314,7 +314,7 @@ func TestQuitCancelsARunningTest(t *testing.T) {
 		return "", ctx.Err()
 	}, nil)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Text: "t"})
 	go cmd()
 
 	var ctx context.Context
@@ -327,7 +327,7 @@ func TestQuitCancelsARunningTest(t *testing.T) {
 		t.Fatal("the context was already cancelled")
 	}
 
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 
 	select {
 	case <-ctx.Done():

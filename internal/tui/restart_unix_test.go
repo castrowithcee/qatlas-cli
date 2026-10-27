@@ -5,13 +5,12 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // restartRecorder stands for the process replacement: it records what exec was asked to run, and the
@@ -141,10 +140,13 @@ func TestAFailedExecKeepsTheEditorRunning(t *testing.T) {
 	if m.quitting {
 		t.Errorf("a failed restart ended the editor")
 	}
-	// The terminal was released for the replacement, which turned the mouse off: the editor turns it on again,
-	// and nothing else.
-	if cmd == nil || !strings.Contains(fmt.Sprintf("%T", cmd()), "enableMouseCellMotion") {
-		t.Errorf("a failed restart left the mouse off; the command is %v", cmd)
+	// The terminal was released for the replacement; restoring it brings back the mouse mode of the last
+	// view, which still asks for it, and nothing else is sent.
+	if cmd != nil {
+		t.Errorf("a failed restart sends %v", cmd)
+	}
+	if mode := m.View().MouseMode; mode != tea.MouseModeCellMotion {
+		t.Errorf("after a failed restart the view asks for mouse mode %v", mode)
 	}
 	if m.status != "Updated to v0.5.0. Restart qatlas tui to use it." || m.fail != "restart failed: exec format error" {
 		t.Errorf("status %q, fail %q; want the hint and the failure", m.status, m.fail)

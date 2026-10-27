@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -154,7 +154,6 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 		m.status, m.fail = "", tr(tSettingsSaveFailed, m.redactor.Apply(err.Error()))
 		return nil
 	}
-	mouseWas := m.mouseEnabled()
 	m.prefs = next
 	applyColorScheme(next.Theme, next.Background)
 	applyKeys(next.Keys)
@@ -162,12 +161,11 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	setLanguage(next.Language)
 	m.clearMessages()
 	m.status = tr(tSettingsSaved)
-	// The mouse mode of the terminal follows the preference at once.
-	mouse := m.mouseSwitch(mouseWas)
+	// The mouse mode of the terminal follows the preference with the next view (see mouseMode).
 	if leave {
-		return tea.Batch(mouse, m.showList())
+		return m.showList()
 	}
-	return tea.Batch(mouse, m.openPageForm())
+	return m.openPageForm()
 }
 
 // pageAction is a row that runs one of the existing flows at once on enter.

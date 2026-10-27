@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -86,7 +86,7 @@ func (m *Model) cancelRename() {
 	m.status = status
 }
 
-func (m *Model) updateRename(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateRename(key tea.KeyPressMsg) tea.Cmd {
 	r := m.rename
 	if r == nil {
 		m.screen = screenList
@@ -121,7 +121,7 @@ func (m *Model) updateRename(key tea.KeyMsg) tea.Cmd {
 		return m.requireAdmin(m.planRename)
 	}
 	var cmd tea.Cmd
-	r.input, cmd = r.input.Update(key)
+	r.input, cmd = r.input.Update(inputMsg(key))
 	return cmd
 }
 

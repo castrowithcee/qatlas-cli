@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -349,7 +349,7 @@ func findRow(view, text string) string {
 		// A table inside its frame is measured from the inner edge of the frame.
 		if edge := strings.IndexAny(line, "│║"); edge >= 0 {
 			side := line[edge:]
-			line = strings.TrimPrefix(strings.TrimPrefix(side[len("│"):], "\x1b[0m"), " ")
+			line = strings.TrimPrefix(strings.TrimPrefix(side[len("│"):], "\x1b[m"), " ")
 			// The pane beside the frame repeats the name of the marked entry; only the table counts.
 			if end := strings.IndexAny(line, "│║"); end >= 0 {
 				line = line[:end]
@@ -377,7 +377,7 @@ func withoutPanelFill(row string) string {
 	if styles.palette.panel == "" {
 		return row
 	}
-	out := lipgloss.NewStyle().Background(styles.palette.panel.lip()).Render("x")
+	out := shown(lipgloss.NewStyle().Background(styles.palette.panel.lip()).Render("x"))
 	return strings.ReplaceAll(row, out[:strings.Index(out, "x")], "")
 }
 

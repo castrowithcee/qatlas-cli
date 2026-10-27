@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // tempHome points the home directory at a new temporary one, on every platform.
@@ -85,12 +85,12 @@ func TestPathFieldKeepsAMissingDirectoryTypeable(t *testing.T) {
 		p := newPathField(mode)
 		p.open("", "")
 		for _, r := range missing + "x" {
-			p.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+			p.update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		}
 		if p.Value() != missing+"x" || len(p.matches) != 0 {
 			t.Fatalf("mode %v: value %q matches %v", mode, p.Value(), p.matches)
 		}
-		p.update(tea.KeyMsg{Type: tea.KeyTab})
+		p.update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if p.Value() != missing+"x" {
 			t.Fatalf("tab changed a path with nothing to complete: %q", p.Value())
 		}
@@ -140,7 +140,7 @@ func TestEmptyFieldSuggestsTheStartDirectoryAndTabTakesIt(t *testing.T) {
 	if !reflect.DeepEqual(p.matches, []string{withSeparator(root)}) {
 		t.Fatalf("matches = %v", p.matches)
 	}
-	p.update(tea.KeyMsg{Type: tea.KeyTab})
+	p.update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if p.Value() != withSeparator(root) {
 		t.Fatalf("tab gave %q", p.Value())
 	}
@@ -156,12 +156,12 @@ func TestUpDownMarkAndEnterTakesTheMarkedSuggestionOnlyAfterTheyMovedIt(t *testi
 	if !p.accept() || p.Value() != typed {
 		t.Fatalf("enter without a mark changed %q", p.Value())
 	}
-	p.update(tea.KeyMsg{Type: tea.KeyDown})
-	p.update(tea.KeyMsg{Type: tea.KeyDown})
+	p.update(tea.KeyPressMsg{Code: tea.KeyDown})
+	p.update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if shown, cur := p.shown(); shown[cur] != typed+"three.txt" {
 		t.Fatalf("marked %q", shown[cur])
 	}
-	p.update(tea.KeyMsg{Type: tea.KeyDown})
+	p.update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if shown, cur := p.shown(); shown[cur] != typed+"one"+s {
 		t.Fatalf("the mark did not wrap: %q", shown[cur])
 	}
@@ -173,13 +173,13 @@ func TestUpDownMarkAndEnterTakesTheMarkedSuggestionOnlyAfterTheyMovedIt(t *testi
 		t.Fatalf("value %q, want the directory entered", p.Value())
 	}
 	p.open(typed, "")
-	p.update(tea.KeyMsg{Type: tea.KeyUp})
+	p.update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if !p.accept() || p.Value() != typed+"three.txt" {
 		t.Fatalf("a marked file was not taken: %q", p.Value())
 	}
 	d := newPathField(pathDirectory)
 	d.open(typed, "")
-	d.update(tea.KeyMsg{Type: tea.KeyDown})
+	d.update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if !d.accept() || d.Value() != typed+"two"+s {
 		t.Fatalf("a marked directory was not taken in directory mode: %q", d.Value())
 	}
@@ -188,10 +188,10 @@ func TestUpDownMarkAndEnterTakesTheMarkedSuggestionOnlyAfterTheyMovedIt(t *testi
 func TestPlainFieldSuggestsNothingAndIgnoresTheSuggestionKeys(t *testing.T) {
 	p := pathField{Model: maskedInput()}
 	for _, r := range "secret" {
-		p.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		p.update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	p.update(tea.KeyMsg{Type: tea.KeyTab})
-	p.update(tea.KeyMsg{Type: tea.KeyDown})
+	p.update(tea.KeyPressMsg{Code: tea.KeyTab})
+	p.update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if p.Value() != "secret" || len(p.matches) != 0 || !p.accept() {
 		t.Fatalf("value %q matches %v", p.Value(), p.matches)
 	}

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -372,7 +372,7 @@ func (m *Model) handleTokenAction(msg tokenActionMsg) tea.Cmd {
 
 // updateTokenScreens handles the keys of the token detail screen and of the revoke question, both standing
 // over the Tokens list like the Approvals detail does. It reports false when neither is open.
-func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	if name := m.tokenRevoke; name != "" {
 		switch key.String() {
 		case "y":

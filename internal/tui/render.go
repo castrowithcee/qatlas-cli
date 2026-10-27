@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -221,7 +221,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(" + m.roleState(m.editing, f.label, m.credentialType()) + ")"
 	case f.kind == fieldMasked && focused:
 		// The input draws one mask character per typed character and never the characters themselves.
-		value = fitInput(f.input, m.valueRoom(f.label)).View()
+		value = inputView(fitInput(f.input, m.valueRoom(f.label)))
 	case f.kind == fieldMasked && f.input.Value() != "":
 		value = tr(tRenderEnteredMasked)
 	case f.kind == fieldMasked && f.stored:
@@ -312,7 +312,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		if f.kind == fieldEnvName && f.value() != "" {
 			source = " (" + m.envSource(f.value()) + ")"
 		}
-		value = fitInput(f.input, m.valueRoom(f.label)-lipgloss.Width(source)).View() + source
+		value = inputView(fitInput(f.input, m.valueRoom(f.label)-lipgloss.Width(source))) + source
 	case f.kind == fieldEnvName && value != "":
 		value += " (" + m.envSource(value) + ")"
 	case value == "":
