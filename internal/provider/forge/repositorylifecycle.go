@@ -168,40 +168,16 @@ var repositoriesCreate = &tool{
 			InputSchema: inputSchema(createProperties(), "name"),
 			OutputSchema: json.RawMessage(schemaOf(p, repositoryMembers, "id", "name",
 				"full_name")),
-			Arguments: []capability.Argument{organizationArgument,
-				{Name: "name", Required: true, Description: "Repository name, 1 to 100 letters, digits, '.', '-', '_'"},
-				{Name: "description", Description: "Description, at most 2048 characters"},
-				{Name: "private", Description: "True for a private repository"},
-				{Name: "auto_init", Description: "True to create an initial commit"},
-				{Name: "default_branch", Description: "Default branch of the new repository"},
-				{Name: "gitignores", Description: "Gitignore templates, comma separated; see the gitignore " +
-					"templates of the instance"},
-				{Name: "issue_labels", Description: "Name of a label set"},
-				{Name: "license", Description: "Name of a license template"},
-				{Name: "readme", Description: "Name of a readme template"},
-				{Name: "template", Description: "True to make the repository a template"},
-				{Name: "trust_model", Description: "default, collaborator, committer, or collaboratorcommitter"},
-				{Name: "object_format_name", Description: "sha1 or sha256"}},
-			Fields: fieldsOf(p, repositoryMembers),
+			Arguments: append([]capability.Argument{organizationArgument}, repositoryCreateArguments...),
+			Fields:    fieldsOf(p, repositoryMembers),
 			Examples: []capability.Example{{Description: "Create a private repository in an organization",
 				Arguments: json.RawMessage(`{"organization":"example","name":"project","private":true}`)}},
 		}
 	},
 	prepare: func(p *product, allowed allowlist, raw json.RawMessage) (run, error) {
 		var a struct {
-			Organization     string  `json:"organization"`
-			Name             string  `json:"name"`
-			Description      *string `json:"description"`
-			Private          *bool   `json:"private"`
-			AutoInit         *bool   `json:"auto_init"`
-			DefaultBranch    string  `json:"default_branch"`
-			Gitignores       string  `json:"gitignores"`
-			IssueLabels      string  `json:"issue_labels"`
-			License          string  `json:"license"`
-			Readme           string  `json:"readme"`
-			Template         *bool   `json:"template"`
-			TrustModel       string  `json:"trust_model"`
-			ObjectFormatName string  `json:"object_format_name"`
+			Organization string `json:"organization"`
+			repositoryCreateOptions
 		}
 		if err := decodeArguments(raw, &a); err != nil {
 			return nil, err
@@ -209,48 +185,9 @@ var repositoriesCreate = &tool{
 		if err := allowed.checkDestination(a.Organization); err != nil {
 			return nil, err
 		}
-		if err := repositoryNameCheck("name", a.Name); err != nil {
+		body, err := a.repositoryCreateOptions.body()
+		if err != nil {
 			return nil, err
-		}
-		body := map[string]any{"name": a.Name}
-		if a.Description != nil {
-			if err := checkOneLine("description", *a.Description, maxRepoDescription); err != nil {
-				return nil, err
-			}
-			body["description"] = *a.Description
-		}
-		for name, value := range map[string]*bool{"private": a.Private, "auto_init": a.AutoInit, "template": a.Template} {
-			if value != nil {
-				body[name] = *value
-			}
-		}
-		if a.DefaultBranch != "" {
-			if err := checkRefName("default_branch", a.DefaultBranch, true); err != nil {
-				return nil, err
-			}
-			body["default_branch"] = a.DefaultBranch
-		}
-		for name, value := range map[string]string{"gitignores": a.Gitignores, "issue_labels": a.IssueLabels,
-			"license": a.License, "readme": a.Readme} {
-			if value == "" {
-				continue
-			}
-			if err := checkTemplateName(name, value, maxTemplateName); err != nil {
-				return nil, err
-			}
-			body[name] = value
-		}
-		if a.TrustModel != "" {
-			if !strings.Contains(trustModels, `"`+a.TrustModel+`"`) {
-				return nil, invalidArgument("trust_model must be default, collaborator, committer, or collaboratorcommitter")
-			}
-			body["trust_model"] = a.TrustModel
-		}
-		if a.ObjectFormatName != "" {
-			if a.ObjectFormatName != "sha1" && a.ObjectFormatName != "sha256" {
-				return nil, invalidArgument("object_format_name must be sha1 or sha256")
-			}
-			body["object_format_name"] = a.ObjectFormatName
 		}
 		path := "/user/repos"
 		if a.Organization != "" {
@@ -276,12 +213,96 @@ var repositoriesCreate = &tool{
 }
 
 func createProperties() string {
-	return `"organization":` + organizationSchema + `,"name":` + repoNameSchema +
+	return `"organization":` + organizationSchema + `,` + repositoryCreateProperties()
+}
+
+// repositoryCreateProperties are the members of CreateRepoOption that a repository creation sends.
+func repositoryCreateProperties() string {
+	return `"name":` + repoNameSchema +
 		`,"description":{"type":"string","maxLength":2048},"private":{"type":"boolean"},` +
 		`"auto_init":{"type":"boolean"},"default_branch":` + branchSchemaName + `,"gitignores":` + repoTextSchema +
 		`,"issue_labels":` + repoTextSchema + `,"license":` + repoTextSchema + `,"readme":` + repoTextSchema +
 		`,"template":{"type":"boolean"},"trust_model":{"type":"string","enum":` + trustModels + `},` +
 		`"object_format_name":{"type":"string","enum":` + objectFormats + `}`
+}
+
+var repositoryCreateArguments = []capability.Argument{
+	{Name: "name", Required: true, Description: "Repository name, 1 to 100 letters, digits, '.', '-', '_'"},
+	{Name: "description", Description: "Description, at most 2048 characters"},
+	{Name: "private", Description: "True for a private repository"},
+	{Name: "auto_init", Description: "True to create an initial commit"},
+	{Name: "default_branch", Description: "Default branch of the new repository"},
+	{Name: "gitignores", Description: "Gitignore templates, comma separated; see the gitignore " +
+		"templates of the instance"},
+	{Name: "issue_labels", Description: "Name of a label set"},
+	{Name: "license", Description: "Name of a license template"},
+	{Name: "readme", Description: "Name of a readme template"},
+	{Name: "template", Description: "True to make the repository a template"},
+	{Name: "trust_model", Description: "default, collaborator, committer, or collaboratorcommitter"},
+	{Name: "object_format_name", Description: "sha1 or sha256"}}
+
+// repositoryCreateOptions are the arguments that become the CreateRepoOption body.
+type repositoryCreateOptions struct {
+	Name             string  `json:"name"`
+	Description      *string `json:"description"`
+	Private          *bool   `json:"private"`
+	AutoInit         *bool   `json:"auto_init"`
+	DefaultBranch    string  `json:"default_branch"`
+	Gitignores       string  `json:"gitignores"`
+	IssueLabels      string  `json:"issue_labels"`
+	License          string  `json:"license"`
+	Readme           string  `json:"readme"`
+	Template         *bool   `json:"template"`
+	TrustModel       string  `json:"trust_model"`
+	ObjectFormatName string  `json:"object_format_name"`
+}
+
+// body checks the options and returns the request body.
+func (a repositoryCreateOptions) body() (map[string]any, error) {
+	if err := repositoryNameCheck("name", a.Name); err != nil {
+		return nil, err
+	}
+	body := map[string]any{"name": a.Name}
+	if a.Description != nil {
+		if err := checkOneLine("description", *a.Description, maxRepoDescription); err != nil {
+			return nil, err
+		}
+		body["description"] = *a.Description
+	}
+	for name, value := range map[string]*bool{"private": a.Private, "auto_init": a.AutoInit, "template": a.Template} {
+		if value != nil {
+			body[name] = *value
+		}
+	}
+	if a.DefaultBranch != "" {
+		if err := checkRefName("default_branch", a.DefaultBranch, true); err != nil {
+			return nil, err
+		}
+		body["default_branch"] = a.DefaultBranch
+	}
+	for name, value := range map[string]string{"gitignores": a.Gitignores, "issue_labels": a.IssueLabels,
+		"license": a.License, "readme": a.Readme} {
+		if value == "" {
+			continue
+		}
+		if err := checkTemplateName(name, value, maxTemplateName); err != nil {
+			return nil, err
+		}
+		body[name] = value
+	}
+	if a.TrustModel != "" {
+		if !strings.Contains(trustModels, `"`+a.TrustModel+`"`) {
+			return nil, invalidArgument("trust_model must be default, collaborator, committer, or collaboratorcommitter")
+		}
+		body["trust_model"] = a.TrustModel
+	}
+	if a.ObjectFormatName != "" {
+		if a.ObjectFormatName != "sha1" && a.ObjectFormatName != "sha256" {
+			return nil, invalidArgument("object_format_name must be sha1 or sha256")
+		}
+		body["object_format_name"] = a.ObjectFormatName
+	}
+	return body, nil
 }
 
 // ---- update -------------------------------------------------------------------------------------------------
