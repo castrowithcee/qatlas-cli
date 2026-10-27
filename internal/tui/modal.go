@@ -115,20 +115,29 @@ func (m *Model) baseScreen() screen {
 	return s
 }
 
+// scrollViews are the scroll areas that drawing a view clamps as a side effect.
+func (m *Model) scrollViews() []*textScroll {
+	views := []*textScroll{&m.help, &m.approval}
+	if e := m.export; e != nil {
+		views = append(views, &e.view)
+	}
+	if e := m.imp; e != nil {
+		views = append(views, &e.view)
+	}
+	if r := m.rename; r != nil {
+		views = append(views, &r.view)
+	}
+	if st := m.st; st != nil {
+		views = append(views, &st.view)
+	}
+	return views
+}
+
 // scrollRefs are the offsets that drawing a view clamps as a side effect.
 func (m *Model) scrollRefs() []*int {
 	var refs []*int
 	if e := m.export; e != nil {
-		refs = append(refs, &e.offset, &e.rows.offset)
-	}
-	if e := m.imp; e != nil {
-		refs = append(refs, &e.offset)
-	}
-	if r := m.rename; r != nil {
-		refs = append(refs, &r.offset)
-	}
-	if st := m.st; st != nil {
-		refs = append(refs, &st.offset)
+		refs = append(refs, &e.rows.offset)
 	}
 	return refs
 }
@@ -141,9 +150,17 @@ func (m *Model) renderAs(s screen, width int, render func()) {
 	for i, ref := range refs {
 		saved[i] = *ref
 	}
+	views := m.scrollViews()
+	savedViews := make([]textScroll, len(views))
+	for i, v := range views {
+		savedViews[i] = *v
+	}
 	screen, w := m.screen, m.width
 	defer func() {
 		m.screen, m.width = screen, w
+		for i, v := range views {
+			*v = savedViews[i]
+		}
 		for i, ref := range refs {
 			*ref = saved[i]
 		}

@@ -74,9 +74,9 @@ type importState struct {
 	// plan is what the preview shows, and carries the secret values of the file until the import ends.
 	plan  *manage.ImportPlan
 	store string
-	// lines and offset are the preview or the result, one line each, and the first one shown.
-	lines  []string
-	offset int
+	// lines and view are the preview or the result, one line each, and the scroll position in them.
+	lines []string
+	view  textScroll
 	// working says why no key acts: "reading" the file or "writing" the import or approvals.
 	working string
 	// res is what the write did, for the approval; the report is what the vault holds open afterwards.
@@ -205,14 +205,14 @@ func (m *Model) updateImport(key tea.KeyPressMsg) tea.Cmd {
 			m.clearMessages()
 			return m.requireAdmin(m.beginImportWrite)
 		default:
-			e.offset = scrollOffset(e.offset, key, m.height)
+			e.view.scroll(key, halfPage(m.height))
 		}
 	case importResult:
 		if keyIs(key, actEnter) {
 			m.importNext()
 			return nil
 		}
-		e.offset = scrollOffset(e.offset, key, m.height)
+		e.view.scroll(key, halfPage(m.height))
 	case importApprove:
 		switch {
 		case keyIs(key, actYes):
@@ -220,7 +220,7 @@ func (m *Model) updateImport(key tea.KeyPressMsg) tea.Cmd {
 		case keyIs(key, actNo):
 			m.declineImportApproval()
 		default:
-			e.offset = scrollOffset(e.offset, key, m.height)
+			e.view.scroll(key, halfPage(m.height))
 		}
 	case importDelete:
 		switch {
@@ -229,7 +229,7 @@ func (m *Model) updateImport(key tea.KeyPressMsg) tea.Cmd {
 		case keyIs(key, actNo):
 			m.deleteImportSource(false)
 		default:
-			e.offset = scrollOffset(e.offset, key, m.height)
+			e.view.scroll(key, halfPage(m.height))
 		}
 	}
 	return nil
@@ -358,7 +358,7 @@ func (m *Model) handleImportPlanned(msg importPlannedMsg) tea.Cmd {
 			return nil
 		}
 		e.store = store
-		e.offset = 0
+		e.view.reset()
 		e.lines = m.importPlanLines(msg.plan, store, overSSH)
 		e.step = importPreview
 	case errors.Is(msg.err, errImportNeedsPassphrase):
@@ -514,7 +514,8 @@ func (m *Model) handleImportDone(msg importDoneMsg) tea.Cmd {
 	}
 	plan := e.plan
 	e.plan = nil
-	e.res, e.report, e.offset = msg.res, msg.report, 0
+	e.res, e.report = msg.res, msg.report
+	e.view.reset()
 	e.lines = m.importResultLines(plan, msg.res)
 	if msg.reported {
 		if hasImportedOpen(msg.report) {
@@ -607,7 +608,7 @@ func (m *Model) importApprovalLines(res manage.ImportResult, report manage.Impor
 func (m *Model) importNext() {
 	e := m.imp
 	m.clearMessages()
-	e.offset = 0
+	e.view.reset()
 	switch {
 	case e.pendingApprove:
 		e.pendingApprove = false
@@ -645,7 +646,7 @@ func (m *Model) handleImportApproved(msg importApprovedMsg) tea.Cmd {
 	e.report = msg.report
 	e.lines = append(e.lines, m.importApprovalLines(e.res, msg.report, true)...)
 	e.toApprove = nil
-	e.offset = 0
+	e.view.reset()
 	e.step = importResult
 	return nil
 }
@@ -656,7 +657,7 @@ func (m *Model) declineImportApproval() {
 	m.clearMessages()
 	e.lines = append(e.lines, m.importApprovalLines(e.res, e.report, true)...)
 	e.toApprove = nil
-	e.offset = 0
+	e.view.reset()
 	e.step = importResult
 }
 
@@ -675,7 +676,7 @@ func (m *Model) deleteImportSource(remove bool) {
 			e.lines = append(e.lines, tr(tImLineDeleted, shown))
 		}
 	}
-	e.offset = 0
+	e.view.reset()
 	e.step = importResult
 }
 
@@ -729,7 +730,7 @@ func (m *Model) importView() string {
 	if e.working != "" {
 		keys = workingWait(e.working)
 	}
-	return m.linesView(title, question, keys, lines, &e.offset,
+	return m.linesView(title, question, keys, lines, &e.view,
 		e.step == importResult || e.step == importApprove || e.step == importDelete)
 }
 
