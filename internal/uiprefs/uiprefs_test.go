@@ -39,14 +39,14 @@ func TestLoadUnreadablePathGivesDefaultsAndWarning(t *testing.T) {
 
 func TestLoadInvalidValuesFallBackPerField(t *testing.T) {
 	path := Path(t.TempDir())
-	data := "theme: purple\nbackground: neon\nstart: connections\nicons: emoji\n"
+	data := "theme: \"\"\nstart: connections\nicons: emoji\n"
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
 	want := Default()
 	want.Start = "connections"
-	if got != want || len(warnings) != 3 {
+	if got != want || len(warnings) != 2 {
 		t.Fatalf("Load() = %+v, %v; want %+v and two warnings", got, warnings, want)
 	}
 }
@@ -58,14 +58,14 @@ func TestLoadToleratesUnknownKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
-	if got.Theme != ThemeDark || len(warnings) != 0 {
-		t.Fatalf("Load() = %+v, %v; want theme dark and no warning", got, warnings)
+	if got.Theme != ThemeQatlasDark || len(warnings) != 0 {
+		t.Fatalf("Load() = %+v, %v; want theme qatlas dark and no warning", got, warnings)
 	}
 }
 
 func TestSaveRoundTripLeavesNoTempFile(t *testing.T) {
 	dir := t.TempDir()
-	want := Prefs{Theme: ThemeLight, Background: BackgroundQatlas, Start: "access", Icons: IconsNerdFont, Language: LanguageGerman, Keys: DefaultKeys()}
+	want := Prefs{Theme: ThemeQatlasLight, Start: "access", Icons: IconsNerdFont, Language: LanguageGerman, Keys: DefaultKeys()}
 	if err := Save(Path(dir), want); err != nil {
 		t.Fatal(err)
 	}
@@ -87,14 +87,14 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 	if err := os.WriteFile(path, []byte("theme: dark\nstart: library\nicons: nerdfont\nextra: x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Save(path, Prefs{Theme: ThemeLight, Start: "overview", Icons: IconsNone}); err != nil {
+	if err := Save(path, Prefs{Theme: ThemeQatlasLight, Start: "overview", Icons: IconsNone}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != "theme: light\nbackground: terminal\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
+	if got := string(data); got != "theme: qatlas light\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
 		t.Fatalf("file = %q", got)
 	}
 }
@@ -102,11 +102,10 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 func TestSaveInvalidWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 	for _, bad := range []Prefs{
-		{Theme: "x", Start: "overview", Icons: IconsNone},
-		{Theme: ThemeAuto, Start: "", Icons: IconsNone},
-		{Theme: ThemeAuto, Start: "overview", Icons: "x"},
-		{Theme: ThemeAuto, Background: "x", Start: "overview", Icons: IconsNone},
-		{Theme: ThemeAuto, Start: "overview", Icons: IconsNone, Language: "fr"},
+		{Theme: "", Start: "overview", Icons: IconsNone},
+		{Theme: ThemeTerminal, Start: "", Icons: IconsNone},
+		{Theme: ThemeTerminal, Start: "overview", Icons: "x"},
+		{Theme: ThemeTerminal, Start: "overview", Icons: IconsNone, Language: "fr"},
 	} {
 		if err := Save(Path(dir), bad); err == nil {
 			t.Errorf("Save(%+v) = nil; want an error", bad)
@@ -199,23 +198,44 @@ func TestLoadWarnsForAMouseValueThatIsNoBoolean(t *testing.T) {
 	}
 }
 
-func TestBackgroundLoadsAndFallsBack(t *testing.T) {
-	path := Path(t.TempDir())
-	if got, _ := Load(path); got.Background != BackgroundTerminal {
-		t.Fatalf("default background = %q, want terminal", got.Background)
+// A file of an earlier version names a colour scheme and maybe a background: the scheme becomes its theme, and
+// the background is dropped without a word and not written again.
+func TestFormerColourSchemeBecomesTheme(t *testing.T) {
+	for _, tc := range []struct {
+		file, want string
+	}{
+		{"theme: auto\n", ThemeTerminal},
+		{"theme: light\n", ThemeQatlasLight},
+		{"theme: dark\n", ThemeQatlasDark},
+		{"start: overview\n", ThemeTerminal},
+		{"theme: auto\nbackground: qatlas\n", ThemeTerminal},
+		{"theme: light\nbackground: terminal\n", ThemeQatlasLight},
+		{"theme: dark\nbackground: qatlas\n", ThemeQatlasDark},
+		{"background: neon\n", ThemeTerminal},
+		{"theme: qatlas light\n", ThemeQatlasLight},
+		{"theme: some later theme\n", "some later theme"},
+	} {
+		path := Path(t.TempDir())
+		if err := os.WriteFile(path, []byte(tc.file), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		got, warnings := Load(path)
+		if got.Theme != tc.want || len(warnings) != 0 {
+			t.Errorf("Load(%q) = theme %q, %v; want %q and no warning", tc.file, got.Theme, warnings, tc.want)
+			continue
+		}
+		if err := Save(path, got); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "background") {
+			t.Errorf("Save after Load(%q) still writes the background:\n%s", tc.file, data)
+		}
 	}
-	if err := os.WriteFile(path, []byte("background: qatlas\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if got, warnings := Load(path); got.Background != BackgroundQatlas || len(warnings) != 0 {
-		t.Fatalf("Load() = %+v, %v; want background qatlas", got, warnings)
-	}
-	if err := os.WriteFile(path, []byte("background: neon\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	got, warnings := Load(path)
-	if got.Background != BackgroundTerminal || len(warnings) != 1 ||
-		!strings.Contains(warnings[0], `background "neon" is not terminal or qatlas`) {
-		t.Fatalf("Load() = %+v, %v; want the default and one warning", got, warnings)
+	if got, _ := Load(Path(t.TempDir())); got.Theme != ThemeTerminal {
+		t.Errorf("without a file the theme is %q, want %s", got.Theme, ThemeTerminal)
 	}
 }

@@ -13,7 +13,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/selftest"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // dialogScreen brings a model to one dialog screen; the model is sized by the caller afterwards.
@@ -153,7 +152,7 @@ func TestDialogScreensFramedAtSizeAndPlainAtTheSmallest(t *testing.T) {
 				}
 				t.Run(name, func(t *testing.T) {
 					visualSetup(t, noColor)
-					applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+					useDarkColours()
 					m := sc.open(t)
 					m.Update(tea.WindowSizeMsg{Width: size.w, Height: size.h})
 					view := m.render()
@@ -189,7 +188,7 @@ func TestResultsCarryTheirColourAndWord(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			visualSetup(t, false)
-			applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+			useDarkColours()
 			setProfile(profileTrueColor)
 			m := tc.open(t)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
@@ -205,7 +204,7 @@ func TestResultsCarryTheirColourAndWord(t *testing.T) {
 func TestTheSizeHintReadsAtTheSmallestSizeLess(t *testing.T) {
 	for _, noColor := range []bool{false, true} {
 		visualSetup(t, noColor)
-		applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+		useDarkColours()
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: minimumWidth - 1, Height: minimumHeight - 2})
 		view := m.render()
@@ -226,7 +225,7 @@ func TestTheSizeHintReadsAtTheSmallestSizeLess(t *testing.T) {
 // for a frame it stands in a panel, every row of it inside the width.
 func TestQuestionAndPromptFillTheWorkspaceInAPanel(t *testing.T) {
 	visualSetup(t, false)
-	applyColorScheme(uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+	useDarkColours()
 
 	m := startedWith(t, newerRelease())
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})

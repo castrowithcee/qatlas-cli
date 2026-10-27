@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // configBytes is the content of the configuration file, or a marker where it does not exist yet.
@@ -123,7 +125,7 @@ func TestDropdownReadsWithoutColour(t *testing.T) {
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
-	applyColorScheme("", "")
+	applyTheme(uiprefs.ThemeTerminal)
 	setProfile(profile256)
 
 	m := newTableModel(t, 100)

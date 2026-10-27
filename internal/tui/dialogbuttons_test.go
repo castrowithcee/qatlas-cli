@@ -49,7 +49,7 @@ func TestOnlyDestructiveQuestionsHaveADangerButton(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
-	applyColorScheme("dark", "")
+	useDarkColours()
 	danger := button(buttonDanger, "Delete", false)
 	fill := danger[:strings.Index(danger, "[ Delete")]
 
@@ -68,7 +68,7 @@ func TestDialogsReadWithoutColour(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "1")
-	applyColorScheme("dark", "")
+	useDarkColours()
 
 	question := openDeleteQuestion(t)
 	input, _ := startServiceForm(t)
@@ -97,7 +97,7 @@ func TestSecretFieldIsMaskedOnItsSurface(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
-	applyColorScheme("dark", "")
+	useDarkColours()
 	m, _ := startServiceForm(t)
 	sizedModel(m, 100, 30)
 	m.screen, m.secretInput = screenSecret, maskedInput()

@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // demoOverview is the Overview of the snapshot setup at the given size, with its log read.
@@ -21,7 +22,7 @@ func demoOverview(t *testing.T, noColor bool, width, height int) *Model {
 	t.Helper()
 	fixtures := demoFixtures()
 	visualSetup(t, noColor)
-	return visualModel(t, fixtures, width, height, "dark", "terminal")
+	return visualModel(t, fixtures, width, height, uiprefs.ThemeQatlasDark)
 }
 
 // demoFixtures is the absolute path of the snapshot fixtures, resolved before a test changes its directory.
