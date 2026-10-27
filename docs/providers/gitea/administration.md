@@ -32,6 +32,9 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-user-emails.delete` | delete, listed only | Forgejo |
 | `admin-orgs.list` | read | both |
 | `admin-orgs.create`, `admin-repositories.create` | create | both |
+| `admin-unadopted.list` | read | both |
+| `admin-unadopted.adopt` | create | both |
+| `admin-unadopted.delete` | delete, listed only | both |
 
 ## Binding
 
@@ -104,8 +107,19 @@ repository for the existing account `username`; the settings, limits, and exclus
 organization is named by `organization`. Both are not idempotent, are in no setup profile, and are refused as
 `invalid-provider-response` when the answer names another organization or repository.
 
+### Unadopted repositories
+
+`admin-unadopted.list` lists one batch of the repository directories on the disk that no repository record owns, as
+`owner`, `repo`, and `full_name`; an entry that is not exactly one valid `owner/repo` pair is left out. `pattern`
+is an optional glob of the form `owner` or `owner/repo` with at most one `/`; the tool sends it under the name the
+instance version knows (`query` on Gitea 28 and later, `pattern` otherwise). `admin-unadopted.adopt` registers the
+files of one directory as a repository and is not idempotent. `admin-unadopted.delete` removes the files of one
+directory for good; it is offered only by a connection whose `tools` list names it. Both take `owner` and `repo`,
+are in no setup profile, and are refused for any other name.
+
 ## Changes
 
 `admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`, `admin-orgs`,
-and `admin-repositories` that change need confirmation, send exactly one request, and are never repeated; when the
-outcome is open, the message says that the change may have been applied. No tool of this group is in a setup profile.
+`admin-repositories`, and `admin-unadopted` that change need confirmation, send exactly one request, and are never
+repeated; when the outcome is open, the message says that the change may have been applied. No tool of this group is
+in a setup profile.
