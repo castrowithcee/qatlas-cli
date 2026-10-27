@@ -28,6 +28,7 @@ var textDE = map[textID]string{
 	tHeaderTitle:                       "Qatlas",
 	tHeaderHelp:                        "Hilfe",
 	tHeaderCmd:                         "Befehl",
+	tHeaderBack:                        "Zurück",
 	tHeaderCreated:                     " (wird beim ersten Speichern angelegt)",
 	tTabSetup:                          "[c Setup]",
 	tVaultError:                        "Tresor: %s",

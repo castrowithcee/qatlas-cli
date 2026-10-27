@@ -28,6 +28,7 @@ const (
 	tHeaderTitle                             textID = "HeaderTitle"
 	tHeaderHelp                              textID = "HeaderHelp"
 	tHeaderCmd                               textID = "HeaderCmd"
+	tHeaderBack                              textID = "HeaderBack"
 	tHeaderCreated                           textID = "HeaderCreated"
 	tTabSetup                                textID = "TabSetup"
 	tVaultError                              textID = "VaultError"

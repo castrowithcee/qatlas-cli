@@ -28,6 +28,7 @@ var textEN = map[textID]string{
 	tHeaderTitle:                       "Qatlas",
 	tHeaderHelp:                        "help",
 	tHeaderCmd:                         "cmd",
+	tHeaderBack:                        "back",
 	tHeaderCreated:                     " (created on first save)",
 	tTabSetup:                          "[c setup]",
 	tVaultError:                        "vault: %s",
