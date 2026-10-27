@@ -508,6 +508,7 @@ var textEN = map[textID]string{
 	footerID("space unchanged"):                                "space unchanged",
 	footerID("space fold unchanged"):                           "space fold unchanged",
 	footerID("up/down scroll"):                                 "up/down scroll",
+	footerID("pgup/pgdn scroll"):                               "pgup/pgdn scroll",
 	footerID("y approve all"):                                  "y approve all",
 	tRenameLabelID:                                             "id",
 	tRenameLabelEntry:                                          "entry",

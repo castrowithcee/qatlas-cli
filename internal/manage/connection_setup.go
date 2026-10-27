@@ -93,8 +93,10 @@ type ConnectionDraft struct {
 	// provider's defaults, "none" allows nothing. With ToolsSelected, Tools is the explicit selection, and
 	// no tool outside it is enabled, an empty one included; only Tools is stored then and Effects is
 	// ignored. Without it the connection offers every tool of its effects.
-	Name          string
-	Targets       []string
+	Name    string
+	Targets []string
+	// Exclude are target objects taken out of what the targets reach; the core validates them.
+	Exclude       []string
 	Description   string
 	Effects       string
 	ToolsSelected bool
@@ -228,7 +230,7 @@ func buildCandidate(cfg *config.Config, d ConnectionDraft, stage ConnectionStage
 		}
 		target, targets := SplitTargets(d.Targets)
 		conn := config.Connection{
-			Service: d.Service, Credential: d.Credential, Target: target, Targets: targets,
+			Service: d.Service, Credential: d.Credential, Target: target, Targets: targets, Exclude: slices.Clone(d.Exclude),
 			Description: d.Description, Paths: slices.Clone(d.Paths), ForwardSecrets: slices.Clone(d.Forward),
 			Files:        config.Files{Read: slices.Clone(d.Files.Read), Write: slices.Clone(d.Files.Write)},
 			TargetLabels: maps.Clone(d.TargetLabels),

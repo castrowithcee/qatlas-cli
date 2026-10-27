@@ -10,12 +10,14 @@ import "fmt"
 type Resolved struct {
 	Name string
 	// ID is the connection's config id, empty for a connection that has none yet.
-	ID         string
-	Provider   string
-	BaseURL    string
-	Options    map[string]string
-	Target     string
-	Targets    []string
+	ID       string
+	Provider string
+	BaseURL  string
+	Options  map[string]string
+	Target   string
+	Targets  []string
+	// Exclude is the connection's exclusions; read through provider.ExcludesOf, never part of the targets.
+	Exclude    []string
 	Service    string
 	Credential string
 	Secrets    Credential
@@ -102,6 +104,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Options:        service.Options,
 		Target:         conn.Target,
 		Targets:        append([]string(nil), conn.Targets...),
+		Exclude:        conn.ExcludeValues(),
 		Service:        conn.Service,
 		Credential:     conn.Credential,
 		Secrets:        cred,

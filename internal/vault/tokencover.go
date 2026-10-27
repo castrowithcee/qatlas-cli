@@ -24,6 +24,7 @@ const (
 	GapEffects    = "effects"
 	GapTools      = "tools"
 	GapTargets    = "targets"
+	GapExclude    = "exclude"
 	GapPaths      = "paths"
 	GapFiles      = "files"
 	GapForward    = "forward"
@@ -277,6 +278,11 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	// that same entry, since the vault knows no provider's rules.
 	if len(ceiling.Targets) > 0 && (len(change.Targets) == 0 || !subset(change.Targets, ceiling.Targets)) {
 		gaps = append(gaps, GapTargets)
+	}
+	// Exclusions run the other way: the vorbild's exclusions narrow it, so a change that drops one reaches
+	// more than was approved. Kept or added exclusions stay covered.
+	if !subset(ceiling.Exclude, change.Exclude) {
+		gaps = append(gaps, GapExclude)
 	}
 	if len(ceiling.Paths) > 0 && !pathsWithin(change.Paths, ceiling.Paths) {
 		gaps = append(gaps, GapPaths)

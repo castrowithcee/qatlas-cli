@@ -273,7 +273,7 @@ func (c *Client) BatchDeleteRows(ctx context.Context, table string, rowIDs []str
 // The API reports no failure per row; countField names the answer field that carries the reported count.
 func (c *Client) batchChange(ctx context.Context, op, method, table string, payload map[string]any,
 	sets []map[string]json.RawMessage, requested int, countField string) (*BatchResult, error) {
-	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets, true)
+	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets)
 	if err != nil {
 		return nil, err
 	}

@@ -270,6 +270,10 @@ func (c *Client) ListThreads(ctx context.Context, teamID string, page, limit int
 			entries = append(entries, entry)
 		}
 	}
+	guard := c.newPreviewGuard(ctx, op)
+	for i := range entries {
+		guard.apply(&entries[i].Root)
+	}
 	var total *int
 	if n := list.Total.Value; n != nil && *n >= 0 {
 		total = n
@@ -332,6 +336,7 @@ func invokeThreadsGet(ctx context.Context, resolved *config.Resolved, secrets *s
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned a different thread than the one requested"}
 	}
+	client.newPreviewGuard(ctx, op).apply(&entry.Root)
 	return entry, nil
 }
 

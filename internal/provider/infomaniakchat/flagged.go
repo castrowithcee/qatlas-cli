@@ -194,6 +194,7 @@ func (c *Client) ListFlagged(ctx context.Context, input flaggedListArguments) (*
 			entries = append(entries, messageEntryOf(post))
 		}
 	}
+	c.guardEntries(ctx, op, entries)
 	return &FlaggedMessages{TeamID: input.TeamID, ChannelID: input.ChannelID, Messages: entries, Page: input.Page,
 		HasMore: received >= input.Limit, Count: len(entries)}, nil
 }

@@ -238,6 +238,9 @@ type logRow struct {
 
 // logView is the state of the Logs section.
 type logView struct {
+	// view scrolls the detail screen of one entry; page is how many of its lines the last drawing showed.
+	view textScroll
+	page int
 	mode logMode
 	// day is the day of logModeDay, from and to the range of logModeRange, all as logDateLayout.
 	day, from, to string
@@ -680,6 +683,7 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 		case logFocusRows:
 			if row, ok := lv.list.selected(); ok && !lv.stats && !lv.heat {
 				lv.detail, _ = strconv.Atoi(row)
+				lv.view.reset()
 				m.screen = screenLogDetail
 				m.clearMessages()
 			}
@@ -769,6 +773,8 @@ func (m *Model) updateLogDetail(key tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case keyIs(key, actBack):
 		m.screen = screenLogs
+	default:
+		m.logs.view.scroll(key, m.logs.page)
 	}
 	return nil
 }
@@ -1446,7 +1452,7 @@ func (m *Model) logDetailView() string {
 		title = tr(tLogEntryTime, e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700"))
 	}
 	var b strings.Builder
-	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
+	head := m.wrapped(styles.title, title) + "\n\n"
 	m.formCol = m.labelColumn(logLabel("status"), logLabel("UTC file"), logLabel("sequence"), logLabel("day"), logLabel("kind"),
 		logLabel("through"), logLabel("way"), logLabel("client"), logLabel("tool"), logLabel("connection"),
 		logLabel("effect"), logLabel("result"), logLabel("duration"), logLabel("request"), logLabel("response"))
@@ -1484,8 +1490,25 @@ func (m *Model) logDetailView() string {
 		field("request", formatBytes(e.ReqBytes))
 		field("response", formatBytes(e.RespBytes))
 	}
-	b.WriteString(m.keyHint("{back} back · 1-8 section · {command} cmds · {help} help"))
-	return b.String()
+	// The fields are laid out first and shown from the scroll position on, so a long message scrolls and
+	// nothing is cut; a longer text gains the position line and the scroll keys.
+	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+	keys := "{back} back · 1-8 section · {command} cmds · {help} help"
+	// The lines after the last field are the key line and the notes, and at least the empty line the view
+	// ends in.
+	tail := func(keys string) int { return strings.Count(m.keyHint(keys)+m.notes(), "\n") + 1 }
+	room := m.height - strings.Count(head, "\n") - tail(keys)
+	position := ""
+	if total := len(lines); total > room {
+		keys = "up/down scroll · " + keys
+		room = max(m.height-strings.Count(head, "\n")-tail(keys)-1, 1)
+		lv.page = room
+		lines = lv.view.window(lines, room, false)
+		position = m.wrapped(styles.hint, lv.view.position(total, room)) + "\n"
+	} else {
+		lv.view.reset()
+	}
+	return head + strings.Join(lines, "\n") + "\n" + position + m.keyHint(keys)
 }
 
 // logReason says why a line has its status.

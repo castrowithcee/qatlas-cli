@@ -76,3 +76,65 @@ func (t *textScroll) window(lines []string, height int, follow bool) []string {
 	}
 	return rows
 }
+
+// position is the line that says which lines of total are in view, in the form of the help; it is empty
+// while all of them fit.
+func (t *textScroll) position(total, shown int) string {
+	if shown >= total {
+		return ""
+	}
+	first := min(t.offset()+1, total)
+	return tr(tApprovalLines, first, min(t.offset()+shown, total), total)
+}
+
+// paneScroll is the scroll state of a text pane that stands beside a screen (the detail pane of a list, the
+// explanation pane of a form), which has no key of its own to scroll with: only the wheel over it, and for
+// the focused detail pane the page keys.
+type paneScroll struct {
+	view textScroll
+	// key names what the pane shows; another subject starts at the first line.
+	key string
+	// page is the lines in view of the last drawing, more whether there were lines left out.
+	page int
+	more bool
+	// x0, y0, x1, y1 is where the pane was drawn.
+	x0, y0, x1, y1 int
+}
+
+// fit lays body out in room rows and returns the rows to draw. A body that does not fit gets room-1 rows and
+// the position line below them; a pane of a single row keeps cutting, which is all it can show.
+func (p *paneScroll) fit(key string, body []string, room int) (rows []string, position string) {
+	if key != p.key {
+		p.key = key
+		p.view.reset()
+	}
+	p.more = false
+	if len(body) <= room || room < 2 {
+		p.view.reset()
+		return body, ""
+	}
+	p.page, p.more = room-1, true
+	rows = p.view.window(body, p.page, false)
+	return rows, p.view.position(len(body), p.page)
+}
+
+// at reports whether the cell is in the pane that was drawn last.
+func (p *paneScroll) at(x, y int) bool {
+	return p.more && x >= p.x0 && x < p.x1 && y >= p.y0 && y < p.y1
+}
+
+// wheel moves the pane by the notches of the wheel.
+func (p *paneScroll) wheel(up bool) {
+	code := tea.KeyDown
+	if up {
+		code = tea.KeyUp
+	}
+	for range wheelText {
+		p.view.scroll(tea.KeyPressMsg{Code: code}, p.page)
+	}
+}
+
+// pageKey reports whether key is one of the keys that jump within a text: the page keys, home and end.
+func pageKey(key tea.KeyPressMsg) bool {
+	return keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd)
+}
