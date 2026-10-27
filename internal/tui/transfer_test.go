@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
@@ -97,7 +97,7 @@ func (v *exportViews) startExport(adminPassphrase string) {
 // typePath pastes the path as one event: typing it would redraw the screen once per character.
 func (v *exportViews) typePath(path string) {
 	clearField(v.t, v.m)
-	v.m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(path), Paste: true})
+	v.m.Update(tea.PasteMsg{Content: path})
 	v.views = append(v.views, v.m.render(), screenOf(v.m))
 }
 

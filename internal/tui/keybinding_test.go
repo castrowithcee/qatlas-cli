@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -189,6 +189,38 @@ func TestCtrlCStillQuitsDuringCapture(t *testing.T) {
 	_, cmd := m.Update(keyMsg("ctrl+c"))
 	if m.keyCapture || cmd == nil {
 		t.Fatalf("ctrl+c during the capture: capture %v, quit command %v", m.keyCapture, cmd != nil)
+	}
+}
+
+// Every key a binding may hold reaches the editor under the name it was stored under, from the sequences
+// terminals send for it: the shifted F1 to F8 of xterm-like terminals as F13 to F20, and the F1 to F5 of the
+// Linux console as F1 to F5.
+func TestStoredKeyNamesReachTheEditorUnchanged(t *testing.T) {
+	keys := []struct{ sequence, name, action string }{
+		{"\x1bOQ", "f2", uiprefs.ActionSave}, {"\x1bOR", "f3", uiprefs.ActionSave}, {"\x1bOS", "f4", uiprefs.ActionSave},
+		{"\x1b[17~", "f6", uiprefs.ActionSave}, {"\x1b[18~", "f7", uiprefs.ActionSave},
+		{"\x1b[19~", "f8", uiprefs.ActionSave}, {"\x1b[20~", "f9", uiprefs.ActionSave},
+		{"\x1b[25~", "f13", uiprefs.ActionSave}, {"\x1b[1;2P", "f13", uiprefs.ActionSave},
+		{"\x1b[1;2Q", "f14", uiprefs.ActionSave}, {"\x1b[1;2R", "f15", uiprefs.ActionSave},
+		{"\x1b[1;2S", "f16", uiprefs.ActionSave}, {"\x1b[15;2~", "f17", uiprefs.ActionSave},
+		{"\x1b[17;2~", "f18", uiprefs.ActionSave}, {"\x1b[18;2~", "f19", uiprefs.ActionSave},
+		{"\x1b[19;2~", "f20", uiprefs.ActionSave}, {"\x1b[[B", "f2", uiprefs.ActionSave}, {"\x1b[[D", "f4", uiprefs.ActionSave},
+		{"\x07", "ctrl+g", uiprefs.ActionSave}, {"\x0c", "ctrl+l", uiprefs.ActionLock}, {"\x0f", "ctrl+o", uiprefs.ActionSave},
+		{"\x12", "ctrl+r", uiprefs.ActionSave}, {"\x14", "ctrl+t", uiprefs.ActionSave}, {"\x18", "ctrl+x", uiprefs.ActionSave},
+		{"?", "?", uiprefs.ActionHelp}, {":", ":", uiprefs.ActionCommand}, {"!", "!", uiprefs.ActionHelp},
+	}
+	var stream strings.Builder
+	var want []string
+	for _, k := range keys {
+		if _, err := uiprefs.DefaultKeys().Check(k.action, k.name); err != nil {
+			t.Errorf("%s is no key a binding may hold: %v", k.name, err)
+		}
+		stream.WriteString(k.sequence)
+		want = append(want, k.name)
+	}
+	m := sizedModel(groupModel(t), 120, 40)
+	if got := runInput(t, m, stream.String()); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the terminal's keys reach the editor as\n%q, want\n%q", got, want)
 	}
 }
 

@@ -4,13 +4,16 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
 // canvasPrefix is the escape sequence that sets the base background and the text colour under the current
 // colour profile; empty where the terminal shows no colour.
 func (t theme) canvasPrefix() string {
+	if currentProfile() == profileNone {
+		return ""
+	}
 	const probe = "x"
 	out := lipgloss.NewStyle().Foreground(t.palette.text.lip()).Background(t.palette.base.lip()).Render(probe)
 	prefix, _, _ := strings.Cut(out, probe)

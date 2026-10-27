@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
@@ -166,14 +166,14 @@ func (e *importState) dirty() bool {
 	return e.step != importFile || e.input.Value() != ""
 }
 
-func (m *Model) updateTransfer(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateTransfer(key tea.KeyPressMsg) tea.Cmd {
 	if m.imp != nil {
 		return m.updateImport(key)
 	}
 	return m.updateExport(key)
 }
 
-func (m *Model) updateImport(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateImport(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
 	if e == nil {
 		m.screen = screenList
@@ -189,7 +189,7 @@ func (m *Model) updateImport(key tea.KeyMsg) tea.Cmd {
 		switch e.step {
 		case importFile, importPassphrase, importMode, importResult:
 			// F2 goes on like enter, which also confirms the one-line dialogs.
-			key = tea.KeyMsg{Type: tea.KeyEnter}
+			key = tea.KeyPressMsg{Code: tea.KeyEnter}
 		}
 	}
 	switch e.step {
@@ -269,7 +269,7 @@ func (m *Model) importBack() tea.Cmd {
 	return nil
 }
 
-func (m *Model) updateImportFile(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateImportFile(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
 	if key.String() != "enter" {
 		return e.input.update(key)
@@ -287,7 +287,7 @@ func (m *Model) updateImportFile(key tea.KeyMsg) tea.Cmd {
 	return m.planImport(manage.ImportModeCreate, planProbe)
 }
 
-func (m *Model) updateImportPassphrase(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateImportPassphrase(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
 	if key.String() != "enter" {
 		return e.input.update(key)
@@ -304,7 +304,7 @@ func (m *Model) updateImportPassphrase(key tea.KeyMsg) tea.Cmd {
 	return m.planImport(manage.ImportModeCreate, planProbe)
 }
 
-func (m *Model) updateImportMode(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateImportMode(key tea.KeyPressMsg) tea.Cmd {
 	e := m.imp
 	switch key.String() {
 	case "up":

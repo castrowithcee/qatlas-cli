@@ -1,29 +1,27 @@
-[1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                                   [2m[?] help[0m  [2m[:] cmd[0m
-[1m  [0m[2m 1 Overview [0m [2m 2 Connections [0m [2m 3 Activity [0m [2m 4 Access [0m [1m[5 Library][0m [2m 6 Settings [0m
-  [1m[Services][0m [2m Credentials [0m
-[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
-[1mServices (7)[0m                                                                          [2m1/7[0m
+[1mQatlas[m  [1m●[m vault unlocked  [2m●[m admin off  [2mconfig.yaml[m                                                                                   [2m[?] help[m  [2m[:] cmd[m
+[1m  [m[2m 1 Overview [m [2m 2 Connections [m [2m 3 Activity [m [2m 4 Access [m [1m[5 Library][m [2m 6 Settings [m
+  [1m[Services][m [2m Credentials [m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[1mServices (7)[m                                                                          [2m1/7[m
 
-╔═[1m[0m══════════════════════════════════════════════════════════════════════════════════════╗ [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────╮[0m
-║    Group: Provider ▾      Sort: Name ▾                 [2m / search…                    [0m ║ [2m│[0m [1mwiki[0m                                     [2m●[0m 1 connections [2m│[0m
-║ [2m    NAME    BASE URL[0m                                                                  ║ [2m│[0m [2mbookstack[0m                                                [2m│[0m
-║   [2m▾ [0m■ [1mbookstack[0m[2m (1)[0m                                                                   ║ [2m│[0m                                                          [2m│[0m
-║ [1;7m>[0m[1;7m   wiki    https://wiki.example.invalid                                             [0m ║ [2m│[0m [1m[Overview][0m [2m Details [0m [2m Raw [0m                               [2m│[0m
-║   [2m▾ [0m■ [1mgithub[0m[2m (1)[0m                                                                      ║ [2m│[0m                                                          [2m│[0m
-║     code                                                                              ║ [2m│[0m [2mProvider:     [0mbookstack                                  [2m│[0m
-║   [2m▾ [0m■ [1mnextcloud[0m[2m (1)[0m                                                                   ║ [2m│[0m [2mBase URL:     [0mhttps://wiki.example.invalid               [2m│[0m
-║     cloud   https://files.example.invalid                                             ║ [2m│[0m [2mConnections:  [0m1                                          [2m│[0m
-║   [2m▾ [0m■ [1mseatable.base[0m[2m (1)[0m                                                               ║ [2m│[0m                                                          [2m│[0m
-║     tables  https://tables.example.invalid                                            ║ [2m│[0m                                                          [2m│[0m
-║   [2m▾ [0m■ [1mtelegram[0m[2m (1)[0m                                                                    ║ [2m│[0m                                                          [2m│[0m
-║     alerts                                                                            ║ [2m│[0m                                                          [2m│[0m
-║   [2m▾ [0m■ [1mtodoist[0m[2m (1)[0m                                                                     ║ [2m│[0m                                                          [2m│[0m
-║     tasks                                                                             ║ [2m│[0m                                                          [2m│[0m
-║   [2m▾ [0m■ [1mtwenty-crm[0m[2m (1)[0m                                                                  ║ [2m│[0m                                                          [2m│[0m
-║     crm     https://crm.example.invalid                                               ║ [2m│[0m                                                          [2m│[0m
-╚═══════════════════════════════════════════════════════════════════════════════════════╝ [2m╰──────────────────────────────────────────────────────────╯[0m
-
-
+╔═[1m[m══════════════════════════════════════════════════════════════════════════════════════╗ [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────╮[m
+║    Group: Provider ▾      Sort: Name ▾                 [2m / search…                    [m ║ [2m│[m [1mwiki[m                                     [2m●[m 1 connections [2m│[m
+║ [2m    NAME    BASE URL[m                                                                  ║ [2m│[m [2mbookstack[m                                                [2m│[m
+║   [2m▾ [m■ [1mbookstack[m[2m (1)[m                                                                   ║ [2m│[m                                                          [2m│[m
+║ [1;7m>[m[1;7m   wiki    https://wiki.example.invalid                                             [m ║ [2m│[m [1m[Overview][m [2m Details [m [2m Raw [m                               [2m│[m
+║   [2m▾ [m■ [1mgithub[m[2m (1)[m                                                                      ║ [2m│[m                                                          [2m│[m
+║     code                                                                              ║ [2m│[m [2mProvider:     [mbookstack                                  [2m│[m
+║   [2m▾ [m■ [1mnextcloud[m[2m (1)[m                                                                   ║ [2m│[m [2mBase URL:     [mhttps://wiki.example.invalid               [2m│[m
+║     cloud   https://files.example.invalid                                             ║ [2m│[m [2mConnections:  [m1                                          [2m│[m
+║   [2m▾ [m■ [1mseatable.base[m[2m (1)[m                                                               ║ [2m│[m                                                          [2m│[m
+║     tables  https://tables.example.invalid                                            ║ [2m│[m                                                          [2m│[m
+║   [2m▾ [m■ [1mtelegram[m[2m (1)[m                                                                    ║ [2m│[m                                                          [2m│[m
+║     alerts                                                                            ║ [2m│[m                                                          [2m│[m
+║   [2m▾ [m■ [1mtodoist[m[2m (1)[m                                                                     ║ [2m│[m                                                          [2m│[m
+║     tasks                                                                             ║ [2m│[m                                                          [2m│[m
+║   [2m▾ [m■ [1mtwenty-crm[m[2m (1)[m                                                                  ║ [2m│[m                                                          [2m│[m
+║     crm     https://crm.example.invalid                                               ║ [2m│[m                                                          [2m│[m
+╚═══════════════════════════════════════════════════════════════════════════════════════╝ [2m╰──────────────────────────────────────────────────────────╯[m
 
 
 
@@ -39,4 +37,6 @@
 
 
 
-[1m/[0m[2m filter[0m  [1mn[0m[2m new[0m  [1mp[0m[2m duplicate[0m  [1menter[0m[2m edit/fold[0m  [1mr[0m[2m rename[0m  [1md[0m[2m delete[0m  [1mc[0m[2m setup[0m  [1m1-6/esc[0m[2m areas[0m  [1mctrl+l[0m[2m lock vault[0m  [1mi[0m[2m info[0m  [1m:[0m[2m cmds[0m  [1m?[0m[2m help[0m  [1mq[0m[2m quit[0m   [1mtab[0m[2m bar[0m
+
+
+[1m/[m[2m filter[m  [1mn[m[2m new[m  [1mp[m[2m duplicate[m  [1menter[m[2m edit/fold[m  [1mr[m[2m rename[m  [1md[m[2m delete[m  [1mc[m[2m setup[m  [1m1-6/esc[m[2m areas[m  [1mctrl+l[m[2m lock vault[m  [1mi[m[2m info[m  [1m:[m[2m cmds[m  [1m?[m[2m help[m  [1mq[m[2m quit[m   [1mtab[m[2m bar[m

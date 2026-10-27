@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -192,7 +192,7 @@ func TestSettingsSubTabsInOrderWithAdvancedBar(t *testing.T) {
 		t.Fatalf("digit 6 opened %v, want General first", m.section.title())
 	}
 	m.screen = screenNav
-	if line := m.subNavLine(); !strings.Contains(strings.Join(strings.Fields(line), " "), "[General] | Vault Defaults Transfer Update Self-test") {
+	if line := shown(m.subNavLine()); !strings.Contains(strings.Join(strings.Fields(line), " "), "[General] | Vault Defaults Transfer Update Self-test") {
 		t.Errorf("option bar = %q", line)
 	}
 	m.screen, m.navSub = screenNav, true

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -41,7 +41,7 @@ func (m *Model) openTargets() {
 
 // updateTargets handles the target list screen: the typed target first, then the remove question, then
 // the list itself.
-func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed
@@ -86,7 +86,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			m.takeLabel()
 		default:
 			var cmd tea.Cmd
-			m.labelInput, cmd = m.labelInput.Update(key)
+			m.labelInput, cmd = m.labelInput.Update(inputMsg(key))
 			return cmd
 		}
 		return nil
@@ -105,7 +105,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			m.takeTarget()
 		default:
 			var cmd tea.Cmd
-			m.targetInput, cmd = m.targetInput.Update(key)
+			m.targetInput, cmd = m.targetInput.Update(inputMsg(key))
 			return cmd
 		}
 		return nil

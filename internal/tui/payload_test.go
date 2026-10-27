@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -116,7 +116,7 @@ func (h *payloadHarness) startPayload(t *testing.T, name, storage, description s
 	h.press(t, "tab")
 }
 
-func ctrlD() tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyCtrlD} }
+func ctrlD() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl} }
 
 func TestPayloadSecretWithTwoFieldsIsStored(t *testing.T) {
 	for _, tt := range []struct {

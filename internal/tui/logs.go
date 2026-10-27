@@ -21,9 +21,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
@@ -614,7 +614,7 @@ func (m *Model) reloadShownLogs() tea.Cmd {
 }
 
 // updateLogs handles the keys of the Logs screen and of the dialogs over it.
-func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 	lv := m.logs
 	switch {
 	case lv.dialog != nil:
@@ -739,7 +739,7 @@ func (m *Model) openLogBarDropdown() {
 }
 
 // updateLogSearch is the Logs screen while its search is typed; every printable key is search text.
-func (m *Model) updateLogSearch(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLogSearch(key tea.KeyPressMsg) tea.Cmd {
 	lv := m.logs
 	switch key.String() {
 	case keyOf(actBack):
@@ -760,7 +760,7 @@ func (m *Model) updateLogSearch(key tea.KeyMsg) tea.Cmd {
 }
 
 // updateLogDetail handles the detail screen of one entry.
-func (m *Model) updateLogDetail(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLogDetail(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
@@ -798,7 +798,7 @@ func (m *Model) openLogDateDialog() {
 	m.clearMessages()
 }
 
-func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLogDateDialog(key tea.KeyPressMsg) tea.Cmd {
 	lv, d := m.logs, m.logs.dialog
 	switch key.String() {
 	case keyOf(actBack):
@@ -836,7 +836,7 @@ func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
 		return m.loadLogs()
 	}
 	var cmd tea.Cmd
-	d.inputs[d.focus], cmd = d.inputs[d.focus].Update(key)
+	d.inputs[d.focus], cmd = d.inputs[d.focus].Update(inputMsg(key))
 	d.err = ""
 	return cmd
 }
@@ -885,7 +885,7 @@ func filterText(value string) string {
 	return value
 }
 
-func (m *Model) updateLogPick(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLogPick(key tea.KeyPressMsg) tea.Cmd {
 	lv, p := m.logs, m.logs.pick
 	switch key.String() {
 	case keyOf(actBack):
@@ -1502,7 +1502,7 @@ func (m *Model) logDateDialogView() string {
 	m.formCol = m.labelColumn(labels...)
 	defer func() { m.formCol = 0 }()
 	for i, in := range d.inputs {
-		b.WriteString(m.formRow(i == d.focus, logLabel(labels[i]), in.View()) + "\n")
+		b.WriteString(m.formRow(i == d.focus, logLabel(labels[i]), inputView(in)) + "\n")
 	}
 	b.WriteString(m.indented(tr(tLogDateHint)) + "\n")
 	if d.err != "" {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -191,7 +191,7 @@ func (m *Model) openVaultUnlockPrompt(back screen) {
 }
 
 // updateVaultUnlockPrompt handles the masked entry of the 'ctrl+l' unlock dialog.
-func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateVaultUnlockPrompt(key tea.KeyPressMsg) tea.Cmd {
 	u := m.vaultUnlock
 	switch key.String() {
 	case keyOf(actBack):
@@ -216,7 +216,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 		return m.beginVaultUnlock(typed, u.back)
 	}
 	var cmd tea.Cmd
-	u.input, cmd = u.input.Update(key)
+	u.input, cmd = u.input.Update(inputMsg(key))
 	return cmd
 }
 

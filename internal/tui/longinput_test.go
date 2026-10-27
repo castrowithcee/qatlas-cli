@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -182,7 +182,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					m, confirm := c.open(t, long)
 					sizedModel(m, size.w, size.h)
 					if paste {
-						m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(long), Paste: true})
+						m.Update(tea.PasteMsg{Content: long})
 					} else {
 						typeText(t, m, long)
 					}

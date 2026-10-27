@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // rebind replaces the key of an action for one test.
@@ -29,7 +29,7 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 			t.Errorf("action %q is bound to %q, want %q", a, keymap[a], key)
 		}
 	}
-	if !keyIs(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")}, actInfo) || keyIs(tea.KeyMsg{}, actInfo) {
+	if !keyIs(tea.KeyPressMsg{Code: 'i', Text: "i"}, actInfo) || keyIs(tea.KeyPressMsg{}, actInfo) {
 		t.Error("the info action does not match exactly its key")
 	}
 	if keyLabel(actSave) != "F2" || keyLabel(actHelp) != "?" {
@@ -56,19 +56,19 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	if m.screen == screenCommand {
 		t.Fatal("the old command key still opens the command line")
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	m.Update(tea.KeyPressMsg{Code: 'k', Mod: tea.ModCtrl})
 	if m.screen != screenCommand {
 		t.Fatalf("the new command key left screen %v", m.screen)
 	}
 	press(t, m, "esc")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	m.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
 	if m.screen != screenHelp {
 		t.Fatalf("the new help key left screen %v", m.screen)
 	}
 	if !strings.Contains(m.render(), "esc/ctrl+g close") {
 		t.Errorf("the help footer does not follow the keymap:\n%s", m.render())
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
+	m.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
 	if m.screen == screenHelp {
 		t.Fatal("the new help key does not close the help")
 	}
@@ -77,11 +77,11 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 	if view := m.render(); !strings.Contains(view, "F5 save") || strings.Contains(view, "F2 save") {
 		t.Fatalf("the form footer does not follow the save key:\n%s", view)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyF2})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyF2})
 	if m.fail != "" || m.status != "" {
 		t.Fatalf("the old save key still saves: fail %q status %q", m.fail, m.status)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyF5})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyF5})
 	if m.fail == "" && m.status == "" {
 		t.Fatal("the new save key does nothing")
 	}

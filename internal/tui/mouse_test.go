@@ -1,14 +1,13 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -56,13 +55,17 @@ func cellInRow(t *testing.T, m *Model, row int, text string) int {
 }
 
 func mouseEvent(x, y int, button tea.MouseButton) tea.MouseMsg {
-	return tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: button, Type: tea.MouseLeft}
+	event := tea.Mouse{X: x, Y: y, Button: button}
+	if button == tea.MouseWheelUp || button == tea.MouseWheelDown {
+		return tea.MouseWheelMsg(event)
+	}
+	return tea.MouseClickMsg(event)
 }
 
 // clickAt sends a left click the way a terminal would and delivers the commands it produces.
 func clickAt(t *testing.T, m *Model, x, y int) {
 	t.Helper()
-	_, cmd := m.Update(mouseEvent(x, y, tea.MouseButtonLeft))
+	_, cmd := m.Update(mouseEvent(x, y, tea.MouseLeft))
 	deliver(m, cmd)
 }
 
@@ -585,11 +588,11 @@ func TestTheWheelScrollsAListAndAForm(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	openSectionByName(t, m, sectionConnections)
 	before := m.list.cursor
-	wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 5, 10, tea.MouseWheelDown)
 	if want := before + 1; m.list.cursor != want {
 		t.Errorf("after the wheel down the cursor is %d, want %d", m.list.cursor, want)
 	}
-	wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
+	wheelAt(t, m, 5, 10, tea.MouseWheelUp)
 	if m.list.cursor != before {
 		t.Errorf("after the wheel up the cursor is %d, want %d", m.list.cursor, before)
 	}
@@ -601,13 +604,13 @@ func TestTheWheelScrollsAListAndAForm(t *testing.T) {
 		t.Fatalf("screen %v", m.screen)
 	}
 	focus := m.focus
-	wheelAt(t, m, 60, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 60, 10, tea.MouseWheelDown)
 	if m.focus == focus {
 		t.Error("the wheel over the rows of a form left the focus where it was")
 	}
 	// Over the list of the sections the wheel jumps from section to section.
 	section := m.currentSection()
-	wheelAt(t, m, 1, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 1, 10, tea.MouseWheelDown)
 	if m.currentSection() == section {
 		t.Errorf("the wheel over the sections stayed in %q", section)
 	}
@@ -619,7 +622,7 @@ func TestMouseEventsMakeNoCharacters(t *testing.T) {
 	for _, p := range [][2]int{{0, 0}, {60, 10}, {60, 20}, {70, 21}} {
 		clickAt(t, m, p[0], p[1])
 	}
-	wheelAt(t, m, 60, 20, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 60, 20, tea.MouseWheelDown)
 	if m.screen != screenVaultUnlock || m.vaultUnlock.input.Value() != "" {
 		t.Fatalf("screen %v, input %q; want the empty passphrase prompt", m.screen, m.vaultUnlock.input.Value())
 	}
@@ -648,8 +651,8 @@ func TestMouseEventsMakeNoCharactersInAFormField(t *testing.T) {
 			break
 		}
 	}
-	wheelAt(t, m, 20, 8, tea.MouseButtonWheelDown)
-	wheelAt(t, m, 20, 8, tea.MouseButtonWheelUp)
+	wheelAt(t, m, 20, 8, tea.MouseWheelDown)
+	wheelAt(t, m, 20, 8, tea.MouseWheelUp)
 	if m.formState() != state {
 		t.Errorf("form = %q, want %q", m.formState(), state)
 	}
@@ -680,7 +683,7 @@ func TestATooSmallTerminalIgnoresTheMouse(t *testing.T) {
 	for row := 0; row < minimumHeight; row++ {
 		for _, x := range []int{0, 3, 12, 30} {
 			clickAt(t, m, x, row)
-			wheelAt(t, m, x, row, tea.MouseButtonWheelDown)
+			wheelAt(t, m, x, row, tea.MouseWheelDown)
 		}
 	}
 	if m.list.cursor != cursor || m.section.area() != area || m.screen != screen {
@@ -699,19 +702,16 @@ func TestSwitchedOffMouseDoesNothing(t *testing.T) {
 	}
 	openSectionByName(t, m, sectionServices)
 	cursor := m.list.cursor
-	wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 5, 10, tea.MouseWheelDown)
 	if m.list.cursor != cursor {
 		t.Error("the wheel moved the list with the mouse off")
 	}
-	if cmd := m.mouseSwitch(true); cmd == nil || !strings.Contains(fmt.Sprintf("%T", cmd()), "disableMouse") {
-		t.Errorf("switching off sends %v, want the command that turns the mouse mode off", cmd)
+	if mode := m.View().MouseMode; mode != tea.MouseModeNone {
+		t.Errorf("the view asks for mouse mode %v with the mouse off, want none", mode)
 	}
 	m.prefs.MouseOff = false
-	if cmd := m.mouseSwitch(false); cmd == nil || !strings.Contains(fmt.Sprintf("%T", cmd()), "enableMouseCellMotion") {
-		t.Errorf("switching on sends %v, want the command that turns the mouse mode on", cmd)
-	}
-	if m.mouseSwitch(true) != nil {
-		t.Error("an unchanged preference sends a command")
+	if mode := m.View().MouseMode; mode != tea.MouseModeCellMotion {
+		t.Errorf("the view asks for mouse mode %v with the mouse on, want cell motion", mode)
 	}
 }
 
@@ -728,24 +728,9 @@ func TestTheMouseSettingAppliesAtOnce(t *testing.T) {
 	if m.mouseEnabled() {
 		t.Error("the preference is still on after saving it off")
 	}
-	var seen []string
-	var walk func(tea.Cmd)
-	walk = func(c tea.Cmd) {
-		if c == nil {
-			return
-		}
-		switch msg := c().(type) {
-		case tea.BatchMsg:
-			for _, sub := range msg {
-				walk(sub)
-			}
-		default:
-			seen = append(seen, fmt.Sprintf("%T", msg))
-		}
-	}
-	walk(cmd)
-	if !strings.Contains(strings.Join(seen, " "), "disableMouse") {
-		t.Errorf("saving sent %v, want the command that turns the mouse mode off", seen)
+	deliver(m, cmd)
+	if mode := m.View().MouseMode; mode != tea.MouseModeNone {
+		t.Errorf("after saving the view asks for mouse mode %v, want none", mode)
 	}
 	if got, _ := uiprefs.Load(path); got.MouseEnabled() {
 		t.Error("tui.yaml still has the mouse on")
@@ -756,15 +741,18 @@ func TestTheMouseSettingAppliesAtOnce(t *testing.T) {
 	}
 }
 
-func TestAFailedRestartTurnsTheMouseOnAgainOnlyWhenItIsOn(t *testing.T) {
+// The terminal restored after a failed restart gets the mouse mode of the last view back, so the view keeps
+// asking for what the preference says.
+func TestAFailedRestartKeepsTheMouseModeOfThePreference(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
-	_, cmd := m.Update(restartFailedMsg{})
-	if cmd == nil || !strings.Contains(fmt.Sprintf("%T", cmd()), "enableMouseCellMotion") {
-		t.Errorf("a failed restart sends %v with the mouse on, want the command that turns it on", cmd)
+	m.Update(restartFailedMsg{})
+	if mode := m.View().MouseMode; mode != tea.MouseModeCellMotion {
+		t.Errorf("after a failed restart with the mouse on the view asks for mouse mode %v", mode)
 	}
 	m.prefs.MouseOff = true
-	if _, cmd := m.Update(restartFailedMsg{}); cmd != nil {
-		t.Errorf("a failed restart sends %v with the mouse off", cmd)
+	m.Update(restartFailedMsg{})
+	if mode := m.View().MouseMode; mode != tea.MouseModeNone {
+		t.Errorf("after a failed restart with the mouse off the view asks for mouse mode %v", mode)
 	}
 }
 
@@ -806,8 +794,8 @@ func TestEveryScreenMeetsAClickWithoutPanicking(t *testing.T) {
 			m.screen = screenNav
 			for y := 0; y < size.h; y += 4 {
 				for x := 0; x < size.w; x += 13 {
-					m.Update(mouseEvent(x, y, tea.MouseButtonLeft))
-					m.Update(mouseEvent(x, y, tea.MouseButtonWheelDown))
+					m.Update(mouseEvent(x, y, tea.MouseLeft))
+					m.Update(mouseEvent(x, y, tea.MouseWheelDown))
 					m.render()
 					if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 						continue
@@ -895,25 +883,25 @@ func TestOneNotchIsOneStepWhateverTheTerminalReports(t *testing.T) {
 	m.list.cursor = 0
 	start := 0
 	now := wheelTime(t, m)
-	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
-	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+	wheelEvent(t, m, 5, 10, tea.MouseWheelDown)
+	wheelEvent(t, m, 5, 10, tea.MouseWheelDown)
 	if m.list.cursor != start+1 {
 		t.Fatalf("a notch with its release moved the cursor from %d to %d, want one row", start, m.list.cursor)
 	}
 	for range 3 {
 		*now = now.Add(wheelMerge)
-		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
-		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+		wheelEvent(t, m, 5, 10, tea.MouseWheelDown)
+		wheelEvent(t, m, 5, 10, tea.MouseWheelDown)
 	}
 	if m.list.cursor != start+4 {
 		t.Errorf("three more notches ended on %d, want %d", m.list.cursor, start+4)
 	}
 	// Another direction or another cell is another notch, however close.
-	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelUp)
+	wheelEvent(t, m, 5, 10, tea.MouseWheelUp)
 	if m.list.cursor != start+3 {
 		t.Errorf("the wheel up right after a wheel down ended on %d, want %d", m.list.cursor, start+3)
 	}
-	wheelEvent(t, m, 6, 10, tea.MouseButtonWheelUp)
+	wheelEvent(t, m, 6, 10, tea.MouseWheelUp)
 	if m.list.cursor != start+2 {
 		t.Errorf("the wheel up in another cell ended on %d, want %d", m.list.cursor, start+2)
 	}
@@ -924,7 +912,7 @@ func TestTheWheelStopsAtTheEnds(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	last := len(m.list.matches) - 1
 	m.list.cursor = last
-	wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 5, 10, tea.MouseWheelDown)
 	if m.list.cursor != last {
 		t.Errorf("the wheel down at the end of the list moved the cursor to %d", m.list.cursor)
 	}
@@ -943,13 +931,13 @@ func TestTheWheelStopsAtTheEnds(t *testing.T) {
 	}
 	m.focus = editable[len(editable)-1]
 	m.applyFocus()
-	wheelAt(t, m, 60, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 60, 10, tea.MouseWheelDown)
 	if m.focus != editable[len(editable)-1] {
 		t.Errorf("the wheel down on the last field moved the focus to %d", m.focus)
 	}
 	m.focus = editable[0]
 	m.applyFocus()
-	wheelAt(t, m, 60, 10, tea.MouseButtonWheelUp)
+	wheelAt(t, m, 60, 10, tea.MouseWheelUp)
 	if m.focus != editable[0] {
 		t.Errorf("the wheel up on the first field moved the focus to %d", m.focus)
 	}
@@ -972,16 +960,16 @@ func TestTheWheelStopsAtTheEndsOfTheActivityTable(t *testing.T) {
 		t.Fatalf("the log shows %d rows", n)
 	}
 	m.logs.list.cursor = n - 1
-	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 20, 10, tea.MouseWheelDown)
 	if m.logs.list.cursor != n-1 {
 		t.Errorf("the wheel down at the end moved the cursor to %d", m.logs.list.cursor)
 	}
 	m.logs.list.cursor = 0
-	wheelAt(t, m, 20, 10, tea.MouseButtonWheelUp)
+	wheelAt(t, m, 20, 10, tea.MouseWheelUp)
 	if m.logs.list.cursor != 0 {
 		t.Errorf("the wheel up at the top moved the cursor to %d", m.logs.list.cursor)
 	}
-	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 20, 10, tea.MouseWheelDown)
 	if m.logs.list.cursor != 1 {
 		t.Errorf("the wheel down moved the cursor to %d, want 1", m.logs.list.cursor)
 	}
@@ -992,20 +980,20 @@ func TestTheWheelLeadsFromTheTabLineIntoTheContentOnly(t *testing.T) {
 		m := sizedModel(groupModel(t), 120, 40)
 		openSectionByName(t, m, s)
 		m.focusNav()
-		wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
+		wheelAt(t, m, 5, 10, tea.MouseWheelUp)
 		if m.screen != screenNav {
 			t.Errorf("%v: the wheel up on the tab line left it for screen %v", s, m.screen)
 		}
-		wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+		wheelAt(t, m, 5, 10, tea.MouseWheelDown)
 		if m.screen != screenList {
 			t.Errorf("%v: the wheel down on the tab line led to screen %v, want the list", s, m.screen)
 		}
 		// On the first row the wheel up stays in the list.
-		wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
+		wheelAt(t, m, 5, 10, tea.MouseWheelUp)
 		if m.screen != screenList {
 			t.Errorf("%v: the wheel up on the first row left the list for screen %v", s, m.screen)
 		}
-		wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+		wheelAt(t, m, 5, 10, tea.MouseWheelDown)
 		if m.screen != screenList {
 			t.Errorf("%v: the wheel down in the list left it for screen %v", s, m.screen)
 		}
@@ -1017,11 +1005,11 @@ func TestTheWheelScrollsATextAreaByThreeLines(t *testing.T) {
 	m.openHelp()
 	m.helpOffset = 0
 	m.render()
-	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	wheelAt(t, m, 20, 10, tea.MouseWheelDown)
 	if m.helpOffset != 3 {
 		t.Errorf("the wheel down moved the help by %d lines, want 3", m.helpOffset)
 	}
-	wheelAt(t, m, 20, 10, tea.MouseButtonWheelUp)
+	wheelAt(t, m, 20, 10, tea.MouseWheelUp)
 	if m.helpOffset != 0 {
 		t.Errorf("the wheel up left the help at %d, want 0", m.helpOffset)
 	}
@@ -1034,7 +1022,7 @@ func TestQueuedWheelPairsMoveOneRowEach(t *testing.T) {
 	m.list.cursor = 0
 	wheelTime(t, m)
 	for range 4 {
-		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+		wheelEvent(t, m, 5, 10, tea.MouseWheelDown)
 	}
 	if m.list.cursor != 2 {
 		t.Errorf("four queued events moved the cursor to %d, want 2", m.list.cursor)

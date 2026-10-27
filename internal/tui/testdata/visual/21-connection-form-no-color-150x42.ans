@@ -1,28 +1,28 @@
-[1mQatlas[0m  [1m●[0m vault unlocked  [2m●[0m admin off  [2mconfig.yaml[0m                                                                       [2m[esc] back[0m  [2m[?] help[0m  [2m[:] cmd[0m
-[1m  [0m[2m 1 Overview [0m [1m[2 Connections][0m [2m 3 Activity [0m [2m 4 Access [0m [2m 5 Library [0m [2m 6 Settings [0m
-[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
-[1mEdit connection[0m                                                                          wiki-main  [1m●[0m active                                          
+[1mQatlas[m  [1m●[m vault unlocked  [2m●[m admin off  [2mconfig.yaml[m                                                                       [2m[esc] back[m  [2m[?] help[m  [2m[:] cmd[m
+[1m  [m[2m 1 Overview [m [1m[2 Connections][m [2m 3 Activity [m [2m 4 Access [m [2m 5 Library [m [2m 6 Settings [m
+[2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+[1mEdit connection[m                                                                          wiki-main  [1m●[m active                                          
                                                                                                                                                       
-[2m╭─[0m[1m[0m[2m──────────────────────╮[0m ╔═[1m[0m═══════════════════════════════════════════════════════════════════════════════╗  [2m╭─[0m[1m Help [0m[2m───────────────────────────────╮[0m
-[2m│[0m [1;7m> 1 General          [0m [2m│[0m ║ [1mGeneral[0m                                                                        ║  [2m│[0m [2moptional; what an agent uses this[0m    [2m│[0m
-[2m│[0m   2 Service           [2m│[0m ║ [2mA connection is the route an agent takes: one service with one credential,...[0m  ║  [2m│[0m [2mroute for, e.g. 'customer records,[0m   [2m│[0m
-[2m│[0m   3 Credential        [2m│[0m ║                                                                                ║  [2m│[0m [2mread and create'. discovery[0m          [2m│[0m
-[2m│[0m   4 Targets           [2m│[0m ║               [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────────╮[0m ║  [2m│[0m [2mpublishes it, so it must never carry[0m [2m│[0m
-[2m│[0m   5 Tools             [2m│[0m ║   provider    [2m│[0m BookStack (bookstack)                                      ▾ [2m│[0m ║  [2m│[0m [2ma secret or personal data[0m            [2m│[0m
-[2m│[0m   6 Access            [2m│[0m ║               [2m╰──────────────────────────────────────────────────────────────╯[0m ║  [2m╰──────────────────────────────────────╯[0m
-[2m│[0m [2m  7 Advanced (closed)[0m [2m│[0m ║               [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────────╮[0m ║                                          
-[2m╰───────────────────────╯[0m ║   name        [2m│[0m wiki-main (read-only; rename with r on the list)             [2m│[0m ║                                          
-                          ║               [2m╰──────────────────────────────────────────────────────────────╯[0m ║                                          
-                          ║               ╔═[1m[0m═════════════════════════════════════════════════════════════╗ ║                                          
-                          ║ [1m> description [0m║ Team wiki, read and write[7m [0m                                   ║ ║                                          
+[2m╭─[m[1m[m[2m──────────────────────╮[m ╔═[1m[m═══════════════════════════════════════════════════════════════════════════════╗  [2m╭─[m[1m Help [m[2m───────────────────────────────╮[m
+[2m│[m [1;7m> 1 General          [m [2m│[m ║ [1mGeneral[m                                                                        ║  [2m│[m [2moptional; what an agent uses this[m    [2m│[m
+[2m│[m   2 Service           [2m│[m ║ [2mA connection is the route an agent takes: one service with one credential,...[m  ║  [2m│[m [2mroute for, e.g. 'customer records,[m   [2m│[m
+[2m│[m   3 Credential        [2m│[m ║                                                                                ║  [2m│[m [2mread and create'. discovery[m          [2m│[m
+[2m│[m   4 Targets           [2m│[m ║               [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────────╮[m ║  [2m│[m [2mpublishes it, so it must never carry[m [2m│[m
+[2m│[m   5 Tools             [2m│[m ║   provider    [2m│[m BookStack (bookstack)                                      ▾ [2m│[m ║  [2m│[m [2ma secret or personal data[m            [2m│[m
+[2m│[m   6 Access            [2m│[m ║               [2m╰──────────────────────────────────────────────────────────────╯[m ║  [2m╰──────────────────────────────────────╯[m
+[2m│[m [2m  7 Advanced (closed)[m [2m│[m ║               [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────────╮[m ║                                          
+[2m╰───────────────────────╯[m ║   name        [2m│[m wiki-main (read-only; rename with r on the list)             [2m│[m ║                                          
+                          ║               [2m╰──────────────────────────────────────────────────────────────╯[m ║                                          
+                          ║               ╔═[1m[m═════════════════════════════════════════════════════════════╗ ║                                          
+                          ║ [1m> description [m║ Team wiki, read and write[7m [m                                   ║ ║                                          
                           ║               ╚══════════════════════════════════════════════════════════════╝ ║                                          
-                          ║               [2moptional; published by discovery, no secrets[0m                     ║                                          
-                          ║               [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────────╮[0m ║                                          
-                          ║   state       [2m│[0m active                                                     ▾ [2m│[0m ║                                          
-                          ║               [2m╰──────────────────────────────────────────────────────────────╯[0m ║                                          
-                          ║               [2m╭─[0m[1m[0m[2m─────────────────────────────────────────────────────────────╮[0m ║                                          
-                          ║   active for  [2m│[0m unlimited                                                  ▾ [2m│[0m ║                                          
-                          ║               [2m╰──────────────────────────────────────────────────────────────╯[0m ║                                          
+                          ║               [2moptional; published by discovery, no secrets[m                     ║                                          
+                          ║               [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────────╮[m ║                                          
+                          ║   state       [2m│[m active                                                     ▾ [2m│[m ║                                          
+                          ║               [2m╰──────────────────────────────────────────────────────────────╯[m ║                                          
+                          ║               [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────────╮[m ║                                          
+                          ║   active for  [2m│[m unlimited                                                  ▾ [2m│[m ║                                          
+                          ║               [2m╰──────────────────────────────────────────────────────────────╯[m ║                                          
                           ╚════════════════════════════════════════════════════════════════════════════════╝                                          
                                                                                                                                                       
 
@@ -39,4 +39,4 @@
 
 
 
-[1menter[0m[2m next[0m  [1mF2[0m[2m save[0m  [1mesc[0m[2m leave[0m  [1mpgup/pgdn[0m[2m section[0m                                                                                       [1mtab[0m[2m next field[0m
+[1menter[m[2m next[m  [1mF2[m[2m save[m  [1mesc[m[2m leave[m  [1mpgup/pgdn[m[2m section[m                                                                                       [1mtab[m[2m next field[m

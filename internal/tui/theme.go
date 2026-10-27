@@ -3,7 +3,7 @@ package tui
 import (
 	"os"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -180,9 +180,9 @@ var styles = defaultTheme()
 func setTheme(t theme) { styles = t }
 
 // applyColorScheme activates the theme the preference names: light and dark force their palette, anything
-// else (auto) follows the background lipgloss detects. Forcing never overwrites that detection, so a later
-// switch back to auto still finds the real background. NO_COLOR wins over all of it and asks the terminal
-// nothing. background qatlas fills the screen with the palette's base colour.
+// else (auto) follows the background Run detected (see detectBackground). Forcing never overwrites that
+// detection, so a later switch back to auto still finds the real background. NO_COLOR wins over all of it,
+// and Run asks the terminal nothing then. background qatlas fills the screen with the palette's base colour.
 func applyColorScheme(mode, background string) {
 	if os.Getenv("NO_COLOR") != "" {
 		setTheme(buildTheme(true, true, false))

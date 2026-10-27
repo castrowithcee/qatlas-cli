@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -35,7 +35,7 @@ func (m *Model) openPaths() {
 
 // updatePaths handles the path list screen: the typed path first, then the remove question, then the list
 // itself.
-func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed path
