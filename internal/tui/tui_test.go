@@ -1887,8 +1887,10 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 30})
 	view := m.render()
+	if row := strings.Split(view, "\n")[0]; strings.Contains(row, "created on first save") || strings.Contains(row, "config.yaml") {
+		t.Errorf("the header names the config path: %q", row)
+	}
 	for _, want := range []string{
-		"created on first save",
 		"c setup",
 		"1 Overview",
 		"2 Connections",
@@ -1899,11 +1901,36 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 			t.Errorf("first-run view does not contain %q:\n%s", want, view)
 		}
 	}
-	if compact := strings.Join(strings.Fields(view), ""); !strings.Contains(compact, path) {
-		t.Errorf("first-run view does not contain the config path %q:\n%s", path, view)
-	}
 	if strings.Contains(view, "Loaded") {
 		t.Errorf("a missing file is described as loaded:\n%s", view)
+	}
+	// A long temporary directory needs the room for the whole path and the note.
+	m.Update(tea.WindowSizeMsg{Width: max(200, len(path)+60), Height: 30})
+	press(t, m, "1")
+	view = m.render()
+	if !strings.Contains(view, "created on first save") {
+		t.Errorf("the Overview lacks the note that the file is created on first save:\n%s", view)
+	}
+	if compact := strings.Join(strings.Fields(view), ""); !strings.Contains(compact, path) {
+		t.Errorf("the Overview does not contain the config path %q:\n%s", path, view)
+	}
+}
+
+// The Overview writes the home directory of the config path as "~" and names no note once the file exists.
+func TestOverviewShowsTheConfigPathWithTheHomeAsTilde(t *testing.T) {
+	m, _, path := newModel(t)
+	home := filepath.Dir(filepath.Dir(path))
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	press(t, m, "1")
+	want := "~" + string(filepath.Separator) + filepath.Join("qatlas", "config.yaml")
+	if view := m.render(); !strings.Contains(view, want) || strings.Contains(view, home) {
+		t.Errorf("the Overview lacks %q or shows the home directory:\n%s", want, view)
+	}
+	m.configExists = true
+	if view := m.render(); !strings.Contains(view, want) || strings.Contains(view, "created on first save") {
+		t.Errorf("the Overview of an existing file: want the path and no note:\n%s", view)
 	}
 }
 

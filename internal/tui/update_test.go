@@ -237,7 +237,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 		banner        string
 	}{
 		{width: 100, height: 28, banner: fullBanner},
-		{width: 60, height: 24, banner: "Update available v0.5.0 · u update"},
+		{width: 50, height: 24, banner: "Update available v0.5.0 · u update"},
 		{width: 40, height: minimumHeight, banner: "Update v0.5.0 · u"},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})

@@ -1,4 +1,4 @@
-[1mQatlas[m  [1m●[m vault unlocked  [2m●[m admin off  [2mconfig.yaml[m                                                                                   [2m[?] help[m  [2m[:] cmd[m
+[1mQatlas[m  [1m●[m vault unlocked  [2m●[m admin off                                                                                                [2m[?] help[m  [2m[:] cmd[m
 [1m> [m[1m[1 Overview][m [2m 2 Connections [m [2m 3 Activity [m [2m 4 Access [m [2m 5 Library [m [2m 6 Settings [m
 [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
 [1mOverview[m                                                                                                                       [2mWed, 18 Mar 2026  12:00[m
@@ -6,7 +6,7 @@
 [2m╭─[m[1m Connections [m[2m──────────────╮[m [2m╭─[m[1m Services [m[2m────────────────╮[m [2m╭─[m[1m Credentials [m[2m─────────────╮[m [2m╭─[m[1m Tokens [m[2m──────────────────╮[m [2m╭─[m[1m Approvals [m[2m───────────────╮[m
 [2m│[m [1m7[m                          [2m│[m [2m│[m [1m7[m                         [2m│[m [2m│[m [1m7[m                         [2m│[m [2m│[m [1m0[m                         [2m│[m [2m│[m [1m7[m                         [2m│[m
 [2m╰────────────────────────────╯[m [2m╰───────────────────────────╯[m [2m╰───────────────────────────╯[m [2m╰───────────────────────────╯[m [2m╰───────────────────────────╯[m
-[2mqatlas 1.2.3[m
+[2mqatlas 1.2.3  config.yaml[m
 [2m╭─[m[1m Next steps [m[2m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[m
 [2m│[m   open Access > Approvals (4)                                                                                                                      [2m│[m
 [2m│[m   open Connections and press t to test; Defaults are optional                                                                                      [2m│[m
