@@ -1317,6 +1317,8 @@ func (m *Model) newEntryBlockedFor(s section) string {
 // quitting, so a screen that does not fit is never the end of the session; a form with unsaved input asks
 // first, like every other way out of it.
 func (m *Model) leaveScreen() tea.Cmd {
+	// A capture belongs to the form it started in; the resize notice can leave that form mid-capture.
+	m.keyCapture = false
 	switch m.screen {
 	case screenNav:
 		return nil
