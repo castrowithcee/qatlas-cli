@@ -169,6 +169,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == forgejo {
 			want = append(want, p.id+".admin-user-emails.list", p.id+".admin-user-emails.delete")
 		}
+		want = append(want, p.id+".admin-user-keys.delete")
+		if p == forgejo {
+			want = append(want, p.id+".admin-access-tokens.list", p.id+".admin-access-tokens.delete")
+		}
 		want = append(want, p.id+".topics.search", p.id+".repository-topics.list", p.id+".repository-topics.set",
 			p.id+".repository-topics.add", p.id+".repository-topics.remove", p.id+".gitignore-templates.list",
 			p.id+".gitignore-templates.get", p.id+".label-templates.list", p.id+".label-templates.get",

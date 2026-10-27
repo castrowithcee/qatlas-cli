@@ -474,12 +474,13 @@ func TestPushMirrorsShowTheTargetNeverCredentials(t *testing.T) {
 // accessWiring lists, per source file, the methods and path literals the tools of the existing accesses wire.
 // GET is the default of a read; the listed methods are the changes. A later group adds its entries here.
 var accessWiring = map[string]struct{ methods, paths []string }{
-	"webhooks.go":    {[]string{"MethodDelete"}, []string{"/hooks", "/user/hooks"}},
-	"githooks.go":    {[]string{"MethodDelete"}, []string{"/hooks/git", "/hooks/git/"}},
-	"pushmirrors.go": {[]string{"MethodDelete", "MethodPost"}, []string{"/push_mirrors", "/push_mirrors/", "/push_mirrors-sync"}},
-	"keys.go":        {[]string{"MethodDelete"}, []string{"/user/keys", "/user/gpg_keys", "/keys", "/gpg_keys", "/keys/"}},
-	"tokens.go":      {[]string{"MethodDelete"}, []string{"/tokens", "/token"}},
-	"oauth2apps.go":  {nil, []string{"/user/applications/oauth2"}},
+	"webhooks.go":         {[]string{"MethodDelete"}, []string{"/hooks", "/user/hooks"}},
+	"githooks.go":         {[]string{"MethodDelete"}, []string{"/hooks/git", "/hooks/git/"}},
+	"pushmirrors.go":      {[]string{"MethodDelete", "MethodPost"}, []string{"/push_mirrors", "/push_mirrors/", "/push_mirrors-sync"}},
+	"keys.go":             {[]string{"MethodDelete"}, []string{"/user/keys", "/user/gpg_keys", "/keys", "/gpg_keys", "/keys/"}},
+	"tokens.go":           {[]string{"MethodDelete"}, []string{"/tokens", "/token"}},
+	"oauth2apps.go":       {nil, []string{"/user/applications/oauth2"}},
+	"admincredentials.go": {[]string{"MethodDelete"}, []string{"/keys/", "/tokens", "/tokens/"}},
 }
 
 // accessRouteWords mark a path literal as an access route that accessWiring must list.
@@ -526,7 +527,7 @@ func TestOnlyTheListedAccessRoutesAndMethodsAreWired(t *testing.T) {
 				for _, bad := range forbiddenPaths {
 					// The administration tools are the only files that wire administrator routes.
 					if bad == "/admin/" && slices.Contains([]string{"instanceadmin.go", "quotaadmin.go", "adminusers.go",
-						"adminemails.go", "adminorgs.go", "adminunadopted.go", "admincron.go"}, name) {
+						"adminemails.go", "adminorgs.go", "adminunadopted.go", "admincron.go", "admincredentials.go"}, name) {
 						continue
 					}
 					if strings.Contains(value, bad) && strings.Contains(value, "/") {
