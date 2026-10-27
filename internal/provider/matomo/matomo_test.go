@@ -270,6 +270,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.tag-manager-triggers.add" || tool.ID == "matomo.tag-manager-triggers.update" || tool.ID == "matomo.tag-manager-triggers.delete" ||
 			strings.HasPrefix(tool.ID, "matomo.tag-manager-tags.") && tool.ID != "matomo.tag-manager-tags.list" && tool.ID != "matomo.tag-manager-tags.get" ||
 			tool.ID == "matomo.tag-manager-variables.add" || tool.ID == "matomo.tag-manager-variables.update" || tool.ID == "matomo.tag-manager-variables.delete" ||
+			tool.ID == "matomo.tag-manager-versions.publish" ||
 			strings.HasPrefix(tool.ID, "matomo.privacy-settings.set-") || strings.HasPrefix(tool.ID, "matomo.do-not-track.")) &&
 			tool.Effect != config.EffectRead
 		if !changes && (tool.Effect != config.EffectRead || tool.RequiresToolAllowList != listedReads[tool.ID]) {
@@ -277,7 +278,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 168 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 169 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

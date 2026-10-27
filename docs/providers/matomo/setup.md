@@ -253,7 +253,7 @@ Plugin `TagManager`. The instance setting that restricts Tag Manager access to a
 | Create versions, change the draft, add a container | Write on the website |
 | Update or delete a container | Write on the website and the right to publish |
 | Delete or pause a tag that uses a custom template, change a trigger with one | The right to use custom templates |
-| Environments you may publish to | The right to publish; without it `live` is left out |
+| Publish a version, environments you may publish to | Write on the website; for `live` the right to publish (without it `live` is left out), for another environment that or the right to use custom templates |
 
 ## What happens without a right
 
