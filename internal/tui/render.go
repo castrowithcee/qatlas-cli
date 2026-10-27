@@ -468,6 +468,9 @@ func (m *Model) keyHint(text string) string {
 		// A screen's keys stand in the footer of the frame, not in the workspace. A dialog under a backdrop
 		// leaves the footer as it was.
 		if !m.backdrop {
+			if m.copyKeyShown() {
+				text = withCopyKey(text)
+			}
 			m.screenKeys = text
 		}
 		return ""

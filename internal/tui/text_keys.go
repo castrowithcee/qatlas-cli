@@ -52,6 +52,7 @@ const (
 	tVaultNone                               textID = "VaultNone"
 	tVaultNothingToLock                      textID = "VaultNothingToLock"
 	tCancelled                               textID = "Cancelled"
+	tCopyHandedOver                          textID = "CopyHandedOver"
 	tPassphraseEmpty                         textID = "PassphraseEmpty"
 	tPassphraseWrong                         textID = "PassphraseWrong"
 	tVaultNowUnlocked                        textID = "VaultNowUnlocked"

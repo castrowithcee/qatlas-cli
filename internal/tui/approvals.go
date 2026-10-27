@@ -281,11 +281,11 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 	inner, _ := m.detailInner()
 	facts := m.approvalFacts(change)
 	lines := factLinesIn(facts, inner, factColumn(facts, inner), func(s string) string { return s })
-	keys := "o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
+	keys := "o logs · y approve · n/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "space unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "space fold unchanged · o logs · y approve · n/{back} back, stays open · {command} cmds · {help} help"
+			keys = "space fold unchanged · o logs · y approve · n/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
 		}
 	}
 	room := m.approvalRoom(keys, len(lines))
@@ -640,4 +640,24 @@ func (m *Model) renameFindings() []renameFinding {
 			leftover: f.Leftover, ambiguous: f.Ambiguous, carried: f.Carried})
 	}
 	return out
+}
+
+// approvalDetailText is the detail screen of the open approval of the shown connection.
+func (m *Model) approvalDetailText() string {
+	report, unavailable := m.approvalsReport()
+	if unavailable != "" {
+		return ""
+	}
+	var change *approval.Change
+	for i := range report.Open {
+		if report.Open[i].Connection == m.approvalDetail {
+			change = &report.Open[i]
+			break
+		}
+	}
+	if change == nil {
+		return ""
+	}
+	lines := append([]string{tr(tApprovalTitle, m.approvalDetail), ""}, factsText(m.approvalFacts(*change))...)
+	return strings.Join(lines, "\n")
 }
