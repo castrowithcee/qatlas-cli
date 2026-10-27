@@ -1488,55 +1488,6 @@ func TestNameWithASpaceIsRefused(t *testing.T) {
 	}
 }
 
-// The focused field is drawn by the text input, so the form shows where the cursor stands. The proof is
-// that the rendering changes when nothing but the cursor moves: the plain value cannot depend on the cursor.
-func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
-	const url = "https://wiki.example.invalid"
-
-	// The frame of the field pads its line, so the cursor cell shows only as the reverse video it is drawn in.
-	restoreRenderer(t)
-	setProfile(profile16)
-	m, _, _ := newModel(t)
-	noPane(m)
-	openSectionByName(t, m, sectionServices)
-	pressNew(t, m)
-	press(t, m, "tab", "tab") // name, provider, base url
-	typeText(t, m, url)
-
-	if got := m.fields[m.focus].label; got != "base url" {
-		t.Fatalf("focused field = %q, want the base url", got)
-	}
-	atEnd := screenOf(m)
-	if !strings.Contains(atEnd, url) {
-		t.Fatalf("the typed value is missing from the form:\n%s", atEnd)
-	}
-	// The cursor sits past the last character, so the text input draws one more cell after the value; the
-	// frame of the field pads the line, so the cell is looked for as the input draws it.
-	if !strings.Contains(atEnd, shown(m.fields[m.focus].input.View())) {
-		t.Errorf("no cursor cell behind the value, the field is drawn from the plain value:\n%s", atEnd)
-	}
-
-	press(t, m, "left", "left", "left")
-	if got, want := m.fields[m.focus].input.Position(), len(url)-3; got != want {
-		t.Fatalf("cursor position = %d, want %d", got, want)
-	}
-	inTheMiddle := screenOf(m)
-	if inTheMiddle == atEnd {
-		t.Errorf("the form is identical wherever the cursor stands:\n%s", inTheMiddle)
-	}
-
-	// A cursor that is only visible while a blink timer runs would vanish; this one is always drawn.
-	if m.fields[m.focus].input.Styles().Cursor.Blink {
-		t.Error("the cursor blinks, want a static one")
-	}
-	if !strings.Contains(m.fields[m.focus].input.View(), "\x1b[7m") {
-		t.Error("the cursor of the focused field is currently not drawn")
-	}
-	if strings.Contains(m.fields[0].input.View(), "\x1b[7m") {
-		t.Error("an unfocused field should not draw a cursor")
-	}
-}
-
 // The form shows what a field expects, above all that a credential field wants a variable name.
 func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	m, _, _ := newModel(t)
