@@ -646,6 +646,8 @@ type Model struct {
 	// The click targets of the frame drawn last; see mouse.go.
 	hits      []hit
 	frameHits []hit
+	// cursor is where the focused text field of the frame drawn last puts the terminal cursor; nil hides it.
+	cursor *tea.Cursor
 	// drawn is set when the targets match the state: render sets it, any other message clears it. During a
 	// mouse event, verified says that frame also fits the screen, so the first key of the event needs no check.
 	drawn, verified bool
@@ -3690,13 +3692,15 @@ func sectionShortcut(key string) (section, bool) {
 // prompt, never on the alternate screen.
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
+	v.Cursor = m.cursor
 	v.MouseMode = m.mouseMode()
 	return v
 }
 
 // render draws the frame: the configuration path, the sections, and the workspace with the current screen.
 func (m *Model) render() string {
-	view := m.renderFrame()
+	view, cursor := takeCursor(m.renderFrame())
+	m.cursor = cursor
 	if styles.filled && view != "" {
 		view = paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
 	}
