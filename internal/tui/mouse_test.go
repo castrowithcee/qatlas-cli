@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -55,7 +56,32 @@ func clickOn(t *testing.T, m *Model, text string) {
 	clickAt(t, m, x, y)
 }
 
+// wheelClocks are the test clocks of the models a test turns the wheel on.
+var wheelClocks = map[*Model]*time.Time{}
+
+// wheelTime returns the test clock of m, installing it on first use.
+func wheelTime(t *testing.T, m *Model) *time.Time {
+	t.Helper()
+	if now, ok := wheelClocks[m]; ok {
+		return now
+	}
+	now := time.Now()
+	wheelClocks[m] = &now
+	m.now = func() time.Time { return now }
+	t.Cleanup(func() { delete(wheelClocks, m) })
+	return &now
+}
+
+// wheelAt turns the wheel one notch, a second after the last one.
 func wheelAt(t *testing.T, m *Model, x, y int, button tea.MouseButton) {
+	t.Helper()
+	now := wheelTime(t, m)
+	*now = now.Add(time.Second)
+	wheelEvent(t, m, x, y, button)
+}
+
+// wheelEvent sends one wheel event at the current test time.
+func wheelEvent(t *testing.T, m *Model, x, y int, button tea.MouseButton) {
 	t.Helper()
 	_, cmd := m.Update(mouseEvent(x, y, button))
 	deliver(m, cmd)
@@ -335,7 +361,7 @@ func TestTheWheelScrollsAListAndAForm(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	before := m.list.cursor
 	wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
-	if want := wrap(before+wheelStep, len(m.list.matches)); m.list.cursor != want {
+	if want := before + 1; m.list.cursor != want {
 		t.Errorf("after the wheel down the cursor is %d, want %d", m.list.cursor, want)
 	}
 	wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
@@ -628,5 +654,158 @@ func TestDialogButtonsWorkInTheFullScreenFallback(t *testing.T) {
 	}
 	if _, ok := m.cfg.Services["wiki-main"]; !ok {
 		t.Error("keeping deleted the service")
+	}
+}
+
+// A terminal that reports a notch and its release delivers two presses at once; they are one step. Notches
+// that follow each other at the pace of a hand are each a step.
+func TestOneNotchIsOneStepWhateverTheTerminalReports(t *testing.T) {
+	m := sizedModel(groupModel(t), 100, 40)
+	openSectionByName(t, m, sectionConnections)
+	m.list.cursor = 0
+	start := 0
+	now := wheelTime(t, m)
+	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+	if m.list.cursor != start+1 {
+		t.Fatalf("a notch with its release moved the cursor from %d to %d, want one row", start, m.list.cursor)
+	}
+	for range 3 {
+		*now = now.Add(wheelMerge)
+		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+	}
+	if m.list.cursor != start+4 {
+		t.Errorf("three more notches ended on %d, want %d", m.list.cursor, start+4)
+	}
+	// Another direction or another cell is another notch, however close.
+	wheelEvent(t, m, 5, 10, tea.MouseButtonWheelUp)
+	if m.list.cursor != start+3 {
+		t.Errorf("the wheel up right after a wheel down ended on %d, want %d", m.list.cursor, start+3)
+	}
+	wheelEvent(t, m, 6, 10, tea.MouseButtonWheelUp)
+	if m.list.cursor != start+2 {
+		t.Errorf("the wheel up in another cell ended on %d, want %d", m.list.cursor, start+2)
+	}
+}
+
+func TestTheWheelStopsAtTheEnds(t *testing.T) {
+	m := sizedModel(groupModel(t), 100, 40)
+	openSectionByName(t, m, sectionConnections)
+	last := len(m.list.matches) - 1
+	m.list.cursor = last
+	wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+	if m.list.cursor != last {
+		t.Errorf("the wheel down at the end of the list moved the cursor to %d", m.list.cursor)
+	}
+
+	clickOn(t, m, "wiki-docs")
+	m.render()
+	if m.screen != screenForm {
+		t.Fatalf("screen %v", m.screen)
+	}
+	var editable []int
+	for i := range m.fields {
+		if !m.fields[i].readOnly && !m.skipped(i) {
+			editable = append(editable, i)
+		}
+	}
+	m.focus = editable[len(editable)-1]
+	m.applyFocus()
+	wheelAt(t, m, 60, 10, tea.MouseButtonWheelDown)
+	if m.focus != editable[len(editable)-1] {
+		t.Errorf("the wheel down on the last field moved the focus to %d", m.focus)
+	}
+	m.focus = editable[0]
+	m.applyFocus()
+	wheelAt(t, m, 60, 10, tea.MouseButtonWheelUp)
+	if m.focus != editable[0] {
+		t.Errorf("the wheel up on the first field moved the focus to %d", m.focus)
+	}
+	// The keys still wrap.
+	press(t, m, "shift+tab")
+	if m.focus != editable[len(editable)-1] {
+		t.Errorf("shift+tab on the first field went to %d, want the last", m.focus)
+	}
+}
+
+func TestTheWheelStopsAtTheEndsOfTheActivityTable(t *testing.T) {
+	m := sizedModel(heatModel(t, activityLog(t)), 120, 40)
+	m.logs.heat = false
+	m.logs.focus = logFocusRows
+	m.screen = screenLogs
+	m.setLogTab(logTabTable)
+	m.render()
+	n := len(m.logs.list.matches)
+	if n < 2 {
+		t.Fatalf("the log shows %d rows", n)
+	}
+	m.logs.list.cursor = n - 1
+	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	if m.logs.list.cursor != n-1 {
+		t.Errorf("the wheel down at the end moved the cursor to %d", m.logs.list.cursor)
+	}
+	m.logs.list.cursor = 0
+	wheelAt(t, m, 20, 10, tea.MouseButtonWheelUp)
+	if m.logs.list.cursor != 0 {
+		t.Errorf("the wheel up at the top moved the cursor to %d", m.logs.list.cursor)
+	}
+	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	if m.logs.list.cursor != 1 {
+		t.Errorf("the wheel down moved the cursor to %d, want 1", m.logs.list.cursor)
+	}
+}
+
+func TestTheWheelLeadsFromTheTabLineIntoTheContentOnly(t *testing.T) {
+	for _, s := range []section{sectionOverview, sectionConnections, sectionServices, sectionTokens} {
+		m := sizedModel(groupModel(t), 120, 40)
+		openSectionByName(t, m, s)
+		m.focusNav()
+		wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
+		if m.screen != screenNav {
+			t.Errorf("%v: the wheel up on the tab line left it for screen %v", s, m.screen)
+		}
+		wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+		if m.screen != screenList {
+			t.Errorf("%v: the wheel down on the tab line led to screen %v, want the list", s, m.screen)
+		}
+		// On the first row the wheel up stays in the list.
+		wheelAt(t, m, 5, 10, tea.MouseButtonWheelUp)
+		if m.screen != screenList {
+			t.Errorf("%v: the wheel up on the first row left the list for screen %v", s, m.screen)
+		}
+		wheelAt(t, m, 5, 10, tea.MouseButtonWheelDown)
+		if m.screen != screenList {
+			t.Errorf("%v: the wheel down in the list left it for screen %v", s, m.screen)
+		}
+	}
+}
+
+func TestTheWheelScrollsATextAreaByThreeLines(t *testing.T) {
+	m := sizedModel(groupModel(t), 100, 40)
+	m.openHelp()
+	m.helpOffset = 0
+	m.render()
+	wheelAt(t, m, 20, 10, tea.MouseButtonWheelDown)
+	if m.helpOffset != 3 {
+		t.Errorf("the wheel down moved the help by %d lines, want 3", m.helpOffset)
+	}
+	wheelAt(t, m, 20, 10, tea.MouseButtonWheelUp)
+	if m.helpOffset != 0 {
+		t.Errorf("the wheel up left the help at %d, want 0", m.helpOffset)
+	}
+}
+
+// Events that queue up while the editor draws arrive as pairs without a gap: n notches are n rows.
+func TestQueuedWheelPairsMoveOneRowEach(t *testing.T) {
+	m := sizedModel(groupModel(t), 100, 40)
+	openSectionByName(t, m, sectionConnections)
+	m.list.cursor = 0
+	wheelTime(t, m)
+	for range 4 {
+		wheelEvent(t, m, 5, 10, tea.MouseButtonWheelDown)
+	}
+	if m.list.cursor != 2 {
+		t.Errorf("four queued events moved the cursor to %d, want 2", m.list.cursor)
 	}
 }

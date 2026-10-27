@@ -474,6 +474,8 @@ type Model struct {
 	pathRemove bool
 	// now is the clock the active-for row and the connection list read; nil means time.Now.
 	now func() time.Time
+	// wheelSeen is the wheel event last acted on; see wheelMerge.
+	wheelSeen wheelSeen
 	// startDir is the working directory the TUI was started in, the first suggestion for a new path.
 	startDir string
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
@@ -3298,7 +3300,13 @@ func (m *Model) moveFocus(by int) {
 	m.trimFields()
 	next := m.focus
 	for i := 0; i < len(m.fields); i++ {
+		prev := next
 		next = wrap(next+by, len(m.fields))
+		if wheelClamp && next == prev {
+			// The wheel stops at the end of the form; it never lands on a locked field there.
+			next = m.focus
+			break
+		}
 		if !m.fields[next].readOnly && !m.skipped(next) {
 			break
 		}
@@ -3644,6 +3652,9 @@ func listLines(values []string, singular, plural string) string {
 func wrap(i, n int) int {
 	if n <= 0 {
 		return 0
+	}
+	if wheelClamp {
+		return min(max(i, 0), n-1)
 	}
 	return ((i % n) + n) % n
 }

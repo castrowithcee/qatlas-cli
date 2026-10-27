@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -82,8 +83,34 @@ func (m *Model) mouseResume() tea.Cmd {
 	return nil
 }
 
-// wheelStep is how many rows one notch of the wheel moves.
-const wheelStep = 3
+// wheelText is how many rows one notch of the wheel moves in a text area; elsewhere it is one step.
+const wheelText = 3
+
+// wheelMerge is the longest gap between a wheel event and the event after it that can be its release half. A
+// terminal that reports a notch as a press and a release delivers both as presses, back to back.
+const wheelMerge = 15 * time.Millisecond
+
+// wheelClamp makes wrap stop at the ends while the wheel presses a key: the wheel never jumps from the last
+// row to the first or the other way round, the keys keep their wraparound.
+var wheelClamp bool
+
+// wheelSeen is the last wheel event that moved something.
+type wheelSeen struct {
+	button tea.MouseButton
+	x, y   int
+	at     time.Time
+	ok     bool
+}
+
+// repeats reports whether the event is the release half of the notch seen last. It claims at most one event
+// per notch: after it dropped one, the next equal event is a notch of its own however close it is.
+func (w *wheelSeen) repeats(event tea.MouseEvent, now time.Time) bool {
+	if w.ok && w.button == event.Button && w.x == event.X && w.y == event.Y && now.Sub(w.at) < wheelMerge {
+		w.ok = false
+		return true
+	}
+	return false
+}
 
 // updateMouse handles one mouse event. It acts only on a press of the left button and on the wheel; motion and
 // release do nothing. A terminal too small for the screen, an editor with the mouse switched off, and the
@@ -95,6 +122,9 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	wheel := event.Button == tea.MouseButtonWheelUp || event.Button == tea.MouseButtonWheelDown
 	if !wheel && event.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	if wheel && m.wheelSeen.repeats(event, m.timeNow()) {
 		return nil
 	}
 	// Draw once more, so the targets are those of the state the event meets.
@@ -112,7 +142,9 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 		if m.dd != nil {
 			return nil
 		}
-		return m.wheel(event)
+		cmd := m.wheel(event)
+		m.wheelSeen = wheelSeen{button: event.Button, x: event.X, y: event.Y, at: m.timeNow(), ok: true}
+		return cmd
 	}
 	if m.dd != nil {
 		return m.clickDropdown(event.X, event.Y)
@@ -138,24 +170,59 @@ func (m *Model) wheelScreens() bool {
 	return false
 }
 
-// wheel scrolls: a notch is a few presses of up or down, and over the list of the sections of a form it is a
-// press of pgup or pgdown, which jump from section to section.
+// atListTop reports whether up would leave the rows of the list for its filter bar or the tab line.
+func (m *Model) atListTop() bool {
+	if m.screen != screenList {
+		return false
+	}
+	if m.barFocus != 0 {
+		return true
+	}
+	if m.section == sectionOverview {
+		return m.overviewCursor <= 0
+	}
+	return m.list.cursor <= 0
+}
+
+// wheel scrolls: a notch is one press of up or down (three in a text area), and over the list of the sections
+// of a form it is a press of pgup or pgdown, which jump from section to section. On the tab line a notch down
+// goes into the content and nothing leads back out of it.
 func (m *Model) wheel(event tea.MouseEvent) tea.Cmd {
-	if !m.wheelScreens() {
+	up := event.Button == tea.MouseButtonWheelUp
+	if m.screen == screenNav {
+		if up {
+			return nil
+		}
+		m.touchAdminSessionIfActive()
+		var cmds []tea.Cmd
+		// The option bar of an area is a stop before its content.
+		for range 2 {
+			if m.screen != screenNav {
+				break
+			}
+			cmds = append(cmds, m.press(tea.KeyMsg{Type: tea.KeyDown}))
+		}
+		return tea.Batch(cmds...)
+	}
+	if !m.wheelScreens() || (up && m.atListTop()) {
 		return nil
 	}
 	m.touchAdminSessionIfActive()
-	up := event.Button == tea.MouseButtonWheelUp
-	key, times := tea.KeyDown, wheelStep
+	key, times := tea.KeyDown, 1
 	if up {
 		key = tea.KeyUp
 	}
+	if m.screen == screenHelp {
+		times = wheelText
+	}
 	if m.screen == screenForm && event.X < m.sectionListWidth {
-		key, times = tea.KeyPgDown, 1
+		key = tea.KeyPgDown
 		if up {
 			key = tea.KeyPgUp
 		}
 	}
+	wheelClamp = true
+	defer func() { wheelClamp = false }()
 	var cmds []tea.Cmd
 	for range times {
 		cmds = append(cmds, m.press(tea.KeyMsg{Type: key}))
