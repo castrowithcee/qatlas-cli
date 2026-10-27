@@ -69,16 +69,13 @@ func TestLetterActionsAreTheAgreedLetters(t *testing.T) {
 }
 
 // helpWording is how the help names each letter of the table: the letter followed by what it does. A letter the
-// table gains fails here until the help and this list both name it. c is reserved for copying, which does
-// nothing yet, so the help leaves it out.
+// table gains fails here until the help and this list both name it.
 var helpWording = map[string]string{
 	"g": "g starts", "n": "n creates", "e": "e edits", "r": "r renames", "d": "d deletes", "p": "p duplicates",
 	"t": "t tests", "u": "u installs", "a": "a approves", "v": "v shows or hides", "s": "s shows", "f": "f their filter",
 	"m": "m their MCP sessions", "o": "o opens", "w": "w saves", "b": "b puts", "i": "i opens", "q": "q quits",
-	"y": "y confirms", "h": "h, j, k, and l", "j": "h, j, k, and l", "k": "h, j, k, and l", "l": "h, j, k, and l",
+	"c": "c hands", "y": "y confirms", "h": "h, j, k, and l", "j": "h, j, k, and l", "k": "h, j, k, and l", "l": "h, j, k, and l",
 }
-
-var helpReserved = []action{actCopy}
 
 func TestHelpNamesEveryLetterOfTheTable(t *testing.T) {
 	var text strings.Builder
@@ -88,12 +85,6 @@ func TestHelpNamesEveryLetterOfTheTable(t *testing.T) {
 	help := text.String()
 	isLetter := regexp.MustCompile(`^[a-z]$`)
 	for _, d := range keyDefs {
-		if slices.Contains(helpReserved, d.act) {
-			if strings.Contains(help, "c copies") || strings.Contains(help, "c is reserved") {
-				t.Errorf("the help names %s, which does nothing yet", d.act)
-			}
-			continue
-		}
 		for _, k := range d.keys {
 			if !isLetter.MatchString(k) {
 				continue
@@ -116,7 +107,7 @@ func TestOldLettersMeanNothingAnymore(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "c")
 	if m.wizard != nil || m.screen != screenList {
-		t.Errorf("c = screen %v wizard %v, want nothing: it is reserved", m.screen, m.wizard)
+		t.Errorf("c = screen %v wizard %v, want nothing: there is no entry to copy the name of", m.screen, m.wizard)
 	}
 	press(t, m, "s")
 	if m.screen != screenList {

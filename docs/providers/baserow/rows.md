@@ -31,12 +31,14 @@ begin with `-` or `+`. Filter types come from a fixed list; for most of them Bas
 needed. Values travel only as URL-encoded query parameters, never as a passthrough. The API documents no format for
 filter groups and a flat tree does no more than the offered filters, so the JSON filter tree is not offered.
 
-Lookup, formula, rollup, and count fields are filterable and sortable. A link field whose other table is outside the
-targets (or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
+Formula, rollup, and count fields are filterable and sortable. A lookup field through a link into a table outside the
+targets (or one that cannot be determined) is left out of the output and refuses any filter and sorting, as does a
+full-text `search` on a table with one. A link field whose other table is outside
+the targets (or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
 sorting. Display values of linked rows outside the targets are masked; a text filter, a sort, or a full-text search on
 them would disclose them. Filters by row ID or emptiness show only what the output shows anyway. For the same reason
-`search` is refused on a table with such a link field unless the connection targets `*`; with `*`, or when the other
-table is inside the targets, nothing is refused.
+`search` is refused on a table with such a link or lookup field unless the connection targets `*`; with `*`, or when the
+other table is inside the targets, nothing is refused.
 
 Order of checks: the table (before the credential), argument shape, limits, column keys, and filter types (before any
 request), then one read of the table's fields, after which an unknown or unsuitable field, a repeated field and type,

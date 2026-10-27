@@ -18,9 +18,10 @@
 // Baserow is asked to fetch must be https on a public host name; Baserow's own guard covers the resolution.
 //
 // Link fields (link_row) into a table outside the allow-list are reduced to row IDs: their display values
-// are dropped. A link field whose other table cannot be determined counts as outside. Lookup and formula
-// fields can carry values of other tables and are passed through as the instance reports them; this is a
-// documented boundary, not a masked one.
+// are dropped. A link field whose other table cannot be determined counts as outside. A lookup
+// field through such a link, or through a link that cannot be found, is left out of the output and refused
+// in filters and sorting. Rollup, count, and formula fields can reflect data of other tables but cannot be
+// assigned to one; they are passed through as the instance reports them, a documented boundary.
 //
 // Every value of a response is provider data and untrusted: strings, arrays, objects, and nesting are
 // bounded, a response is read up to a size limit, and provider texts never reach an error message.

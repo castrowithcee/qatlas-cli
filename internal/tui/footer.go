@@ -35,6 +35,7 @@ const (
 	footerQuit     = 6
 	footerOthers   = 10
 	footerInfo     = 700
+	footerCopy     = 710  // goes before the info key does
 	footerPosition = 900  // right, before the navigation
 	footerNavigate = 1000 // navigation stands right and goes first
 )
@@ -61,6 +62,8 @@ func footerGroupRank(group string, index int) (rank int, right bool) {
 		return footerCommand, false
 	case key == keyLabel(actInfo) || key == keyName(keyOf(actInfo)):
 		return footerInfo, false
+	case key == keyLabel(actCopy):
+		return footerCopy, false
 	}
 	return footerOthers + index, false
 }
