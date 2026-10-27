@@ -13,7 +13,9 @@ import (
 // every place that draws something clickable says where on the screen it stands and which key press the click
 // stands for. A click then does what that key does, through the same handlers, so every check the key meets
 // (the admin session, the confirmations, the question before unsaved input is dropped) stays in force, and a
-// click is never stronger than its key. Nothing is drawn from the list and nothing is stored beyond one frame.
+// click is never stronger than its key. A row is only marked by the first click, so that a click that meant to
+// scroll or to take the focus opens nothing; the click on the marked row is the press. Nothing is drawn from the
+// list and nothing is stored beyond one frame.
 
 // hit is one click target: the cells [x0, x1) by [y0, y1) of the screen and what a click on them does.
 type hit struct {
@@ -485,12 +487,24 @@ func (m *Model) hitList(header string, start, end int, row func(i int) string) {
 	m.hitRows(m.hitTop(header), m.listWidth(), start, end, row, m.clickListRow)
 }
 
-// clickListRow is a click on a row of the list: it takes the focus to the row and does what enter does there,
-// which opens an entry and folds a group. A filter being typed is only kept.
+// markOrAct is the click on a row of a list: it marks the row, and only a click on the row that already was
+// marked, with the focus on the rows, does act. focused says the rows had the focus before the click.
+func markOrAct(cursor *int, i int, focused bool, act func() tea.Cmd) tea.Cmd {
+	if !focused || *cursor != i {
+		*cursor = i
+		return nil
+	}
+	return act()
+}
+
+// clickListRow is a click on a row of the list: it marks the row, and a click on the marked row does what enter
+// does there, which opens an entry. A group folds at the first click, which is harmless and undone by the next.
+// A filter being typed is only kept.
 func (m *Model) clickListRow(i int) tea.Cmd {
 	if i < 0 || i >= len(m.list.matches) {
 		return nil
 	}
+	focused := m.screen == screenList && m.barFocus == 0 && !m.list.editing && !m.detailFocused()
 	switch m.screen {
 	case screenNav:
 		if cmd := m.focusList(); m.screen != screenList {
@@ -502,12 +516,17 @@ func (m *Model) clickListRow(i int) tea.Cmd {
 	}
 	m.barFocus = 0
 	m.leaveDetail()
-	m.list.cursor = i
 	if m.list.editing {
+		m.list.cursor = i
 		m.list.stopFilter()
 		return nil
 	}
-	return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+	enter := func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) }
+	if isGroupRow(m.list.matches[i]) {
+		m.list.cursor = i
+		return enter()
+	}
+	return markOrAct(&m.list.cursor, i, focused, enter)
 }
 
 // hitOverview makes the selectable items of the Overview, its cards and lines, clickable.
@@ -518,8 +537,10 @@ func (m *Model) hitOverview() {
 	}
 }
 
-// clickOverview is a click on an item of the Overview: it opens its area, as enter does.
+// clickOverview is a click on an item of the Overview: it marks the item, and a click on the marked one opens
+// its area, as enter does.
 func (m *Model) clickOverview(i int) tea.Cmd {
+	focused := m.screen == screenList
 	switch m.screen {
 	case screenNav:
 		m.focusList()
@@ -527,22 +548,23 @@ func (m *Model) clickOverview(i int) tea.Cmd {
 	default:
 		return nil
 	}
-	m.overviewCursor = i
-	return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+	return markOrAct(&m.overviewCursor, i, focused, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) })
 }
 
-// hitPicker makes the values of the picker clickable. A picker of ticks ticks the value, as space does; any
-// other chooses it, as enter does. The info mark of a value opens its explanation.
+// hitPicker makes the values of the picker clickable. A click marks a value; a click on the marked one ticks it
+// in a picker of ticks, as space does, and chooses it in any other, as enter does. Its search line takes the
+// keys of the rows, so the rows always have the focus. The info mark of a value opens its explanation.
 func (m *Model) hitPicker(header string, start, end int) {
 	m.hitRows(m.hitTop(header), m.usable(0), start, end, m.pickerRow, func(i int) tea.Cmd {
 		if m.screen != screenPicker || i >= len(m.picker.matches) {
 			return nil
 		}
-		m.picker.cursor = i
-		if m.pickerMarks != nil {
-			return m.updatePicker(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
-		}
-		return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+		return markOrAct(&m.picker.cursor, i, true, func() tea.Cmd {
+			if m.pickerMarks != nil {
+				return m.updatePicker(tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}})
+			}
+			return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+		})
 	})
 	y := m.hitTop(header)
 	for i := start; i < end; i++ {
@@ -570,14 +592,14 @@ func (m *Model) hitInfoMark(text string, y, x0 int, act func() tea.Cmd) {
 	}
 }
 
-// hitTable makes the rows of a windowed list of a screen clickable, each as a press of enter on its row.
+// hitTable makes the rows of a windowed list of a screen clickable: a click marks a row, and a click on the
+// marked row is a press of enter on it.
 func (m *Model) hitTable(l *filterList, on screen, header string, start, end int, row func(i int) string) {
 	m.hitRows(m.hitTop(header), m.usable(0), start, end, row, func(i int) tea.Cmd {
 		if m.screen != on || i >= len(l.matches) {
 			return nil
 		}
-		l.cursor = i
-		return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+		return markOrAct(&l.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) })
 	})
 }
 
@@ -655,17 +677,18 @@ func (m *Model) logBarTargets(mode, date string, tabs []string, filters []string
 	return specs
 }
 
-// hitLogs makes the rows of the Logs screen clickable: a click takes the focus to the row and opens its
-// entry, as enter does.
+// hitLogs makes the rows of the Logs screen clickable: a click takes the focus to the row and marks it, and a
+// click on the marked row opens its entry, as enter does.
 func (m *Model) hitLogs(head string, start, end int) {
 	m.hitRows(m.hitTop(head), m.usable(0), start, end, func(int) string { return "" }, func(i int) tea.Cmd {
 		lv := m.logs
+		focused := m.screen == screenLogs && lv.focus == logFocusRows
 		lead, ok := m.logBarGuard()
 		if !ok || i >= len(lv.list.matches) {
 			return lead
 		}
-		lv.focus, lv.list.cursor = logFocusRows, i
-		return tea.Batch(lead, m.press(tea.KeyMsg{Type: tea.KeyEnter}))
+		lv.focus = logFocusRows
+		return tea.Batch(lead, markOrAct(&lv.list.cursor, i, focused, func() tea.Cmd { return m.press(tea.KeyMsg{Type: tea.KeyEnter}) }))
 	})
 }
 
