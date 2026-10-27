@@ -268,22 +268,57 @@ func (c *Client) joinedTableReadable(document metadataJSON, current tableJSON, c
 	if c.scope.wildcard {
 		return true
 	}
-	link := column
-	if column.Type == "link-formula" {
-		key, _ := data["link_column_key"].(string)
-		found := false
-		for _, candidate := range current.Columns {
-			if candidate.Key == key && key != "" && candidate.Type == "link" {
-				link, found = candidate, true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
+	link, found := joinLinkColumn(current, column, data)
+	if !found {
+		return false
 	}
 	other, ok := counterpart(current, link)
 	return ok && c.tableAllowed(document, other)
+}
+
+// joinLinkColumn returns the link column whose counterpart table a link or link-formula column joins. A
+// link-formula column names it by link_column_key; the result is false when no link column carries that key.
+func joinLinkColumn(current tableJSON, column columnJSON, data map[string]any) (columnJSON, bool) {
+	if column.Type != "link-formula" {
+		return column, true
+	}
+	key, _ := data["link_column_key"].(string)
+	if key == "" {
+		return columnJSON{}, false
+	}
+	for _, candidate := range current.Columns {
+		if candidate.Key == key && candidate.Type == "link" {
+			return candidate, true
+		}
+	}
+	return columnJSON{}, false
+}
+
+// hiddenLookups returns the columns of a table whose cell values copy a value from single linked rows
+// (formula lookup, findmin, findmax) of a table the connection may not read, or of a table that cannot be
+// determined. Rollups, counts and other formulas aggregate and stay. A wildcard connection hides nothing.
+func (c *Client) hiddenLookups(document metadataJSON, current *tableJSON) []columnJSON {
+	if c.scope.wildcard || current == nil {
+		return nil
+	}
+	var hidden []columnJSON
+	for _, column := range current.Columns {
+		if column.Type != "link-formula" {
+			continue
+		}
+		tree, _ := decodeBounded(column.RawData)
+		data, _ := tree.(map[string]any)
+		formula, _ := data["formula"].(string)
+		switch strings.ToLower(formula) {
+		case "lookup", "findmin", "findmax":
+		default:
+			continue
+		}
+		if !c.joinedTableReadable(document, *current, column, data) {
+			hidden = append(hidden, column)
+		}
+	}
+	return hidden
 }
 
 // namesJoinedTable reports whether a data key of a link or link-formula column names the joined table, one of

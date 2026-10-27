@@ -121,7 +121,8 @@ const rowSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
 	`"creator":{"type":"string"},"last_modifier":{"type":"string"},"locked":{"type":"boolean"},` +
 	`"locked_by":{"type":"string"},"archived":{"type":"boolean"},` +
-	`"values":{"type":"object"}},"required":["id","values"],"additionalProperties":false}`
+	`"values":{"type":"object"},"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
+	`"required":["id","values"],"additionalProperties":false}`
 
 const tableSelectionSchema = `{"type":"string","minLength":1,"maxLength":512}`
 
@@ -203,13 +204,14 @@ var columnsList = capability.Descriptor{
 }
 
 var rowsList = capability.Descriptor{
-	ID:          Provider + ".rows.list",
-	Version:     1,
-	Title:       "List SeaTable rows",
-	Description: "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
-	Tags:        []string{"seatable", "base", "rows", "list", "table"},
-	Risk:        seatableReadRisk,
-	Provider:    Provider,
+	ID:      Provider + ".rows.list",
+	Version: 1,
+	Title:   "List SeaTable rows",
+	Description: "List one bounded page of rows from a table allowed by an explicit SeaTable connection;" +
+		" lookup, findmin and findmax values from tables outside the connection are omitted; rollup, count and formula values stay and can reflect data of linked tables",
+	Tags:     []string{"seatable", "base", "rows", "list", "table"},
+	Risk:     seatableReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
@@ -226,7 +228,7 @@ var rowsList = capability.Descriptor{
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
 	Fields: []capability.Field{
-		{Name: "rows", Description: "The rows on this page with id, created_at, updated_at, creator, last_modifier, locked, locked_by, archived and values, untrusted data"},
+		{Name: "rows", Description: "The rows on this page with id, created_at, updated_at, creator, last_modifier, locked, locked_by, archived, values and omitted_fields, untrusted data"},
 		{Name: "start", Description: "Row offset this page started at"},
 		{Name: "limit", Description: "Page size the request applied"},
 		{Name: "next_start", Description: "Offset of the following page, absent on the last page"},
@@ -243,7 +245,7 @@ var rowsGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get a SeaTable row",
 	Description: "Read one row of a table allowed by an explicit SeaTable connection by its row " +
-		"identifier",
+		"identifier; lookup, findmin and findmax values from tables outside the connection are omitted; rollup, count and formula values stay and can reflect data of linked tables",
 	Tags:     []string{"seatable", "base", "rows", "get", "table"},
 	Risk:     seatableReadRisk,
 	Provider: Provider,
@@ -265,6 +267,7 @@ var rowsGet = capability.Descriptor{
 		{Name: "locked_by", Description: "SeaTable user identifier of the person who locked the row, untrusted data"},
 		{Name: "archived", Description: "Whether the row is archived, as SeaTable reports it; absent when SeaTable sends none"},
 		{Name: "values", Description: "Column values of the row by column name, untrusted data"},
+		{Name: "omitted_fields", Description: "Names of the lookup columns whose value was left out because it comes from a table outside the connection"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read one row by the identifier a list result reported",
@@ -987,6 +990,8 @@ type Row struct {
 	LockedBy     string                     `json:"locked_by,omitempty"`
 	Archived     *bool                      `json:"archived,omitempty"`
 	Values       map[string]json.RawMessage `json:"values"`
+	// OmittedFields names the columns whose value was left out of Values.
+	OmittedFields []string `json:"omitted_fields,omitempty"`
 }
 
 // ListResult is the normalised page of rows.
@@ -1221,29 +1226,21 @@ func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, err
 			Message: "SeaTable answered with a different row than the requested one",
 		}
 	}
-	if err := c.maskLinks(ctx, op, selected, []Row{*row}); err != nil {
+	masked := []Row{*row}
+	if err := c.maskLinks(ctx, op, selected, masked); err != nil {
 		return nil, err
 	}
-	return row, nil
+	return &masked[0], nil
 }
 
-// maskLinks reduces every link entry that points into a table outside the connection's allow-list to its
-// row identifier, so a display value never leaves through a table the connection may not read. A wildcard
-// connection reads every table and keeps the display values. The metadata is requested only when a row
-// carries link entries at all. A counter table that cannot be determined counts as not allowed.
+// maskLinks applies the table boundary to row values. Every link entry that points into a table outside
+// the connection's allow-list is reduced to its row identifier, so a display value never leaves through a
+// table the connection may not read. A lookup, findmin or findmax value that copies a value from such a
+// table, or from a table that cannot be determined, is removed and its column named in omitted_fields.
+// A wildcard connection reads every table and keeps all values. The metadata is the one cached read of the
+// client. A counter table that cannot be determined counts as not allowed.
 func (c *Client) maskLinks(ctx context.Context, op string, selected target, rows []Row) error {
-	if c.scope.wildcard {
-		return nil
-	}
-	found := false
-	for _, row := range rows {
-		for _, value := range row.Values {
-			if _, ok := linkEntries(value); ok {
-				found = true
-			}
-		}
-	}
-	if !found {
+	if c.scope.wildcard || len(rows) == 0 {
 		return nil
 	}
 	document, err := c.metadata(ctx, op)
@@ -1257,7 +1254,15 @@ func (c *Client) maskLinks(ctx context.Context, op string, selected target, rows
 			break
 		}
 	}
-	for _, row := range rows {
+	hidden := c.hiddenLookups(document, current)
+	for i := range rows {
+		row := &rows[i]
+		for _, column := range hidden {
+			if _, present := row.Values[column.Name]; present {
+				delete(row.Values, column.Name)
+				row.OmittedFields = append(row.OmittedFields, column.Name)
+			}
+		}
 		for name, value := range row.Values {
 			entries, ok := linkEntries(value)
 			if !ok || c.linkAllowed(document, current, name) {
