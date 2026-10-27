@@ -77,3 +77,34 @@ func TestProviderMarkIsStableAndUsesBrandColours(t *testing.T) {
 		}
 	}
 }
+
+// The active tab is a surface under colour and brackets without it; both take the same cells, so a click
+// target never moves with the profile, and the others stay unshaded.
+func TestTabStripActiveTabIsASurfaceAndBracketsWithoutColour(t *testing.T) {
+	words := []string{"One", "|", "Two", "Three"}
+	withTheme(t, buildTheme(true, false, false))
+	coloured, colourSpans := tabStrip(words, 2, false)
+	focused, _ := tabStrip(words, 2, true)
+	if strings.Contains(sgr.ReplaceAllString(coloured, ""), "[") {
+		t.Errorf("coloured tabs carry brackets: %q", sgr.ReplaceAllString(coloured, ""))
+	}
+	if !hasBackground(coloured) || !hasBackground(focused) || focused == coloured {
+		t.Errorf("active tab is no surface, or the focus does not show: %q / %q", coloured, focused)
+	}
+	withTheme(t, buildTheme(true, true, false))
+	plain, plainSpans := tabStrip(words, 2, false)
+	if !strings.Contains(plain, "[Two]") || hasBackground(plain) || strings.Contains(plain, "38;") {
+		t.Errorf("plain active tab = %q, want brackets and no colour", plain)
+	}
+	if !strings.Contains(sgr.ReplaceAllString(plain, ""), "[Two]") || lipgloss.Width(plain) != lipgloss.Width(coloured) {
+		t.Errorf("plain width %d, coloured %d", lipgloss.Width(plain), lipgloss.Width(coloured))
+	}
+	for i := range colourSpans {
+		if colourSpans[i] != plainSpans[i] {
+			t.Errorf("span %d = %v coloured, %v plain", i, colourSpans[i], plainSpans[i])
+		}
+	}
+	if reverse, _ := tabStrip(words, 2, true); reverse == plain {
+		t.Errorf("without colour the focus leaves the tab unchanged")
+	}
+}

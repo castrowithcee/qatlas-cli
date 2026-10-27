@@ -7,7 +7,7 @@
 [38;2;127;147;168m│    Group: Provider ▾      State: All ▾      Sort: Name ▾    / search…                 │ │ wiki-main                                       ● active │[0m
 [38;2;127;147;168m│     NAME            STATE   SERVICE  EFFECTS             TOOLS  DESCRIPTION           │ │ bookstack                                                │[0m
 [38;2;127;147;168m│   ▾ ■ bookstack (1)                                                                   │ │                                                          │[0m
-[38;2;127;147;168m│ ▌   wiki-main       active  wiki     read,create,update  all    Team wiki, read and … │ │ [Overview]  Details   Raw                                │[0m
+[38;2;127;147;168m│ ▌   wiki-main       active  wiki     read,create,update  all    Team wiki, read and … │ │  Overview   Details   Raw                                │[0m
 [38;2;127;147;168m│   ▾ ■ github (1)                                                                      │ │                                                          │[0m
 [38;2;127;147;168m│     code-planning   active  code     read                all    Planning repositories │ │ Provider:     bookstack                                  │[0m
 [38;2;127;147;168m│   ▾ ■ nextcloud (1)                                                                   │ │ Service:      wiki                                       │[0m
