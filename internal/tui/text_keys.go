@@ -119,6 +119,7 @@ const (
 	tBackgroundDetail                        textID = "BackgroundDetail"
 	tStartHint                               textID = "StartHint"
 	tIconsHint                               textID = "IconsHint"
+	tIconsTest                               textID = "IconsTest"
 	tIconsDetail                             textID = "IconsDetail"
 	tLanguageHint                            textID = "LanguageHint"
 	tLanguageDetail                          textID = "LanguageDetail"

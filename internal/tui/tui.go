@@ -620,6 +620,7 @@ type Model struct {
 	// version installed since, which takes effect only after a restart. updateFrom is the screen the update
 	// question returns to.
 	updater    Updater
+	version    string
 	release    selfupdate.Result
 	updating   bool
 	updated    string
@@ -1318,6 +1319,8 @@ func (m *Model) newEntryBlockedFor(s section) string {
 // quitting, so a screen that does not fit is never the end of the session; a form with unsaved input asks
 // first, like every other way out of it.
 func (m *Model) leaveScreen() tea.Cmd {
+	// A capture belongs to the form it started in; the resize notice can leave that form mid-capture.
+	m.keyCapture = false
 	switch m.screen {
 	case screenNav:
 		return nil
@@ -4934,6 +4937,8 @@ type Options struct {
 	Tester   Tester
 	Secrets  Secrets
 	Redactor *redact.Redactor
+	// Version is the running qatlas version; empty is read as dev.
+	Version string
 	// Updater may be nil, in which case the editor does not look for a newer release.
 	Updater Updater
 	// Restart may be nil, in which case an installed release waits for a restart by hand.
@@ -4970,6 +4975,7 @@ func Run(opts Options) error {
 		return err
 	}
 	model.updater = opts.Updater
+	model.version = opts.Version
 	model.restart = opts.Restart
 	model.selftest = opts.SelfTest
 	model.prefs = prefs

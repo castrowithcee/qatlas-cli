@@ -283,3 +283,33 @@ func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdatePageNamesRunningVersion(t *testing.T) {
+	m, _ := lockedVaultModel(t)
+	m.version = "1.2.3"
+	openSectionByName(t, m, sectionUpdate)
+	if view := m.render(); !strings.Contains(view, "qatlas 1.2.3") {
+		t.Errorf("the Update page does not name the running version:\n%s", view)
+	}
+}
+
+// The long explanation of the icons preference and of its nerdfont value show the glyphs and where to get a font.
+func TestIconsExplanationShowsTestCharactersAndFontHint(t *testing.T) {
+	eachLanguage(t, func(t *testing.T) {
+		m, _, _ := newModel(t)
+		f := choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, uiprefs.IconsNone)
+		for name, got := range map[string]string{
+			"detail": f.withDetail(iconsDetail()).detail,
+			"picker": m.pickerChoiceSubject(f, uiprefs.IconsNerdFont).long,
+		} {
+			for _, icon := range areaIcons {
+				if !strings.Contains(got, icon) {
+					t.Errorf("%s lacks the test character %q: %q", name, icon, got)
+				}
+			}
+			if !strings.Contains(got, "https://www.nerdfonts.com") {
+				t.Errorf("%s lacks the font URL: %q", name, got)
+			}
+		}
+	})
+}

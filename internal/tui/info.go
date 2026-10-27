@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 const (
@@ -147,6 +148,9 @@ func (m *Model) pickerChoiceSubject(f field, choice string) infoSubject {
 			}
 		}
 		return s
+	case f.label == iconsLabel && choice == uiprefs.IconsNerdFont:
+		s.long = iconsDetail()
+		return s.withTerm(m.fieldTerm(f))
 	case f.label == profileLabel:
 		if profile, ok := findProfile(metadata, choice); ok {
 			s.title, s.long = profile.Title, profileText(metadata, profile)

@@ -184,7 +184,7 @@ change or run something. The instance serves them only to the people named in th
 
 | Tools | Scope |
 | --- | --- |
-| [Instance administration](administration.md): runners, workflow runs, workflow jobs, and packages of the whole instance | `read:admin`; `write:admin` to change |
+| [Instance administration](administration.md): runners, workflow runs, workflow jobs, packages, user accounts, and email addresses of the whole instance | `read:admin`; `write:admin` to change |
 
 The account of the token must be a **site administrator** of the instance. Use a token of its own for these tools
 that no other connection uses.

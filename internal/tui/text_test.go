@@ -281,13 +281,16 @@ func TestGermanKeyRows(t *testing.T) {
 	if !strings.Contains(m.render(), "Taste beibehalten") {
 		t.Errorf("cancelling lacks its status:\n%s", m.render())
 	}
-	// The capture status is a second note, which the smallest terminal has no row for: there the form asks for
-	// one row more, so that a capture cannot start in a screen the terminal replaces by the resize notice.
-	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {60, 16}, {80, 24}, {140, 40}} {
+	// The smallest size comes last: its capture status needs a row the terminal lacks, so the resize notice
+	// replaces the form, and esc there leaves the form and ends the capture.
+	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight + 1}, {60, 16}, {80, 24}, {140, 40}, {minimumWidth, minimumHeight}} {
 		sizedModel(m, size.w, size.h)
 		assertViewFits(t, m.render(), size.w, size.h)
 		press(t, m, "enter")
 		assertViewFits(t, m.render(), size.w, size.h)
 		press(t, m, "esc")
+	}
+	if m.keyCapture {
+		t.Error("esc at the smallest size left the capture running")
 	}
 }

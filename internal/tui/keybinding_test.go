@@ -223,3 +223,43 @@ func TestStoredKeyNamesReachTheEditorUnchanged(t *testing.T) {
 		t.Errorf("the terminal's keys reach the editor as\n%q, want\n%q", got, want)
 	}
 }
+
+func TestKeyCaptureEndsWhenTheResizeNoticeLeavesTheForm(t *testing.T) {
+	keepKeys(t)
+	setup := func() (*Model, string) {
+		m, _ := lockedVaultModel(t)
+		sizedModel(m, 100, 40)
+		openSectionByName(t, m, sectionGeneral)
+		focusKeyRow(t, m, "info key")
+		bound := keyOf(actInfo)
+		press(t, m, "enter")
+		if !m.keyCapture {
+			t.Fatal("enter did not start the capture")
+		}
+		sizedModel(m, 40, 13)
+		return m, bound
+	}
+
+	m, bound := setup()
+	press(t, m, "esc")
+	if m.keyCapture || m.screen == screenForm || len(m.fields) != 0 {
+		t.Fatalf("after esc in the notice: capture %v, screen %v, fields %d", m.keyCapture, m.screen, len(m.fields))
+	}
+	sizedModel(m, 100, 40)
+	press(t, m, "x")
+	if keyOf(actInfo) != bound {
+		t.Errorf("a key after leaving rebound the info key: %q, was %q", keyOf(actInfo), bound)
+	}
+
+	m, _ = setup()
+	m.fields[m.focus].bound = "y"
+	press(t, m, "esc")
+	if m.keyCapture || m.screen != screenLeave {
+		t.Fatalf("a changed form: capture %v, screen %v", m.keyCapture, m.screen)
+	}
+	sizedModel(m, 100, 40)
+	press(t, m, "esc")
+	if m.screen != screenForm {
+		t.Errorf("the next key did not answer the question: screen %v", m.screen)
+	}
+}

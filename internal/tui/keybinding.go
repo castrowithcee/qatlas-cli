@@ -83,6 +83,9 @@ func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	m.keyCapture = false
+	if m.focus < 0 || m.focus >= len(m.fields) || m.fields[m.focus].kind != fieldKey {
+		return nil
+	}
 	m.clearMessages()
 	if key.String() == keyOf(actBack) {
 		m.status = tr(tKeyKept)
