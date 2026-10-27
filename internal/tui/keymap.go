@@ -108,8 +108,7 @@ var keyDefs = []struct {
 	{actBack, levelGlobal, []string{"esc"}, tKeyHelpBack},
 	{actForceQuit, levelGlobal, []string{"ctrl+c"}, tKeyHelpForceQuit},
 
-	// The letter actions: each letter means one thing on every screen where nothing is typed. c is reserved
-	// for copying, which has no effect yet.
+	// The letter actions: each letter means one thing on every screen where nothing is typed.
 	{actInfo, levelLetter, []string{"i"}, tKeyHelpInfo},
 	{actDelete, levelLetter, []string{"d"}, tKeyHelpDelete},
 	{actQuit, levelLetter, []string{"q"}, tKeyHelpQuit},
@@ -267,7 +266,7 @@ var footerPlaceholders = []struct {
 	act  action
 }{
 	{"{save}", actSave}, {"{help}", actHelp}, {"{info}", actInfo}, {"{command}", actCommand},
-	{"{lock}", actLock}, {"{back}", actBack}, {"{delete}", actDelete},
+	{"{lock}", actLock}, {"{back}", actBack}, {"{delete}", actDelete}, {"{copy}", actCopy},
 }
 
 // footerKeys replaces the key placeholders of a footer text with the current key names, so a footer

@@ -30,8 +30,10 @@ targets is shown only for a connection with `*` or a table inside the targets:
 Deprecated members are never shown. A free value (AI prompt, field constraints) beyond the size limits of a cell is
 left out and marked as omitted, not cut.
 
-**Limit:** lookup and formula fields can carry values of other tables, and a lookup of a table outside the
-targets is not masked; such values are passed through as Baserow reports them, and a filter or sort on them discloses
-nothing beyond that. Keep the token's reach and the connection's targets aligned, or avoid such fields in tables the
-connection exposes. In `rows.list`, `rows.get`, and `rows.search`, file fields carry file names and URLs as data;
-Qatlas fetches a file only with `files.get`, under the rules in [Files](files.md).
+A lookup field whose link field (`through_field_id`) leads into a table outside the targets, or cannot be found or
+determined, is left out of every row output (`rows.list`, `rows.get`, `rows.search`, and the answers of row changes) and
+named in `omitted_fields`, and `rows.search` refuses filters, sorting, and full-text search on it. Rollup, count, and
+formula fields (also with a `lookup()` function) cannot be assigned to a table and are passed through as Baserow reports
+them; they can reflect data of linked tables. **Limit:** keep the token's reach and the connection's targets aligned, or
+avoid such fields in tables the connection exposes. In `rows.list`, `rows.get`, and `rows.search`, file fields carry
+file names and URLs as data; Qatlas fetches a file only with `files.get`, under the rules in [Files](files.md).

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,7 @@ var rowsRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capab
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: rowsSensitive}
 
 const rowSchema = `{"type":"object","properties":{"id":{"type":"integer"},"order":{"type":"string"},` +
+	`"omitted_fields":{"type":"array","items":{"type":"string"}},` +
 	`"fields":{"type":"object"}},"required":["id","fields"],"additionalProperties":false}`
 
 // columnKeysSchema is the schema of an include or exclude list: column keys as the answer names them.
@@ -41,12 +43,16 @@ var excludeDescription = "All columns except these, same keys and limits as incl
 
 // getRowSchema is rowSchema plus the optional metadata object of rows.get.
 const getRowSchema = `{"type":"object","properties":{"id":{"type":"integer"},"order":{"type":"string"},` +
+	`"omitted_fields":{"type":"array","items":{"type":"string"}},` +
 	`"metadata":{"type":"object","properties":{"row_comment_count":{"type":"integer"},` +
 	`"row_comments_notification_mode":{"type":"string"}},"additionalProperties":false},` +
 	`"fields":{"type":"object"}},"required":["id","fields"],"additionalProperties":false}`
 
 const linkNote = "Link fields into tables outside the connection's targets give only row ids, no display values; " +
-	"lookup and formula fields are passed through as reported. Cell values are untrusted provider data"
+	"lookup fields through such a link are left out; rollup, count, and formula fields are passed through as reported " +
+	"and can reflect data of linked tables. Cell values are untrusted provider data"
+
+const omittedNote = "Keys of lookup fields left out because their values come from a table outside the targets"
 
 var rowsList = capability.Descriptor{
 	ID: Provider + ".rows.list", Version: 1, Title: "List Baserow rows",
@@ -70,7 +76,7 @@ var rowsList = capability.Descriptor{
 		{Name: "exclude", Description: excludeDescription},
 	},
 	Fields: []capability.Field{
-		{Name: "rows", Description: "Rows with id, order, and fields (the cell values)"},
+		{Name: "rows", Description: "Rows with id, order, fields (the cell values), and omitted_fields: " + omittedNote},
 		{Name: "count", Description: "Total number of rows of the table as Baserow reports it"},
 		{Name: "page", Description: "Page number of this result"},
 		{Name: "size", Description: "Requested page size"},
@@ -98,6 +104,7 @@ var rowsGet = capability.Descriptor{
 		{Name: "order", Description: "Row order as Baserow reports it"},
 		{Name: "metadata", Description: "Row metadata with row_comment_count and row_comments_notification_mode; only with include_metadata"},
 		{Name: "fields", Description: "Cell values"},
+		{Name: "omitted_fields", Description: omittedNote},
 	},
 	Examples: []capability.Example{{Description: "Read one row", Arguments: json.RawMessage(`{"table_id":1,"row_id":1}`)}},
 }
@@ -109,6 +116,8 @@ type Row struct {
 	// Metadata is set only by rows.get when requested.
 	Metadata map[string]any `json:"metadata,omitempty"`
 	Fields   map[string]any `json:"fields"`
+	// OmittedFields names the lookup fields left out of Fields, by the key they would have had.
+	OmittedFields []string `json:"omitted_fields,omitempty"`
 }
 
 // RowsPage is one page of rows.
@@ -332,8 +341,10 @@ func takeMetadata(cells map[string]any) map[string]any {
 
 // maskLinks reduces every link entry that points into a table outside the allow-list to its row identifier,
 // so a display value never leaves through a table the connection may not read. A wildcard connection keeps
-// them. The fields are requested only when a row holds a link-shaped value at all. A link field whose other
-// table cannot be determined, or a link-shaped value without a known field, counts as not allowed.
+// them, and drops every lookup value whose link field leads outside the targets. The fields are requested
+// only when a row holds a collection-valued cell (a lookup is always one), which includes every link-shaped
+// value. A link field whose other table cannot be determined, or a link-shaped value without a known field,
+// counts as not allowed.
 func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName bool, rows []Row) error {
 	if c.scope.wildcard {
 		return nil
@@ -341,7 +352,7 @@ func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName
 	found := false
 	for _, row := range rows {
 		for _, cell := range row.Fields {
-			if _, ok := linkEntries(cell); ok {
+			if collectionCell(cell) {
 				found = true
 			}
 		}
@@ -363,15 +374,23 @@ func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
 		return
 	}
 	byKey := map[string]fieldJSON{}
+	byID := map[int64]fieldJSON{}
 	for _, field := range fields {
 		key := field.Name
 		if !byName {
 			key = "field_" + strconv.FormatInt(field.ID, 10)
 		}
 		byKey[key] = field
+		byID[field.ID] = field
 	}
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		for key, cell := range row.Fields {
+			if field, known := byKey[key]; known && c.lookupOutside(field, byID) {
+				delete(row.Fields, key)
+				row.OmittedFields = append(row.OmittedFields, bounded(key))
+				continue
+			}
 			ids, ok := linkEntries(cell)
 			if !ok {
 				continue
@@ -390,7 +409,37 @@ func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
 			}
 			row.Fields[key] = masked
 		}
+		slices.Sort(row.OmittedFields)
+		row.OmittedFields = slices.Compact(row.OmittedFields)
 	}
+}
+
+// collectionCell reports a non-empty array or an object: the shapes a lookup or link value takes.
+func collectionCell(cell any) bool {
+	switch typed := cell.(type) {
+	case []any:
+		return len(typed) > 0
+	case map[string]any:
+		return true
+	}
+	return false
+}
+
+// lookupOutside reports a lookup field whose link field leads into a table outside the targets or cannot be
+// determined (no link field, unknown link field, or a field that is not a link). Its values come from that
+// table, so they are left out of the output and no filter or sort may act on them.
+func (c *Client) lookupOutside(field fieldJSON, byID map[int64]fieldJSON) bool {
+	if c.scope.wildcard || field.Type != "lookup" {
+		return false
+	}
+	if field.ThroughFieldID == nil {
+		return true
+	}
+	link, ok := byID[*field.ThroughFieldID]
+	if !ok || link.Type != "link_row" {
+		return true
+	}
+	return link.LinkRowTableID == nil || !c.inScope(*link.LinkRowTableID)
 }
 
 // linkEntries reports the row identifiers of a cell that holds link-shaped entries: an array with at least one

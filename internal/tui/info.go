@@ -389,10 +389,17 @@ func (m *Model) infoView() string {
 			}
 		}
 	}
-	keys := footerText("esc close")
+	keys := footerKeys("{back} close")
+	scroll := ""
 	if position != "" {
 		lines = append(lines, styles.hint.Render(position))
-		keys = footerText("up/down scroll") + " · " + keys
+		scroll = footerText("up/down scroll") + " · "
+	}
+	// The copy key is named only where it fits beside the others on the line.
+	if withCopy := scroll + footerKeys("{copy} copy") + " · " + keys; lipgloss.Width(withCopy) <= inner {
+		keys = withCopy
+	} else {
+		keys = scroll + keys
 	}
 	lines = append(lines, "", keyHintGroupFoot(keys))
 	for i, l := range lines {
