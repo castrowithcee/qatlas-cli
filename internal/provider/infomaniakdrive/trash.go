@@ -189,7 +189,7 @@ func invokeTrashList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if limit == 0 {
 		limit = defaultListLimit
 	}
-	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareTrash(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,12 +250,16 @@ func invokeTrashFile(ctx context.Context, resolved *config.Resolved, secrets *se
 	var err error
 	if whole {
 		// An entry of the trash has no place in a subtree any more.
-		client, err = prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
+		client, err = prepareTrash(ctx, resolved, secrets, red, op, input.DriveID)
 	} else {
 		if err := protectTarget(resolved, input.DriveID, input.FileID); err != nil {
 			return nil, err
 		}
 		client, err = prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
+		if err == nil {
+			// Trashing a folder takes everything below it along, excluded objects included.
+			err = client.refuseAncestor(ctx, op, input.DriveID, input.FileID)
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -306,7 +310,7 @@ func invokeTrashRestore(ctx context.Context, resolved *config.Resolved, secrets 
 	if !validObjectID(input.DestinationID) {
 		return nil, invalidRequest("destination_id must be a positive integer")
 	}
-	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareTrash(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +336,7 @@ func invokeTrashEmpty(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	client, err := prepareWhole(ctx, resolved, secrets, red, op, input.DriveID)
+	client, err := prepareTrash(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,4 +356,25 @@ func (c *Client) trashChange(ctx context.Context, op, method, path string, body 
 	}
 	change.FileID, change.Entry = fileID, nil
 	return change, nil
+}
+
+// prepareTrash is prepareWhole for the trash tools. A trash entry has no known place any more, so a drive
+// with excluded files or folders cannot tell whether an entry belonged to an excluded folder: the tool is
+// refused before the secret is read, with the message of a drive bound only as a subtree.
+func prepareTrash(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	op string, driveID int64) (*Client, error) {
+	if err := selectDrive(resolved, driveID); err != nil {
+		return nil, err
+	}
+	if err := requireWholeDrive(resolved, driveID); err != nil {
+		return nil, err
+	}
+	bound, err := scopeOf(resolved)
+	if err != nil {
+		return nil, providerError("open", err.Error())
+	}
+	if bound.hasFileExcludes(driveID) {
+		return nil, invalidRequest(needsWholeDrive)
+	}
+	return prepare(ctx, resolved, secrets, red, op, driveID)
 }
