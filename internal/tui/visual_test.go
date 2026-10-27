@@ -91,6 +91,7 @@ func visualSetup(t *testing.T, noColor bool) {
 	setLanguage(uiprefs.LanguageEnglish)
 	time.Local = time.UTC
 	setProfile(profileTrueColor)
+	termFg, termBg = nil, nil
 	if noColor {
 		t.Setenv("NO_COLOR", "1")
 	} else {
@@ -107,7 +108,7 @@ var visualRoles = map[string][]string{
 
 // visualModel builds the demo editor in the current working directory: an encrypted, unlocked vault holding
 // a placeholder secret for every credential of testdata/visual/config.yaml, and the demo invoke log.
-func visualModel(t *testing.T, fixtures string, width, height int, theme, background string) *Model {
+func visualModel(t *testing.T, fixtures string, width, height int, theme string) *Model {
 	t.Helper()
 	cfg, err := os.ReadFile(filepath.Join(fixtures, "config.yaml"))
 	mustNoError(t, err)
@@ -128,8 +129,8 @@ func visualModel(t *testing.T, fixtures string, width, height int, theme, backgr
 	m.now = func() time.Time { return visualNow }
 	m.logs = newLogView(visualNow)
 	m.prefs = uiprefs.Default()
-	m.prefs.Theme, m.prefs.Background = theme, background
-	applyColorScheme(theme, background)
+	m.prefs.Theme = theme
+	applyTheme(theme)
 	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	m.section = sectionOverview
 	m.screen = screenNav
@@ -143,7 +144,6 @@ type visualShot struct {
 	name          string
 	width, height int
 	theme         string
-	background    string
 	noColor       bool
 	show          func(t *testing.T, m *Model)
 }
@@ -160,7 +160,7 @@ func activityHeatmap(t *testing.T, m *Model) {
 }
 
 func visualShots() []visualShot {
-	dark, term := uiprefs.ThemeDark, uiprefs.BackgroundTerminal
+	dark, light := uiprefs.ThemeQatlasDark, uiprefs.ThemeQatlasLight
 	overview := func(*testing.T, *Model) {}
 	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
 	activityTable := func(t *testing.T, m *Model) {
@@ -172,66 +172,66 @@ func visualShots() []visualShot {
 	}
 	activityDetails := func(t *testing.T, m *Model) { activityTable(t, m); pump(t, m, "s") }
 	return []visualShot{
-		{"01-overview", 150, 42, dark, term, false, overview},
-		{"02-connections", 150, 42, dark, term, false, connections},
-		{"03-connection-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"01-overview", 150, 42, dark, false, overview},
+		{"02-connections", 150, 42, dark, false, connections},
+		{"03-connection-form", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "enter")
 		}},
-		{"04-connection-delete", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"04-connection-delete", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "d")
 		}},
-		{"05-activity-table", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"05-activity-table", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			pump(t, m, "3")
 			for m.logs.mode != logModeAll {
 				m.logs.focus = logFocusMode
 				pump(t, m, "right")
 			}
 		}},
-		{"06-activity-heatmap", 150, 42, dark, term, false, activityHeatmap},
-		{"07-palette", 150, 42, dark, term, false, func(t *testing.T, m *Model) { press(t, m, ":") }},
-		{"08-library", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
-		{"09-access", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionTokens) }},
-		{"10-settings", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionGeneral) }},
-		{"11-overview", 80, 24, dark, term, false, overview},
-		{"12-connections", 80, 24, dark, term, false, connections},
-		{"13-overview-light", 150, 42, uiprefs.ThemeLight, term, false, overview},
-		{"14-overview-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, overview},
-		{"15-overview-no-color", 150, 42, dark, term, true, overview},
-		{"16-connection-form-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) {
+		{"06-activity-heatmap", 150, 42, dark, false, activityHeatmap},
+		{"07-palette", 150, 42, dark, false, func(t *testing.T, m *Model) { press(t, m, ":") }},
+		{"08-library", 150, 42, dark, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"09-access", 150, 42, dark, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionTokens) }},
+		{"10-settings", 150, 42, dark, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionGeneral) }},
+		{"11-overview", 80, 24, dark, false, overview},
+		{"12-connections", 80, 24, dark, false, connections},
+		{"13-overview-light", 150, 42, light, false, overview},
+		{"14-overview-qatlas-background", 150, 42, dark, false, overview},
+		{"15-overview-no-color", 150, 42, dark, true, overview},
+		{"16-connection-form-compact", 80, 24, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "enter")
 		}},
-		{"17-service-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"17-service-form", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionServices)
 			m.openForm("")
 		}},
-		{"18-credential-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"18-credential-form", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionCredentials)
 			m.openForm("")
 		}},
-		{"19-token-form", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"19-token-form", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionTokens)
 			m.openForm("")
 		}},
-		{"20-setup-step", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"20-setup-step", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			m.startSetup()
 			pump(t, m, "enter")
 		}},
-		{"21-connection-form-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
+		{"21-connection-form-no-color", 150, 42, dark, true, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "enter")
 		}},
-		{"22-connection-details", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"22-connection-details", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "down")
 			pump(t, m, "down")
 			pump(t, m, "tab")
 			pump(t, m, "right")
 		}},
-		{"23-connection-raw", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"23-connection-raw", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "down")
 			pump(t, m, "down")
@@ -239,21 +239,21 @@ func visualShots() []visualShot {
 			pump(t, m, "right")
 			pump(t, m, "right")
 		}},
-		{"30-activity-details", 150, 42, dark, term, false, activityDetails},
-		{"31-activity-table-no-color", 150, 42, dark, term, true, activityTable},
-		{"32-activity-heatmap-no-color", 150, 42, dark, term, true, activityHeatmap},
-		{"33-activity-table", 80, 24, dark, term, false, activityTable},
-		{"34-activity-heatmap", 80, 24, dark, term, false, activityHeatmap},
-		{"35-activity-empty", 150, 42, dark, term, false, func(t *testing.T, m *Model) { pump(t, m, "3") }},
-		{"50-provider-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"30-activity-details", 150, 42, dark, false, activityDetails},
+		{"31-activity-table-no-color", 150, 42, dark, true, activityTable},
+		{"32-activity-heatmap-no-color", 150, 42, dark, true, activityHeatmap},
+		{"33-activity-table", 80, 24, dark, false, activityTable},
+		{"34-activity-heatmap", 80, 24, dark, false, activityHeatmap},
+		{"35-activity-empty", 150, 42, dark, false, func(t *testing.T, m *Model) { pump(t, m, "3") }},
+		{"50-provider-picker", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionConnections)
 			m.openForm("")
 			focusField(t, m, providerLabel)
 			pump(t, m, "enter")
 			pump(t, m, "down", "down")
 		}},
-		{"51-target-picker", 150, 42, dark, term, false, visualTargetPicker},
-		{"52-tool-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"51-target-picker", 150, 42, dark, false, visualTargetPicker},
+		{"52-tool-picker", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openEntryForm(t, m, sectionConnections, "wiki-main")
 			focusField(t, m, accessLabel)
 			selectChoice(t, m, accessTools)
@@ -261,63 +261,63 @@ func visualShots() []visualShot {
 			pump(t, m, "enter")
 			pump(t, m, " ", "down", "down", "down", "down", "down", "right", "down", " ", "down", " ")
 		}},
-		{"53-setup-summary", 150, 42, dark, term, false, visualSetupSummary},
-		{"54-template-picker", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"53-setup-summary", 150, 42, dark, false, visualSetupSummary},
+		{"54-template-picker", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionConnections)
 			m.askSetupTemplate()
 			pump(t, m, "down", "enter")
 		}},
-		{"24-connection-details-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) {
+		{"24-connection-details-no-color", 150, 42, dark, true, func(t *testing.T, m *Model) {
 			connections(t, m)
 			pump(t, m, "down")
 			pump(t, m, "down")
 			pump(t, m, "tab")
 			pump(t, m, "right")
 		}},
-		{"40-tokens", 150, 42, dark, term, false, func(t *testing.T, m *Model) { visualTokens(t, m) }},
-		{"41-approvals", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"40-tokens", 150, 42, dark, false, func(t *testing.T, m *Model) { visualTokens(t, m) }},
+		{"41-approvals", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionApprovals)
 		}},
-		{"42-approval-detail", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"42-approval-detail", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			mustNoError(t, os.Chtimes("config.yaml", visualNow, visualNow))
 			openSectionByName(t, m, sectionApprovals)
 			pump(t, m, "enter")
 		}},
-		{"44-library-credentials", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"44-library-credentials", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionCredentials)
 		}},
-		{"45-settings-vault", 150, 42, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionVault) }},
-		{"46-help", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"45-settings-vault", 150, 42, dark, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionVault) }},
+		{"46-help", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			press(t, m, "?")
 		}},
-		{"47-info", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"47-info", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionGeneral)
 			press(t, m, "i")
 		}},
-		{"48-library-no-color", 150, 42, dark, term, true, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
-		{"49-library-compact", 80, 24, dark, term, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
-		{"55-export", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"48-library-no-color", 150, 42, dark, true, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"49-library-compact", 80, 24, dark, false, func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices) }},
+		{"55-export", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			press(t, m, ":")
 			typeText(t, m, "export")
 			pump(t, m, "enter")
 			typeText(t, m, visualPassphrase)
 			pump(t, m, "enter")
 		}},
-		{"57-selftest", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"57-selftest", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			m.selftest.scenarios = fakeScenarios("alpha")
 			m.selftest.run = func(_ context.Context, o selftest.Options) (*selftest.Report, error) {
 				return fakeReport(o.Scenario), nil
 			}
 			drainSelftest(m, startSelftestCommand(t, m, "selftest alpha"))
 		}},
-		{"58-targets", 150, 42, dark, term, false, func(t *testing.T, m *Model) {
+		{"58-targets", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			connections(t, m)
 			m.list.selectName("code-planning")
 			pump(t, m, "enter")
 			openTargetList(t, m)
 		}},
-		{"59-resize", 39, 12, dark, term, false, overview},
+		{"59-resize", 39, 12, dark, false, overview},
 	}
 }
 
@@ -329,17 +329,52 @@ type visualProfileShot struct {
 
 // visualProfileShots are the colour-profile variants of the Overview and the Connections list, numbered 60 to 69.
 func visualProfileShots() []visualProfileShot {
-	dark, term := uiprefs.ThemeDark, uiprefs.BackgroundTerminal
+	dark, light := uiprefs.ThemeQatlasDark, uiprefs.ThemeQatlasLight
 	overview := func(*testing.T, *Model) {}
 	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
 	return []visualProfileShot{
-		{visualShot{"60-overview-256", 150, 42, dark, term, false, overview}, profile256},
-		{visualShot{"61-connections-256", 150, 42, dark, term, false, connections}, profile256},
-		{visualShot{"62-overview-16", 150, 42, dark, term, false, overview}, profile16},
-		{visualShot{"63-connections-16", 150, 42, dark, term, false, connections}, profile16},
-		{visualShot{"64-connections-light", 150, 42, uiprefs.ThemeLight, term, false, connections}, profileTrueColor},
-		{visualShot{"65-connections-qatlas-background", 150, 42, dark, uiprefs.BackgroundQatlas, false, connections}, profileTrueColor},
-		{visualShot{"66-connections-no-color", 150, 42, dark, term, true, connections}, profileTrueColor},
+		{visualShot{"60-overview-256", 150, 42, dark, false, overview}, profile256},
+		{visualShot{"61-connections-256", 150, 42, dark, false, connections}, profile256},
+		{visualShot{"62-overview-16", 150, 42, dark, false, overview}, profile16},
+		{visualShot{"63-connections-16", 150, 42, dark, false, connections}, profile16},
+		{visualShot{"64-connections-light", 150, 42, light, false, connections}, profileTrueColor},
+		{visualShot{"65-connections-qatlas-background", 150, 42, dark, false, connections}, profileTrueColor},
+		{visualShot{"66-connections-no-color", 150, 42, dark, true, connections}, profileTrueColor},
+	}
+}
+
+// visualTerminalShot is a snapshot of the terminal theme under the answer of a terminal with foreground fg and
+// background bg; without them the terminal does not answer.
+type visualTerminalShot struct {
+	visualProfileShot
+	fg, bg string
+}
+
+// visualTerminalShots are the snapshots of the terminal theme, numbered 70 to 79: a dark and a light terminal,
+// one that does not answer, and a dark one with 256 colours.
+func visualTerminalShots() []visualTerminalShot {
+	const darkFg, darkBg, lightFg, lightBg = "#cdd6f4", "#1e1e2e", "#24292f", "#ffffff"
+	overview := func(*testing.T, *Model) {}
+	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	details := func(t *testing.T, m *Model) {
+		connections(t, m)
+		pump(t, m, "down", "down", "tab", "right")
+	}
+	settings := func(t *testing.T, m *Model) { openSectionByName(t, m, sectionGeneral) }
+	shot := func(name string, show func(*testing.T, *Model), profile colorProfile, fg, bg string) visualTerminalShot {
+		return visualTerminalShot{visualProfileShot{visualShot{name, 150, 42, uiprefs.ThemeTerminal, false, show}, profile}, fg, bg}
+	}
+	return []visualTerminalShot{
+		shot("70-overview-terminal-dark", overview, profileTrueColor, darkFg, darkBg),
+		shot("71-connections-terminal-dark", connections, profileTrueColor, darkFg, darkBg),
+		shot("72-connection-details-terminal-dark", details, profileTrueColor, darkFg, darkBg),
+		shot("73-settings-terminal-dark", settings, profileTrueColor, darkFg, darkBg),
+		shot("74-activity-heatmap-terminal-dark", activityHeatmap, profileTrueColor, darkFg, darkBg),
+		shot("75-overview-terminal-light", overview, profileTrueColor, lightFg, lightBg),
+		shot("76-connections-terminal-light", connections, profileTrueColor, lightFg, lightBg),
+		shot("77-overview-terminal-no-answer", overview, profileTrueColor, "", ""),
+		shot("78-connections-terminal-no-answer", connections, profileTrueColor, "", ""),
+		shot("79-connections-terminal-256", connections, profile256, darkFg, darkBg),
 	}
 }
 
@@ -352,17 +387,23 @@ func TestVisualSnapshots(t *testing.T) {
 		mustNoError(t, err)
 		mustNoError(t, os.MkdirAll(htmlDir, 0o755))
 	}
-	shots := make([]visualProfileShot, 0, 64)
+	shots := make([]visualTerminalShot, 0, 80)
 	for _, shot := range visualShots() {
-		shots = append(shots, visualProfileShot{shot, profileTrueColor})
+		shots = append(shots, visualTerminalShot{visualProfileShot: visualProfileShot{shot, profileTrueColor}})
 	}
-	shots = append(shots, visualProfileShots()...)
-	for _, ps := range shots {
-		shot := ps.visualShot
+	for _, shot := range visualProfileShots() {
+		shots = append(shots, visualTerminalShot{visualProfileShot: shot})
+	}
+	shots = append(shots, visualTerminalShots()...)
+	for _, ts := range shots {
+		shot := ts.visualShot
 		t.Run(shot.name, func(t *testing.T) {
 			visualSetup(t, shot.noColor)
-			setProfile(ps.profile)
-			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme, shot.background)
+			setProfile(ts.profile)
+			m := visualModel(t, fixtures, shot.width, shot.height, shot.theme)
+			if ts.fg != "" {
+				answerColours(t, m, ts.fg, ts.bg)
+			}
 			shot.show(t, m)
 			view := m.render()
 			if strings.Contains(view, "\r") {
@@ -386,7 +427,10 @@ func TestVisualSnapshots(t *testing.T) {
 			}
 			if htmlDir != "" {
 				pal := htmlDark
-				if shot.theme == uiprefs.ThemeLight {
+				switch {
+				case ts.fg != "":
+					pal = htmlPalette{htmlDark.page, ts.bg, ts.fg}
+				case shot.theme == uiprefs.ThemeQatlasLight:
 					pal = htmlLight
 				}
 				page := ansiToHTML(view, name, pal)
