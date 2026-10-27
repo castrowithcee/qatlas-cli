@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
@@ -130,21 +129,20 @@ func TestRecycleBinMutationsReportUncertaintyWithoutRetry(t *testing.T) {
 	const hint = "this change may have taken effect"
 	for name, tt := range map[string]struct {
 		handler http.HandlerFunc
-		timeout time.Duration
+		arrival bool
 	}{
-		"5xx": {func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0},
-		"timeout": {func(w http.ResponseWriter, r *http.Request) {
-			select {
-			case <-r.Context().Done():
-			case <-time.After(2 * time.Second):
-			}
-		}, 500 * time.Millisecond},
+		"5xx":     {func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, false},
+		"timeout": {nil, true},
 	} {
 		t.Run(name, func(t *testing.T) {
+			handler, newCtx := tt.handler, func() context.Context { return context.Background() }
+			if tt.arrival {
+				handler, newCtx = cancelOnArrival(t)
+			}
 			rec := &recorder{}
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				rec.record(r)
-				tt.handler(w, r)
+				handler(w, r)
 			}))
 			defer server.Close()
 			c := newClient(t, server.URL, nil)
@@ -152,13 +150,11 @@ func TestRecycleBinMutationsReportUncertaintyWithoutRetry(t *testing.T) {
 				func(ctx context.Context) error { _, err := c.RestoreFromRecycleBin(ctx, 4); return err },
 				func(ctx context.Context) error { _, err := c.DestroyFromRecycleBin(ctx, 4); return err },
 			} {
-				ctx := context.Background()
-				if tt.timeout > 0 {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, tt.timeout)
-					defer cancel()
+				err := call(newCtx())
+				if tt.arrival {
+					wantTimeout(t, err)
 				}
-				if err := call(ctx); err == nil || !strings.Contains(err.Error(), hint) {
+				if err == nil || !strings.Contains(err.Error(), hint) {
 					t.Errorf("err = %v, want uncertainty hint", err)
 				}
 			}

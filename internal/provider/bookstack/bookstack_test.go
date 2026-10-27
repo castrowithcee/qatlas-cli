@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -57,6 +58,56 @@ type recorder struct {
 	paths   []string
 	queries []string
 	auth    []string
+}
+
+// cancelOnArrival returns a handler that blocks until its request is cancelled, and a constructor for call
+// contexts that expire with a deadline error only once the handler has seen the request. A wall-clock deadline
+// would also cover connecting and the TLS handshake, so under load it could fire before the request arrived.
+func cancelOnArrival(t *testing.T) (http.HandlerFunc, func() context.Context) {
+	t.Helper()
+	var mu sync.Mutex
+	var current chan struct{}
+	handler := func(_ http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		arrived := current
+		mu.Unlock()
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+		// The server notices a dropped connection only after it has read the request body. Aborting instead of
+		// returning keeps a response from ever reaching the client.
+		_, _ = io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+		panic(http.ErrAbortHandler)
+	}
+	newCtx := func() context.Context {
+		ctx, cancel := context.WithCancelCause(context.Background())
+		t.Cleanup(func() { cancel(nil) })
+		arrived := make(chan struct{}, 1)
+		mu.Lock()
+		current = arrived
+		mu.Unlock()
+		go func() {
+			select {
+			case <-arrived:
+				cancel(context.DeadlineExceeded)
+			case <-time.After(30 * time.Second):
+				cancel(context.DeadlineExceeded)
+			}
+		}()
+		return ctx
+	}
+	return handler, newCtx
+}
+
+// wantTimeout fails unless err is a provider error of the timeout class.
+func wantTimeout(t *testing.T, err error) {
+	t.Helper()
+	var perr *provider.Error
+	if !errors.As(err, &perr) || perr.Class != provider.ClassTimeout {
+		t.Errorf("error = %v, want class %s", err, provider.ClassTimeout)
+	}
 }
 
 func (r *recorder) record(req *http.Request) {
@@ -506,8 +557,12 @@ func TestValidationNamesOnlyArguments(t *testing.T) {
 
 func TestMutationsReportUncertainty(t *testing.T) {
 	const hint = "this change may have taken effect, read the current state in BookStack before repeating it"
-	run := func(name string, handler http.HandlerFunc, ctxTimeout time.Duration, wantHint bool) {
+	run := func(name string, handler http.HandlerFunc, arrival bool, wantHint bool) {
 		t.Run(name, func(t *testing.T) {
+			newCtx := func() context.Context { return context.Background() }
+			if arrival {
+				handler, newCtx = cancelOnArrival(t)
+			}
 			rec := &recorder{}
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				rec.record(r)
@@ -524,13 +579,10 @@ func TestMutationsReportUncertainty(t *testing.T) {
 				func(ctx context.Context) error { return c.DeletePage(ctx, "1") },
 			}
 			for n, call := range calls {
-				ctx := context.Background()
-				if ctxTimeout > 0 {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, ctxTimeout)
-					defer cancel()
+				err := call(newCtx())
+				if arrival {
+					wantTimeout(t, err)
 				}
-				err := call(ctx)
 				// A delete reads no response body, so an unreadable body cannot fail it.
 				if n == 2 && name == "unreadable response" {
 					if err != nil {
@@ -539,7 +591,7 @@ func TestMutationsReportUncertainty(t *testing.T) {
 					continue
 				}
 				if err == nil || strings.Contains(err.Error(), hint) != wantHint {
-					t.Errorf("error = %v, hint wanted %v", err, wantHint)
+					t.Errorf("call %d error = %v, hint wanted %v", n, err, wantHint)
 				}
 			}
 			if methods, _, _, _ := rec.snapshot(); len(methods) != 3 {
@@ -547,18 +599,11 @@ func TestMutationsReportUncertainty(t *testing.T) {
 			}
 		})
 	}
-	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0, true)
-	// The handler answers long after the deadline, which only has to outlast the TLS handshake for the request
-	// to arrive.
-	run("timeout", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-r.Context().Done():
-		case <-time.After(2 * time.Second):
-		}
-	}, 500*time.Millisecond, true)
-	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, 0, true)
-	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, 0, false)
-	run("404 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }, 0, false)
+	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, false, true)
+	run("timeout", nil, true, true)
+	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, false, true)
+	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, false, false)
+	run("404 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }, false, false)
 }
 
 func TestReadResponseCap(t *testing.T) {
