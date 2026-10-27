@@ -11,8 +11,8 @@ import (
 )
 
 // The webhook tools read and delete existing webhooks at one of three levels: a repository, an organization,
-// or the account behind the token. No webhook is created, tested, or changed, and system webhooks are not
-// reached. A webhook ID is addressed inside the path of its owner, so the owner binding of the level is the
+// or the account behind the token. No webhook is created, tested, or changed; system webhooks are in
+// admin-webhooks. A webhook ID is addressed inside the path of its owner, so the owner binding of the level is the
 // proof; only the account level needs a read of the account first. The target address of a webhook is
 // untrusted text that is never fetched; the secret, the authorization header, and every config key outside
 // hookConfigMembers are never shown.

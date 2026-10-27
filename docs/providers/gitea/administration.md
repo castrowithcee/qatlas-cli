@@ -43,6 +43,8 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-unadopted.delete` | delete, listed only | both |
 | `admin-cron.list` | read | both |
 | `admin-cron.run` | execute | both |
+| `admin-webhooks.list`, `admin-webhooks.get` | read | both |
+| `admin-webhooks.delete` | delete, listed only | both |
 
 ## Binding
 
@@ -149,10 +151,19 @@ are in no setup profile, and are refused for any other name.
 `exec_times`; names and schedules are untrusted data. `admin-cron.run` starts one task now by the name the list
 reports; it is not idempotent and is in no setup profile.
 
+### System webhooks
+
+`admin-webhooks.list` and `admin-webhooks.get` read the system webhooks of the instance with the webhook object of
+[Accesses](accesses.md#webhooks): the same members, and no `authorization_header`, `secret`, or unlisted `config`
+key. Gitea alone takes the filter `type`; Forgejo refuses it as `invalid-request`.
+`admin-webhooks.get` refuses an answer for another webhook as `invalid-provider-response`. `admin-webhooks.delete`
+removes one webhook for good and is offered only by a connection whose `tools` list names it. Creating, changing,
+and pausing a system webhook are not offered, because a change without the events resets the configuration.
+
 ## Changes
 
 `admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`,
 `admin-user-keys`, `admin-user-badges`, `admin-access-tokens`, `admin-orgs`, `admin-repositories`,
-`admin-unadopted`, and `admin-cron` that change need confirmation, send exactly one request, and are never
-repeated; when the outcome is open, the message says that the change may have been applied. No tool of this group
-is in a setup profile.
+`admin-unadopted`, `admin-cron`, and `admin-webhooks` that change need confirmation, send exactly one request,
+and are never repeated; when the outcome is open, the message says that the change may have been applied. No tool
+of this group is in a setup profile.
