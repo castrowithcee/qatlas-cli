@@ -181,6 +181,11 @@ func TestOverviewCardSelectionAndClick(t *testing.T) {
 		m := demoOverview(t, false, 150, 42)
 		x, y := cellOf(t, m, "Credentials")
 		clickAt(t, m, x, y+offset)
+		if m.section != sectionOverview || m.overviewCursor < 0 {
+			t.Errorf("click %d line under the label: section = %v, want the first click to only mark", offset, m.section)
+		}
+		m.render()
+		clickAt(t, m, x, y+offset)
 		if m.section != sectionCredentials {
 			t.Errorf("click %d line under the label: section = %v, want Credentials", offset, m.section)
 		}

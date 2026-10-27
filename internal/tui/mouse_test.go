@@ -28,6 +28,18 @@ func cellOf(t *testing.T, m *Model, text string) (x, y int) {
 	return 0, 0
 }
 
+// clickOnRow clicks the first cell of text that stands left of the detail pane, in the rows of a list.
+func clickOnRow(t *testing.T, m *Model, text string) {
+	t.Helper()
+	for row, line := range frameLines(m) {
+		if at := strings.Index(line, text); at >= 0 && ansi.StringWidth(line[:at]) < m.listWidth() {
+			clickAt(t, m, ansi.StringWidth(line[:at]), row)
+			return
+		}
+	}
+	t.Fatalf("the rows show no %q:\n%s", text, ansi.Strip(m.render()))
+}
+
 // cellInRow is cellOf within one screen row.
 func cellInRow(t *testing.T, m *Model, row int, text string) int {
 	t.Helper()
@@ -165,9 +177,210 @@ func TestClickOnAListRowOpensItAndOnAGroupFoldsIt(t *testing.T) {
 	if len(m.list.matches) != before {
 		t.Fatalf("a second click left %d rows, want %d", len(m.list.matches), before)
 	}
-	clickOn(t, m, "wiki-main")
+	clickOnRow(t, m, "wiki-main")
+	if m.screen != screenList || m.editing != "" || markedRow(m) != "wiki-main" {
+		t.Fatalf("the first click on an entry: screen %v marked %q, want only the mark", m.screen, markedRow(m))
+	}
+	clickOnRow(t, m, "wiki-main")
 	if m.screen != screenForm || m.editing != "wiki-main" {
-		t.Fatalf("a click on an entry: screen %v editing %q, want its form", m.screen, m.editing)
+		t.Fatalf("a click on the marked entry: screen %v editing %q, want its form", m.screen, m.editing)
+	}
+}
+
+func markedRow(m *Model) string {
+	name, _ := m.list.selected()
+	return name
+}
+
+// The first click on a row of a list marks it, a click on another row marks that one, and only a click on the
+// row that was already marked opens it.
+func TestClickOnAnotherListRowOnlyMarksIt(t *testing.T) {
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionConnections)
+	m.render()
+	first := markedRow(m)
+	if first != "wiki-docs" {
+		t.Fatalf("the list opens on %q, want wiki-docs", first)
+	}
+	other := "tracker-triage"
+	clickOnRow(t, m, other)
+	if m.screen != screenList || markedRow(m) != other {
+		t.Fatalf("first click: screen %v marked %q, want the list with %q marked", m.screen, markedRow(m), other)
+	}
+	clickOnRow(t, m, first)
+	if m.screen != screenList || markedRow(m) != first {
+		t.Fatalf("click on another row: screen %v marked %q, want only %q marked", m.screen, markedRow(m), first)
+	}
+	clickOnRow(t, m, first)
+	if m.screen != screenForm || m.editing != first {
+		t.Fatalf("click on the marked row: screen %v editing %q, want %q open", m.screen, m.editing, first)
+	}
+}
+
+// A click from the tab line or the filter bar only takes the focus to the row, even if the cursor stood on it.
+func TestClickFromOutsideTheRowsOnTheMarkedRowOnlyMarks(t *testing.T) {
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionConnections)
+	m.render()
+	name := markedRow(m)
+	m.focusNav()
+	clickOnRow(t, m, name)
+	if m.screen != screenList || m.barFocus != 0 || m.editing != "" {
+		t.Fatalf("click from the tab line: screen %v bar %d editing %q, want the list with the focus on the rows", m.screen, m.barFocus, m.editing)
+	}
+	clickOn(t, m, "Sort:")
+	if m.barFocus == 0 && m.dd == nil {
+		t.Fatal("the click on the filter bar did nothing")
+	}
+	press(t, m, "esc")
+	m.render()
+	if m.barFocus == 0 {
+		m.barFocus = 1
+	}
+	clickOnRow(t, m, name)
+	if m.screen != screenList || m.barFocus != 0 || m.editing != "" {
+		t.Fatalf("click from the filter bar: screen %v bar %d editing %q, want only the focus on the row", m.screen, m.barFocus, m.editing)
+	}
+	clickOnRow(t, m, name)
+	if m.screen != screenForm || m.editing != name {
+		t.Fatalf("second click: screen %v editing %q, want %q open", m.screen, m.editing, name)
+	}
+}
+
+func TestClickOnALogRowMarksItAndASecondClickOpensIt(t *testing.T) {
+	m := sizedModel(heatModel(t, activityLog(t)), 120, 40)
+	m.logs.heat = false
+	m.logs.focus = logFocusRows
+	m.screen = screenLogs
+	m.setLogTab(logTabTable)
+	m.render()
+	clickOn(t, m, "2026-10-23 12:02")
+	if m.screen != screenLogs || m.logs.list.cursor != 2 {
+		t.Fatalf("first click: screen %v cursor %d, want the table with row 2 marked", m.screen, m.logs.list.cursor)
+	}
+	clickOn(t, m, "2026-10-23 12:01")
+	if m.screen != screenLogs || m.logs.list.cursor != 1 {
+		t.Fatalf("click on another row: screen %v cursor %d, want only row 1 marked", m.screen, m.logs.list.cursor)
+	}
+	clickOn(t, m, "2026-10-23 12:01")
+	if m.screen != screenLogDetail {
+		t.Fatalf("click on the marked row: screen %v, want the entry", m.screen)
+	}
+}
+
+func TestClickFromTheTabLineOnTheMarkedLogRowOnlyMarks(t *testing.T) {
+	m := sizedModel(heatModel(t, activityLog(t)), 120, 40)
+	m.logs.heat = false
+	m.logs.focus = logFocusRows
+	m.screen = screenLogs
+	m.setLogTab(logTabTable)
+	m.render()
+	m.focusNav()
+	clickOn(t, m, "2026-10-19 12:00")
+	if m.screen != screenLogs || m.logs.focus != logFocusRows {
+		t.Fatalf("click from the tab line: screen %v focus %v, want the rows", m.screen, m.logs.focus)
+	}
+	m.logs.focus = logFocusTabs
+	m.render()
+	clickOn(t, m, "2026-10-19 12:00")
+	if m.screen != screenLogs || m.logs.focus != logFocusRows {
+		t.Fatalf("click from the log tabs: screen %v focus %v, want only the focus on the rows", m.screen, m.logs.focus)
+	}
+	clickOn(t, m, "2026-10-19 12:00")
+	if m.screen != screenLogDetail {
+		t.Fatalf("second click: screen %v, want the entry", m.screen)
+	}
+}
+
+func TestClickOnATemplateRowMarksItAndASecondClickTakesIt(t *testing.T) {
+	m, _ := templateModel(t, "alpha", "beta", "gamma")
+	openSectionByName(t, m, sectionConnections)
+	m.screen = screenList
+	press(t, m, "n")
+	clickOn(t, m, "from")
+	if m.template == nil || !m.template.picking {
+		t.Fatal("the list of entries did not open")
+	}
+	m.render()
+	clickOn(t, m, "beta")
+	if m.screen != screenTemplate || selectedTemplate(m) != "beta" {
+		t.Fatalf("first click: screen %v marked %q, want only beta marked", m.screen, selectedTemplate(m))
+	}
+	clickOn(t, m, "gamma")
+	if m.screen != screenTemplate || selectedTemplate(m) != "gamma" {
+		t.Fatalf("click on another row: screen %v marked %q, want only gamma marked", m.screen, selectedTemplate(m))
+	}
+	clickOn(t, m, "gamma")
+	if m.screen == screenTemplate {
+		t.Fatal("a click on the marked row left the list of entries open")
+	}
+}
+
+func selectedTemplate(m *Model) string {
+	name, _ := m.templateList.selected()
+	return name
+}
+
+func TestClickOnAProviderMarksItAndASecondClickChoosesIt(t *testing.T) {
+	m := sizedModel(groupModel(t), 120, 40)
+	openSectionByName(t, m, sectionServices)
+	pressNew(t, m)
+	clickOn(t, m, labelText(providerLabel))
+	if m.screen != screenProviders {
+		t.Fatalf("the provider choice is screen %v here", m.screen)
+	}
+	m.render()
+	before, _ := m.providers.list.selected()
+	x, y := cellOf(t, m, "Tracker")
+	clickAt(t, m, x, y)
+	if m.screen != screenProviders {
+		t.Fatalf("first click: screen %v, want the table", m.screen)
+	}
+	marked, _ := m.providers.list.selected()
+	if marked == before && before != "tracker" {
+		t.Fatalf("the click did not mark the row: %q", marked)
+	}
+	clickAt(t, m, x, y)
+	if m.screen != screenForm {
+		t.Fatalf("click on the marked row: screen %v, want the form", m.screen)
+	}
+}
+
+func TestClickOnAPickerValueMarksItAndASecondClickChoosesIt(t *testing.T) {
+	m, _, _ := newModel(t)
+	names := numberedConnections(60)
+	seedConnections(t, m, names...)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openDefaultForm(t, m)
+	press(t, m, "/")
+	if m.screen != screenPicker {
+		t.Fatalf("screen %v, want the picker", m.screen)
+	}
+	m.render()
+	clickOn(t, m, "conn-003")
+	if m.screen != screenPicker || m.picker.cursor != 3 {
+		t.Fatalf("first click: screen %v cursor %d, want the picker with row 3 marked", m.screen, m.picker.cursor)
+	}
+	clickOn(t, m, "conn-003")
+	if m.screen != screenForm || m.fieldValue("connection") != "conn-003" {
+		t.Fatalf("click on the marked value: screen %v value %q, want conn-003 chosen", m.screen, m.fieldValue("connection"))
+	}
+}
+
+func TestClickOnATickPickerValueMarksItAndASecondClickTicksIt(t *testing.T) {
+	m, _, _ := groupedPicker(t, 100)
+	group := m.pickerGroups.groups[0]
+	m.render()
+	clickOn(t, m, "Pull requests (26)")
+	if len(m.pickerMarks) != 0 {
+		t.Fatalf("the first click ticked %d tools", len(m.pickerMarks))
+	}
+	if got, _ := m.picker.selected(); got == groupRowPrefix+group.ID {
+		t.Fatalf("the first click left the mark on the first group")
+	}
+	clickOn(t, m, "Pull requests (26)")
+	if len(m.pickerMarks) != 26 {
+		t.Fatalf("the click on the marked group ticked %d tools, want 26", len(m.pickerMarks))
 	}
 }
 
@@ -175,7 +388,11 @@ func TestClickOnARowFromTheTabLineTakesTheFocus(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	m.openSection(sectionConnections)
 	m.screen = screenNav
-	clickOn(t, m, "tracker-triage")
+	clickOnRow(t, m, "tracker-triage")
+	if m.screen != screenList || markedRow(m) != "tracker-triage" || m.editing != "" {
+		t.Fatalf("screen %v marked %q editing %q, want the list with the row marked", m.screen, markedRow(m), m.editing)
+	}
+	clickOnRow(t, m, "tracker-triage")
 	if m.screen != screenForm || m.editing != "tracker-triage" {
 		t.Fatalf("screen %v editing %q", m.screen, m.editing)
 	}
@@ -234,6 +451,9 @@ func TestClickOnAChoiceRowOpensItsChoices(t *testing.T) {
 	// A click on a value of the table chooses it, as enter does.
 	x, y := cellOf(t, m, "Tracker")
 	clickAt(t, m, x, y)
+	if m.screen == screenProviders {
+		clickAt(t, m, x, y)
+	}
 	if m.screen != screenForm {
 		t.Errorf("a click on a provider: screen %v, want the form", m.screen)
 	}
@@ -242,7 +462,7 @@ func TestClickOnAChoiceRowOpensItsChoices(t *testing.T) {
 func TestClickOnASectionOfAFormMovesTheFocus(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	openSectionByName(t, m, sectionConnections)
-	clickOn(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
 	m.render()
 	if m.screen != screenForm || m.sectionListWidth == 0 {
 		t.Fatalf("screen %v, section list width %d; want a connection form with its section list", m.screen, m.sectionListWidth)
@@ -265,7 +485,7 @@ func TestClickOnASectionOfAFormMovesTheFocus(t *testing.T) {
 func TestClickOnASectionHeadingInANarrowTerminal(t *testing.T) {
 	m := sizedModel(groupModel(t), 90, 60)
 	openSectionByName(t, m, sectionConnections)
-	clickOn(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
 	m.render()
 	entries := m.formSections()
 	if m.sectionListWidth != 0 || len(entries) < 2 {
@@ -335,7 +555,7 @@ func TestClickOnAModalButtonAnswersTheQuestion(t *testing.T) {
 func TestClickOnAConfirmationAnswersWithTheUsualKey(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	openSectionByName(t, m, sectionServices)
-	clickOn(t, m, "wiki-main")
+	clickOnRow(t, m, "wiki-main")
 	press(t, m, "esc")
 	press(t, m, "d")
 	if m.screen != screenConfirm {
@@ -369,7 +589,8 @@ func TestTheWheelScrollsAListAndAForm(t *testing.T) {
 		t.Errorf("after the wheel up the cursor is %d, want %d", m.list.cursor, before)
 	}
 
-	clickOn(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
 	m.render()
 	if m.screen != screenForm {
 		t.Fatalf("screen %v", m.screen)
@@ -561,6 +782,10 @@ func TestClickOnAnOverviewLineOpensItsArea(t *testing.T) {
 	m.openSection(sectionOverview)
 	m.screen = screenNav
 	clickOn(t, m, sectionServices.title())
+	if m.section != sectionOverview || m.screen != screenList {
+		t.Fatalf("the first click: section %v screen %v, want the Overview with the line marked", m.section, m.screen)
+	}
+	clickOn(t, m, sectionServices.title())
 	if m.section != sectionServices {
 		t.Errorf("section = %v, want Services", m.section)
 	}
@@ -639,7 +864,7 @@ func TestDialogButtonsWorkInTheFullScreenFallback(t *testing.T) {
 
 	// A destructive question is still asked, and answered only by its own buttons.
 	openSectionByName(t, m, sectionServices)
-	clickOn(t, m, "wiki-main")
+	clickOnRow(t, m, "wiki-main")
 	press(t, m, "esc", "d")
 	if m.screen != screenConfirm {
 		t.Fatalf("screen %v, want the confirmation", m.screen)
@@ -699,7 +924,8 @@ func TestTheWheelStopsAtTheEnds(t *testing.T) {
 		t.Errorf("the wheel down at the end of the list moved the cursor to %d", m.list.cursor)
 	}
 
-	clickOn(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
+	clickOnRow(t, m, "wiki-docs")
 	m.render()
 	if m.screen != screenForm {
 		t.Fatalf("screen %v", m.screen)
