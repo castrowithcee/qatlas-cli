@@ -80,3 +80,15 @@ func TestTargetsOf(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludesOf(t *testing.T) {
+	if got := provider.ExcludesOf(&config.Resolved{Targets: []string{"a"}, Exclude: []string{"x", "y"}}); !reflect.DeepEqual(got, []string{"x", "y"}) {
+		t.Errorf("got %v", got)
+	}
+	if got := provider.ExcludesOf(&config.Resolved{Target: "a"}); len(got) != 0 {
+		t.Errorf("without exclusions got %v", got)
+	}
+	if got := provider.TargetsOf(&config.Resolved{Targets: []string{"a"}, Exclude: []string{"x"}}); !reflect.DeepEqual(got, []string{"a"}) {
+		t.Errorf("TargetsOf contains exclusions: %v", got)
+	}
+}

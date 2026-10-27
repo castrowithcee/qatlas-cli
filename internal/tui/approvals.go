@@ -77,7 +77,7 @@ func approvalSummary(c approval.Change) string {
 // means.
 var approvalFields = []string{
 	approval.FieldCredential, approval.FieldProvider, approval.FieldOrigin,
-	approval.FieldEffects, approval.FieldTargets, approval.FieldTools, approval.FieldPaths,
+	approval.FieldEffects, approval.FieldTargets, approval.FieldExclude, approval.FieldTools, approval.FieldPaths,
 	approval.FieldFiles, approval.FieldForward, approval.FieldState, approval.FieldActiveUntil,
 }
 
@@ -127,6 +127,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		approval.FieldOrigin:      choiceText(approval.OriginText(c.After.Origin)),
 		approval.FieldEffects:     approvalList(c.After.Effects),
 		approval.FieldTargets:     approvalList(c.After.Targets),
+		approval.FieldExclude:     approvalList(c.After.Exclude),
 		approval.FieldTools:       approvalTools(c.After.Tools),
 		approval.FieldPaths:       approval.PathsText(c.After.Paths),
 		approval.FieldFiles:       approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
@@ -137,6 +138,10 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 	rows := make([]approvalRow, 0, len(approvalFields))
 	for _, field := range approvalFields {
 		f, ok := changed[field]
+		// Most connections exclude nothing, so the row appears only once there is something to say.
+		if field == approval.FieldExclude && !ok && len(c.After.Exclude) == 0 {
+			continue
+		}
 		switch {
 		case ok && f.IsListChange():
 			rows = append(rows, fieldRow(field, approvalCounts(f)))

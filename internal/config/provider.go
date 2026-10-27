@@ -142,6 +142,10 @@ func (t TargetMetadata) knowsForm(form string) bool {
 // Unlisted says that the provider offers no list of the kind (a service without an index of its chats, say):
 // a surface offers no list for it, though entries of it can still come from a resolved web address. The zero
 // value is a listed kind.
+//
+// Excludable says that the provider reads an exclusion in a form of the kind (see Connection.Exclude): a
+// connection can take entries of the kind out of what its targets reach. It declares a promise of the
+// provider and widens nothing; without it on any kind, a connection may not carry exclusions at all.
 type TargetKind struct {
 	Name        string
 	Description string
@@ -150,6 +154,7 @@ type TargetKind struct {
 	Nested      bool
 	Top         bool
 	Unlisted    bool
+	Excludable  bool
 }
 
 // ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.
@@ -257,6 +262,76 @@ func (t TargetMetadata) ValidTarget(kind, target string) bool {
 	segments := strings.Split(target, "/")
 	fits := slices.ContainsFunc(k.Forms, func(form string) bool { return FitsForm(segments, strings.Split(form, "/")) })
 	return fits && (t.Validate == nil || t.Validate(target) == nil)
+}
+
+// Excludes reports whether the provider declares exclusions for at least one kind of target.
+func (t TargetMetadata) Excludes() bool {
+	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool { return kind.Excludable })
+}
+
+// ExcludeFault names why an exclusion of a connection is invalid.
+type ExcludeFault int
+
+const (
+	// ExcludeEmpty is a blank entry.
+	ExcludeEmpty ExcludeFault = iota + 1
+	// ExcludeDuplicate repeats an earlier entry.
+	ExcludeDuplicate
+	// ExcludeIsTarget equals a target of the connection.
+	ExcludeIsTarget
+	// ExcludeWildcard is the provider's wildcard or has a segment "*".
+	ExcludeWildcard
+	// ExcludeForm is not spelled in a form of an excludable kind or fails the provider's Validate.
+	ExcludeForm
+)
+
+// ExcludeFinding is one invalid entry of an exclude list: its position and why it is invalid.
+type ExcludeFinding struct {
+	Index int
+	Fault ExcludeFault
+}
+
+// CheckExcludes returns the invalid entries of an exclude list next to the targets of the connection, in
+// list order, at most one finding per entry. It is the one place that decides what an exclusion may be; it
+// compares only the spelling, so an exclusion that lies outside every target or matches nothing is valid. A
+// provider without an excludable kind accepts no entry, which the caller reports once instead.
+func (t TargetMetadata) CheckExcludes(excludes, targets []string) []ExcludeFinding {
+	var out []ExcludeFinding
+	seen := map[string]bool{}
+	isTarget := map[string]bool{}
+	for _, target := range targets {
+		isTarget[strings.TrimSpace(target)] = true
+	}
+	for i, value := range excludes {
+		fault := ExcludeFault(0)
+		switch {
+		case strings.TrimSpace(value) == "":
+			fault = ExcludeEmpty
+		case seen[value]:
+			fault = ExcludeDuplicate
+		case isTarget[strings.TrimSpace(value)]:
+			fault = ExcludeIsTarget
+		case value == t.Wildcard || slices.Contains(strings.Split(value, "/"), "*"):
+			fault = ExcludeWildcard
+		case !t.excludableForm(value):
+			fault = ExcludeForm
+		}
+		seen[value] = true
+		if fault != 0 {
+			out = append(out, ExcludeFinding{Index: i, Fault: fault})
+		}
+	}
+	return out
+}
+
+// excludableForm reports whether value, spelled exactly, is a valid target of an excludable kind.
+func (t TargetMetadata) excludableForm(value string) bool {
+	if value != strings.TrimSpace(value) {
+		return false
+	}
+	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool {
+		return kind.Excludable && t.ValidTarget(kind.Name, value)
+	})
 }
 
 // Placeholder reports whether a segment of a form is a placeholder such as OWNER.
