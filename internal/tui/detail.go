@@ -94,6 +94,9 @@ func (m *Model) updateDetail(key tea.KeyPressMsg) (tea.Cmd, bool) {
 			m.detailTab = min(max(m.detailTab+detailTab(by), 0), tabCount-1)
 		}
 		return nil, true
+	case m.detailPane.more && pageKey(key) && m.detailPane.view.scroll(key, m.detailPane.page):
+		// The page keys read a text longer than the pane; up and down stay the rows'.
+		return nil, true
 	case keyIs(key, actNext):
 		m.leaveDetail()
 		if m.listBarShown() {
@@ -141,6 +144,7 @@ func (m *Model) withPane(lines []string, footer string, room, skip int) string {
 	panelLines, tabRow, spans := m.detailPanel(name, len(lines)-skip+1)
 	top := m.workspaceTop() + skip
 	x := width + lipgloss.Width(paneGap)
+	m.detailPane.x0, m.detailPane.y0, m.detailPane.x1, m.detailPane.y1 = x, top, x+m.paneWidth(), top+len(panelLines)
 	m.addHit(x, top, x+m.paneWidth(), top+len(panelLines), func() tea.Cmd { return m.clickDetailTab(m.shownTab()) })
 	for tab, span := range spans {
 		m.addHit(x+2+span[0], top+1+tabRow, x+2+span[1], top+2+tabRow, func() tea.Cmd { return m.clickDetailTab(detailTab(tab)) })
@@ -200,6 +204,11 @@ func (m *Model) detailPanel(name string, height int) ([]string, int, [][2]int) {
 		body = factLines(m.detailFacts(name, m.shownTab()), inner, m.logText)
 	}
 	room := max(rows-len(head), 0)
+	key := fmt.Sprint(m.section, name, m.shownTab())
+	body, position := m.detailPane.fit(key, body, room)
+	if position != "" {
+		body = append(body, styles.hint.Render(truncateCells(position, inner)))
+	}
 	if len(body) > room {
 		body = body[:room]
 		if room > 0 {

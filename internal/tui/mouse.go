@@ -137,8 +137,9 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.infoOpen {
 		if !wheel {
 			m.infoOpen = false
+			return nil
 		}
-		return nil
+		return m.wheel(event)
 	}
 	if m.tooSmall {
 		return nil
@@ -178,8 +179,11 @@ func (m *Model) wheelScreens() bool {
 // textScreen reports whether what the screen shows is a plain text area, which the wheel moves by wheelText
 // rows. The steps of a transfer or rename that ask for input or move over rows are not.
 func (m *Model) textScreen() bool {
+	if m.infoOpen {
+		return true
+	}
 	switch m.screen {
-	case screenHelp, screenSelftest:
+	case screenHelp, screenSelftest, screenLogDetail:
 		return true
 	case screenConfirm:
 		return m.approvalDetail != ""
@@ -215,7 +219,17 @@ func (m *Model) atListTop() bool {
 // goes into the content and nothing leads back out of it.
 func (m *Model) wheel(event tea.Mouse) tea.Cmd {
 	up := event.Button == tea.MouseWheelUp
-	if m.screen == screenNav {
+	if !m.infoOpen {
+		// A text pane beside the screen scrolls under the wheel without taking the focus or moving the rows.
+		for _, pane := range []*paneScroll{&m.detailPane, &m.infoPane} {
+			if (pane == &m.detailPane && (m.screen == screenList || m.screen == screenNav) && m.paneWidth() > 0 || pane == &m.infoPane && m.paneShown()) && pane.at(event.X, event.Y) {
+				m.touchAdminSessionIfActive()
+				pane.wheel(up)
+				return nil
+			}
+		}
+	}
+	if m.screen == screenNav && !m.infoOpen {
 		if up {
 			return nil
 		}
@@ -230,7 +244,7 @@ func (m *Model) wheel(event tea.Mouse) tea.Cmd {
 		}
 		return tea.Batch(cmds...)
 	}
-	if !m.wheelScreens() || (up && m.atListTop()) {
+	if !m.wheelScreens() || (up && !m.infoOpen && m.atListTop()) {
 		return nil
 	}
 	m.touchAdminSessionIfActive()
@@ -241,7 +255,7 @@ func (m *Model) wheel(event tea.Mouse) tea.Cmd {
 	if m.textScreen() {
 		times = wheelText
 	}
-	if m.screen == screenForm && event.X < m.sectionListWidth {
+	if m.screen == screenForm && !m.infoOpen && event.X < m.sectionListWidth {
 		key = tea.KeyPgDown
 		if up {
 			key = tea.KeyPgUp
