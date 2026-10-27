@@ -29,7 +29,8 @@ func (m *Model) layoutWorkspace() {
 // last line of the screen.
 func (m *Model) frame(workspace string) string {
 	m.registerBars()
-	lines := m.headerLines()
+	lines, back := m.headerLayout()
+	m.registerBack(back)
 	lines = append(lines, m.navLine())
 	if m.hasSubTabs() {
 		// The line stays, empty, during the guided setup so the workspace never changes height under it.
@@ -73,6 +74,14 @@ const pathRoom = 12
 // the path is shortened at its start (the end tells files apart); only when even that leaves the path less
 // than pathRoom does it move to a row of its own, and a status part that does not fit wraps like text.
 func (m *Model) headerLines() []string {
+	lines, _ := m.headerLayout()
+	return lines
+}
+
+// headerLayout is headerLines and the cells of the back button in the first row (empty when it is not shown).
+// The button stands at the right end in front of the help and command keys; it gives way last, so it never
+// changes the rows or the path that the keys alone would leave.
+func (m *Model) headerLayout() ([]string, navSpan) {
 	width := max(m.termWidth, 1)
 	lines, used := flowParts(m.headerStatus(), width)
 	path := m.configPath()
@@ -80,8 +89,7 @@ func (m *Model) headerLines() []string {
 	if !m.configExists {
 		suffix = tr(tHeaderCreated)
 	}
-	hints := m.headerHints()
-	hintsWidth := lipgloss.Width(hints)
+	rights := m.headerRights()
 	pathMin := min(pathRoom, lipgloss.Width(path))
 	sep := lipgloss.Width(headerSep)
 
@@ -104,16 +112,67 @@ func (m *Model) headerLines() []string {
 	if len(lines) == 1 && room >= pathMin {
 		shown := fitPath(path, suffix, room)
 		line := lines[0] + headerSep + styles.hint.Render(shown)
-		if gap := width - lipgloss.Width(line) - hintsWidth; hints != "" && gap >= sep &&
-			(shown == path || shown == path+suffix) {
-			line += strings.Repeat(" ", gap) + hints
+		var back navSpan
+		if shown == path || shown == path+suffix {
+			line, back = placeRight(line, rights, width)
 		}
-		return []string{line}
+		return []string{line}, back
 	}
-	if gap := width - lipgloss.Width(lines[0]) - hintsWidth; hints != "" && len(lines) == 1 && gap >= sep {
-		lines[0] += strings.Repeat(" ", gap) + hints
+	var back navSpan
+	if len(lines) == 1 {
+		lines[0], back = placeRight(lines[0], rights, width)
 	}
-	return append(lines, styles.hint.Render(fitPath(path, suffix, width)))
+	return append(lines, styles.hint.Render(fitPath(path, suffix, width))), back
+}
+
+// headerRight is a block at the right end of the header: the cells of the back button in it, if it holds one.
+type headerRight struct {
+	text string
+	back navSpan
+}
+
+// placeRight puts the widest block that fits, with at least headerSep before it, at the right end of line and
+// returns the line and the cells of the back button in it.
+func placeRight(line string, rights []headerRight, width int) (string, navSpan) {
+	for _, r := range rights {
+		w := lipgloss.Width(r.text)
+		if gap := width - lipgloss.Width(line) - w; gap >= lipgloss.Width(headerSep) {
+			x := width - w
+			back := navSpan{}
+			if r.back.x1 > r.back.x0 {
+				back = navSpan{x + r.back.x0, x + r.back.x1}
+			}
+			return line + strings.Repeat(" ", gap) + r.text, back
+		}
+	}
+	return line, navSpan{}
+}
+
+// headerRights are the blocks the right end of the header can show, widest first. When the width is short the
+// help and command keys go first, then the back button; esc stays the way back.
+func (m *Model) headerRights() []headerRight {
+	hints := m.headerHints()
+	back := m.backButton()
+	var rights []headerRight
+	if back != "" {
+		bw := lipgloss.Width(back)
+		if hints != "" {
+			rights = append(rights, headerRight{back + headerSep + hints, navSpan{0, bw}})
+		}
+		return append(rights, headerRight{back, navSpan{0, bw}})
+	}
+	if hints != "" {
+		rights = append(rights, headerRight{text: hints})
+	}
+	return rights
+}
+
+// backButton is the clickable mark of the way back, drawn like the key hints; empty where esc leads no level back.
+func (m *Model) backButton() string {
+	if !m.backShown() {
+		return ""
+	}
+	return styles.hint.Render("[" + keyLabel(actBack) + "] " + tr(tHeaderBack))
 }
 
 // flowParts lays styled parts out one after the other in rows of at most width cells, separated by
