@@ -23,18 +23,19 @@ func (m *Model) dialogPanelOf() dialogPanel {
 	return dialogPanel{m: m, room: m.usable(0)}
 }
 
-// chrome is the number of lines the frame adds around the text.
+// chrome is the number of lines the title and the frame add around the text.
 func (p dialogPanel) chrome() int {
 	if p.framed {
-		return 2
+		return p.m.titleRows() + 2
 	}
 	return 0
 }
 
-// top is the title line: the top border with the title and a dimmed note, or the bold title alone.
+// top is the title line with a dimmed note at its right and, in a frame, the gap and the top border under
+// it; without a frame the bold title alone.
 func (p dialogPanel) top(title, note string) string {
 	if p.framed {
-		return panelTop(truncateCells(title, p.room-2), note, p.room, true) + "\n"
+		return p.m.titled(title, note, p.room+4) + panelTop("", "", p.room, true) + "\n"
 	}
 	if note != "" {
 		title += "  " + note

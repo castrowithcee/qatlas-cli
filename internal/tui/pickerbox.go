@@ -23,8 +23,8 @@ func (m *Model) boxRoom() int {
 	return m.usable(0)
 }
 
-// boxTop is the title of a picker: in the top border of the panel, with note dimmed at its right end, or as
-// a line of its own with the note behind it.
+// boxTop is the title of a picker: a title line above the panel with note dimmed at its right end, or, where
+// there is no frame, a line of its own with the note behind it.
 func (m *Model) boxTop(title, note string) string {
 	if !m.boxed() {
 		if note != "" {
@@ -32,7 +32,7 @@ func (m *Model) boxTop(title, note string) string {
 		}
 		return m.wrapped(styles.title, title) + "\n"
 	}
-	return panelTop(title, note, m.boxRoom(), true) + "\n"
+	return m.titled(title, note, m.boxRoom()+4) + panelTop("", "", m.boxRoom(), true) + "\n"
 }
 
 // boxText is a message of a picker, wrapped into the room of its lines.

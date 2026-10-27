@@ -128,17 +128,18 @@ func (m *Model) clickDetailTab(tab detailTab) tea.Cmd {
 }
 
 // withPane sets the detail pane of the marked entry beside the lines of the list that stand above its
-// footer, which take up to room lines. The pane is a panel as high as the table: its frame closes in the
-// first line of the footer, which is the bottom of the table. A pane that needs more room than the rows
-// leave stretches the table frame.
-func (m *Model) withPane(lines []string, footer string, room int) string {
+// footer, which take up to room lines. The first skip lines are the title of the list, above the panels, so
+// the pane starts level with the top of the table frame. The pane is a panel as high as the table: its frame
+// closes in the first line of the footer, which is the bottom of the table. A pane that needs more room than
+// the rows leave stretches the table frame.
+func (m *Model) withPane(lines []string, footer string, room, skip int) string {
 	width := m.listWidth()
-	for len(lines) < min(room, detailMinHeight-1) {
+	for len(lines)-skip < min(room-skip, detailMinHeight-1) {
 		lines = append(lines, panelSide("", m.tableRoom(), m.tableFocused(), ""))
 	}
 	name, _ := m.list.selected()
-	panelLines, tabRow, spans := m.detailPanel(name, len(lines)+1)
-	top := m.workspaceTop()
+	panelLines, tabRow, spans := m.detailPanel(name, len(lines)-skip+1)
+	top := m.workspaceTop() + skip
 	x := width + lipgloss.Width(paneGap)
 	m.addHit(x, top, x+m.paneWidth(), top+len(panelLines), func() tea.Cmd { return m.clickDetailTab(m.shownTab()) })
 	for tab, span := range spans {
@@ -146,10 +147,14 @@ func (m *Model) withPane(lines []string, footer string, room int) string {
 	}
 	out := make([]string, 0, len(lines)+1)
 	for i, line := range lines {
-		out = append(out, padLine(clipCells(line, width), width)+paneGap+panelLines[i])
+		if i < skip {
+			out = append(out, clipCells(line, width))
+			continue
+		}
+		out = append(out, padLine(clipCells(line, width), width)+paneGap+panelLines[i-skip])
 	}
 	first, rest, more := strings.Cut(footer, "\n")
-	out = append(out, padLine(clipCells(first, width), width)+paneGap+panelLines[len(lines)])
+	out = append(out, padLine(clipCells(first, width), width)+paneGap+panelLines[len(lines)-skip])
 	if more {
 		return strings.Join(out, "\n") + "\n" + rest
 	}
@@ -327,9 +332,14 @@ func (m *Model) detailInner() (int, bool) {
 	return m.usable(0), false
 }
 
-// detailChrome is the number of lines a detail screen spends around its text: the frame, or the title and
-// the blank line under it.
-const detailChrome = 2
+// detailChrome is the number of lines a detail screen spends around its text: the title line, the gap under
+// it and the frame, or without a frame the title and the blank line under it.
+func (m *Model) detailChrome() int {
+	if m.tableFramed() {
+		return m.titleRows() + 2
+	}
+	return 2
+}
 
 // statusFact is the state of a detail screen as a row of its own where the frame has the room; without the
 // frame frameDetail puts the mark beside the title.
@@ -348,7 +358,7 @@ func (m *Model) frameDetail(title, mark string, lines []string) string {
 		// Without the frame the state stands beside the title, so it costs no line.
 		return m.wrapped(styles.title, title) + "  " + mark + "\n\n" + strings.Join(lines, "\n")
 	}
-	return strings.Join(panel(truncateCells(title, inner-2), lines, inner, len(lines), panelOpts{focused: true}), "\n")
+	return m.titled(title, "", inner+4) + strings.Join(panel("", lines, inner, len(lines), panelOpts{focused: true}), "\n")
 }
 
 // listFacts is a list of values as facts under one label, at most limit of them and then the number left.
