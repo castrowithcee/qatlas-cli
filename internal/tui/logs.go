@@ -980,7 +980,7 @@ func (m *Model) logSide(line string) string {
 	if !m.logs.framed {
 		return line
 	}
-	return panelSide(line, m.logRoom(), m.logPanelFocused(), "")
+	return panelSide(line, m.logRoom(), m.logPanelFocused())
 }
 
 // logInside puts every line of text, each ended by a line break, into the frame of the panel.
@@ -1118,7 +1118,7 @@ func (m *Model) logsFrame() (string, string) {
 		}
 		if framed {
 			for i, line := range lines {
-				lines[i] = panelSide(line, room, focused, "")
+				lines[i] = panelSide(line, room, focused)
 			}
 		}
 		return lines
@@ -1155,7 +1155,7 @@ func (m *Model) logsFrame() (string, string) {
 		}
 		for _, line := range barLines {
 			if framed {
-				line = panelSide(line, room, focused, "")
+				line = panelSide(line, room, focused)
 			}
 			lines = append(lines, line)
 		}

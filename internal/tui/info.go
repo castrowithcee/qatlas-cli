@@ -359,7 +359,7 @@ func (m *Model) infoView() string {
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, inner, "")
 	}
-	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true, fill: true})
+	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true})
 	background := m.frame(m.workspaceView())
 	return overlay(background, dialog, m.termWidth, m.termHeight)
 }

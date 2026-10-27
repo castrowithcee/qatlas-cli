@@ -211,7 +211,7 @@ func (m *Model) modalView() (string, bool) {
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, inner, "")
 	}
-	dialog := panel(title, lines, inner, len(lines), panelOpts{focused: true, fill: true})
+	dialog := panel(title, lines, inner, len(lines), panelOpts{focused: true})
 
 	var background string
 	m.renderAs(base, 0, func() {

@@ -13,7 +13,6 @@ import (
 // panelOpts selects the look of a panel.
 type panelOpts struct {
 	focused bool // frame in the focus colour (double frame without colour)
-	fill    bool // content area in the panel colour
 }
 
 // frameChars returns the frame characters: rounded, or double for a focused frame without colour, where the
@@ -30,16 +29,12 @@ func frameChars(focused bool) (h, v string, corners [4]string) {
 func panel(title string, lines []string, inner, rows int, o panelOpts) []string {
 	inner = max(inner, 0)
 	out := []string{panelTop(title, "", inner, o.focused)}
-	bg := colour("")
-	if o.fill && styles.palette.panel != "" {
-		bg = styles.palette.panel
-	}
 	for i := 0; i < rows; i++ {
 		text := ""
 		if i < len(lines) {
 			text = lines[i]
 		}
-		out = append(out, panelSide(text, inner, o.focused, bg))
+		out = append(out, panelSide(text, inner, o.focused))
 	}
 	return append(out, panelBottom(inner, o.focused))
 }
@@ -77,10 +72,11 @@ func panelTop(title, note string, inner int, focused bool) string {
 	return style.Render(c[0]+h) + styles.title.Render(label) + style.Render(strings.Repeat(h, rule)+c[1])
 }
 
-// panelSide is one content line of a panel: cut or padded to inner cells between the side borders. A
-// background colour fills the content area.
-func panelSide(text string, inner int, focused bool, bg colour) string {
+// panelSide is one content line of a panel: cut or padded to inner cells between the side borders. The
+// content area carries the panel colour; cells with a background of their own (fields, marked rows) keep it.
+func panelSide(text string, inner int, focused bool) string {
 	inner = max(inner, 0)
+	bg := styles.palette.panel
 	style := panelStyle(focused)
 	_, v, _ := frameChars(focused)
 	body := lipgloss.NewStyle()

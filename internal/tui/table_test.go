@@ -345,6 +345,7 @@ var trailingEscapes = regexp.MustCompile(`(\x1b\[[0-9;]*m)+$`)
 
 func findRow(view, text string) string {
 	for _, line := range strings.Split(view, "\n") {
+		line = withoutPanelFill(line)
 		// A table inside its frame is measured from the inner edge of the frame.
 		if edge := strings.IndexAny(line, "│║"); edge >= 0 {
 			side := line[edge:]
@@ -367,7 +368,18 @@ func findRow(view, text string) string {
 // background matches a background colour in an SGR sequence.
 var background = regexp.MustCompile("\x1b\\[(?:[0-9;]*;)?(?:4[0-7]|10[0-7]|48)[;m]")
 
-func hasBackground(row string) bool { return background.MatchString(row) }
+// hasBackground reports a background of the row's own; the panel colour behind it does not count.
+func hasBackground(row string) bool { return background.MatchString(withoutPanelFill(row)) }
+
+// withoutPanelFill drops the sequences that set the panel colour, which every panel line carries behind its
+// content.
+func withoutPanelFill(row string) string {
+	if styles.palette.panel == "" {
+		return row
+	}
+	out := lipgloss.NewStyle().Background(styles.palette.panel.lip()).Render("x")
+	return strings.ReplaceAll(row, out[:strings.Index(out, "x")], "")
+}
 
 // The marked row of a section list is highlighted the full width of the row under colour, and, without it
 // (NO_COLOR or an ASCII terminal), is still told apart by its leading '>' alone; an unmarked row beside it

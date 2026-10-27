@@ -23,7 +23,7 @@ type palette struct {
 }
 
 var darkPalette = palette{
-	base: "#0b141d", surface: "#101b26", panel: "#121f2e",
+	base: "#0b141d", surface: "#1a2b3c", panel: "#14212f",
 	border: "#2a3d52", borderFocus: "#3b82f6",
 	text: "#d6e2ee", textDim: "#7f93a8",
 	accent: "#4c9aff", ok: "#3fb56b", fail: "#f0525a", warn: "#e7b84c",
@@ -33,7 +33,7 @@ var darkPalette = palette{
 }
 
 var lightPalette = palette{
-	base: "#f6f8fb", surface: "#eaeff5", panel: "#ffffff",
+	base: "#f6f8fb", surface: "#e0e7ef", panel: "#edf1f6",
 	border: "#b8c4d2", borderFocus: "#1d5fd6",
 	text: "#14202e", textDim: "#566778",
 	accent: "#1d5fd6", ok: "#1a7f43", fail: "#c62828", warn: "#9a6700",
@@ -45,7 +45,7 @@ var lightPalette = palette{
 // The 256-colour palettes name indexes of the xterm cube and ramp, the 16-colour ones the ANSI slots of the
 // terminal's own scheme. The 16-colour surfaces stay black: a dim grey slot would fall into the text colours.
 var darkPalette256 = palette{
-	base: "233", surface: "234", panel: "235",
+	base: "233", surface: "236", panel: "235",
 	border: "240", borderFocus: "69",
 	text: "253", textDim: "246",
 	accent: "75", ok: "71", fail: "203", warn: "179",
@@ -55,7 +55,7 @@ var darkPalette256 = palette{
 }
 
 var lightPalette256 = palette{
-	base: "255", surface: "254", panel: "231",
+	base: "255", surface: "253", panel: "254",
 	border: "250", borderFocus: "26",
 	text: "234", textDim: "241",
 	accent: "26", ok: "28", fail: "160", warn: "130",
