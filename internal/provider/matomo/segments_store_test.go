@@ -147,8 +147,8 @@ func TestSegmentsListCutsRowsToTheTargets(t *testing.T) {
 	}{
 		{"seg-writer", []int{1, 2, 3, 4}},
 		{"seg-general", []int{1, 2, 3, 4}},
-		{"seg-one", []int{3}},
-		{"seg-two", []int{2, 3}},
+		{"seg-one", []int{1, 3}},
+		{"seg-two", []int{1, 2, 3}},
 	} {
 		var calls []call
 		env := newSegmentsEnvironment(t, &calls, segmentToolAnswers(answers{
@@ -213,7 +213,7 @@ func TestSegmentsListWithASiteReadsEveryFieldAndPages(t *testing.T) {
 	}
 }
 
-func TestSegmentsListWithASiteKeepsOnlyThatSiteAndAllWebsitesOnWideBinding(t *testing.T) {
+func TestSegmentsListWithASiteKeepsOnlyThatSiteAndAllWebsites(t *testing.T) {
 	var calls []call
 	env := newSegmentsEnvironment(t, &calls, segmentToolAnswers(answers{
 		"SegmentEditor.getAll": func(call) *http.Response { return ok(storedSegments) },
@@ -224,11 +224,11 @@ func TestSegmentsListWithASiteKeepsOnlyThatSiteAndAllWebsitesOnWideBinding(t *te
 	if err != nil || len(out.Segments) != 2 || out.Segments[0].ID != 1 || out.Segments[1].ID != 2 {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
-	// With site/ID targets, a segment for all websites is not reachable even when asked for one website.
+	// With site/ID targets, a segment for all websites is readable.
 	result, err = env.invoke("matomo.segments.list", "seg-two", `{"idSite":1}`)
 	out = SegmentsResult{}
 	_ = json.Unmarshal([]byte(result), &out)
-	if err != nil || len(out.Segments) != 1 || out.Segments[0].ID != 2 {
+	if err != nil || len(out.Segments) != 2 || out.Segments[0].ID != 1 || out.Segments[1].ID != 2 {
 		t.Fatalf("result = %s, err = %v", result, err)
 	}
 }
@@ -266,8 +266,8 @@ func TestSegmentsGetProvesTheBindingWithOneRead(t *testing.T) {
 	}{
 		{"seg-writer", "1", true}, {"seg-writer", "4", true},
 		{"seg-general", "1", true}, {"seg-general", "3", true},
-		{"seg-one", "3", true}, {"seg-one", "2", false}, {"seg-one", "1", false}, {"seg-one", "4", false},
-		{"seg-two", "1", false}, {"seg-two", "4", false}, {"seg-two", "2", true},
+		{"seg-one", "3", true}, {"seg-one", "2", false}, {"seg-one", "1", true}, {"seg-one", "4", false},
+		{"seg-two", "1", true}, {"seg-two", "4", false}, {"seg-two", "2", true},
 		{"seg-writer", "99", false},
 	} {
 		var calls []call
