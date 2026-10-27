@@ -824,8 +824,8 @@ const bracketHold = 100 * time.Millisecond
 // final M or m.
 var fragmentTail = regexp.MustCompile(`^[0-9;]*[Mm]?`)
 
-// fragmentHead matches the start of such a report that is left once its escape byte went into a key of its own.
-var fragmentHead = regexp.MustCompile(`^(\[<|<)[0-9;]*[Mm]?`)
+// fragmentHead matches the start of such a report that is left once its escape and "[" went into keys of their own.
+var fragmentHead = regexp.MustCompile(`^<[0-9;]*[Mm]?`)
 
 // reportStart matches the start of such a report the input reader gave up on, its rest still to come.
 var reportStart = regexp.MustCompile(`^\x1b\[<[0-9;]*$`)
@@ -839,10 +839,11 @@ type heldKeyMsg struct{ id int }
 // fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read with a
 // pause between them longer than the input reader waits: the reader then reports the start it has as an
 // unknown sequence, or as an escape or alt+[, and the rest as typed characters like "<65;12;5M", which a text
-// field would take. A piece counts only when it follows the one before it within fragmentWindow and fits the
-// report form, so the same characters typed by hand, pasted, or standing alone pass unchanged. Only a "[" that
-// may open a piece is held back, briefly; a lone escape is a real key and passes at once, so the report's
-// escape byte alone can still reach the model as esc.
+// field would take. The input reader joins pieces that follow each other within its escape wait, so the filter
+// only meets those after a longer pause. A piece counts only when it follows the one before it within
+// fragmentWindow and fits the report form, so the same characters typed by hand, pasted, or standing alone pass
+// unchanged. Only a "[" that may open a piece is held back, briefly; a lone escape is a real key and passes at
+// once, so an escape byte the reader already gave up on still reaches the model as esc.
 // On the way it gives keys the names stored key bindings know (see legacyKey and linuxFunctionKey).
 type fragmentFilter struct {
 	now     func() time.Time
@@ -922,10 +923,6 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	switch last {
 	case "[":
 		if plain && strings.HasPrefix(text, "<") {
-			n = len(fragmentHead.FindString(text))
-		}
-	case "esc":
-		if plain && strings.HasPrefix(text, "[<") {
 			n = len(fragmentHead.FindString(text))
 		}
 	case "tail":
