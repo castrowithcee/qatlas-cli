@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Set up Matomo
@@ -16,26 +16,23 @@ do when Matomo refuses a request. Fields, tools, arguments, profiles, and target
 **The token decides what is possible at all.** A Matomo token has no scopes to tick: it carries the rights of the
 Matomo user who created it, per website (view, write, or admin) or Super User rights. The rights you set in Qatlas
 (the connection's `tools`, `effects`, and `targets`) limit it further. A call works only if both allow it. A
-connection can never do more than the user, and the token never widens the connection. To give a connection fewer
-rights, create the token for a Matomo user that has fewer rights.
+connection can never do more than the user, and the token never widens the connection.
 
 ## What you need
 
 - A Matomo user with the rights from [Rights per tool group](#rights-per-tool-group) for the tools you will use.
   Use a separate user for a connection that should only read; do not use your own Super User.
-- The address of your Matomo installation: `https://HOST[/PATH]`, or `https://SUBDOMAIN.matomo.cloud` for Matomo
-  Cloud. There is no default; see [Configuration](README.md#configuration).
-- Matomo 5 or newer. Older releases are refused.
+- Matomo 5 or newer (older releases are refused) and its address: `https://HOST[/PATH]`, or
+  `https://SUBDOMAIN.matomo.cloud` for Matomo Cloud. There is no default; see [Configuration](README.md#configuration).
 - Qatlas keeps the token in the system keyring or the vault, or reads it from an environment variable.
-- For some privacy tools, also the Matomo password of that user; see
-  [Password confirmation](#password-confirmation).
 
 ## Create a token
 
 In Matomo, open **Administration** (the gear icon), then **Personal**, then **Security**. Matomo changes its pages
 from time to time; look for these names.
 
-1. Click **Create New Token** and confirm your password.
+1. While logged in as the user whose rights the connection should have, click **Create New Token** and confirm
+   your password. A token cannot give more than that user holds.
 2. Enter a **Description** you will recognize, for example `qatlas-reader`.
 3. Leave **Only allow secure requests** on. Qatlas sends every request as `POST`, which such a token allows.
 4. Matomo 6 also offers a **Token access level**. Choose the lowest level the connection needs, or **Inherit user
@@ -43,17 +40,14 @@ from time to time; look for these names.
 5. Optionally set an **Expiry date**. You replace the token when it ends.
 6. Click **Create New Token** and copy the token at once. Matomo shows it only once.
 
-Create the token while logged in as the user whose rights the connection should have. A token cannot give more
-than that user holds.
-
 ## Add it to Qatlas
 
 The guided setup does all of this for you:
 
 1. Run `qatlas tui`.
 2. In the Connections area, press `n` and follow the steps: provider `matomo`, the service with its address, a
-   credential, the scope (websites), and the access (by effect or by tools).
-3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
+   credential (choose where to keep it and paste the token as its `token` secret), the scope (websites), and the
+   access (by effect or by tools).
 
 Without the guided setup, store the token on the command line. It is read from standard input, so it does not
 appear in the shell history:
@@ -70,13 +64,12 @@ check the configuration file. It contacts no provider.
 
 The credential can hold a second, optional secret, `password-confirmation`: the Matomo password of the token's
 user. Matomo asks for it on a few privacy tools even when a token is used; see the tools marked in
-[Privacy](#privacy). Store it only for a connection that offers those tools:
+[Privacy](#privacy). Store it only for a connection that offers those tools; without it, they are refused before
+any request:
 
 ```sh
 printf %s "$MATOMO_PASSWORD" | qatlas credential set matomo-admin password-confirmation
 ```
-
-Without it, those tools are refused before any request.
 
 ## Check the connection
 
@@ -84,9 +77,8 @@ In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` 
 the instance is Matomo 5 or newer, and each website the connection's targets name could be read.
 
 **A passing test does not mean every tool works.** It proves the token and those websites, not write rights, not
-Super User rights, and not any plugin. Matomo checks the rights again on every call. Compare the user's rights
-with [Rights per tool group](#rights-per-tool-group) for the tools you use. A failing test or call is explained
-under [Fixing errors](#fixing-errors).
+Super User rights, and not any plugin. Matomo checks the rights again on every call. A failing test or call is
+explained under [Fixing errors](#fixing-errors).
 
 ## Rights per tool group
 
@@ -184,6 +176,16 @@ Plugin `ScheduledReports`.
 | Render as text | View on the website of the report |
 | Pause, delete | The creator of the report, or a Super User |
 
+### Alerts
+
+Plugin `CustomAlerts`.
+
+| Tools | Matomo right |
+| --- | --- |
+| List alerts, list triggered alerts | View on the websites; shows only the alerts of the token's user |
+| List the alerts of all users (`ifSuperUserReturnAllAlerts`) | Super User |
+| Read an alert or its past values, delete an alert | Only the creator of the alert, even a Super User |
+
 ### Instance settings and reference data
 
 | Tools | Matomo right |
@@ -265,8 +267,6 @@ every call alone. Two cases differ:
 - A user list without the admin right shows only the token's own user instead of failing.
 
 ## Fixing errors
-
-Every failed call has a **code** and a **message** from Qatlas.
 
 ### Reading a refusal
 

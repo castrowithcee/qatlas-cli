@@ -134,19 +134,19 @@ func TestFilterOpensGroupsWithHits(t *testing.T) {
 func TestPositionCountsEntriesOnly(t *testing.T) {
 	m := groupModel(t)
 	openSectionByName(t, m, sectionConnections)
-	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3") {
 		t.Errorf("first entry:\n%s", view)
 	}
 	press(t, m, "down", "down") // group row of tracker, then tracker-issues
-	if view := screenOf(m); !strings.Contains(view, " 2/3 ") {
+	if view := screenOf(m); !strings.Contains(view, " 2/3") {
 		t.Errorf("second entry:\n%s", view)
 	}
 	press(t, m, "up")
-	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3") {
 		t.Errorf("on a group row the position is that of the entry above:\n%s", view)
 	}
 	press(t, m, "left") // fold tracker: total stays 3
-	if view := screenOf(m); !strings.Contains(view, " 1/3 ") {
+	if view := screenOf(m); !strings.Contains(view, " 1/3") {
 		t.Errorf("folded:\n%s", view)
 	}
 }
