@@ -52,3 +52,10 @@ func TargetsOf(resolved *config.Resolved) []string {
 	}
 	return resolved.Targets
 }
+
+// ExcludesOf returns the exclusions of a connection: entries, spelled like targets, that a provider takes
+// out of what the targets reach. They are never part of TargetsOf and widen nothing. It returns the
+// resolved list itself, so callers must not modify it.
+func ExcludesOf(resolved *config.Resolved) []string {
+	return resolved.Exclude
+}

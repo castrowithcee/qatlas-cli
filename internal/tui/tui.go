@@ -3219,7 +3219,22 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		// SetConnection drops the labels of targets the list no longer holds.
 		labels := targetLabelsOf(m.fields)
+		// The form does not edit exclusions: they carry over from the connection it was opened on (the
+		// original also when renamed or copied), with their labels. Dropping them would widen the connection.
+		var exclude []string
+		if source, ok := m.cfg.Connections[m.formSource()]; ok {
+			exclude = source.ExcludeValues()
+			for _, value := range exclude {
+				if label, ok := source.TargetLabels[value]; ok {
+					if labels == nil {
+						labels = map[string]string{}
+					}
+					labels[value] = label
+				}
+			}
+		}
 		return cfg.SetConnection(name, config.Connection{
+			Exclude:        exclude,
 			Service:        m.fieldValue("service"),
 			Credential:     m.fieldValue("credential"),
 			Target:         target,
@@ -3238,6 +3253,15 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		return cfg.SetDefault(name, m.fieldValue("connection"))
 	}
 	return nil
+}
+
+// formSource is the name of the entry the open form was started from: the one being edited, or the one a
+// new entry is copied from.
+func (m *Model) formSource() string {
+	if m.editing != "" {
+		return m.editing
+	}
+	return m.copyFrom
 }
 
 // connectionState is the value of the state row for a connection.

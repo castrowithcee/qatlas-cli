@@ -39,6 +39,10 @@ type Scope struct {
 	// Tools is the connection's tools list. Nil means it has none, so every tool of its effects is offered;
 	// an empty list offers none. The two are different scopes.
 	Tools []string `json:"tools"`
+	// Exclude are the target objects the connection takes out of what its targets and the credential reach,
+	// as configured; none excludes nothing. Dropping one widens the connection, so a change of the list
+	// needs approval too. A scope without them keeps the fingerprint it had before they existed.
+	Exclude []string `json:"exclude,omitempty"`
 	// Paths are the directories the connection is bound to, as configured; none means every project. A
 	// connection bound to other projects reaches other data, so a change of its paths needs approval too.
 	Paths []string `json:"paths,omitempty"`
@@ -103,6 +107,7 @@ func (s Scope) Normalized() Scope {
 	} else {
 		s.Paths = nil
 	}
+	s.Exclude = sortedOrNil(s.Exclude)
 	s.FilesRead = sortedOrNil(s.FilesRead)
 	s.FilesWrite = sortedOrNil(s.FilesWrite)
 	s.Forward = normalizedForward(s.Forward)
@@ -154,6 +159,7 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Effects      []string `json:"permissions"`
 		Targets      []string `json:"targets"`
 		Tools        []string `json:"tools"`
+		Exclude      []string `json:"exclude,omitempty"`
 		Paths        []string `json:"paths,omitempty"`
 		FilesRead    []string `json:"files_read,omitempty"`
 		FilesWrite   []string `json:"files_write,omitempty"`
@@ -161,7 +167,7 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Forward     []ForwardSecret `json:"forward,omitempty"`
 		Disabled    bool            `json:"disabled,omitempty"`
 		ActiveUntil string          `json:"active_until,omitempty"`
-	}{credentialID, n.Credential, n.Provider, n.Origin, n.Effects, n.Targets, n.Tools, n.Paths,
+	}{credentialID, n.Credential, n.Provider, n.Origin, n.Effects, n.Targets, n.Tools, n.Exclude, n.Paths,
 		n.FilesRead, n.FilesWrite, n.Forward, n.Disabled, n.ActiveUntil}
 	data, err := json.Marshal(canonical)
 	if err != nil {
