@@ -256,10 +256,7 @@ func (m *Model) navTabs() navBar {
 func (m *Model) tabLine(focus string, items []string, active int) string {
 	var b strings.Builder
 	b.WriteString(styles.active.Render(focus))
-	fill := styles.active
-	if p := styles.palette; !plainTabs() {
-		fill = lipgloss.NewStyle().Bold(true).Background(p.accent.lip()).Foreground(p.base.lip())
-	}
+	fill := accentFill()
 	for i, item := range items {
 		if i > 0 {
 			b.WriteString(" ")

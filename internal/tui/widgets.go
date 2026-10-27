@@ -135,22 +135,41 @@ func surfaceRow(text string, width int) string {
 	return lipgloss.NewStyle().Background(styles.palette.surface.lip()).Render(keepBackground(text, styles.palette.surface))
 }
 
-// tabStrip draws a row of tabs, the active one in brackets and highlighted, the others dimmed, and returns
-// the cells each takes, counted from the first cell of the row. A word "|" is a separator, not a tab. The
-// brackets still tell the active tab without colour; focused marks the active one as the focus.
+// accentFill is the surface of the tab that has the focus: bold base text on the accent colour. Without colour
+// it is the bold style of the plain tabs.
+func accentFill() lipgloss.Style {
+	p := styles.palette
+	if plainTabs() {
+		return styles.active
+	}
+	return lipgloss.NewStyle().Bold(true).Background(p.accent.lip()).Foreground(p.base.lip())
+}
+
+// tabStrip draws a row of tabs and returns the cells each takes, counted from the first cell of the row. The
+// active tab is a surface: the marked-row fill of the section lists, the accent fill while it has the focus;
+// the others are dimmed. Without colour the active tab stands in brackets, in reverse video while it has the
+// focus, so the colour is never the only mark. A word "|" is a separator, not a tab. Every tab takes the same
+// cells whether active or not.
 func tabStrip(words []string, active int, focused bool) (string, [][2]int) {
 	var b strings.Builder
 	spans := make([][2]int, 0, len(words))
 	x := 0
+	plain := plainTabs()
 	for i, word := range words {
 		text, style := " "+word+" ", styles.hint
 		switch {
 		case word == "|":
 			text = word
 		case i == active:
-			text, style = "["+word+"]", styles.active
+			style = styles.activeRow
+			if plain {
+				text, style = "["+word+"]", styles.active
+			}
 			if focused {
-				style = styles.activeRow
+				style = accentFill()
+				if plain {
+					style = styles.activeRow
+				}
 			}
 		}
 		if i > 0 {
