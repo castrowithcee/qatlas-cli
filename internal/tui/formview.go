@@ -197,7 +197,8 @@ func (m *Model) formBody() string {
 	rows := m.formRows(!sections && len(entries) >= 2, entries, current)
 	m.width, m.formTop = full, top
 	lines := append(head, strings.Split(strings.TrimSuffix(rows, "\n"), "\n")...)
-	panelLines := panel("", lines, inner, len(lines), panelOpts{})
+	// The focus is always in the rows; the list beside them only shows where they are.
+	panelLines := panel("", lines, inner, len(lines), panelOpts{focused: true})
 	return lipgloss.JoinHorizontal(lipgloss.Top, list, " ", strings.Join(panelLines, "\n")) + "\n"
 }
 

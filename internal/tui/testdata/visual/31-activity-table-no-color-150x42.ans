@@ -3,40 +3,40 @@
 [2m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 [1mLogs[0m
 
-  [1m[Table][0m [2m Activity [0m [2m Details [0m                                                                                                            [1m? unverified[0m
-> [1m Mode: All ▾ [0m    [2m(all recorded days)[0m     Way: all ▾      Client: all ▾      Tool: all ▾      Conn: all ▾      Effect: all ▾      Result: all ▾ 
-                                                                                                                        [2m / search…                    [0m
-[2m╭─[0m[1m[0m[2m───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m
-[2m│[0m [2m  STATUS        TIME                 WAY  CLIENT  TOOL                    CONNECTION      RESULT           RESP.   DUR.[0m                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 08:39+00[0m  [2mCLI[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      283ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 10:52+00[0m  [2mMCP[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m      314ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 12:05+00[0m  [2mMCP[0m  -       seatable.rows.list      tables-ops      [1mok[0m               [2m-[0m      345ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 14:18+00[0m  [2mCLI[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      376ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 16:31+00[0m  [2mMCP[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      407ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 08:44+00[0m  [2mMCP[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m       38ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-07 10:57+00[0m  [2mCLI[0m  -       github.issues.list      code-planning   [1mnot-found[0m        [2m-[0m       69ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-08 08:38+00[0m  [2mMCP[0m  -       nextcloud.files.upload  cloud-files     [1mnot-found[0m        [2m-[0m      266ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-08 10:51+00[0m  [2mCLI[0m  -       telegram.messages.send  alerts-bot      [1mok[0m               [2m-[0m      297ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-08 12:04+00[0m  [2mMCP[0m  -       github.issues.read      code-planning   [1mok[0m               [2m-[0m      328ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-08 14:17+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      359ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 08:37+00[0m  [2mMCP[0m  -       github.issues.list      code-planning   [1mok[0m               [2m-[0m      249ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 10:50+00[0m  [2mMCP[0m  -       twentycrm.people.list   crm-sales       [1mnot-found[0m        [2m-[0m      280ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 12:03+00[0m  [2mCLI[0m  -       bookstack.pages.read    wiki-main       [1mok[0m               [2m-[0m      311ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 14:16+00[0m  [2mMCP[0m  -       nextcloud.files.upload  cloud-files     [1mok[0m               [2m-[0m      342ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 16:29+00[0m  [2mMCP[0m  -       telegram.messages.send  alerts-bot      [1mok[0m               [2m-[0m      373ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 08:42+00[0m  [2mCLI[0m  -       github.issues.read      code-planning   [1mok[0m               [2m-[0m      404ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 10:55+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m       35ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 12:08+00[0m  [2mMCP[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m       66ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 14:21+00[0m  [2mCLI[0m  -       seatable.rows.list      tables-ops      [1mnot-found[0m        [2m-[0m       97ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 16:34+00[0m  [2mMCP[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      128ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 08:47+00[0m  [2mMCP[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      159ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-09 10:00+00[0m  [2mCLI[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m      190ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-10 08:36+00[0m  [2mCLI[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      232ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 08:35+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      215ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 10:48+00[0m  [2mCLI[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m      246ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 12:01+00[0m  [2mMCP[0m  -       seatable.rows.list      tables-ops      [1mok[0m               [2m-[0m      277ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 14:14+00[0m  [2mMCP[0m  -       bookstack.pages.list    wiki-main       [1mnot-found[0m        [2m-[0m      308ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 16:27+00[0m  [2mCLI[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      339ms                            [2m│[0m
-[2m│[0m   [2m? unverified[0m  [2m2026-02-11 08:40+00[0m  [2mMCP[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m      370ms                            [2m│[0m
-[2m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+╔═[1m[0m═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║   [1m[Table][0m [2m Activity [0m [2m Details [0m                                                                                                        [1m? unverified[0m ║
+║ > [1m Mode: All ▾ [0m    [2m(all recorded days)[0m     Way: all ▾      Client: all ▾      Tool: all ▾      Conn: all ▾      Effect: all ▾      Result: all ▾   ║
+║                                                                                                                     [2m / search…                    [0m ║
+║ [2m  STATUS        TIME                 WAY  CLIENT  TOOL                    CONNECTION      RESULT           RESP.   DUR.[0m                            ║
+║   [2m? unverified[0m  [2m2026-02-07 08:39+00[0m  [2mCLI[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      283ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 10:52+00[0m  [2mMCP[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m      314ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 12:05+00[0m  [2mMCP[0m  -       seatable.rows.list      tables-ops      [1mok[0m               [2m-[0m      345ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 14:18+00[0m  [2mCLI[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      376ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 16:31+00[0m  [2mMCP[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      407ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 08:44+00[0m  [2mMCP[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m       38ms                            ║
+║   [2m? unverified[0m  [2m2026-02-07 10:57+00[0m  [2mCLI[0m  -       github.issues.list      code-planning   [1mnot-found[0m        [2m-[0m       69ms                            ║
+║   [2m? unverified[0m  [2m2026-02-08 08:38+00[0m  [2mMCP[0m  -       nextcloud.files.upload  cloud-files     [1mnot-found[0m        [2m-[0m      266ms                            ║
+║   [2m? unverified[0m  [2m2026-02-08 10:51+00[0m  [2mCLI[0m  -       telegram.messages.send  alerts-bot      [1mok[0m               [2m-[0m      297ms                            ║
+║   [2m? unverified[0m  [2m2026-02-08 12:04+00[0m  [2mMCP[0m  -       github.issues.read      code-planning   [1mok[0m               [2m-[0m      328ms                            ║
+║   [2m? unverified[0m  [2m2026-02-08 14:17+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      359ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 08:37+00[0m  [2mMCP[0m  -       github.issues.list      code-planning   [1mok[0m               [2m-[0m      249ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 10:50+00[0m  [2mMCP[0m  -       twentycrm.people.list   crm-sales       [1mnot-found[0m        [2m-[0m      280ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 12:03+00[0m  [2mCLI[0m  -       bookstack.pages.read    wiki-main       [1mok[0m               [2m-[0m      311ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 14:16+00[0m  [2mMCP[0m  -       nextcloud.files.upload  cloud-files     [1mok[0m               [2m-[0m      342ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 16:29+00[0m  [2mMCP[0m  -       telegram.messages.send  alerts-bot      [1mok[0m               [2m-[0m      373ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 08:42+00[0m  [2mCLI[0m  -       github.issues.read      code-planning   [1mok[0m               [2m-[0m      404ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 10:55+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m       35ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 12:08+00[0m  [2mMCP[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m       66ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 14:21+00[0m  [2mCLI[0m  -       seatable.rows.list      tables-ops      [1mnot-found[0m        [2m-[0m       97ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 16:34+00[0m  [2mMCP[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      128ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 08:47+00[0m  [2mMCP[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      159ms                            ║
+║   [2m? unverified[0m  [2m2026-02-09 10:00+00[0m  [2mCLI[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m      190ms                            ║
+║   [2m? unverified[0m  [2m2026-02-10 08:36+00[0m  [2mCLI[0m  -       bookstack.pages.list    wiki-main       [1mok[0m               [2m-[0m      232ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 08:35+00[0m  [2mMCP[0m  -       todoist.tasks.list      tasks-personal  [1mok[0m               [2m-[0m      215ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 10:48+00[0m  [2mCLI[0m  -       bookstack.pages.update  wiki-main       [1mok[0m               [2m-[0m      246ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 12:01+00[0m  [2mMCP[0m  -       seatable.rows.list      tables-ops      [1mok[0m               [2m-[0m      277ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 14:14+00[0m  [2mMCP[0m  -       bookstack.pages.list    wiki-main       [1mnot-found[0m        [2m-[0m      308ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 16:27+00[0m  [2mCLI[0m  -       nextcloud.files.list    cloud-files     [1mok[0m               [2m-[0m      339ms                            ║
+║   [2m? unverified[0m  [2m2026-02-11 08:40+00[0m  [2mMCP[0m  -       todoist.tasks.create    tasks-personal  [1mok[0m               [2m-[0m      370ms                            ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
 [1menter[0m[2m open[0m  [1mf[0m[2m filter[0m  [1ms[0m[2m summary[0m  [1mm[0m[2m MCP sessions[0m  [1m/[0m[2m search[0m  [1m1-8[0m[2m section[0m  [1mesc[0m[2m back[0m  [1m:[0m[2m cmds[0m  [1m?[0m[2m help[0m  [1mq[0m[2m quit[0m            [1mleft/right[0m[2m change mode[0m  [2m1/180 · 0%[0m
