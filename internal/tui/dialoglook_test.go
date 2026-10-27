@@ -193,7 +193,7 @@ func TestResultsCarryTheirColourAndWord(t *testing.T) {
 			setProfile(profileTrueColor)
 			m := tc.open(t)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-			view := m.render()
+			view := withoutPanelFill(m.render())
 			if !strings.Contains(view, styles.ok.Render("●")+" "+tc.word) && !strings.Contains(view, styles.fail.Render("●")+" "+tc.word) {
 				t.Errorf("no mark and word %q:\n%s", tc.word, view)
 			}

@@ -145,7 +145,7 @@ func (d *dropdown) lines() []string {
 		}
 		rows[i] = line
 	}
-	return panel("", rows, inner, len(rows), panelOpts{focused: true, fill: true})
+	return panel("", rows, inner, len(rows), panelOpts{focused: true})
 }
 
 // overlayDropdown puts the open list over view, under its field, and registers its click targets. A list whose

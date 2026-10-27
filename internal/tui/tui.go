@@ -4045,7 +4045,7 @@ func (m *Model) listFrame() (string, string) {
 		}
 		var b strings.Builder
 		for _, line := range strings.Split(text, "\n") {
-			b.WriteString(panelSide(line, room, m.tableFocused(), "") + "\n")
+			b.WriteString(panelSide(line, room, m.tableFocused()) + "\n")
 		}
 		return b.String()
 	}
@@ -4289,7 +4289,7 @@ func (m *Model) listRows() func(i int) string {
 			row = m.listRowIn(room, active, indent[2:]+t.line(t.rows[name], layout))
 		}
 		if m.tableFramed() {
-			return panelSide(row, room, m.tableFocused(), "")
+			return panelSide(row, room, m.tableFocused())
 		}
 		return row
 	}

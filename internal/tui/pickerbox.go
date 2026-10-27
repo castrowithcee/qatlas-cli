@@ -42,7 +42,7 @@ func (m *Model) boxText(style lipgloss.Style, text string) string {
 	}
 	var b strings.Builder
 	for _, line := range strings.Split(render(style, m.boxRoom(), text), "\n") {
-		b.WriteString(panelSide(line, m.boxRoom(), true, "") + "\n")
+		b.WriteString(panelSide(line, m.boxRoom(), true) + "\n")
 	}
 	return b.String()
 }
@@ -52,7 +52,7 @@ func (m *Model) boxLine(text string) string {
 	if !m.boxed() {
 		return text + "\n"
 	}
-	return panelSide(text, m.boxRoom(), true, "") + "\n"
+	return panelSide(text, m.boxRoom(), true) + "\n"
 }
 
 // boxSearch is the search line of a picker: the search field of the lists inside the panel, and the labelled
@@ -70,7 +70,7 @@ func (m *Model) boxRow(row string) string {
 	if !m.boxed() {
 		return row
 	}
-	return panelSide(row, m.boxRoom(), true, "")
+	return panelSide(row, m.boxRoom(), true)
 }
 
 // boxBottom is the closing border of the panel, or nothing without one.

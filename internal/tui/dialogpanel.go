@@ -56,7 +56,7 @@ func (p dialogPanel) side(line string) string {
 	if !p.framed {
 		return line
 	}
-	return panelSide(line, p.room, true, "")
+	return panelSide(line, p.room, true)
 }
 
 // blank is an empty line.

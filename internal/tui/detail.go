@@ -135,7 +135,7 @@ func (m *Model) clickDetailTab(tab detailTab) tea.Cmd {
 func (m *Model) withPane(lines []string, footer string, room, skip int) string {
 	width := m.listWidth()
 	for len(lines)-skip < min(room-skip, detailMinHeight-1) {
-		lines = append(lines, panelSide("", m.tableRoom(), m.tableFocused(), ""))
+		lines = append(lines, panelSide("", m.tableRoom(), m.tableFocused()))
 	}
 	name, _ := m.list.selected()
 	panelLines, tabRow, spans := m.detailPanel(name, len(lines)-skip+1)

@@ -24,7 +24,7 @@ func TestWidgetsCloseTheirFrameAtEveryWidth(t *testing.T) {
 		for w := 10; w <= 200; w++ {
 			long := strings.Repeat("wide ", 80)
 			blocks := map[string][]string{
-				"panel":   panel("a long title "+long, []string{long, "", "x"}, w-4, 4, panelOpts{fill: true}),
+				"panel":   panel("a long title "+long, []string{long, "", "x"}, w-4, 4, panelOpts{}),
 				"focused": panel("t", []string{long}, w-4, 2, panelOpts{focused: true}),
 				"card":    card("Services "+long, "10"+long, w),
 			}
@@ -106,5 +106,36 @@ func TestTabStripActiveTabIsASurfaceAndBracketsWithoutColour(t *testing.T) {
 	}
 	if reverse, _ := tabStrip(words, 2, true); reverse == plain {
 		t.Errorf("without colour the focus leaves the tab unchanged")
+	}
+}
+
+func TestPanelAndFieldCarrySurfaces(t *testing.T) {
+	withTheme(t, buildTheme(true, false, false))
+	p := styles.palette
+	bgOf := func(c colour) string {
+		out := lipgloss.NewStyle().Background(c.lip()).Render("x")
+		return out[:strings.Index(out, "x")]
+	}
+	panelBG, fieldBG := bgOf(p.panel), bgOf(p.surface)
+	if panelBG == fieldBG || bgOf(p.base) == panelBG || bgOf(p.base) == fieldBG {
+		t.Fatalf("base, panel and surface must differ: %q %q %q", bgOf(p.base), panelBG, fieldBG)
+	}
+	// A styled text inside a panel keeps the panel colour behind it, also after its own reset.
+	lines := panel("t", []string{styles.hint.Render("dim") + " tail"}, 20, 1, panelOpts{})
+	if !strings.HasPrefix(strings.TrimPrefix(lines[1], panelStyle(false).Render("│")), panelBG) {
+		t.Fatalf("panel content does not open with the panel colour: %q", lines[1])
+	}
+	if !strings.Contains(lines[1], "\x1b[0m"+panelBG+" tail") {
+		t.Fatalf("panel colour lost after a styled run: %q", lines[1])
+	}
+	if f := surfaceRow("name", 10); !strings.Contains(f, fieldBG) || strings.Contains(f, panelBG) {
+		t.Fatalf("field row not on the field surface: %q", f)
+	}
+
+	withTheme(t, buildTheme(true, true, false))
+	for _, l := range append(panel("t", []string{"x"}, 10, 1, panelOpts{}), surfaceRow("x", 10)) {
+		if strings.Contains(l, "48;") || strings.Contains(l, "\x1b[4") {
+			t.Fatalf("background colour without colour: %q", l)
+		}
 	}
 }
