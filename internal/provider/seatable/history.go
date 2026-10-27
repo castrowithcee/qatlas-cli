@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -52,7 +54,7 @@ var rowsActivities = capability.Descriptor{
 	Version: 1,
 	Title:   "List SeaTable row activities",
 	Description: "Read the change history of one row of a table allowed by an explicit SeaTable connection; " +
-		"values of links into tables outside the connection are reduced to row identifiers",
+		"values of links into tables outside the connection are reduced to row identifiers; lookup, findmin and findmax values from tables outside the connection are omitted; rollup, count and formula values stay and can reflect data of linked tables",
 	Tags:     []string{"seatable", "base", "rows", "activities", "history", "table"},
 	Risk:     seatableHistoryRisk,
 	Provider: Provider,
@@ -291,11 +293,17 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 	}
 	items = kept
 	var mask *linkMask
-	if !c.scope.wildcard && hasLinkShape(items) {
+	if !c.scope.wildcard && len(items) > 0 {
 		if err := load(); err != nil {
 			return nil, err
 		}
-		mask = &linkMask{client: c, document: document, current: current}
+		mask = &linkMask{client: c, document: document, current: current, hidden: map[string]string{}}
+		for _, column := range c.hiddenLookups(document, current) {
+			mask.hidden[column.Name] = column.Name
+			if column.Key != "" {
+				mask.hidden[column.Key] = column.Name
+			}
+		}
 	}
 	result, err := encodeItems(op, items, mask)
 	if err != nil {
@@ -381,6 +389,8 @@ type linkMask struct {
 	client   *Client
 	document metadataJSON
 	current  *tableJSON
+	// hidden maps the name and the key of every lookup column that is left out to its name.
+	hidden map[string]string
 }
 
 // allowed reports whether the link column behind a key points into the allow-list. The key may be the
@@ -418,33 +428,6 @@ func historyLinkIDs(list []any) ([]string, bool) {
 	return ids, found
 }
 
-func hasLinkShape(value any) bool {
-	switch typed := value.(type) {
-	case []map[string]any:
-		for _, item := range typed {
-			if hasLinkShape(item) {
-				return true
-			}
-		}
-	case map[string]any:
-		for _, item := range typed {
-			if hasLinkShape(item) {
-				return true
-			}
-		}
-	case []any:
-		if _, ok := historyLinkIDs(typed); ok {
-			return true
-		}
-		for _, item := range typed {
-			if hasLinkShape(item) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // shorten bounds strings and nesting of a history entry and masks link values the connection may not
 // read. Without a mask, every value stays as SeaTable reported it.
 func shorten(value any, mask *linkMask, depth int) any {
@@ -456,7 +439,31 @@ func shorten(value any, mask *linkMask, depth int) any {
 		return clipString(typed)
 	case map[string]any:
 		out := make(map[string]any, len(typed))
+		if mask != nil {
+			// A column object names its column as a value; every other member could hold its cell value.
+			for _, member := range []string{"column_key", "column_name"} {
+				text, _ := typed[member].(string)
+				if name, hidden := mask.hidden[text]; hidden && text != "" {
+					for _, keep := range []string{"column_key", "column_name", "column_type"} {
+						if item, ok := typed[keep].(string); ok {
+							out[keep] = clipString(item)
+						}
+					}
+					out["omitted_fields"] = []string{name}
+					return out
+				}
+			}
+		}
+		var omitted []string
 		for key, item := range typed {
+			if mask != nil {
+				if name, hidden := mask.hidden[key]; hidden {
+					if !slices.Contains(omitted, name) {
+						omitted = append(omitted, name)
+					}
+					continue
+				}
+			}
 			if list, ok := item.([]any); ok && mask != nil {
 				if ids, found := historyLinkIDs(list); found && !mask.allowed(key) {
 					masked := make([]any, 0, len(ids))
@@ -468,6 +475,10 @@ func shorten(value any, mask *linkMask, depth int) any {
 				}
 			}
 			out[key] = shorten(item, mask, depth+1)
+		}
+		if len(omitted) > 0 {
+			sort.Strings(omitted)
+			out["omitted_fields"] = omitted
 		}
 		return out
 	case []any:

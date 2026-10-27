@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 )
 
@@ -23,11 +22,8 @@ const (
 	profileNone
 )
 
-// profile and darkBackground are what Run found the terminal to show; tests set them.
-var (
-	profile        = profileNone
-	darkBackground = true
-)
+// profile is what Run found the terminal to show; tests set it.
+var profile = profileNone
 
 // toColorprofile is the profile of the colour library. No colour is NoTTY, which drops bold, faint and
 // reverse as well, as the output always did without colour; none of them carries a meaning alone.
@@ -67,14 +63,6 @@ func detectProfile(out io.Writer) colorProfile {
 func currentProfile() colorProfile { return profile }
 
 func setProfile(p colorProfile) { profile = p }
-
-// detectBackground asks the terminal for its background once, before the program reads the input, so a later
-// switch to the automatic colour scheme needs no second question.
-func detectBackground(in, out *os.File) { darkBackground = lipgloss.HasDarkBackground(in, out) }
-
-func hasDarkBackground() bool { return darkBackground }
-
-func setHasDarkBackground(dark bool) { darkBackground = dark }
 
 // shown is a frame as the terminal of the current profile is sent it, so what render returns is what the
 // terminal shows. Bubble Tea steps the frame down to the same profile, which leaves it unchanged.

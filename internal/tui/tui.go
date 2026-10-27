@@ -66,7 +66,7 @@ const (
 	sectionLogs
 	// sectionOverview is the start of the editor. It holds no entries; see overview.go.
 	sectionOverview
-	// sectionGeneral holds the device-local preferences (colour scheme, start view, icons), a settings form
+	// sectionGeneral holds the device-local preferences (theme, start view, icons), a settings form
 	// that needs no admin session. sectionTransfer, sectionUpdate and sectionSelftest are pages of action
 	// rows that start the export and import, the update and the selftests. See settings.go.
 	sectionGeneral
@@ -777,10 +777,11 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 }
 
 // Init resolves credential locations for the credential list. It asks only for source metadata; secret values
-// never enter the model. It also starts the check for a newer release, which never blocks the editor.
+// never enter the model. It also starts the check for a newer release, which never blocks the editor, and
+// asks the terminal for its colours where the theme mixes from them.
 func (m *Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick(),
-		m.loadOverviewActivity()}
+		m.loadOverviewActivity(), terminalColourQuery(m.prefs.Theme)}
 	if m.start != areaOverview {
 		// The chosen area opens like a tab pick: on its first part, with the focus on the tab line.
 		notice := m.status
@@ -880,6 +881,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSelftest(msg)
 	case restartFailedMsg:
 		m.restartFailed(msg)
+		return m, nil
+	case tea.ForegroundColorMsg, tea.BackgroundColorMsg:
+		m.takeTerminalColour(msg)
 		return m, nil
 	case tea.PasteMsg:
 		_, cmd := m.Update(pasteKey(msg.Content))
@@ -3753,7 +3757,7 @@ func (m *Model) render() string {
 	return shown(view)
 }
 
-// renderFrame is the frame before the background of the preference is applied.
+// renderFrame is the frame before the base colour of the theme is applied.
 func (m *Model) renderFrame() string {
 	if m.quitting {
 		return ""
@@ -5021,13 +5025,10 @@ func Run(opts Options) error {
 	if prefs == (uiprefs.Prefs{}) {
 		prefs = uiprefs.Default()
 	}
-	// The colour scheme is settled before the program takes the terminal, so the background query never
-	// races the editor's own input.
 	setProfile(detectProfile(opts.Out))
-	if os.Getenv("NO_COLOR") == "" {
-		detectBackground(opts.In, opts.Out)
-	}
-	applyColorScheme(prefs.Theme, prefs.Background)
+	known, themeWarning := knownTheme(prefs.Theme)
+	prefs.Theme = known
+	applyTheme(prefs.Theme)
 	setLanguage(prefs.Language)
 	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
 	if err != nil {
@@ -5040,6 +5041,9 @@ func Run(opts Options) error {
 	model.prefs = prefs
 	model.savePrefs = opts.SavePrefs
 	warnings := opts.PrefsWarnings
+	if themeWarning != "" {
+		warnings = append(warnings, themeWarning)
+	}
 	if err := prefs.Keys.WithDefaults().Validate(); err != nil {
 		warnings = append(warnings, "keys: "+err.Error()+", using the standard keys")
 		prefs.Keys, model.prefs.Keys = uiprefs.DefaultKeys(), uiprefs.DefaultKeys()

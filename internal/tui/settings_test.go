@@ -17,6 +17,8 @@ import (
 // returned path.
 func lockedVaultModel(t *testing.T) (*Model, string) {
 	t.Helper()
+	// A save applies the theme of the form to the whole process.
+	restoreRenderer(t)
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
@@ -35,11 +37,10 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 		t.Fatalf("General = screen %v section %v, want its form", m.screen, m.section)
 	}
 	labels := []string{m.fields[0].label, m.fields[1].label, m.fields[2].label, m.fields[3].label}
-	if strings.Join(labels, ",") != "color scheme,background,start view,icons" {
+	if strings.Join(labels, ",") != "theme,start view,icons,language" {
 		t.Fatalf("rows = %v", labels)
 	}
-	press(t, m, "right")        // color scheme: light
-	press(t, m, "tab", "right") // background: qatlas
+	press(t, m, "right", "right") // theme: qatlas light
 	press(t, m, "tab", "right")
 	press(t, m, "tab", "right") // icons: nerdfont
 	pump(t, m, "f2")
@@ -50,7 +51,7 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 		t.Fatalf("status %q fail %q, want it saved", m.status, m.fail)
 	}
 	got, warnings := uiprefs.Load(path)
-	want := uiprefs.Prefs{Theme: uiprefs.ThemeLight, Background: uiprefs.BackgroundQatlas, Start: "connections", Icons: uiprefs.IconsNerdFont,
+	want := uiprefs.Prefs{Theme: uiprefs.ThemeQatlasLight, Start: "connections", Icons: uiprefs.IconsNerdFont,
 		Language: uiprefs.LanguageEnglish, Keys: uiprefs.DefaultKeys()}
 	if got != want || len(warnings) != 0 {
 		t.Fatalf("stored = %+v %v, want %+v", got, warnings, want)
@@ -58,23 +59,57 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 	if m.prefs != want {
 		t.Errorf("model prefs = %+v, want %+v", m.prefs, want)
 	}
-	if styles.active.GetForeground() != buildTheme(false, false, false).active.GetForeground() {
-		t.Error("the colour scheme did not change at once")
-	}
-	if !styles.filled {
-		t.Error("the background did not change at once")
+	if styles.palette != paletteOf(false, currentProfile()) || !styles.filled {
+		t.Error("the theme did not change at once")
 	}
 	if m.formDirty() {
 		t.Error("the saved form still counts as changed")
 	}
 }
 
-func TestGeneralWithBackgroundFieldFitsSmallTerminal(t *testing.T) {
+// The theme row offers the terminal theme and the qatlas themes, and no background row is left.
+func TestGeneralOffersTheThemes(t *testing.T) {
+	m, _ := lockedVaultModel(t)
+	openSectionByName(t, m, sectionGeneral)
+	for _, f := range m.fields {
+		if f.label == "background" || f.label == "color scheme" {
+			t.Errorf("the General page still has the row %q", f.label)
+		}
+	}
+	theme := m.fields[0]
+	if theme.label != themeLabel || strings.Join(theme.choices, ",") != "terminal,qatlas dark,qatlas light" ||
+		theme.choices[theme.index] != uiprefs.ThemeTerminal {
+		t.Errorf("theme row = %q %v at %d, want terminal, qatlas dark and qatlas light on terminal",
+			theme.label, theme.choices, theme.index)
+	}
+}
+
+// Saving the terminal theme after another one asks the terminal for its colours, as the start does.
+func TestSavingTheTerminalThemeAsksForTheColours(t *testing.T) {
+	restoreRenderer(t)
+	setProfile(profileTrueColor)
+	t.Setenv("NO_COLOR", "")
+	m, _ := lockedVaultModel(t)
+	m.prefs.Theme = uiprefs.ThemeQatlasDark
+	openSectionByName(t, m, sectionGeneral)
+	press(t, m, "left") // theme: terminal
+	cmd := m.saveGeneral(false)
+	if m.prefs.Theme != uiprefs.ThemeTerminal || cmd == nil {
+		t.Fatalf("theme %q, command %v; want terminal and the question to the terminal", m.prefs.Theme, cmd)
+	}
+	if _, ok := cmd().(tea.BatchMsg); !ok {
+		t.Error("the save does not ask for both colours")
+	}
+	if again := m.saveGeneral(false); again != nil {
+		t.Error("saving the terminal theme again asks the terminal again")
+	}
+}
+
+func TestGeneralWithThemeFieldFitsSmallTerminal(t *testing.T) {
 	restoreRenderer(t)
 	m, _ := lockedVaultModel(t)
 	openSectionByName(t, m, sectionGeneral)
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 14})
-	press(t, m, "tab") // background
 	view := m.render()
 	lines := strings.Split(view, "\n")
 	if len(lines) > 14 || m.tooSmall {
@@ -85,8 +120,8 @@ func TestGeneralWithBackgroundFieldFitsSmallTerminal(t *testing.T) {
 			t.Errorf("line %d is %d cells wide at width 40", i, w)
 		}
 	}
-	if !strings.Contains(view, "background") {
-		t.Errorf("the background field is not on screen:\n%s", view)
+	if !strings.Contains(view, "theme") {
+		t.Errorf("the theme field is not on screen:\n%s", view)
 	}
 }
 
@@ -107,7 +142,7 @@ func TestGeneralSaveFailureIsReportedNotFatal(t *testing.T) {
 func TestGeneralLeaveQuestionSavesWithoutAdminSession(t *testing.T) {
 	m, path := lockedVaultModel(t)
 	openSectionByName(t, m, sectionGeneral)
-	press(t, m, "right", "right") // dark
+	press(t, m, "right", "right") // qatlas light
 	pump(t, m, "esc")
 	if m.screen != screenLeave {
 		t.Fatalf("esc on a changed form = screen %v, want the leave question", m.screen)
@@ -116,8 +151,8 @@ func TestGeneralLeaveQuestionSavesWithoutAdminSession(t *testing.T) {
 	if m.screen != screenNav || m.screen == screenAdminAuth {
 		t.Fatalf("after saving from the leave question: screen %v, want the tab line", m.screen)
 	}
-	if got, _ := uiprefs.Load(path); got.Theme != uiprefs.ThemeDark {
-		t.Errorf("stored theme = %q, want dark", got.Theme)
+	if got, _ := uiprefs.Load(path); got.Theme != uiprefs.ThemeQatlasLight {
+		t.Errorf("stored theme = %q, want qatlas light", got.Theme)
 	}
 }
 
@@ -259,7 +294,7 @@ func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
 	for _, noColor := range []bool{false, true} {
 		restoreRenderer(t)
 		t.Setenv("NO_COLOR", "")
-		applyColorScheme("dark", "")
+		useDarkColours()
 		if noColor {
 			withNoColor(t)
 		}

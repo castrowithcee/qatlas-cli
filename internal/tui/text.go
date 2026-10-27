@@ -39,7 +39,7 @@ func init() {
 	}
 }
 
-// uiLang is the language the editor draws in. Like the colour scheme it is process-wide: one editor runs per
+// uiLang is the language the editor draws in. Like the theme it is process-wide: one editor runs per
 // process, and the text helpers are called from places that hold no model.
 var uiLang = i18n.English
 

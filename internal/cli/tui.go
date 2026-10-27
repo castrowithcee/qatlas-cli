@@ -161,8 +161,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
 			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
-			"General (6, first part of Settings) holds the preferences of this device: the color scheme (auto,\n" +
-			"light, or dark; auto follows the terminal's background and NO_COLOR wins over all of them), the\n" +
+			"General (6, first part of Settings) holds the preferences of this device: the theme (terminal,\n" +
+			"the default, takes the colors of the terminal; qatlas dark and qatlas light paint the whole\n" +
+			"screen; NO_COLOR wins over all of them), the\n" +
 			"start view (the area the editor opens on the next start), icons (none or nerdfont, an icon\n" +
 			"before each area name that needs a Nerd Font), and language (english, deutsch, or system, which\n" +
 			"follows the device; it applies at once and covers the editor's own texts only), and mouse (on by\n" +

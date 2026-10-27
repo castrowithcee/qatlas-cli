@@ -49,7 +49,7 @@ var rowsSearch = capability.Descriptor{
 	Version: 1,
 	Title:   "Search SeaTable rows",
 	Description: "Filter, sort and page the rows of a table allowed by an explicit SeaTable connection with " +
-		"structured conditions; it searches the whole table and does not apply a configured view",
+		"structured conditions; it searches the whole table and does not apply a configured view; lookup, findmin and findmax values from tables outside the connection are omitted; rollup, count and formula values stay and can reflect data of linked tables",
 	Tags:     []string{"seatable", "base", "rows", "search", "filter", "sort", "table"},
 	Risk:     seatableReadRisk,
 	Provider: Provider,

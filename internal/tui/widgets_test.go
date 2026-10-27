@@ -20,7 +20,11 @@ func withTheme(t *testing.T, th theme) {
 
 func TestWidgetsCloseTheirFrameAtEveryWidth(t *testing.T) {
 	for _, noColor := range []bool{false, true} {
-		withTheme(t, buildTheme(true, noColor, false))
+		th := darkTheme()
+		if noColor {
+			th = noColorTheme()
+		}
+		withTheme(t, th)
 		for w := 10; w <= 200; w++ {
 			long := strings.Repeat("wide ", 80)
 			blocks := map[string][]string{
@@ -46,7 +50,7 @@ func TestWidgetsCloseTheirFrameAtEveryWidth(t *testing.T) {
 }
 
 func TestStatusMarkAndButtonWithoutColour(t *testing.T) {
-	withTheme(t, buildTheme(true, true, false))
+	withTheme(t, noColorTheme())
 	for _, s := range []string{statusMark(statusOK, "active"), statusMark(statusFail, "failed"),
 		button(buttonDanger, "Delete", true), button(buttonPrimary, "Save", false), button(buttonNormal, "Cancel", false)} {
 		if strings.Contains(s, "\x1b[3") || strings.Contains(s, "\x1b[4") || strings.Contains(s, "38;") || strings.Contains(s, "48;") {
@@ -59,7 +63,7 @@ func TestStatusMarkAndButtonWithoutColour(t *testing.T) {
 }
 
 func TestProviderMarkIsStableAndUsesBrandColours(t *testing.T) {
-	withTheme(t, buildTheme(true, false, false))
+	withTheme(t, darkTheme())
 	for _, name := range []string{"github", "gitlab", "mattermost", "", "x"} {
 		c := brandColor(name)
 		if c != brandColor(name) {
@@ -82,7 +86,7 @@ func TestProviderMarkIsStableAndUsesBrandColours(t *testing.T) {
 // target never moves with the profile, and the others stay unshaded.
 func TestTabStripActiveTabIsASurfaceAndBracketsWithoutColour(t *testing.T) {
 	words := []string{"One", "|", "Two", "Three"}
-	withTheme(t, buildTheme(true, false, false))
+	withTheme(t, darkTheme())
 	coloured, colourSpans := tabStrip(words, 2, false)
 	focused, _ := tabStrip(words, 2, true)
 	if strings.Contains(sgr.ReplaceAllString(coloured, ""), "[") {
@@ -91,7 +95,7 @@ func TestTabStripActiveTabIsASurfaceAndBracketsWithoutColour(t *testing.T) {
 	if !hasBackground(coloured) || !hasBackground(focused) || focused == coloured {
 		t.Errorf("active tab is no surface, or the focus does not show: %q / %q", coloured, focused)
 	}
-	withTheme(t, buildTheme(true, true, false))
+	withTheme(t, noColorTheme())
 	plain, plainSpans := tabStrip(words, 2, false)
 	if !strings.Contains(plain, "[Two]") || hasBackground(plain) || strings.Contains(plain, "38;") {
 		t.Errorf("plain active tab = %q, want brackets and no colour", plain)
@@ -110,7 +114,7 @@ func TestTabStripActiveTabIsASurfaceAndBracketsWithoutColour(t *testing.T) {
 }
 
 func TestPanelAndFieldCarrySurfaces(t *testing.T) {
-	withTheme(t, buildTheme(true, false, false))
+	withTheme(t, darkTheme())
 	p := styles.palette
 	bgOf := func(c colour) string {
 		out := lipgloss.NewStyle().Background(c.lip()).Render("x")
@@ -132,7 +136,7 @@ func TestPanelAndFieldCarrySurfaces(t *testing.T) {
 		t.Fatalf("field row not on the field surface: %q", f)
 	}
 
-	withTheme(t, buildTheme(true, true, false))
+	withTheme(t, noColorTheme())
 	for _, l := range append(panel("t", []string{"x"}, 10, 1, panelOpts{}), surfaceRow("x", 10)) {
 		if strings.Contains(l, "48;") || strings.Contains(l, "\x1b[4") {
 			t.Fatalf("background colour without colour: %q", l)

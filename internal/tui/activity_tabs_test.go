@@ -11,6 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // The tabs of the Activity screen switch by key and by click, and the summary and the sessions stay behind s and m.
@@ -102,7 +104,7 @@ func TestActivityHeatmapTotalsMatchTheFixture(t *testing.T) {
 		}
 	}
 	visualSetup(t, false)
-	m := visualModel(t, fixtures, 150, 42, "dark", "terminal")
+	m := visualModel(t, fixtures, 150, 42, uiprefs.ThemeQatlasDark)
 	activityHeatmap(t, m)
 	want := fmt.Sprintf("Calls %d · success %d%% · errors %d", len(calls), (len(calls)-failed)*100/len(calls), failed)
 	if view := ansi.Strip(m.render()); !strings.Contains(view, want) {

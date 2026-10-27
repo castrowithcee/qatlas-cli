@@ -36,7 +36,7 @@ func TestFormsStayUsableAtEverySizeAndWithoutColour(t *testing.T) {
 				name := form.name + "/" + map[bool]string{false: "colour", true: "no colour"}[noColor]
 				t.Run(name+"/"+fmt.Sprintf("%dx%d", size.w, size.h), func(t *testing.T) {
 					visualSetup(t, noColor)
-					m := visualModel(t, fixtures, size.w, size.h, uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+					m := visualModel(t, fixtures, size.w, size.h, uiprefs.ThemeQatlasDark)
 					form.open(t, m)
 					if m.screen != screenForm && m.screen != screenPicker {
 						t.Fatalf("screen = %v, want the form", m.screen)
@@ -65,7 +65,7 @@ func TestAFormTooTallForFramesFallsBackWithoutLosingTheFocus(t *testing.T) {
 	fixtures, err := filepath.Abs(visualDir)
 	mustNoError(t, err)
 	visualSetup(t, false)
-	m := visualModel(t, fixtures, 80, 24, uiprefs.ThemeDark, uiprefs.BackgroundTerminal)
+	m := visualModel(t, fixtures, 80, 24, uiprefs.ThemeQatlasDark)
 	pump(t, m, "2", "enter")
 	for range m.fields {
 		view := ansi.Strip(m.render())
