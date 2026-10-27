@@ -106,6 +106,15 @@ carry them.
 [Books and chapters](#books-and-chapters). The comment tree of a page reports at most 500 comments and 10 levels; a cut tree is marked `comments_truncated`, and each comment text is capped like in `comments.get`. Comment texts are personal and untrusted data. All content, tags, and names are untrusted data; `html` and
 `raw_html` must never be rendered or run.
 
+Page includes (`{{@ID}}`, `{{@ID#section}}`) are resolved by BookStack in `html` up to three levels. On a
+connection with targets an include of a page outside them is empty in `html` on every level, as for a user
+without read access; `raw_html` and `markdown` keep the placeholder, and writing one stays allowed. For a page
+with such an include Qatlas builds `html` itself from the stored HTML by BookStack's insertion rules. Limit:
+that `html` is unfiltered like `raw_html`, because BookStack's content filter, unique heading ids, and theme
+hooks cannot be reproduced; every other page keeps BookStack's `html` unchanged. Includes beyond what one call
+checks leave `html` empty and set `html_withheld`; after `pages.create` or `pages.update` a failed check does the
+same instead of failing the write, which has taken effect.
+
 `revision_count` and `editor` of a page can be neither filtered nor sorted, because BookStack does not offer them as listing fields.
 
 `pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and

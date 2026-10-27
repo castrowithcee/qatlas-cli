@@ -556,6 +556,10 @@ func invokeAccessGrant(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
+	// Access to a folder is inherited by everything below it, excluded objects included.
+	if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+		return nil, err
+	}
 	if err := client.verifyAccessTargets(ctx, op, input.DriveID, input.UserIDs, input.TeamIDs); err != nil {
 		return nil, err
 	}
@@ -680,6 +684,12 @@ func invokeAccessOne(ctx context.Context, resolved *config.Resolved, secrets *se
 	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err
+	}
+	if update {
+		// Like a grant, an update reaches everything below the folder; taking access away does not.
+		if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+			return nil, err
+		}
 	}
 	var users, teams []int64
 	if input.UserID != 0 {

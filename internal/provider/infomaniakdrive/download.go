@@ -101,6 +101,10 @@ func invokeFilesDownload(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
+	// A folder is written as a zip archive of everything below it.
+	if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+		return nil, err
+	}
 	response, err := client.openDownload(ctx, op, input.DriveID, input.FileID)
 	if err != nil {
 		return nil, err

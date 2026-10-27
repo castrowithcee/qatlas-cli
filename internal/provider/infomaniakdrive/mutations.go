@@ -359,6 +359,12 @@ func invokeTransfer(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
+	if !move {
+		// A copy of a folder carries everything below it, excluded objects included.
+		if err := client.refuseAncestor(ctx, op, input.DriveID, input.FileID); err != nil {
+			return nil, err
+		}
+	}
 	return send(client, ctx, input.DriveID, input.FileID, input.DestinationID, input.Conflict)
 }
 
