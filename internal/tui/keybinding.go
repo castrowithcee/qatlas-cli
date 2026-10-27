@@ -61,13 +61,13 @@ func keyRowValue(f field) string {
 // keyRowKey handles the keys of a focused key row: enter waits for the new key, r restores the standard.
 func (m *Model) keyRowKey(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	f := &m.fields[m.focus]
-	switch key.String() {
-	case "enter":
+	switch {
+	case keyIs(key, actEnter):
 		m.clearMessages()
 		m.keyCapture = true
 		m.status = tr(tKeyPressStatus, trOr(textID("keyaction."+f.action), strings.TrimSuffix(f.label, " key")))
 		return nil, true
-	case "r":
+	case key.String() == "r":
 		m.clearMessages()
 		f.bound = uiprefs.DefaultKeys().Get(f.action)
 		return nil, true
@@ -87,7 +87,7 @@ func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	m.clearMessages()
-	if key.String() == keyOf(actBack) {
+	if keyIs(key, actBack) {
 		m.status = tr(tKeyKept)
 		return nil
 	}
