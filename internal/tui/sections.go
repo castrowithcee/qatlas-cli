@@ -36,7 +36,7 @@ var connectionSections = map[string]string{
 	targetsLabel: secTargets, pathsLabel: secTargets,
 	profileLabel: secTools, toolListLabel: secTools,
 	accessLabel: secAccess, effectsLabel: secAccess,
-	filesReadLabel: secAdvanced, filesWriteLabel: secAdvanced, activeForLabel: secAdvanced, forwardLabel: secAdvanced,
+	filesReadLabel: secAdvanced, filesWriteLabel: secAdvanced, activeForLabel: secGeneral, forwardLabel: secAdvanced,
 }
 
 const (
