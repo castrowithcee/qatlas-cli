@@ -28,12 +28,11 @@ func iconsDetail() string { return tr(tIconsDetail) + ". " + iconsTest() }
 
 // Labels of the General form.
 const (
-	themeLabel      = "color scheme"
-	backgroundLabel = "background"
-	startLabel      = "start view"
-	iconsLabel      = "icons"
-	langLabel       = "language"
-	mouseLabel      = "mouse"
+	themeLabel = "theme"
+	startLabel = "start view"
+	iconsLabel = "icons"
+	langLabel  = "language"
+	mouseLabel = "mouse"
 )
 
 // Actions of the Transfer, Update and Self-test pages, run by a fieldVaultAction row.
@@ -111,21 +110,15 @@ func (m *Model) generalFields() []field {
 	if language == "" {
 		language = uiprefs.LanguageEnglish
 	}
-	background := prefs.Background
-	if background == "" {
-		background = uiprefs.BackgroundTerminal
-	}
+	current, _ := themeNamed(prefs.Theme)
 	mouse := uiprefs.ChoiceMouseOn
 	if !prefs.MouseEnabled() {
 		mouse = uiprefs.ChoiceMouseOff
 	}
 	fields := []field{
-		choiceField(themeLabel, []string{uiprefs.ThemeAuto, uiprefs.ThemeLight, uiprefs.ThemeDark}, prefs.Theme).
+		choiceField(themeLabel, themeNames(), current.name).
 			withHint(tr(tThemeHint)).
 			withDetail(tr(tThemeDetail)),
-		choiceField(backgroundLabel, []string{uiprefs.BackgroundTerminal, uiprefs.BackgroundQatlas}, background).
-			withHint(tr(tBackgroundHint)).
-			withDetail(tr(tBackgroundDetail)),
 		choiceField(startLabel, areas, start).
 			withHint(tr(tStartHint)),
 		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
@@ -146,7 +139,7 @@ func (m *Model) generalFields() []field {
 // which goes on to the tab line afterwards.
 func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	next := uiprefs.Prefs{
-		Theme: m.fieldValue(themeLabel), Background: m.fieldValue(backgroundLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
+		Theme: m.fieldValue(themeLabel), Start: m.fieldValue(startLabel), Icons: m.fieldValue(iconsLabel),
 		Language: m.fieldValue(langLabel), MouseOff: m.fieldValue(mouseLabel) == uiprefs.ChoiceMouseOff, Keys: m.keysOfForm(),
 	}
 	if err := next.Keys.Validate(); err != nil {
@@ -161,8 +154,15 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 		m.status, m.fail = "", tr(tSettingsSaveFailed, m.redactor.Apply(err.Error()))
 		return nil
 	}
+	before, _ := themeNamed(m.prefs.Theme)
 	m.prefs = next
-	applyColorScheme(next.Theme, next.Background)
+	applyTheme(next.Theme)
+	// Switching to the terminal theme asks the terminal for its colours again; until it answers the theme
+	// draws without fills.
+	var query tea.Cmd
+	if before.name != next.Theme {
+		query = terminalColourQuery(next.Theme)
+	}
 	applyKeys(next.Keys)
 	// The language applies at once: the messages and the form below are drawn in it.
 	setLanguage(next.Language)
@@ -170,9 +170,9 @@ func (m *Model) saveGeneral(leave bool) tea.Cmd {
 	m.status = tr(tSettingsSaved)
 	// The mouse mode of the terminal follows the preference with the next view (see mouseMode).
 	if leave {
-		return m.showList()
+		return tea.Batch(query, m.showList())
 	}
-	return m.openPageForm()
+	return tea.Batch(query, m.openPageForm())
 }
 
 // pageAction is a row that runs one of the existing flows at once on enter.

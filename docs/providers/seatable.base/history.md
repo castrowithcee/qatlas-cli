@@ -20,8 +20,10 @@ never enter the audit trail or the invoke log. The shared rules are in
   no history. The token exchange and the row read are the only provider access that can precede a refusal.
 - Activities may hold values of linked rows; For a connection with an allow-list, a link
   value whose linked table is outside it, or cannot be determined from the base metadata, is reduced to the
-  `row_id` of its entries. A wildcard connection keeps the values. Text that SeaTable
-  composes into a single string cannot be inspected and is reported as SeaTable sends it.
+  `row_id` of its entries, and the key of a lookup, findmin or findmax column under the same condition is
+  removed with its name listed in `omitted_fields` of the enclosing object. A wildcard connection keeps the
+  values. Text that SeaTable composes into a single string cannot be inspected and is reported as SeaTable
+  sends it.
 - Only entries of the requested row are reported: an entry with a `row_id` other than the requested one, or
   with a `table_id` or `table_name` other than the selected table, is left out; entries without these fields
   stay, because the request names the row. Reading the table identifiers of the metadata is then the only

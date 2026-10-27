@@ -10,6 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // vaultCases are the vault states the header shows, each with the word it must name.
@@ -260,7 +262,7 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
 	t.Setenv("NO_COLOR", "1")
-	applyColorScheme("", "")
+	applyTheme(uiprefs.ThemeTerminal)
 	setProfile(profile256)
 
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)

@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // withNoColor makes the rest of the test draw as a terminal with NO_COLOR does.
@@ -19,7 +20,7 @@ func withNoColor(t *testing.T) {
 	restoreRenderer(t)
 	t.Setenv("NO_COLOR", "1")
 	setProfile(profileNone)
-	applyColorScheme("", "")
+	applyTheme(uiprefs.ThemeTerminal)
 }
 
 // The detail screens of a token and of an open approval keep their state as a mark with its word, and every
@@ -29,7 +30,7 @@ func TestAccessDetailsKeepTheirStatusWordsAtEverySize(t *testing.T) {
 		restoreRenderer(t)
 		setProfile(profileTrueColor)
 		t.Setenv("NO_COLOR", "")
-		applyColorScheme("dark", "")
+		useDarkColours()
 		if noColor {
 			withNoColor(t)
 		}

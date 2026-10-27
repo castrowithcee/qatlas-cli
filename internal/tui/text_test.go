@@ -174,10 +174,10 @@ func TestGermanFrameTexts(t *testing.T) {
 		}
 	}
 	openSectionByName(t, m, sectionGeneral)
-	if got := m.fields[0].label; got != "color scheme" {
+	if got := m.fields[0].label; got != "theme" {
 		t.Errorf("the row label = %q, want the internal key", got)
 	}
-	if view := formView(m); !strings.Contains(view, "Farbschema") || !strings.Contains(view, "auto") ||
+	if view := formView(m); !strings.Contains(view, "Theme") || !strings.Contains(view, "terminal") ||
 		!strings.Contains(screenOf(m), "▾") {
 		t.Errorf("the German General page lacks its labels:\n%s", view)
 	}
@@ -264,7 +264,7 @@ func TestGermanKeyRows(t *testing.T) {
 			t.Errorf("the key rows lack %q:\n%s", want, view)
 		}
 	}
-	if got := m.fields[6].label; got != "save key" {
+	if got := m.fields[5].label; got != "save key" {
 		t.Errorf("key row label = %q, want the internal key", got)
 	}
 	focusField(t, m, "help key")

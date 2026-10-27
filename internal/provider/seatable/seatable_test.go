@@ -505,11 +505,12 @@ func TestListRowsSendsOnlyBoundedPagingAndTheFixedTarget(t *testing.T) {
 
 	want := []string{
 		"GET " + rowsRoute(salesBase) + "?convert_keys=true&limit=100&start=50&table_name=Kunden&view_name=Aktive",
+		"GET " + metaRoute(salesBase) + "?",
 	}
 	if !reflect.DeepEqual(requests, want) {
 		t.Errorf("requests = %v, want %v", requests, want)
 	}
-	if len(authorizations) != 1 || authorizations[0] != "Bearer "+salesBaseToken {
+	if len(authorizations) != 2 || authorizations[0] != "Bearer "+salesBaseToken {
 		t.Errorf("authorizations = %v, want the exchanged base token", authorizations)
 	}
 
@@ -519,7 +520,7 @@ func TestListRowsSendsOnlyBoundedPagingAndTheFixedTarget(t *testing.T) {
 			t.Errorf("ListRows(%+v) was accepted", options)
 		}
 	}
-	if len(requests) != 1 {
+	if len(requests) != 2 {
 		t.Errorf("requests = %v, want the rejected pages to stay local", requests)
 	}
 }
@@ -605,7 +606,7 @@ func TestGetRowReadsExactlyTheValidatedRow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetRow() = %v", err)
 		}
-		want := []string{rowRoute(salesBase, rowID) + "?convert_keys=true&table_name=Kunden"}
+		want := []string{rowRoute(salesBase, rowID) + "?convert_keys=true&table_name=Kunden", metaRoute(salesBase) + "?"}
 		if !reflect.DeepEqual(requests, want) {
 			t.Errorf("requests = %v, want %v", requests, want)
 		}
