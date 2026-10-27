@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Set up Infomaniak Mail
@@ -135,7 +135,7 @@ provider answer (untrusted, not written by qatlas):
 | `auth` ending in "the message was not sent" | SMTP refused the login for the address and password | Same as above. |
 | `permission`: this mailbox may not perform this operation | The server refused the operation on this folder or message | Open the folder in the Infomaniak web mail as the same mailbox. Read the provider answer for the server's reason. |
 | `not-found`: Infomaniak Mail does not hold this folder or does not show it to this mailbox | The folder name is wrong, or the mailbox cannot see it | Check the name against `infomaniak.mail.folders.list`. |
-| `not-found`: Infomaniak Mail holds no such message in this folder | The UID is wrong, the message is gone, or it is from a sender outside the connection's sender targets | List the folder again; see [Scope](README.md#scope). |
+| `not-found`: Infomaniak Mail holds no such message in this folder | The UID is wrong, the message is gone, or it is from a sender outside the connection's sender targets or from an excluded sender | List the folder again; see [Scope](README.md#scope). |
 | `provider-error`: Infomaniak Mail rejected the operation | The server answered `NO` or `BAD` without a code Qatlas maps | Read the provider answer. Nothing is repeated. |
 | `provider-error`: Infomaniak Mail does not offer ..., so nothing was changed | The server lacks `MOVE` or `UIDPLUS` | Not a rights problem. Use a tool that does not need it. |
 | `provider-error`: Infomaniak Mail did not offer STARTTLS, or offered no authentication, or neither AUTH PLAIN nor AUTH LOGIN | The SMTP endpoint did not behave as expected; no credential was sent | Retry later. Nothing was sent. |
@@ -144,5 +144,5 @@ provider answer (untrusted, not written by qatlas):
 | `timeout`: Infomaniak Mail did not answer in time | The server was slow | Retry. After a change or a send, read the mailbox and the Sent folder first. |
 | `tls` | The certificate of the server could not be verified from this machine | Check the system certificate store, the system clock, and any proxy or filter on the network. |
 | `rate-limited` | A limit asks to wait | Wait and retry. |
-| `invalid-request` naming the folder or sender targets | The folder or sender is outside the connection's targets | Not an Infomaniak problem. Pass a target the connection allows, or add it; see [Scope](README.md#scope). |
+| `invalid-request` naming the folder or sender targets | The folder or sender is outside the connection's targets or excluded | Not an Infomaniak problem. Pass a target the connection allows, or add it; see [Scope](README.md#scope). |
 | `invalid-provider-response` | An answer broke the expected structure | Retry; see [Errors](README.md#errors). |

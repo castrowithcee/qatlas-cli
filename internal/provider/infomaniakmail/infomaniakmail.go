@@ -21,6 +21,13 @@
 // refusal never names the folder that is allowed. The sender list is applied locally to the parsed From
 // address of every message; an IMAP SEARCH on its own is never trusted for it.
 //
+// A connection may also exclude folders (folder/PATH, or folder/PATH/* with its subfolders) and sender
+// addresses (sender/ADDRESS), and an exclusion always wins. An excluded folder behaves like a folder without
+// IMAP rights and is left out of the folder listing; a message from an excluded sender behaves like a UID that
+// does not exist and is left out of a listing. An exclusion is applied locally, a server-side NOT FROM is never
+// sent, and no refusal names a folder, an address, or an exclusion. A special-use folder that is excluded is
+// refused like one outside the targets.
+//
 // A folder is opened with EXAMINE for every read, so a read cannot change a message's \Seen flag. Envelopes
 // are fetched with ENVELOPE and BODYSTRUCTURE, and content only with BODY.PEEK[part], none of which ever
 // marks a message seen. A part is addressed only by a part number taken from the message's own
@@ -213,11 +220,15 @@ type session struct {
 }
 
 // folderOK is the final folder check of one operation, run after login and before any SELECT, EXAMINE, or
-// MOVE on that folder. Without a folder/PATH/* target it adds nothing: the check without network access was
-// already exact. With one it asks the server for the hierarchy delimiter once per session (LIST "" "") unless
-// a LIST answer already provided it. A failed question refuses without naming a folder.
+// MOVE on that folder. Without a folder/PATH/* target or exclusion it adds nothing: the check without network
+// access was already exact. With one it asks the server for the hierarchy delimiter once per session
+// (LIST "" "") unless a LIST answer already provided it. A failed question refuses without naming a folder.
 func (s *session) folderOK(op, name string) error {
-	if len(s.scope.trees) == 0 || s.scope.allowsExact(name) {
+	if s.scope.excludesFolder(name, "") {
+		return invalidRequest("folder is outside the targets of this connection")
+	}
+	// The delimiter decides whether the name is a subfolder of a folder/PATH/* target or exclusion.
+	if !s.scope.mayBeExcluded(name) && (len(s.scope.trees) == 0 || s.scope.allowsExact(name)) {
 		return nil
 	}
 	if !s.delimKnown {
@@ -418,7 +429,8 @@ func Register(reg *capability.Registry) error {
 				"repeatable allow-list of folder/PATH targets and an optional, repeatable allow-list of " +
 				"sender/ADDRESS targets; without a folder target every folder of the mailbox is reachable, and " +
 				"without a sender target every sender. A folder outside the list is refused before any secret " +
-				"is read; the sender list is applied locally to the parsed From address of every message",
+				"is read; the sender list is applied locally to the parsed From address of every message. Exclusions " +
+				"(folder/PATH, folder/PATH/*, sender/ADDRESS) take folders and senders out again and always win",
 			Kinds: []config.TargetKind{{
 				Name:        "mailbox",
 				Description: "the one mailbox this connection logs in to; required, exactly one",
@@ -427,13 +439,15 @@ func Register(reg *capability.Registry) error {
 				Name:    "folder",
 				Parents: []string{"mailbox"},
 				Description: "one folder of the mailbox, by its exact name, or with folder/PATH/* that folder and " +
-					"its subfolders; optional, repeatable; no other wildcards",
-				Forms: []string{"folder/PATH", "folder/PATH/*"},
+					"its subfolders; optional, repeatable; no other wildcards; can be excluded",
+				Forms:      []string{"folder/PATH", "folder/PATH/*"},
+				Excludable: true,
 			}, {
 				Name: "sender",
 				Description: "one sender address whose messages are listed; optional, repeatable; compared " +
-					"against the From address of each message, case-insensitively",
-				Forms: []string{"sender/ADDRESS"},
+					"against the From address of each message, case-insensitively; can be excluded",
+				Forms:      []string{"sender/ADDRESS"},
+				Excludable: true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
