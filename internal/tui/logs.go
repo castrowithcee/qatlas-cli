@@ -970,9 +970,9 @@ func (m *Model) logRoom() int {
 	return m.usable(0)
 }
 
-// logPanelFocused reports whether the frame of the panel shows the focus: the rows have it.
+// logPanelFocused reports whether the frame of the panel shows the focus: the screen has it, not the area tabs.
 func (m *Model) logPanelFocused() bool {
-	return m.screen == screenLogs && m.logs.focus == logFocusRows
+	return m.screen == screenLogs
 }
 
 // logSide puts one line into the frame of the panel, where the last frame drew one.
@@ -1032,47 +1032,51 @@ func (m *Model) logsFrame() (string, string) {
 	for mode := logModeDay; mode < logModeCount; mode++ {
 		modes = append(modes, mode.String())
 	}
-	field := func(f logFocus, label, value string) (string, string) {
-		text := dropdownField(label, value, focused && lv.focus == f, width-2)
-		return marker(f) + text, ansi.Strip(text)
-	}
-	strip, spans := tabStrip(logTabWords(), int(lv.tab()), focused && lv.focus == logFocusTabs)
-	tabsPlain := make([]string, len(spans))
-	for i, span := range spans {
-		tabsPlain[i] = ansi.Cut(ansi.Strip(strip), span[0], span[1])
-	}
-	tabLine := packBar([]string{marker(logFocusTabs) + strip}, status, width)
-	modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
-	var dateField, datePlain string
-	switch lv.mode {
-	case logModeDay, logModeRange:
-		text := tr(tLogBarDate, lv.day)
-		if lv.mode == logModeRange {
-			text = tr(tLogBarRange, lv.from, lv.to)
+	// bar draws the tab line and the filter line for a room of width cells: inside the panel where there is one.
+	bar := func(width int) (tabLine, filterRows, compactRows []string) {
+		field := func(f logFocus, label, value string) (string, string) {
+			text := dropdownField(label, value, focused && lv.focus == f, width-2)
+			return marker(f) + text, ansi.Strip(text)
 		}
-		label, value, _ := strings.Cut(text, ": ")
-		dateField, datePlain = field(logFocusDate, label, strings.Trim(value, "[]"))
-	default:
-		dateField = "  " + styles.hint.Render(tr(tLogBarAll))
-	}
+		strip, spans := tabStrip(logTabWords(), int(lv.tab()), focused && lv.focus == logFocusTabs)
+		tabsPlain := make([]string, len(spans))
+		for i, span := range spans {
+			tabsPlain[i] = ansi.Cut(ansi.Strip(strip), span[0], span[1])
+		}
+		tabLine = packBar([]string{marker(logFocusTabs) + strip}, status, width)
+		modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
+		var dateField, datePlain string
+		switch lv.mode {
+		case logModeDay, logModeRange:
+			text := tr(tLogBarDate, lv.day)
+			if lv.mode == logModeRange {
+				text = tr(tLogBarRange, lv.from, lv.to)
+			}
+			label, value, _ := strings.Cut(text, ": ")
+			dateField, datePlain = field(logFocusDate, label, strings.Trim(value, "[]"))
+		default:
+			dateField = "  " + styles.hint.Render(tr(tLogBarAll))
+		}
 
-	// The fields stand behind a marker column of two cells: the mode and the date carry their own, the filters
-	// leave it blank.
-	fields := []string{modeField, dateField}
-	var filterPlain []string
-	for k, value := range lv.filters {
-		label := []rune(tr(logFilterShort[k]))
-		text := dropdownField(strings.ToUpper(string(label[:1]))+string(label[1:]), filterText(value), false, min(width-2, 24))
-		fields = append(fields, "  "+text)
-		filterPlain = append(filterPlain, ansi.Strip(text))
+		// The fields stand behind a marker column of two cells: the mode and the date carry their own, the filters
+		// leave it blank.
+		fields := []string{modeField, dateField}
+		var filterPlain []string
+		for k, value := range lv.filters {
+			label := []rune(tr(logFilterShort[k]))
+			text := dropdownField(strings.ToUpper(string(label[:1]))+string(label[1:]), filterText(value), false, min(width-2, 24))
+			fields = append(fields, "  "+text)
+			filterPlain = append(filterPlain, ansi.Strip(text))
+		}
+		filterRows, searchPlain := fieldRows(fields, func(room int) string { return searchContent(&lv.list, room) }, width)
+		// A compact frame keeps one line of the filter line: the search while it is typed, else the first fields.
+		compactRows = filterRows[:1]
+		if lv.list.editing || lv.list.query() != "" {
+			compactRows = []string{searchField(searchContent(&lv.list, width-2), width-2)}
+		}
+		m.logBarSpecs = m.logBarTargets(modePlain, datePlain, tabsPlain, filterPlain, searchPlain)
+		return tabLine, filterRows, compactRows
 	}
-	filterRows, searchPlain := fieldRows(fields, func(room int) string { return searchContent(&lv.list, room) }, width)
-	// A compact frame keeps one line of the filter line: the search while it is typed, else the first fields.
-	compactRows := filterRows[:1]
-	if lv.list.editing || lv.list.query() != "" {
-		compactRows = []string{searchField(searchContent(&lv.list, width-2), width-2)}
-	}
-	m.logBarSpecs = m.logBarTargets(modePlain, datePlain, tabsPlain, filterPlain, searchPlain)
 	rule := styles.quietBorder.Render(strings.Repeat("─", width))
 
 	shown := len(lv.list.matches)
@@ -1114,7 +1118,7 @@ func (m *Model) logsFrame() (string, string) {
 		}
 		if framed {
 			for i, line := range lines {
-				lines[i] = panelSide(line, room, focused && lv.focus == logFocusRows, "")
+				lines[i] = panelSide(line, room, focused, "")
 			}
 		}
 		return lines
@@ -1136,18 +1140,26 @@ func (m *Model) logsFrame() (string, string) {
 		if framed {
 			lines = strings.Split(strings.TrimSuffix(m.titled(m.section.title(), "", width), "\n"), "\n")
 		}
-		lines = append(lines, tabLine...)
-		if compact {
-			lines = append(lines, compactRows...)
-		} else {
-			lines = append(lines, filterRows...)
-		}
+		tabLine, filterRows, compactRows := bar(room)
 		bottom := rule
-		switch {
-		case framed:
-			lines = append(lines, panelTop("", "", room, focused && lv.focus == logFocusRows))
-			bottom = panelBottom(room, focused && lv.focus == logFocusRows)
-		case !compact:
+		if framed {
+			// The bars stand inside the panel, so the frame shows the focus wherever on the screen it is.
+			lines = append(lines, panelTop("", "", room, focused))
+			bottom = panelBottom(room, focused)
+		}
+		barLines := append([]string{}, tabLine...)
+		if compact {
+			barLines = append(barLines, compactRows...)
+		} else {
+			barLines = append(barLines, filterRows...)
+		}
+		for _, line := range barLines {
+			if framed {
+				line = panelSide(line, room, focused, "")
+			}
+			lines = append(lines, line)
+		}
+		if !framed && !compact {
 			lines = append(lines, rule)
 		}
 		lines = append(lines, body(room, framed)...)

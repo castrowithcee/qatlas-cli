@@ -38,7 +38,7 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 			t.Fatalf("%s = tab %v, want %v with %s:\n%s", step.key, m.logs.tab(), step.want, step.mark, m.render())
 		}
 	}
-	row := m.workspaceTop() + m.titleRows()
+	row := m.workspaceTop() + m.titleRows() + 1 // inside the panel, under its top border
 	clickAt(t, m, cellInRow(t, m, row, "Activity"), row)
 	if m.logs.tab() != logTabActivity || !m.logs.heat {
 		t.Fatalf("a click on Activity = tab %v", m.logs.tab())
