@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -12,13 +13,13 @@ import (
 // keepKeys puts the process-wide keymap back after a test that changes it.
 func keepKeys(t *testing.T) {
 	t.Helper()
-	saved, extra := map[action]string{}, infoExtra
-	for a, k := range keymap {
-		saved[a] = k
+	saved, extra := map[action]key.Binding{}, infoExtra
+	for a, b := range keymap {
+		saved[a] = b
 	}
 	t.Cleanup(func() {
-		for a, k := range saved {
-			keymap[a] = k
+		for a, b := range saved {
+			keymap[a] = b
 		}
 		infoExtra = extra
 	})

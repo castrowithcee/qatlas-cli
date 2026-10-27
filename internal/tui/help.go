@@ -210,7 +210,7 @@ func keyListText() string {
 	lines := []string{keysHeading}
 	for _, r := range keyRows {
 		a := userActions[r.action]
-		key := keyName(keymap[a])
+		key := keyName(keyOf(a))
 		if r.action == uiprefs.ActionInfo {
 			a = actInfo
 			key = keyLabel(a)
