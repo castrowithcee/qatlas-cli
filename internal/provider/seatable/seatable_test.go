@@ -1373,3 +1373,49 @@ func TestWildcardConnectionKeepsDisplayValuesWithoutMetadata(t *testing.T) {
 		t.Errorf("metadata calls = %d, want none for a wildcard", calls)
 	}
 }
+
+func TestSingleRowMutationsRefuseLinkColumns(t *testing.T) {
+	ctx := context.Background()
+	for _, target := range []string{"Kunden", "*"} {
+		calls := serveBatch(t, http.StatusOK, `{}`)
+		c := linksClient(t, target)
+		values := map[string]json.RawMessage{
+			"Name": json.RawMessage(`"a"`), "Vorgang": json.RawMessage(`["` + otherRowID + `"]`)}
+		errs := []error{
+			c.CreateRowIn(ctx, "Kunden", values), c.UpdateRowIn(ctx, "Kunden", rowID, values),
+		}
+		for i, err := range errs {
+			if err == nil || !strings.Contains(err.Error(), "use the link tools") {
+				t.Errorf("target %s call %d err = %v", target, i, err)
+			} else if strings.Contains(err.Error(), "Vorgang") || strings.Contains(err.Error(), "Kunden") {
+				t.Errorf("target %s call %d names column or table: %v", target, i, err)
+			}
+		}
+		if len(*calls) != 0 {
+			t.Errorf("target %s requests = %v, want none", target, *calls)
+		}
+	}
+}
+
+func TestSingleRowHandlersRefuseLinkColumns(t *testing.T) {
+	calls := serveBatch(t, http.StatusOK, `{}`)
+	red := &redact.Redactor{}
+	secrets := secret.NewWith(func(string) string { return salesToken }, nil, nil, red)
+	resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "Kunden")
+	link := `"values":{"Vorgang":["` + otherRowID + `"]}`
+	for name, tt := range map[string]struct {
+		handler capability.Handler
+		raw     string
+	}{
+		"create": {invokeRowsCreate, `{` + link + `}`},
+		"update": {invokeRowsUpdate, `{"row_id":"` + rowID + `",` + link + `}`},
+	} {
+		if _, err := tt.handler(context.Background(), resolved, secrets, red, json.RawMessage(tt.raw)); err == nil ||
+			!strings.Contains(err.Error(), "use the link tools") {
+			t.Errorf("%s err = %v", name, err)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("requests = %v, want none", *calls)
+	}
+}
