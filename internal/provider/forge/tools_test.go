@@ -170,6 +170,10 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".admin-user-emails.list", p.id+".admin-user-emails.delete")
 		}
 		want = append(want, p.id+".admin-user-keys.delete")
+		if p == gitea {
+			want = append(want, p.id+".admin-user-badges.list", p.id+".admin-user-badges.add",
+				p.id+".admin-user-badges.delete")
+		}
 		if p == forgejo {
 			want = append(want, p.id+".admin-access-tokens.list", p.id+".admin-access-tokens.delete")
 		}

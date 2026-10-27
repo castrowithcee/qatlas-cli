@@ -31,6 +31,9 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-user-emails.list` | read | Forgejo |
 | `admin-user-emails.delete` | delete, listed only | Forgejo |
 | `admin-user-keys.delete` | delete, listed only | both |
+| `admin-user-badges.list` | read | Gitea |
+| `admin-user-badges.add` | create | Gitea |
+| `admin-user-badges.delete` | delete, listed only | Gitea |
 | `admin-access-tokens.list` | read | Forgejo 16 and later |
 | `admin-access-tokens.delete` | delete, listed only | Forgejo 16 and later |
 | `admin-orgs.list` | read | both |
@@ -112,6 +115,15 @@ name, so a name cannot be read as an ID. Both token tools need Forgejo 16 or lat
 the minimum version, before any request. Both delete tools are offered only by a connection whose `tools` list
 names them. Creating a key or a token is not offered.
 
+### Badges
+
+`admin-user-badges.list` lists the badges of one account, without paging and capped. `admin-user-badges.add` and
+`admin-user-badges.delete` take a short list of distinct `badge_slugs` in one request. Badges themselves are
+neither created nor changed. Adding is not idempotent: the instance rejects the whole request when the account
+already holds a badge or a slug is unknown. Slugs, descriptions, and image addresses are untrusted data; an image
+address is never fetched and is left out when it carries user info or a query. `admin-user-badges.delete` is
+offered only by a connection whose `tools` list names it. Gitea only.
+
 ### Organizations and repositories
 
 `admin-orgs.list` lists all organizations of the instance, hidden ones included, with the members of
@@ -140,6 +152,7 @@ reports; it is not idempotent and is in no setup profile.
 ## Changes
 
 `admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`,
-`admin-user-keys`, `admin-access-tokens`, `admin-orgs`, `admin-repositories`, `admin-unadopted`, and
-`admin-cron` that change need confirmation, send exactly one request, and are never repeated; when the outcome is
-open, the message says that the change may have been applied. No tool of this group is in a setup profile.
+`admin-user-keys`, `admin-user-badges`, `admin-access-tokens`, `admin-orgs`, `admin-repositories`,
+`admin-unadopted`, and `admin-cron` that change need confirmation, send exactly one request, and are never
+repeated; when the outcome is open, the message says that the change may have been applied. No tool of this group
+is in a setup profile.
