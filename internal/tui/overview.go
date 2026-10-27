@@ -324,8 +324,9 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 		room -= shown + 1
 	}
 	// The header already shows the vault state; only a missing vault is told here, since the header is
-	// silent about it.
-	var state []string
+	// silent about it. The state lines start with the running version, which is shown even without a
+	// known update.
+	state := []string{styles.hint.Render(m.overviewVersionLine())}
 	vaultNone := m.vaultHeaderText() == ""
 	if banner := m.updateBanner(m.usable(0)); banner != "" {
 		state = append(state, styles.ok.Render(banner))
@@ -482,4 +483,17 @@ func (m *Model) updateOverview(key tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// overviewVersionLine is the dimmed state line naming the running version.
+func (m *Model) overviewVersionLine() string {
+	return "qatlas " + m.runningVersion()
+}
+
+// runningVersion is the version this editor runs; models built without one report dev.
+func (m *Model) runningVersion() string {
+	if m.version == "" {
+		return "dev"
+	}
+	return m.version
 }

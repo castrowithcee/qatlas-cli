@@ -283,3 +283,12 @@ func TestVaultStateOfTheSettingsIsAStatusMark(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdatePageNamesRunningVersion(t *testing.T) {
+	m, _ := lockedVaultModel(t)
+	m.version = "1.2.3"
+	openSectionByName(t, m, sectionUpdate)
+	if view := m.render(); !strings.Contains(view, "qatlas 1.2.3") {
+		t.Errorf("the Update page does not name the running version:\n%s", view)
+	}
+}
