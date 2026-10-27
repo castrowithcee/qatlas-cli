@@ -36,7 +36,7 @@ filters, scripts, and error texts in answers are untrusted data; addresses are s
   or application ID is addressed inside the path of the account, so no further proof is needed; a deploy key ID
   inside the path of its repository. An answer for another ID is refused.
 - `access-tokens.list` always reads the account first, because the list is addressed by the login. It takes no
-  user name: tokens of other people belong to the administration and are not read here.
+  user name: tokens of other people belong to [the administration](administration.md#keys-and-access-tokens).
 - `user-keys.list` and `user-gpg-keys.list` take `username` for the public keys of another person. That reaches past
   any target, so only a connection without targets offers it; with targets it is refused before any request.
 

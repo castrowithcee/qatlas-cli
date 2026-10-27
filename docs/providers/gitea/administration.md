@@ -30,6 +30,9 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-emails.list`, `admin-emails.search` | read | both |
 | `admin-user-emails.list` | read | Forgejo |
 | `admin-user-emails.delete` | delete, listed only | Forgejo |
+| `admin-user-keys.delete` | delete, listed only | both |
+| `admin-access-tokens.list` | read | Forgejo 16 and later |
+| `admin-access-tokens.delete` | delete, listed only | Forgejo 16 and later |
 | `admin-orgs.list` | read | both |
 | `admin-orgs.create`, `admin-repositories.create` | create | both |
 | `admin-unadopted.list` | read | both |
@@ -100,6 +103,15 @@ paging and capped. `admin-user-emails.delete` removes up to 20 distinct addresse
 is offered only by a connection whose `tools` list names it and is in no setup profile. Adding an address is not
 offered. The two tools of `admin-user-emails` exist on Forgejo only.
 
+### Keys and access tokens
+
+`admin-user-keys.delete` deletes one public SSH key of another account by user name and key ID.
+`admin-access-tokens.list` lists one batch of the token metadata of an account: ID, name, scopes, and limits. A
+token value or part of it is never shown. `admin-access-tokens.delete` takes the numeric `token_id` only, never a
+name, so a name cannot be read as an ID. Both token tools need Forgejo 16 or later and are refused earlier with
+the minimum version, before any request. Both delete tools are offered only by a connection whose `tools` list
+names them. Creating a key or a token is not offered.
+
 ### Organizations and repositories
 
 `admin-orgs.list` lists all organizations of the instance, hidden ones included, with the members of
@@ -128,6 +140,6 @@ reports; it is not idempotent and is in no setup profile.
 ## Changes
 
 `admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users`, `admin-user-emails`,
-`admin-orgs`, `admin-repositories`, `admin-unadopted`, and `admin-cron` that change need confirmation, send
-exactly one request, and are never repeated; when the outcome is open, the message says that the change may have
-been applied. No tool of this group is in a setup profile.
+`admin-user-keys`, `admin-access-tokens`, `admin-orgs`, `admin-repositories`, `admin-unadopted`, and
+`admin-cron` that change need confirmation, send exactly one request, and are never repeated; when the outcome is
+open, the message says that the change may have been applied. No tool of this group is in a setup profile.
