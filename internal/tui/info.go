@@ -31,9 +31,13 @@ type infoSubject struct {
 	title string
 	long  string
 	term  helptopics.Term
+	// doc is the address of the user page of the provider the subject is about, or empty.
+	doc string
 }
 
-func (s infoSubject) empty() bool { return strings.TrimSpace(s.long) == "" && s.term.ID == "" }
+func (s infoSubject) empty() bool {
+	return strings.TrimSpace(s.long) == "" && s.term.ID == "" && s.doc == ""
+}
 
 // withTerm sets the term with the given ID.
 func (s infoSubject) withTerm(id string) infoSubject {
@@ -61,6 +65,12 @@ func (s infoSubject) lines(width int) []string {
 			out = append(out, "")
 		}
 		out = append(out, strings.Split(helptopics.Wrap(p, width), "\n")...)
+	}
+	if lines := docLines(s.doc, width); len(lines) > 0 {
+		if len(out) > 0 {
+			out = append(out, "")
+		}
+		out = append(out, lines...)
 	}
 	return out
 }
@@ -99,7 +109,13 @@ func (m *Model) infoSubject() infoSubject {
 			return infoSubject{}
 		}
 		f := m.fields[m.focus]
-		return infoSubject{title: labelText(f.label), long: m.fieldDetail(f)}.withTerm(m.fieldTerm(f))
+		s := infoSubject{title: labelText(f.label), long: m.fieldDetail(f)}.withTerm(m.fieldTerm(f))
+		if f.kind == fieldProvider {
+			s.doc = m.docURL(f.value())
+		}
+		return s
+	case screenProviders:
+		return m.providerSubject()
 	case screenPicker:
 		return m.pickerSubject()
 	case screenTargets:
@@ -115,6 +131,16 @@ func (m *Model) infoSubject() infoSubject {
 		return infoSubject{title: m.section.title()}.withTerm(sectionTerms[m.section])
 	}
 	return infoSubject{}
+}
+
+// providerSubject explains the marked provider of the provider table.
+func (m *Model) providerSubject() infoSubject {
+	id, ok := m.providers.list.selected()
+	if !ok || id == "" {
+		return infoSubject{}
+	}
+	metadata, _ := m.cfg.ProviderMetadata(id)
+	return infoSubject{title: m.providers.name(id), long: metadata.Description, doc: m.docURL(id)}
 }
 
 // pickerSubject explains the marked entry of the value picker.

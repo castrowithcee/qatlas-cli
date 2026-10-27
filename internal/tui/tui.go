@@ -4853,8 +4853,12 @@ func (m *Model) testLine() string {
 			tr(tFormOkOkAcceptedTheConnection, m.testName, providerName))
 	case m.testClass != "":
 		explanation := provider.Explain(m.testClass, providerName)
-		return "\n" + m.wrapped(styles.fail,
+		line := "\n" + m.wrapped(styles.fail,
 			tr(tFormFailed, m.testName, m.testClass, explanation))
+		if failDocHelps(m.testClass) {
+			line += m.docText(m.testProvider())
+		}
+		return line
 	}
 	return ""
 }

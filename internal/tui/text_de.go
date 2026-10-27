@@ -956,6 +956,7 @@ var textDE = map[textID]string{
 	tDetailRunning:                                  "läuft",
 	tDetailConnections:                              "%d Connections",
 	tInfoNoFurtherExplanationForThis:                "keine weitere Erklärung zu dieser Zeile",
+	tDocGuide:                                       "Anleitung zu Einrichtung und Token-Rechten:",
 	tPathPathKept:                                   "Pfad behalten",
 	tPathAPathMustNotBe:                             "Ein Pfad darf nicht leer sein; esc bricht die Eingabe ab",
 	tPathDirectory:                                  "Verzeichnis: %s",

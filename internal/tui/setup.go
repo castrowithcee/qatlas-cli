@@ -655,11 +655,18 @@ func (m *Model) summaryView() string {
 	case w.saved != "":
 		keys = "t test connection · {back} connections list · {command} cmds · {help} help"
 	}
+	var tail strings.Builder
 	if w.saved != "" {
-		b.WriteString(m.testLine())
+		tail.WriteString(m.testLine())
 	}
-	b.WriteString(m.keyHint(keys))
-	return b.String()
+	tail.WriteString(m.keyHint(keys))
+	// The guide is an extra: it stands only where the screen has rows to spare, so it never raises the size
+	// the summary needs.
+	if doc := m.docText(w.provider); doc != "" &&
+		(m.height <= 0 || strings.Count(b.String()+doc+"\n"+tail.String(), "\n")+1 <= m.height) {
+		b.WriteString(doc + "\n")
+	}
+	return b.String() + tail.String()
 }
 
 // summaryLabelWidth is the width of the label column of the summary.
