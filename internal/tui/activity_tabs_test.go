@@ -127,10 +127,6 @@ func TestLogsTabsWithoutColourAndAtTheSmallestSize(t *testing.T) {
 			view := m.render()
 			name := fmt.Sprintf("%v at %dx%d", tab.mark, size.width, size.height)
 			if strings.Contains(view, "Resize terminal") {
-				// The summary needs one row more than the smallest terminal gives.
-				if tab.tab == logTabDetails && size.height == minimumHeight {
-					continue
-				}
 				t.Errorf("%s cannot be shown:\n%s", name, view)
 				continue
 			}
@@ -156,4 +152,59 @@ func TestLogsEmptyDayShowsAShortHintInThePanel(t *testing.T) {
 	if !strings.Contains(view, "No entries for 2001-01-01") || !strings.Contains(view, "╭") {
 		t.Errorf("an empty day shows no hint in a panel:\n%s", view)
 	}
+}
+
+// The smallest terminal draws the compact Logs frame with or without rows; the explanation of the summary then
+// stands behind the info key, marked on the tab line, and a large terminal keeps it inline.
+func TestLogsCompactFrameLeavesTheSummaryHelpToTheInfoKey(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	eachLanguage(t, func(t *testing.T) {
+		for _, sessions := range []bool{false, true} {
+			help := tLogStatsHelp
+			if sessions {
+				help = tLogSessionsHelp
+			}
+			t.Run(fmt.Sprintf("sessions=%v", sessions), func(t *testing.T) {
+				m := heatModel(t, activityLog(t))
+				m.setLogTab(logTabDetails)
+				m.logs.sessions = sessions
+				m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
+				large := ansi.Strip(m.render())
+				if !strings.Contains(strings.Join(strings.Fields(strings.ReplaceAll(large, "│", " ")), " "), strings.Join(strings.Fields(tr(help)), " ")) ||
+					strings.Contains(large, infoMark) {
+					t.Errorf("the large frame does not keep the help inline without the mark:\n%s", large)
+				}
+				m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
+				small := ansi.Strip(m.render())
+				assertViewFits(t, small, minimumWidth, minimumHeight)
+				if !strings.Contains(small, infoMark) {
+					t.Errorf("the compact frame lacks the info mark:\n%s", small)
+				}
+				if strings.Contains(small, strings.Fields(tr(help))[0]+" "+strings.Fields(tr(help))[1]) {
+					t.Errorf("the compact frame keeps the help inline:\n%s", small)
+				}
+				pump(t, m, keyOf(actInfo))
+				if !m.infoOpen {
+					t.Fatalf("the info key opens nothing:\n%s", small)
+				}
+				open := strings.Join(strings.Fields(ansi.Strip(m.render())), " ")
+				words := strings.Fields(tr(help))
+				if want := strings.Join(words[:3], " "); !strings.Contains(open, want) {
+					t.Errorf("the explanation lacks %q:\n%s", want, open)
+				}
+			})
+		}
+		t.Run("no rows", func(t *testing.T) {
+			f := activityLog(t)
+			m := f.model(false, "2000-01-01")
+			m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
+			m.setLogTab(logTabDetails)
+			m.status = tr(tCancelled)
+			view := ansi.Strip(m.render())
+			assertViewFits(t, view, minimumWidth, minimumHeight)
+			if !m.logs.compact {
+				t.Errorf("an empty Logs screen at the smallest size is not compact:\n%s", view)
+			}
+		})
+	})
 }
