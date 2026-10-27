@@ -48,6 +48,8 @@ resolved; it may be left out when the targets name exactly one repository.
   the issue.
 - Each entry carries every member of the issue object that the product documents, as in the [issues](issues.md)
   tools. Titles, bodies, and names are untrusted data.
-- An entry whose canonical repository lies outside the targets is not dropped: it shows only `number` and
-  `repository.full_name` and sets `withheld`. An entry that names no repository is shown the same way, by its
-  number alone. Without targets everything is shown in full.
+- In `issue-dependencies.list`, an entry whose canonical repository lies outside the targets is not dropped: it shows
+  only `number` and `repository.full_name` and sets `withheld`. An entry that names no repository is shown the same
+  way, by its number alone.
+- `issue-blocks.list` leaves out an entry whose canonical repository lies outside the targets or that names none.
+- Without targets everything is shown in full.

@@ -28,8 +28,10 @@ for one issue, its `number`. Issues and pull requests share one index space.
   requested state is returned with `changed` false and nothing is sent.
 - `issues.delete` removes the issue and its comments for good. It is offered only by a connection whose `tools` list
   names it and is in no setup profile.
-- The timeline shows another issue, pull request, or comment an event refers to by identifiers only, because it may
-  lie outside the targets.
+- The timeline shows another issue, pull request, or comment an event refers to by identifiers only. A reference
+  event (`issue_ref`, `comment_ref`, `pull_ref`) whose source repository lies outside the targets, or names none,
+  is left out, as for an instance user without read access to that repository; other event types are unchanged.
+  Without targets everything is shown.
 - Not offered: the deprecated `assignee` of create and update, and the due-date members of both, which
   `issue-deadlines.set` covers. A label is set on creation only, by its numeric ID; the update API has no label member.
 
