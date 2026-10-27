@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,8 +128,15 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	if wheel && m.wheelSeen.repeats(event, m.timeNow()) {
 		return nil
 	}
-	// Draw once more, so the targets are those of the state the event meets.
-	m.render()
+	// The targets are those of the state the event meets: the frame drawn after the last message has them, and
+	// only a state changed since then needs a new draw. The event itself may change the state.
+	if !m.drawn {
+		m.render()
+	}
+	// The frame fits (tooSmall is clear below), so the first key of the event skips the check of the size. What
+	// the event does leaves the frame stale.
+	m.verified = !m.tooSmall
+	defer func() { m.verified, m.drawn = false, false }()
 	if m.infoOpen {
 		if !wheel {
 			m.infoOpen = false
@@ -706,4 +714,118 @@ func (m *Model) clickField(i int) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// fragmentWindow is the longest gap between the pieces of one split mouse report. Typing is slower than this.
+const fragmentWindow = 200 * time.Millisecond
+
+// altBracketHold is how long alt+[ waits for the rest of a report before it counts as the key it is. The text
+// field types it as "[", so it cannot be let through first and taken back.
+const altBracketHold = 50 * time.Millisecond
+
+// fragmentTail matches what a mouse report of the SGR form can still lack: the rest of its parameters and the
+// final M or m.
+var fragmentTail = regexp.MustCompile(`^[0-9;]*[Mm]?`)
+
+// fragmentHead matches the start of such a report that is left once its escape byte went into a key of its own.
+var fragmentHead = regexp.MustCompile(`^(\[<|<)[0-9;]*[Mm]?`)
+
+// keysMsg delivers keys the filter held back, in order, as one message.
+type keysMsg []tea.KeyMsg
+
+// heldKeyMsg is the end of the hold of alt+[ number id.
+type heldKeyMsg struct{ id int }
+
+// fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read: the
+// input parser reports such a report as keys (an escape or alt+[ and then runes like "<65;12;5M"), and in a
+// text field they would be typed. A piece counts only when it follows the one before it within fragmentWindow
+// and fits the report form, so the same characters typed by hand, pasted, or standing alone pass unchanged.
+// Only alt+[ is held back, briefly; a lone escape is a real key and passes at once, so the report's escape byte
+// alone can still reach the model as esc.
+type fragmentFilter struct {
+	now     func() time.Time
+	program *tea.Program
+
+	state string // "esc" or "alt+[" when that key came last, "tail" while a report lacks its end
+	at    time.Time
+	held  *tea.KeyMsg
+	id    int
+}
+
+func newFragmentFilter(now func() time.Time) *fragmentFilter {
+	if now == nil {
+		now = time.Now
+	}
+	return &fragmentFilter{now: now}
+}
+
+// filter is the tea.WithFilter function. It runs in the event loop, one message at a time.
+func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
+	if h, ok := msg.(heldKeyMsg); ok {
+		if f.held == nil || h.id != f.id {
+			return nil
+		}
+		key := *f.held
+		f.held = nil
+		return key
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return msg
+	}
+	at, last := f.now(), f.state
+	f.state = ""
+	if last != "" && at.Sub(f.at) > fragmentWindow {
+		last = ""
+	}
+	held := f.held
+	f.held = nil
+	text, plain := "", key.Type == tea.KeyRunes && !key.Alt && !key.Paste
+	if plain {
+		text = string(key.Runes)
+	}
+	var n int
+	switch last {
+	case "alt+[":
+		if plain && strings.HasPrefix(text, "<") {
+			n = len(fragmentHead.FindString(text))
+		}
+	case "esc":
+		if plain && strings.HasPrefix(text, "[<") {
+			n = len(fragmentHead.FindString(text))
+		}
+	case "tail":
+		if plain {
+			n = len(fragmentTail.FindString(text))
+		}
+	}
+	if n > 0 {
+		if piece := text[:n]; !strings.HasSuffix(piece, "M") && !strings.HasSuffix(piece, "m") {
+			f.state, f.at = "tail", at
+		}
+		if n == len(text) {
+			return nil
+		}
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text[n:])}
+	}
+	// Not a piece: a held alt+[ was a key after all and goes first.
+	switch {
+	case key.Paste:
+	case key.Type == tea.KeyEsc && !key.Alt:
+		f.state, f.at = "esc", at
+	case key.Type == tea.KeyRunes && key.Alt && string(key.Runes) == "[" && f.program != nil:
+		f.state, f.at = "alt+[", at
+		f.held = &key
+		f.id++
+		id, program := f.id, f.program
+		time.AfterFunc(altBracketHold, func() { program.Send(heldKeyMsg{id}) })
+		if held != nil {
+			return keysMsg{*held}
+		}
+		return nil
+	}
+	if held != nil {
+		return keysMsg{*held, key}
+	}
+	return key
 }

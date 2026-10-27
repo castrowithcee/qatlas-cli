@@ -645,6 +645,9 @@ type Model struct {
 	// The click targets of the frame drawn last; see mouse.go.
 	hits      []hit
 	frameHits []hit
+	// drawn is set when the targets match the state: render sets it, any other message clears it. During a
+	// mouse event, verified says that frame also fits the screen, so the first key of the event needs no check.
+	drawn, verified bool
 	// tooSmall is set while the workspace is replaced by the size notice, which has nothing to click.
 	tooSmall bool
 	// footerLog, when set, collects the footer lines a dialog draws, to make its keys clickable.
@@ -778,10 +781,21 @@ func (m *Model) Init() tea.Cmd {
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	fits := m.drawn && m.verified
+	if _, mouse := msg.(tea.MouseMsg); !mouse {
+		m.drawn = false
+	}
 	defer m.keepScrollPosition()
 	// Deferred last, so it runs first: the vault or admin state, and with it the header, may have changed.
 	defer m.layoutWorkspace()
 	switch msg := msg.(type) {
+	case keysMsg:
+		var cmds []tea.Cmd
+		for _, key := range msg {
+			_, cmd := m.Update(key)
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
 	case testDoneMsg:
 		m.finishTest(msg)
 		return m, nil
@@ -877,7 +891,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateInfo(msg.String())
 			return m, nil
 		}
-		if m.activeScreenTooSmall() {
+		if !fits && m.activeScreenTooSmall() {
 			switch msg.String() {
 			case "ctrl+c":
 				return m, m.interrupt()
@@ -3687,6 +3701,7 @@ func (m *Model) renderFrame() string {
 		return ""
 	}
 	m.hits, m.frameHits, m.tooSmall = nil, nil, false
+	m.drawn = true
 	if m.dd != nil {
 		m.dd.placed = false
 	}
@@ -4967,11 +4982,15 @@ func Run(opts Options) error {
 	if predecessor != nil {
 		model.adopt(predecessor)
 	}
-	programOptions := []tea.ProgramOption{tea.WithInput(opts.In), tea.WithOutput(opts.Out)}
+	fragments := newFragmentFilter(time.Now)
+	programOptions := []tea.ProgramOption{tea.WithInput(opts.In), tea.WithOutput(opts.Out),
+		tea.WithFilter(fragments.filter)}
 	if prefs.MouseEnabled() {
 		programOptions = append(programOptions, tea.WithMouseCellMotion())
 	}
-	_, err = tea.NewProgram(model, programOptions...).Run()
+	program := tea.NewProgram(model, programOptions...)
+	fragments.program = program
+	_, err = program.Run()
 	return err
 }
 
