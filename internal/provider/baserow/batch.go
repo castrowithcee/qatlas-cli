@@ -35,7 +35,7 @@ var rowsBatchCreate = capability.Descriptor{
 	Arguments: []capability.Argument{tableIDArgument,
 		{Name: "rows", Required: true, Description: "1 to 200 objects of cell values keyed by field name"}},
 	Fields: []capability.Field{
-		{Name: "rows", Description: "The new rows in request order, like baserow.rows.get"},
+		{Name: "rows", Description: "The new rows in request order, like baserow.rows.get, with omitted_fields"},
 		{Name: "count", Description: "Number of rows Baserow returned"},
 	},
 	Examples: []capability.Example{{Description: "Create two rows",
@@ -56,7 +56,7 @@ var rowsBatchUpdate = capability.Descriptor{
 	Arguments: []capability.Argument{tableIDArgument,
 		{Name: "rows", Required: true, Description: "1 to 200 objects with row_id and fields (at least one cell)"}},
 	Fields: []capability.Field{
-		{Name: "rows", Description: "The changed rows as Baserow reports them"},
+		{Name: "rows", Description: "The changed rows as Baserow reports them, with omitted_fields"},
 		{Name: "count", Description: "Number of rows Baserow returned"},
 	},
 	Examples: []capability.Example{{Description: "Change two rows", Arguments: json.RawMessage(

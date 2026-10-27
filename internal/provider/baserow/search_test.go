@@ -241,7 +241,7 @@ func TestRowsSearchLinkTargetsInsideOrWildcardAllowEverything(t *testing.T) {
 }
 
 func TestRowsSearchComputedAndMultiValueFieldsAreUsable(t *testing.T) {
-	fields := `[{"id":1,"name":"Look","type":"lookup"},{"id":2,"name":"Formel","type":"formula"},` +
+	fields := `[{"id":1,"name":"Look","type":"lookup","through_field_id":10},{"id":10,"name":"Verb","type":"link_row","link_row_table_id":12},{"id":2,"name":"Formel","type":"formula"},` +
 		`{"id":3,"name":"Roll","type":"rollup"},{"id":4,"name":"Anzahl","type":"count"},{"id":5,"name":"Datei","type":"file"},` +
 		`{"id":6,"name":"Multi","type":"multiple_select"},{"id":7,"name":"Team","type":"multiple_collaborators"},` +
 		`{"id":8,"name":"Autor","type":"created_by"},{"id":9,"name":"Dauer","type":"duration"}]`
@@ -258,7 +258,7 @@ func TestRowsSearchComputedAndMultiValueFieldsAreUsable(t *testing.T) {
 		`{"field":"Multi","type":"multiple_select_has","value":"1"},{"field":"Team","type":"multiple_collaborators_has","value":"1"},` +
 		`{"field":"Autor","type":"user_is","value":"1"},{"field":"Dauer","type":"lower_than","value":"60"}],` +
 		`"order_by":[{"field":"Look"},{"field":"Formel"},{"field":"Roll"},{"field":"Anzahl"},{"field":"Dauer"}]}`
-	if _, err := env.invoke(rowsSearch.ID, "one", args); err != nil {
+	if _, err := env.invoke(rowsSearch.ID, "list", args); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != 2 {
