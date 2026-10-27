@@ -198,6 +198,7 @@ func (m *Model) updateFields() []field {
 		status = tr(tUpdateAvailableRow, m.release.Current, m.release.Latest)
 	}
 	return []field{
+		textField("version", "qatlas "+m.runningVersion(), true),
 		textField("release", status, true),
 		pageAction(pageActionUpdate, "install update", tr(tUpdateInstallHint), tr(tUpdateInstallDetail)),
 	}

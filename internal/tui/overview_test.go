@@ -223,3 +223,40 @@ func TestOverviewFitsEverySize(t *testing.T) {
 		}
 	})
 }
+
+// The Overview names the running version with and without an updater; an empty value reads as dev, and the
+// vault state of the header is not repeated while the framed panel for a missing vault stays.
+func TestOverviewShowsRunningVersion(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		version string
+		updater Updater
+		want    string
+	}{
+		{"no updater", "1.2.3", nil, "qatlas 1.2.3"},
+		{"updater without an update", "1.2.3", &fakeUpdater{}, "qatlas 1.2.3"},
+		{"empty", "", nil, "qatlas dev"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "qatlas")
+			store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+			secrets, _ := newResolver(t, dir, nil)
+			m, err := New(testService(store, secrets, nil), store, nil, secrets, nil)
+			if err != nil {
+				t.Fatalf("New() = %v", err)
+			}
+			m.version, m.updater = tc.version, tc.updater
+			overviewModel(t, m)
+			view := m.render()
+			if !strings.Contains(view, tc.want) {
+				t.Errorf("the Overview does not show %q:\n%s", tc.want, view)
+			}
+			if !strings.Contains(view, "─ Vault ") || !strings.Contains(view, "none configured") {
+				t.Errorf("the missing-vault panel is gone:\n%s", view)
+			}
+			if lines := strings.Count(view, "none configured"); lines != 1 {
+				t.Errorf("the vault state is shown %d times, want once:\n%s", lines, view)
+			}
+		})
+	}
+}
