@@ -31,21 +31,25 @@ segment belongs to; `0` stands for all websites.
 
 ## Binding to the targets
 
-- A segment of one website is reachable when that website is among the connection's targets.
-- A segment for all websites (`enable_only_idsite` 0) is reachable only when the connection binds `site` without an
-  ID, or has no targets. A connection bound to `site/ID` targets never reaches it, not even when a list names one
-  of its websites.
-- `matomo.segments.list` checks every row against this rule. `matomo.segments.get` and `matomo.segments.update`
-  read the segment once with `SegmentEditor.get` before anything else; a segment outside the targets, a missing one,
-  and a deleted one all end as `not-found` without naming the website or the target.
-- `matomo.segments.add` and `matomo.segments.update` write for all websites (`idSite` 0) only on such a wide
-  connection. `idSite` is checked before the secret is read.
+Reading and writing are separate rules.
+
+- A segment of one website is reachable, for reading and writing, when that website is among the connection's
+  targets.
+- A segment for all websites (`enable_only_idsite` 0) can be read on every connection that reaches a website, as
+  Matomo shows it for any website the token views. Changing it (add, update, delete, star, unstar) needs a
+  connection bound to `site` without an ID, or without targets; Matomo allows it to a Super User only. A
+  `site/ID` connection never writes for all websites: without `idSite` it uses its only website or is refused.
+- `matomo.segments.list` checks every row against the read rule. `matomo.segments.get` and every change read the
+  segment once with `SegmentEditor.get` before anything else; a segment outside the targets, a change of a segment
+  for all websites on a `site/ID` connection, a missing one, and a deleted one all end as `not-found`, before any
+  change request, without naming the website or the target. `idSite` of `add` and `update` is checked before the
+  secret is read.
 
 ## Tool behavior
 
 - `matomo.segments.list` returns the segments the token may use, in the order Matomo gives them (own segments
   first), cut on the Qatlas side into batches ([Paging](README.md#paging)). With `idSite` Matomo answers the
-  segments of that website and those for all websites; the latter drop out on `site/ID` connections.
+  segments of that website and those for all websites.
 - `matomo.segments.get` and the list return every field Matomo documents for a stored segment: `id`, `name`,
   `definition` (as stored, values URL-encoded), `hash`, `login` of the creator, `enable_all_users`,
   `enable_only_idsite`, `auto_archive`, `ts_created`, `ts_last_edit`, `deleted`, `starred`, and `starred_by`.

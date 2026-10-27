@@ -129,3 +129,19 @@ func TestResolveForwardedFromAnEncryptedVault(t *testing.T) {
 		t.Errorf("a field the vault holds no entry for was delivered")
 	}
 }
+
+func TestScopeOfCarriesTheExclusions(t *testing.T) {
+	if scope := ScopeOf(wikiConnection()); scope.Exclude != nil {
+		t.Errorf("ScopeOf() without exclusions has Exclude %v", scope.Exclude)
+	}
+	resolved := wikiConnection()
+	resolved.Exclude = []string{"a", "b"}
+	scope := ScopeOf(resolved)
+	if strings.Join(scope.Exclude, ",") != "a,b" {
+		t.Errorf("ScopeOf().Exclude = %v, want a,b", scope.Exclude)
+	}
+	scope.Exclude[0] = "changed"
+	if resolved.Exclude[0] != "a" {
+		t.Error("ScopeOf().Exclude shares memory with the connection")
+	}
+}

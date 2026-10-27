@@ -454,3 +454,44 @@ func TestBuildConnectionCandidateKeepsTargetLabelsOfItsTargets(t *testing.T) {
 		t.Error("the candidate shares the draft's label map")
 	}
 }
+
+type excludeCatalog struct{}
+
+var excludeProviders = []config.ProviderMetadata{{
+	ID: "ex", SecretRoles: []config.SecretRole{{Name: "token"}},
+	Target: config.TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
+		Kinds:    []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true}},
+		Validate: func(string) error { return nil }},
+}}
+
+func (excludeCatalog) ProviderMetadata(id string) (config.ProviderMetadata, bool) {
+	if id == "ex" {
+		return excludeProviders[0], true
+	}
+	return config.ProviderMetadata{}, false
+}
+
+func (excludeCatalog) ProviderMetadataAll() []config.ProviderMetadata { return excludeProviders }
+
+func TestBuildConnectionCandidateKeepsExclude(t *testing.T) {
+	cfg := config.New(excludeCatalog{})
+	if err := cfg.SetService("svc", config.Service{Provider: "ex", BaseURL: "https://ex.example"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetCredential("key", config.Credential{Provider: "ex", Type: config.CredentialTypeKeyring}); err != nil {
+		t.Fatal(err)
+	}
+	draft := ConnectionDraft{Provider: "ex", Service: "svc", Credential: "key", Name: "mine",
+		Targets: []string{"repos/o/*"}, Exclude: []string{"repos/o/b"}}
+	cand, err := BuildConnectionCandidate(cfg, draft, StageRights)
+	if err != nil {
+		t.Fatalf("BuildConnectionCandidate() = %v", err)
+	}
+	if got := cand.Config.Connections["mine"].Exclude; !slices.Equal(got, []string{"repos/o/b"}) {
+		t.Errorf("candidate exclude = %v, want the draft's", got)
+	}
+	draft.Exclude[0] = "changed"
+	if got := cand.Config.Connections["mine"].Exclude; got[0] != "repos/o/b" {
+		t.Error("the candidate shares its exclusions with the draft")
+	}
+}

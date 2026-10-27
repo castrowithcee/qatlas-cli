@@ -111,7 +111,7 @@ func provenSegmentID(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, Segment{}, err
 	}
-	segment, err := client.fetchSegment(ctx, op, req, id)
+	segment, err := client.fetchSegment(ctx, op, req, id, true)
 	return client, segment, err
 }
 

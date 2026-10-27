@@ -223,6 +223,11 @@ Link and image addresses come from the message content every channel member sees
 bounded text and never fetched. `props` and `metadata.embeds[].data` are bounded free objects; one beyond the
 bound is left out and named in `omitted`, never cut.
 
+Permalink previews (with `previewed_post`) and channel mentions appear only for channels proven reachable in
+a bound team or as a reachable direct or group channel, within the channel allow-list; any other is removed
+without a trace, as is one whose reachability cannot be proven. Only channels the token is a member of count
+for mentions.
+
 ## Boundary
 
 This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate products with
