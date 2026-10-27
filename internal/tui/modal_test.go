@@ -94,7 +94,10 @@ func TestModalBackgroundDoesNotChangeScrollState(t *testing.T) {
 		lines[i] = "line"
 	}
 	huge := 1 << 20
-	m.export = &exportState{step: exportPreview, from: screenList, lines: lines, offset: huge}
+	m.export = &exportState{step: exportPreview, from: screenList, lines: lines}
+	// A tiny area puts the position far below what the real one allows, so drawing would clamp it.
+	m.export.view.window(lines, 3, true)
+	last := m.export.view.offset()
 	m.export.rows.offset = huge
 	m.screen, m.leaveFrom = screenLeave, screenTransfer
 
@@ -105,9 +108,9 @@ func TestModalBackgroundDoesNotChangeScrollState(t *testing.T) {
 	if !strings.Contains(view, "line") {
 		t.Errorf("the background export preview is not visible:\n%s", view)
 	}
-	if m.export.offset != huge || m.export.rows.offset != huge {
+	if m.export.view.offset() != last || m.export.rows.offset != huge {
 		t.Errorf("drawing the background clamped the scroll state: offset %d, rows offset %d",
-			m.export.offset, m.export.rows.offset)
+			m.export.view.offset(), m.export.rows.offset)
 	}
 	if m.screen != screenLeave || m.width != m.termWidth {
 		t.Errorf("drawing the background left screen %v, width %d", m.screen, m.width)
@@ -314,13 +317,13 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	if !strings.Contains(view, "connections.c59.service") || strings.Contains(view, "connections.c00.service") {
 		t.Errorf("end did not scroll to the last line:\n%s", view)
 	}
-	end := m.rename.offset
+	end := m.rename.view.offset()
 	press(t, m, "up")
-	if m.rename.offset != end-1 {
-		t.Errorf("up moved the offset from %d to %d", end, m.rename.offset)
+	if m.rename.view.offset() != end-1 {
+		t.Errorf("up moved the offset from %d to %d", end, m.rename.view.offset())
 	}
 	press(t, m, "home")
-	if m.rename.offset != 0 || !strings.Contains(m.render(), "connections.c00.service") {
-		t.Errorf("home did not return to the first line, offset %d", m.rename.offset)
+	if m.rename.view.offset() != 0 || !strings.Contains(m.render(), "connections.c00.service") {
+		t.Errorf("home did not return to the first line, offset %d", m.rename.view.offset())
 	}
 }

@@ -270,7 +270,7 @@ func (m *Model) approvalFacts(change approval.Change) []styledFact {
 }
 
 // approvalChangeView is the title and body of the detail screen for one change. The whole body is laid out
-// first and shown from m.approvalOffset on, so a scope of any length fits the workspace and only the lines
+// first and shown from the scroll position of m.approval on, so a scope of any length fits the workspace and only the lines
 // scroll; nothing is cut.
 func (m *Model) approvalChangeView(heading string, change approval.Change) string {
 	inner, _ := m.detailInner()
@@ -284,14 +284,15 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 		}
 	}
 	room := m.approvalRoom(keys, len(lines))
-	offset := max(min(m.approvalOffset, len(lines)-room), 0)
-	m.approvalOffset, m.approvalPage = offset, room
+	shown := m.approval.window(lines, room, false)
+	offset := m.approval.offset()
+	m.approvalPage = room
 	foot := m.keyHint(keys)
 	if len(lines) > room {
 		foot = "\n" + m.wrapped(styles.hint, tr(tApprovalLines, offset+1,
 			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
 	}
-	return m.frameDetail(heading, m.approvalMark(change), lines[offset:min(offset+room, len(lines))]) + "\n" + foot
+	return m.frameDetail(heading, m.approvalMark(change), shown) + "\n" + foot
 }
 
 // approvalRoom is how many body lines of the detail screen fit around its frame and above its keys; when the
@@ -303,11 +304,6 @@ func (m *Model) approvalRoom(keys string, lines int) int {
 		room = m.height - m.detailChrome() - strings.Count(longer, "\n") - 2
 	}
 	return max(room, 1)
-}
-
-// scrollApproval moves the detail screen's scroll position by delta lines; the view clamps it.
-func (m *Model) scrollApproval(delta int) {
-	m.approvalOffset = max(m.approvalOffset+delta, 0)
 }
 
 // approveAllConfirmView draws the Approvals bulk-approval confirmation, with the count of what it would
