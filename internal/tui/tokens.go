@@ -374,12 +374,12 @@ func (m *Model) handleTokenAction(msg tokenActionMsg) tea.Cmd {
 // over the Tokens list like the Approvals detail does. It reports false when neither is open.
 func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	if name := m.tokenRevoke; name != "" {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.tokenRevoke, m.tokenDetail, m.tokenReveal = "", "", false
 			m.screen = screenList
 			return m.requireAdmin(func() tea.Cmd { return m.revokeToken(name) }), true
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			// The question returns to where it was asked: the detail screen, or the list.
 			m.tokenRevoke = ""
 			if m.tokenDetail == "" {
@@ -393,8 +393,8 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	if name == "" {
 		return nil, false
 	}
-	switch key.String() {
-	case "s":
+	switch {
+	case key.String() == "s":
 		if m.tokenValueShown() {
 			m.tokenReveal = false
 			return nil, true
@@ -404,10 +404,10 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 			m.tokenReveal = true
 			return nil
 		}), true
-	case keyOf(actDelete):
+	case keyIs(key, actDelete):
 		m.tokenRevoke = name
 		m.clearMessages()
-	case keyOf(actBack):
+	case keyIs(key, actBack):
 		m.tokenDetail, m.tokenReveal = "", false
 		m.screen = screenList
 		m.clearMessages()

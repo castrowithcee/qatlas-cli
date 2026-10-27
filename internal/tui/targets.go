@@ -42,8 +42,8 @@ func (m *Model) openTargets() {
 // updateTargets handles the target list screen: the typed target first, then the remove question, then
 // the list itself.
 func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case keyOf(actSave):
+	switch {
+	case keyIs(key, actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
 		// The add menu takes its typed line the same way, and the builder its target once it is complete.
@@ -79,10 +79,10 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 		return m.updateAdd(key)
 	}
 	if m.labelEdit {
-		switch key.String() {
-		case keyOf(actBack):
+		switch {
+		case keyIs(key, actBack):
 			m.stopLabel()
-		case "enter":
+		case keyIs(key, actEnter):
 			m.takeLabel()
 		default:
 			var cmd tea.Cmd
@@ -92,8 +92,8 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.targetEdit >= 0 {
-		switch key.String() {
-		case keyOf(actBack):
+		switch {
+		case keyIs(key, actBack):
 			if m.targetTyped() {
 				m.askLeave(false)
 				return nil
@@ -101,7 +101,7 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 			m.targetEdit = -1
 			m.targetInput.Blur()
 			m.clearMessages()
-		case "enter":
+		case keyIs(key, actEnter):
 			m.takeTarget()
 		default:
 			var cmd tea.Cmd
@@ -111,20 +111,20 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.targetRemove {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.removeTarget()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.targetRemove = false
 			m.status = tr(tTargetTargetKept)
 		}
 		return nil
 	}
 	target, selected := m.targetList.selected()
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		return m.leaveTargets()
-	case "a":
+	case key.String() == "a":
 		metadata := m.targetMetadata()
 		if !metadata.Multiple && len(m.targetList.all) > 0 {
 			m.status = ""
@@ -133,30 +133,30 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.startAdd()
-	case "enter", "e":
+	case keyIs(key, actEnter) || key.String() == "e":
 		if !selected {
 			// An empty list has nothing to edit, so enter adds its first target.
 			m.startAdd()
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
-	case "r":
+	case key.String() == "r":
 		// The guided setup saves no labels, so it offers none.
 		if selected && m.wizard == nil {
 			m.editLabel(target)
 		}
-	case keyOf(actDelete):
+	case keyIs(key, actDelete):
 		if selected {
 			m.targetRemove = true
 			m.clearMessages()
 		}
-	case "up":
+	case keyIs(key, actUp):
 		m.targetList.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.targetList.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.targetWindow()
-		m.targetList.page(key.String(), start, end)
+		m.targetList.page(key, start, end)
 	}
 	return nil
 }

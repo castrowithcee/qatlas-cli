@@ -108,16 +108,16 @@ func (l *filterList) jump(by int) {
 
 // page handles pgup/pgdown, which move by one screen of the entries the window [start, end) shows, and
 // home/end, which move to either end.
-func (l *filterList) page(key string, start, end int) {
+func (l *filterList) page(key tea.KeyPressMsg, start, end int) {
 	page := max(end-start-1, 1)
-	switch key {
-	case "pgup":
+	switch {
+	case keyIs(key, actPageUp):
 		l.jump(-page)
-	case "pgdown":
+	case keyIs(key, actPageDown):
 		l.jump(page)
-	case "home":
+	case keyIs(key, actHome):
 		l.jump(-len(l.matches))
-	case "end":
+	case keyIs(key, actEnd):
 		l.jump(len(l.matches))
 	}
 }

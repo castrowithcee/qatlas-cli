@@ -121,7 +121,7 @@ func (m *Model) payloadRows() []int {
 // ctrl+d on a value row removes it.
 func (m *Model) payloadKey(key tea.KeyPressMsg) bool {
 	switch current := m.fields[m.focus]; {
-	case current.kind == fieldPayloadNew && key.String() == "enter":
+	case current.kind == fieldPayloadNew && keyIs(key, actEnter):
 		m.addPayloadField()
 		return true
 	case current.kind == fieldMasked && key.String() == "ctrl+d":

@@ -93,15 +93,15 @@ func (m *Model) openAdminPrompt(locked bool, back screen, action func() tea.Cmd)
 // updateAdminAuth handles the masked entry of the admin passphrase dialog.
 func (m *Model) updateAdminAuth(key tea.KeyPressMsg) tea.Cmd {
 	a := m.adminAuth
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		back := a.back
 		a.input.Reset()
 		m.adminAuth = nil
 		m.screen = back
 		m.status = tr(tCancelled)
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		if m.vaultBusy {
 			// The scrypt work of an earlier attempt on this very dialog is still running: starting a second
 			// one over it, on the same vault.Vault, would race it, the same reason every other vault check

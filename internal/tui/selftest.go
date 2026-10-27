@@ -197,23 +197,23 @@ func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.screen = st.from
 		m.st = nil
-	case "down":
+	case keyIs(key, actDown):
 		st.offset++
-	case "up":
+	case keyIs(key, actUp):
 		st.offset--
-	case "pgdown":
+	case keyIs(key, actPageDown):
 		st.offset += m.selftestRoom()
-	case "pgup":
+	case keyIs(key, actPageUp):
 		st.offset -= m.selftestRoom()
-	case "home":
+	case keyIs(key, actHome):
 		st.offset = 0
-	case "end":
+	case keyIs(key, actEnd):
 		st.offset = 1 << 20
-	case "w":
+	case key.String() == "w":
 		m.saveSelftest()
 	}
 	return nil

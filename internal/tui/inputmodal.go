@@ -137,8 +137,8 @@ func (m *Model) testResultShown() bool {
 
 // testResultKey closes the result of a connection test; every other key waits behind it.
 func (m *Model) testResultKey(key tea.KeyPressMsg) {
-	switch key.String() {
-	case "enter", keyOf(actBack):
+	switch {
+	case keyIs(key, actEnter) || keyIs(key, actBack):
 		m.testClass = ""
 	}
 }

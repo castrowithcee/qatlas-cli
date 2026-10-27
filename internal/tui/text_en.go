@@ -223,6 +223,8 @@ var textEN = map[textID]string{
 	tKeyHelpPageDown:                   "page down",
 	tKeyHelpNext:                       "next field",
 	tKeyHelpPrev:                       "previous field",
+	tKeyHelpTopicNext:                  "next topic",
+	tKeyHelpTopicPrev:                  "previous topic",
 	tKeyHelpEnter:                      "open or confirm",
 	tKeyHelpSpace:                      "toggle",
 	tKeyHelpSearch:                     "search",

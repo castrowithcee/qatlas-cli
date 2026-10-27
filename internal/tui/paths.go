@@ -36,8 +36,8 @@ func (m *Model) openPaths() {
 // updatePaths handles the path list screen: the typed path first, then the remove question, then the list
 // itself.
 func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case keyOf(actSave):
+	switch {
+	case keyIs(key, actSave):
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed path
 		// is taken first; one the rules refuse stays typed with the reason, and nothing is saved.
 		if m.pathEdit >= 0 {
@@ -52,8 +52,8 @@ func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
 		return m.updateForm(key)
 	}
 	if m.pathEdit >= 0 {
-		switch key.String() {
-		case keyOf(actBack):
+		switch {
+		case keyIs(key, actBack):
 			if m.pathTyped() {
 				m.askLeave(false)
 				return nil
@@ -61,7 +61,7 @@ func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
 			m.pathEdit = -1
 			m.pathInput.Blur()
 			m.clearMessages()
-		case "enter":
+		case keyIs(key, actEnter):
 			if m.pathInput.accept() {
 				m.takePath()
 			}
@@ -71,40 +71,40 @@ func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.pathRemove {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.removePath()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.pathRemove = false
 			m.status = tr(tPathPathKept)
 		}
 		return nil
 	}
 	path, selected := m.pathList.selected()
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		return m.leavePaths()
-	case "a":
+	case key.String() == "a":
 		m.editPath(len(m.pathList.all), "")
-	case "enter", "e":
+	case keyIs(key, actEnter) || key.String() == "e":
 		if !selected {
 			// An empty list has nothing to edit, so enter adds its first path.
 			m.editPath(len(m.pathList.all), "")
 			return nil
 		}
 		m.editPath(m.pathList.cursor, path)
-	case keyOf(actDelete):
+	case keyIs(key, actDelete):
 		if selected {
 			m.pathRemove = true
 			m.clearMessages()
 		}
-	case "up":
+	case keyIs(key, actUp):
 		m.pathList.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.pathList.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.pathWindow()
-		m.pathList.page(key.String(), start, end)
+		m.pathList.page(key, start, end)
 	}
 	return nil
 }

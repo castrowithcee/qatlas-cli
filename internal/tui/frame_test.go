@@ -10,8 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 )
 
 // vaultCases are the vault states the header shows, each with the word it must name.
@@ -85,28 +83,15 @@ func TestBelowTheSmallestSizeTheResizeNoticeStands(t *testing.T) {
 	}
 }
 
-// heightWithANote is the height a section asks for when it is not yet made to fit the smallest size with one
-// status note standing; the other sections are not listed.
-func heightWithANote(lang i18n.Lang, vault string, s section) int {
-	switch {
-	case s == sectionLogs && (vault == "unencrypted" || vault == "unlocked"):
-		return 17
-	case s == sectionLogs:
-		return 16
-	}
-	return minimumHeight
-}
-
 // Every section shows its content at the smallest size with one status note standing, in every vault state
-// and both languages; the resize notice is for terminals below it. A section that asks for more is listed in
-// heightWithANote and keeps to the height it asks for.
+// and both languages; the resize notice is for terminals below it.
 func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		for _, vc := range vaultCases(t) {
 			for s := section(0); s < sectionCount; s++ {
 				t.Run(fmt.Sprintf("%s/%d", vc.name, s), func(t *testing.T) {
 					m := vc.m
-					height := heightWithANote(uiLang, vc.name, s)
+					height := minimumHeight
 					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: height})
 					m.section, m.screen = s, screenNav
 					m.status = tr(tCancelled)
@@ -117,13 +102,6 @@ func TestEverySectionFitsTheSmallestSizeWithAStatusNote(t *testing.T) {
 					assertViewFits(t, view, minimumWidth, height)
 					if !strings.Contains(view, tr(tCancelled)) {
 						t.Errorf("the status note is missing:\n%s", view)
-					}
-					if height == minimumHeight {
-						return
-					}
-					m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
-					if view := m.render(); !strings.Contains(view, tr(tResizeTitle)) {
-						t.Errorf("the section fits %dx%d now, so it is no exception:\n%s", minimumWidth, minimumHeight, view)
 					}
 				})
 			}

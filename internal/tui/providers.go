@@ -103,13 +103,13 @@ func (m *Model) openProviderTable() {
 // the table is the whole provider step, so taking a provider goes on to the next step and esc cancels the
 // setup like on every other step.
 func (m *Model) updateProviderTable(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		if m.wizard != nil {
 			return m.setupEsc()
 		}
 		m.screen = screenForm
-	case "enter":
+	case keyIs(key, actEnter):
 		id, ok := m.providers.list.selected()
 		if !ok {
 			// Nothing matches the search, so there is nothing to take.
@@ -121,13 +121,13 @@ func (m *Model) updateProviderTable(key tea.KeyPressMsg) tea.Cmd {
 			m.setupNext()
 		}
 		return cmd
-	case "up":
+	case keyIs(key, actUp):
 		m.providers.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.providers.list.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.providerTableWindow()
-		m.providers.list.page(key.String(), start, end)
+		m.providers.list.page(key, start, end)
 	default:
 		return m.providers.list.updateFilter(key)
 	}

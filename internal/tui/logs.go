@@ -272,6 +272,8 @@ type logView struct {
 	heat  bool
 	// framed says that the last frame drew the rows in a panel.
 	framed bool
+	// compact says that the last frame left out the panel and the explanations, which the info key gives.
+	compact bool
 	// sessions makes the summary the one of the MCP sessions, scrolled down by scroll lines.
 	sessions bool
 	scroll   int
@@ -627,10 +629,10 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case "q":
+	switch {
+	case keyIs(key, actQuit):
 		return m.quit()
-	case keyOf(actBack):
+	case keyIs(key, actBack):
 		if lv.stats {
 			lv.stats, lv.sessions = false, false
 			return nil
@@ -640,13 +642,13 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "tab":
+	case keyIs(key, actNext):
 		lv.moveFocus(1)
-	case "shift+tab":
+	case keyIs(key, actPrev):
 		lv.moveFocus(-1)
-	case "left", "right":
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		by := 1
-		if key.String() == "left" {
+		if keyIs(key, actLeft) {
 			by = -1
 		}
 		switch lv.focus {
@@ -662,12 +664,12 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 				m.focusNav()
 			}
 		}
-	case "s":
+	case key.String() == "s":
 		lv.stats, lv.sessions, lv.heat = !lv.stats, false, false
-	case "m":
+	case key.String() == "m":
 		on := !(lv.stats && lv.sessions)
 		lv.stats, lv.sessions, lv.scroll, lv.heat = on, on, 0, false
-	case "enter":
+	case keyIs(key, actEnter):
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
@@ -682,27 +684,27 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 				m.clearMessages()
 			}
 		}
-	case "up", "down", "pgup", "pgdown", "home", "end":
+	case keyIs(key, actUp) || keyIs(key, actDown) || keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		lv.focus = logFocusRows
 		if lv.heat {
 			break
 		}
 		if lv.stats && lv.sessions {
-			m.scrollSessions(key.String())
+			m.scrollSessions(key)
 			break
 		}
-		switch key.String() {
-		case "up":
+		switch {
+		case keyIs(key, actUp):
 			lv.list.move(-1)
-		case "down":
+		case keyIs(key, actDown):
 			lv.list.move(1)
 		default:
 			start, end := m.logsWindow()
-			lv.list.page(key.String(), start, end)
+			lv.list.page(key, start, end)
 		}
-	case "f":
+	case key.String() == "f":
 		m.openLogPick(-1)
-	case "/":
+	case keyIs(key, actSearch):
 		lv.focus = logFocusRows
 		lv.list.startFilter()
 	}
@@ -741,18 +743,18 @@ func (m *Model) openLogBarDropdown() {
 // updateLogSearch is the Logs screen while its search is typed; every printable key is search text.
 func (m *Model) updateLogSearch(key tea.KeyPressMsg) tea.Cmd {
 	lv := m.logs
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		lv.list.clearFilter()
-	case "enter":
+	case keyIs(key, actEnter):
 		lv.list.stopFilter()
-	case "up":
+	case keyIs(key, actUp):
 		lv.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		lv.list.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.logsWindow()
-		lv.list.page(key.String(), start, end)
+		lv.list.page(key, start, end)
 	default:
 		return lv.list.updateFilter(key)
 	}
@@ -764,8 +766,8 @@ func (m *Model) updateLogDetail(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.screen = screenLogs
 	}
 	return nil
@@ -800,20 +802,20 @@ func (m *Model) openLogDateDialog() {
 
 func (m *Model) updateLogDateDialog(key tea.KeyPressMsg) tea.Cmd {
 	lv, d := m.logs, m.logs.dialog
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		lv.dialog = nil
 		return nil
-	case "tab", "shift+tab", "up", "down":
+	case keyIs(key, actNext) || keyIs(key, actPrev) || keyIs(key, actUp) || keyIs(key, actDown):
 		d.inputs[d.focus].Blur()
 		by := 1
-		if key.String() == "shift+tab" || key.String() == "up" {
+		if keyIs(key, actPrev) || keyIs(key, actUp) {
 			by = -1
 		}
 		d.focus = wrap(d.focus+by, len(d.inputs))
 		d.inputs[d.focus].Focus()
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		var days []string
 		for _, in := range d.inputs {
 			value := strings.TrimSpace(in.Value())
@@ -887,15 +889,15 @@ func filterText(value string) string {
 
 func (m *Model) updateLogPick(key tea.KeyPressMsg) tea.Cmd {
 	lv, p := m.logs, m.logs.pick
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		if p.filter >= 0 {
 			m.openLogPick(-1)
 			m.logs.pick.list.selectName(strconv.Itoa(p.filter))
 			return nil
 		}
 		lv.pick = nil
-	case "enter":
+	case keyIs(key, actEnter):
 		choice, ok := p.list.selected()
 		if !ok {
 			return nil
@@ -908,13 +910,13 @@ func (m *Model) updateLogPick(key tea.KeyPressMsg) tea.Cmd {
 		lv.filters[p.filter] = choice
 		lv.pick = nil
 		lv.applyFilters()
-	case "up":
+	case keyIs(key, actUp):
 		p.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		p.list.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.logPickWindow()
-		p.list.page(key.String(), start, end)
+		p.list.page(key, start, end)
 	default:
 		return p.list.updateFilter(key)
 	}
@@ -1043,7 +1045,12 @@ func (m *Model) logsFrame() (string, string) {
 		for i, span := range spans {
 			tabsPlain[i] = ansi.Cut(ansi.Strip(strip), span[0], span[1])
 		}
-		tabLine = packBar([]string{marker(logFocusTabs) + strip}, status, width)
+		tabItem := marker(logFocusTabs) + strip
+		if !lv.compactSubject().empty() {
+			// The compact frame leaves the explanation of the summary to the info key.
+			tabItem += styles.hint.Render(infoMark)
+		}
+		tabLine = packBar([]string{tabItem}, status, width)
 		modeField, modePlain := field(logFocusMode, barLabel(tLogBarMode), modes[lv.mode])
 		var dateField, datePlain string
 		switch lv.mode {
@@ -1081,7 +1088,7 @@ func (m *Model) logsFrame() (string, string) {
 
 	shown := len(lv.list.matches)
 	// body is the lines between the top and the bottom of the panel, drawn for the room of its inside.
-	body := func(room int, framed bool) []string {
+	body := func(room int, framed, compact bool) []string {
 		var lines []string
 		note := func(style lipgloss.Style, text string) {
 			if framed {
@@ -1105,13 +1112,17 @@ func (m *Model) logsFrame() (string, string) {
 		case lv.heat:
 			// The heatmap has no table header.
 		case lv.stats && lv.sessions:
-			note(styles.hint, tr(tLogSessionsHelp))
+			if !compact {
+				note(styles.hint, tr(tLogSessionsHelp))
+			}
 			if stats := m.logSessionStats(); len(stats.order) > 0 {
 				lines = append(lines, header(stats.table, stats.layout))
 			}
 		case lv.stats:
 			stats := m.logStats()
-			note(styles.hint, tr(tLogStatsHelp))
+			if !compact {
+				note(styles.hint, tr(tLogStatsHelp))
+			}
 			lines = append(lines, header(stats.table, stats.layout))
 		default:
 			lines = append(lines, header(lv.table, m.logLayout()))
@@ -1130,7 +1141,7 @@ func (m *Model) logsFrame() (string, string) {
 	// the panel, the rules, the idle search line, the position, and the note, which the detail repeats.
 	build := func(compact bool) (string, string) {
 		framed := !compact && m.tableFramed()
-		lv.framed = framed
+		lv.framed, lv.compact = framed, compact
 		room := width
 		if framed {
 			room = max(width-4, 1)
@@ -1162,7 +1173,7 @@ func (m *Model) logsFrame() (string, string) {
 		if !framed && !compact {
 			lines = append(lines, rule)
 		}
-		lines = append(lines, body(room, framed)...)
+		lines = append(lines, body(room, framed, compact)...)
 		if compact {
 			return strings.Join(lines, "\n") + "\n", strings.TrimPrefix(keys, "\n") + m.notes()
 		}
@@ -1176,10 +1187,24 @@ func (m *Model) logsFrame() (string, string) {
 		return strings.Join(lines, "\n") + "\n", bottom + foot + m.notes()
 	}
 	head, f := build(false)
-	if shown > 0 && m.height-strings.Count(head, "\n")-strings.Count(f, "\n")-1 < 1 {
+	// The full frame must leave a row for the rows or the note, whether or not there are rows to show.
+	if m.height-strings.Count(head, "\n")-strings.Count(f, "\n")-1 < 1 {
 		return build(true)
 	}
 	return head, f
+}
+
+// compactSubject is the explanation the compact frame left out of the summary tab, or none: the full frame
+// shows it only above a table, so it exists only where there are rows.
+func (lv *logView) compactSubject() infoSubject {
+	if !lv.compact || !lv.stats || lv.heat || !lv.loaded || lv.err != "" || len(lv.list.matches) == 0 {
+		return infoSubject{}
+	}
+	help := tLogStatsHelp
+	if lv.sessions {
+		help = tLogSessionsHelp
+	}
+	return infoSubject{title: logTabWords()[logTabDetails], long: tr(help)}
 }
 
 // emptyText says that the selected days hold no entry.
@@ -1356,15 +1381,25 @@ func (m *Model) sessionRoom() int {
 }
 
 // scrollSessions moves the shown part of the session summary; the view clamps it again for its own room.
-func (m *Model) scrollSessions(key string) {
+func (m *Model) scrollSessions(key tea.KeyPressMsg) {
 	lv := m.logs
 	room := max(m.sessionRoom()-1, 1)
 	last := max(len(m.logSessionStats().order)-room, 0)
-	by := map[string]int{"up": -1, "down": 1, "pgup": -room, "pgdown": room}[key]
-	switch key {
-	case "home":
+	by := 0
+	switch {
+	case keyIs(key, actUp):
+		by = -1
+	case keyIs(key, actDown):
+		by = 1
+	case keyIs(key, actPageUp):
+		by = -room
+	case keyIs(key, actPageDown):
+		by = room
+	}
+	switch {
+	case keyIs(key, actHome):
 		lv.scroll = 0
-	case "end":
+	case keyIs(key, actEnd):
 		lv.scroll = last
 	default:
 		lv.scroll = min(max(lv.scroll+by, 0), last)
