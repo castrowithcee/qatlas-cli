@@ -119,6 +119,7 @@ var textDE = map[textID]string{
 	tBackgroundDetail:                  "terminal behält den Hintergrund des Terminals; qatlas malt den ganzen Bildschirm im eigenen Hintergrund des Editors. NO_COLOR schaltet Farben immer aus, unabhängig von dieser Wahl. Eine Änderung gilt sofort.",
 	tStartHint:                         "der Bereich, mit dem der Editor startet",
 	tIconsHint:                         "nerdfont braucht eine Nerd Font",
+	tIconsTest:                         "Testzeichen: %s. Erscheinen sie als Kästchen oder Fragezeichen, fehlt die Schrift: Installiere eine Nerd Font (https://www.nerdfonts.com) auf dem Gerät, auf dem das Terminal läuft, bei SSH dein lokaler Rechner, und wähle sie im Terminal als Schrift.",
 	tIconsDetail:                       "nerdfont setzt ein Symbol vor den Namen jedes Bereichs und braucht eine Nerd Font im Terminal; der Name bleibt immer stehen",
 	tLanguageHint:                      "system folgt der Sprache des Geräts",
 	tLanguageDetail:                    "Die Sprache der eigenen Texte des Editors; eine Änderung gilt sofort. Begriffe wie Service, Credential und Connection bleiben, wie sie sind, Texte aus Core und Providern bleiben Englisch.",
