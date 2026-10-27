@@ -119,6 +119,7 @@ var textEN = map[textID]string{
 	tBackgroundDetail:                  "terminal keeps the background of the terminal; qatlas paints the whole screen in the editor's own background. NO_COLOR turns every colour off whatever is chosen here. A change applies at once.",
 	tStartHint:                         "the area the editor opens on",
 	tIconsHint:                         "nerdfont needs a Nerd Font",
+	tIconsTest:                         "Test characters: %s. If they show as boxes or question marks, the font is missing: install a Nerd Font (https://www.nerdfonts.com) on the device where the terminal runs, on SSH your local computer, and choose it as the terminal font.",
 	tIconsDetail:                       "nerdfont puts an icon before each area's name and needs a Nerd Font in the terminal; the name always stays",
 	tLanguageHint:                      "system follows the language of the device",
 	tLanguageDetail:                    "The language of the editor's own texts; a change applies at once. Terms such as service, credential and connection stay as they are, and texts of the core and the providers stay English.",

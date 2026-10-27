@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +19,12 @@ var areaIcons = [areaCount]string{
 	areaLibrary:     "",
 	areaSettings:    "",
 }
+
+// iconsTest explains the nerdfont value with the glyphs themselves, taken from areaIcons.
+func iconsTest() string { return fmt.Sprintf(tr(tIconsTest), strings.Join(areaIcons[:], " ")) }
+
+// iconsDetail is the long explanation of the icons preference.
+func iconsDetail() string { return tr(tIconsDetail) + ". " + iconsTest() }
 
 // Labels of the General form.
 const (
@@ -123,7 +130,7 @@ func (m *Model) generalFields() []field {
 			withHint(tr(tStartHint)),
 		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
 			withHint(tr(tIconsHint)).
-			withDetail(tr(tIconsDetail)),
+			withDetail(iconsDetail()),
 		choiceField(langLabel, []string{uiprefs.LanguageEnglish, uiprefs.LanguageGerman, uiprefs.LanguageSystem}, language).
 			withHint(tr(tLanguageHint)).
 			withDetail(tr(tLanguageDetail)),
