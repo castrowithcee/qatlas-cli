@@ -136,11 +136,10 @@ publishing changes the script that visitors run.
   as given and cannot change the type; `add` takes `status` (`active` or `paused`). `parameters` are capped like
   those of triggers; Matomo keeps only the parameters the type defines.
 - A `Matomo` tag sends to the address of the variable its `matomoConfig` refers to. The reference must be exactly one
-  `{{Name}}` that names a variable of the draft of the type `MatomoConfiguration`, whose `matomoUrl` and `idSite` are
-  written out (no reference) and equal this connection's base URL (scheme, host, port, and path, ignoring a trailing
-  slash) and the selected website. The tool reads the variables of the draft once for it; otherwise it refuses
+  `{{Name}}` that names a variable of the draft of the type `MatomoConfiguration`, and that variable must meet the
+  rule of the variable tools below. The tool reads the variables of the draft once for it; otherwise it refuses
   without a request to change anything and without naming the other value. `resume` applies the rule to the stored
-  `matomoConfig`. The variable tools hold the variable itself to the same rule.
+  `matomoConfig` and the current variable.
 - The container tools create a container with its draft and change its name, description, and settings; they save no
   version and publish nothing. `matomo.tag-manager-containers.add` takes a `context` that cannot change later;
   `matomo.tag-manager-containers.update` replaces everything as given, so `description` and the three settings are
@@ -165,10 +164,11 @@ publishing changes the script that visitors run.
   refuse them, a fixed list. `add` refuses before any request; `update` reads the stored variable once and refuses one
   of those types before it changes anything.
 - A variable of the type `MatomoConfiguration` decides where `Matomo` tags send their data, so `add` and `update`
-  accept it only under the rule of the `Matomo` tags above: `matomoUrl` and `idSite` written out and equal to this
-  connection's base URL and the selected website. In addition `setApiUrl` and `customRequestProcessing` must be
-  empty, and `trackingEndpoint`, `trackingEndpointCustom`, `jsEndpoint`, and `jsEndpointCustom` must be plain paths
-  (no scheme, host, reference, or `..`). `update` applies this by the stored type; the refusal names no value.
+  accept it only under this rule, which the `Matomo` tag tools and the publication apply as well: `matomoUrl` and
+  `idSite` are written out (no reference) and equal this connection's base URL (scheme, host, port, and path, ignoring
+  a trailing slash) and the selected website; `setApiUrl` and `customRequestProcessing` are empty; `trackingEndpoint`,
+  `trackingEndpointCustom`, `jsEndpoint`, and `jsEndpointCustom` are empty or plain paths (no scheme, host,
+  reference, or `..`). `update` applies this by the stored type; the refusal names no value.
 
 ## Publishing
 
@@ -195,8 +195,8 @@ is no environment of this method, and is refused before any request.
     base URL: `matomoUrl` must be the base URL with `https`, the same host and installation path, and at most a
     closing slash; a protocol-relative or other address, or one built from another variable, is refused. Its
     `idSite` must be the `idSite` of the call and `jsEndpoint` and `trackingEndpoint` one of Matomo's own files (not
-    `custom`). The rules the variable tools apply to such a variable hold as well. Every such variable of the
-    version is checked, used or not;
+    `custom`). The rule of the variable tools holds as well. Every such variable of the version is checked, used
+    or not;
   - a `Matomo` tag does not name exactly one `MatomoConfiguration` variable of the version as `{{name}}` (compared
     without regard to case, as Matomo's database may).
 - Matomo itself refuses an unknown environment, a missing right, or a version of another container or website; the
