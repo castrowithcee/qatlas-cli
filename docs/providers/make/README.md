@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Make
@@ -135,6 +135,30 @@ happened and this provider has no delete tool to undo it. `make.scenarios.run` i
 re-read: its own answer carries no scope of its own to re-verify (see
 [Runs and their errors](scenarios.md#runs-and-their-errors)).
 
+### Exclusions
+
+`exclude` takes objects out of what the targets reach. Its entries are spelled like targets but stand apart from
+them: `scenario/SCENARIO_ID` and `folder/FOLDER_ID` in team mode, `team/TEAM_ID` in organization mode. Any other
+entry (an organization, a team in team mode, a scenario or folder in organization mode), a repeated entry, and an
+entry equal to a target are invalid. Configuration validation does not know the mode, so the provider checks the
+list on every call, before a secret is read, and never quotes a value. An exclusion is no target: it restricts no
+tool, changes which tools a binding reaches in no way, and wins over every target.
+
+Make knows no rights below the team, so an excluded scenario, and every scenario in an excluded folder or any folder
+below it, is treated like a scenario of another team: a tool that names it refuses it as outside the targets without
+naming the scenario or the exclusion, `make.scenarios.list` leaves it out (also with `ids`), and a `folder_id`
+filter on an excluded folder gives an empty page. `make.scenarios.create` with such a `folder_id` and
+`make.scenarios.update` moving a scenario into such a folder are refused before any request; a result that lands
+there anyway is a `provider-error`, as for targets. Moving a reachable scenario elsewhere stays allowed. The folder
+tree is read once per call for every path that must place a scenario or hook, only on a connection that excludes a
+folder; a folder the tree does not show counts as excluded. Hooks of excluded scenarios are covered under
+[Hooks](hooks.md#hooks), excluded teams under [Teams of an organization](organization.md#teams-of-an-organization).
+
+Tools of objects without a scenario reference (connections, access lists, credential requests, data stores, their
+records, data structures, team variables) are unchanged, as is what they report about scenarios that use them, such
+as the scenarios a refused connection deletion lists. A blueprint is the scenario's own content: a reachable
+scenario's blueprint may still name an excluded sub-scenario, and Qatlas does not remove it.
+
 ## Choosing targets
 
 A person chooses the targets of a connection level by level: organization, the teams of an organization, then
@@ -142,7 +166,8 @@ the folders of a team and its scenarios. The scenario list of a team holds all i
 not, so a scenario outside any folder stays selectable; its folder is shown as its place. Organizations and
 teams page by offset (`pg[offset]`, `pg[limit]`); the folder list of a team comes in one answer with all
 subfolders, since Make documents no paging for it. Scenarios can be searched by name at Make; the other levels are
-filtered by what has been loaded. The connection's own targets neither filter nor narrow what is offered.
+filtered by what has been loaded. The connection's own targets and exclusions neither filter nor narrow what is
+offered, and an exclusion is never offered as a target.
 Choosing only reads, through no tool and for no agent. Names are untrusted data and are shortened.
 
 No URL of Make's web interface is resolved: neither Make's API documentation nor its help pages document the
