@@ -1131,7 +1131,12 @@ func (m *Model) logsFrame() (string, string) {
 		if framed {
 			room = max(width-4, 1)
 		}
-		lines := append([]string{}, tabLine...)
+		// Without the frame the terminal is small, and the title line would cost a row of the table.
+		var lines []string
+		if framed {
+			lines = strings.Split(strings.TrimSuffix(m.titled(m.section.title(), "", width), "\n"), "\n")
+		}
+		lines = append(lines, tabLine...)
 		if compact {
 			lines = append(lines, compactRows...)
 		} else {
