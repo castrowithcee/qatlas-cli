@@ -57,8 +57,7 @@ func unencryptedVaultModel(t *testing.T) *Model {
 
 // The header names all three states of an encrypted or unencrypted vault, symbol and word together, and a
 // run without a vault at all keeps the plain header it always had (Vorgabe 1's own narrower reading: nothing
-// instead of a warning for something that does not exist yet). Combined with the path line from
-// narrowWidth up, and its own row above it in a narrower terminal.
+// instead of a warning for something that does not exist yet). The header stays one row without a path.
 func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 	for _, width := range []int{100, 60} {
 		t.Run(fmt.Sprintf("width=%d", width), func(t *testing.T) {
@@ -94,12 +93,12 @@ func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 					if !strings.Contains(joined, tt.want) {
 						t.Fatalf("header = %q, want it to contain %q", joined, tt.want)
 					}
-					// The header stays on one line while the path keeps its room beside the marks.
+					// The header is one row and leaves the config path to the Overview.
 					switch {
 					case len(lines) != 1:
 						t.Fatalf("headerLines() = %d lines, want 1: %q", len(lines), lines)
-					case !strings.Contains(lines[0], "config.yaml"):
-						t.Errorf("header = %q, want the end of the path on the same line", lines[0])
+					case strings.Contains(lines[0], "config.yaml"):
+						t.Errorf("header = %q, want no config path", lines[0])
 					}
 				})
 			}

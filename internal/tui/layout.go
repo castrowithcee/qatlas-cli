@@ -63,79 +63,29 @@ func (m *Model) footerHits() {
 // headerSep is the gap between two parts of the header.
 const headerSep = "  "
 
-// pathRoom is what the path keeps at least on the line of the status marks, and what the banner of a newer
-// release leaves it.
-const pathRoom = 12
-
-// headerLines are the header rows above the workspace. The first row starts with the name, then the status
-// marks of the vault and of the admin session (none for a run with no vault configured: a warning for
-// something that does not exist yet would mislead), the banner of a newer release, and the config path. The
-// help and command keys stand at the right end. When the width does not suffice, those keys go first, then
-// the path is shortened at its start (the end tells files apart); only when even that leaves the path less
-// than pathRoom does it move to a row of its own, and a status part that does not fit wraps like text.
+// headerLines are the header rows above the workspace: always one row. It starts with the name, then the
+// status marks of the vault and of the admin session (none for a run with no vault configured: a warning for
+// something that does not exist yet would mislead), then the banner of a newer release. The back button and
+// the help and command keys stand at the right end. When the width does not suffice, the keys go first,
+// then the button; a status mark that still does not fit is cut with an ellipsis rather than
+// wrapped, so the header never takes a second row.
 func (m *Model) headerLines() []string {
 	lines, _ := m.headerLayout()
 	return lines
 }
 
-// headerLayout is headerLines and the cells of the back button in the first row (empty when it is not shown).
-// The button stands at the right end in front of the help and command keys; it gives way last, so it never
-// changes the rows or the path that the keys alone would leave.
+// headerLayout is headerLines and the cells of the back button in the row (empty when it is not shown). The
+// banner takes its room before the right blocks, which stand only where the row still has room for them.
 func (m *Model) headerLayout() ([]string, navSpan) {
 	width := max(m.termWidth, 1)
-	lines, used := flowParts(m.headerStatus(), width)
-	path := m.configPath()
-	suffix := ""
-	if !m.configExists {
-		suffix = tr(tHeaderCreated)
-	}
-	rights := m.headerRights()
-	pathMin := min(pathRoom, lipgloss.Width(path))
 	sep := lipgloss.Width(headerSep)
+	line, used := fitParts(m.headerStatus(), width)
 
-	// The path keeps the first claim on the row; the banner takes what is left, or the room of the status
-	// row when the path has a row of its own.
-	room := width - used - sep
-	banner := ""
-	if len(lines) == 1 {
-		banner = m.updateBanner(room - sep - pathMin)
+	if banner := m.updateBanner(width - used - sep); banner != "" {
+		line += headerSep + styles.ok.Render(banner)
 	}
-	if banner == "" && !(len(lines) == 1 && room >= pathMin) {
-		banner = m.updateBanner(room)
-	}
-	if banner != "" {
-		lines[len(lines)-1] += headerSep + styles.ok.Render(banner)
-		used += sep + lipgloss.Width(banner)
-		room = width - used - sep
-	}
-
-	if len(lines) == 1 && room >= pathMin {
-		shown := fitPath(path, suffix, room)
-		line := lines[0] + headerSep + styles.hint.Render(shown)
-		var back navSpan
-		if shown == path || shown == path+suffix {
-			line, back = placeRight(line, rights, width)
-			if back.x1 > back.x0 || len(rights) == 0 || rights[len(rights)-1].back.x1 == 0 {
-				return []string{line}, back
-			}
-		}
-		// The button outranks the whole path: it takes its room first, and the path is cut to what is left
-		// as long as that keeps pathRoom; the keys stand only where the whole path fits.
-		if len(rights) > 0 && rights[len(rights)-1].back.x1 > 0 {
-			button := rights[len(rights)-1:]
-			if left := room - sep - lipgloss.Width(button[0].text); left >= pathMin {
-				cut := lines[0] + headerSep + styles.hint.Render(fitPath(path, suffix, left))
-				cut, back = placeRight(cut, button, width)
-				return []string{cut}, back
-			}
-		}
-		return []string{line}, navSpan{}
-	}
-	var back navSpan
-	if len(lines) == 1 {
-		lines[0], back = placeRight(lines[0], rights, width)
-	}
-	return append(lines, styles.hint.Render(fitPath(path, suffix, width))), back
+	line, back := placeRight(line, m.headerRights(), width)
+	return []string{line}, back
 }
 
 // headerRight is a block at the right end of the header: the cells of the back button in it, if it holds one.
@@ -188,27 +138,23 @@ func (m *Model) backButton() string {
 	return styles.hint.Render("[" + keyLabel(actBack) + "] " + tr(tHeaderBack))
 }
 
-// flowParts lays styled parts out one after the other in rows of at most width cells, separated by
-// headerSep, and returns the rows and the width of the last one. A part wider than a row is cut.
-func flowParts(parts []string, width int) ([]string, int) {
-	lines := []string{""}
-	used := 0
+// fitParts lays styled parts out in one row of at most width cells, separated by headerSep, and returns the
+// row and its width. The part that does not fit is cut with an ellipsis and the parts after it are dropped.
+func fitParts(parts []string, width int) (string, int) {
+	line, used := "", 0
 	for _, part := range parts {
-		w := lipgloss.Width(part)
-		if used > 0 && used+lipgloss.Width(headerSep)+w > width {
-			lines, used = append(lines, ""), 0
-		}
 		if used > 0 {
-			lines[len(lines)-1] += headerSep
+			if used+lipgloss.Width(headerSep)+1 > width {
+				break
+			}
+			line += headerSep
 			used += lipgloss.Width(headerSep)
 		}
-		if w > width {
-			part, w = clipCells(part, width), width
-		}
-		lines[len(lines)-1] += part
-		used += w
+		part = truncateCells(part, width-used)
+		line += part
+		used += lipgloss.Width(part)
 	}
-	return lines, used
+	return line, used
 }
 
 // fitPath is the plain path text for room cells: with the note that the file is still to be created if
