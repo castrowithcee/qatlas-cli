@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
@@ -595,7 +595,7 @@ func visualTargetPicker(t *testing.T, m *Model) {
 		typeText(t, m, visualPassphrase)
 		pump(t, m, "enter")
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	deliver(m, cmd)
 	pump(t, m, "tab", "down", "down", "tab")
 }

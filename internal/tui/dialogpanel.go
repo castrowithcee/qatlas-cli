@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // dialogPanel lays the text of a dialog screen (a list of entries, a preview, a result) into one panel when

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -217,7 +217,7 @@ func (m *Model) closeFindings() {
 	m.findings, m.screen = nil, screenList
 }
 
-func (m *Model) updateFindings(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateFindings(key tea.KeyPressMsg) tea.Cmd {
 	s := m.findings
 	if s == nil {
 		m.screen = screenList

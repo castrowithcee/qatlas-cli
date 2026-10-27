@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // lookScreen builds one picker or setup screen on the model of its test.
@@ -147,14 +147,14 @@ func TestTickedEntriesShowAColouredTickAndReadWithoutColour(t *testing.T) {
 	}
 
 	setProfile(profile16)
-	if row := m.pickerRowText(ticked); !strings.Contains(row, styles.ok.Render("[x]")) {
+	if row := shown(m.pickerRowText(ticked)); !strings.Contains(row, shown(styles.ok.Render("[x]"))) {
 		t.Errorf("the ticked row has no coloured tick: %q", row)
 	}
-	if row := m.pickerRowText(open); strings.Contains(row, styles.ok.Render("[x]")) || !strings.Contains(row, "[ ]") {
+	if row := shown(m.pickerRowText(open)); strings.Contains(row, shown(styles.ok.Render("[x]"))) || !strings.Contains(row, "[ ]") {
 		t.Errorf("the unticked row reads like a ticked one: %q", row)
 	}
 	setProfile(profileNone)
-	if row := m.pickerRowText(ticked); strings.Contains(row, "\x1b") || !strings.Contains(row, "[x] ") {
+	if row := shown(m.pickerRowText(ticked)); strings.Contains(row, "\x1b") || !strings.Contains(row, "[x] ") {
 		t.Errorf("without colour the tick is not plain text: %q", row)
 	}
 }

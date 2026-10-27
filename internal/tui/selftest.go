@@ -9,8 +9,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/selftest"
 )
@@ -189,7 +189,7 @@ func (m *Model) endSelftest() {
 	}
 }
 
-func (m *Model) updateSelftest(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 	st := m.st
 	if !st.done {
 		if key.String() == keyOf(actBack) {

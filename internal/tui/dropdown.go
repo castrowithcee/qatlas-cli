@@ -3,8 +3,8 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -101,7 +101,7 @@ func (m *Model) noteField(id string, x, y int) {
 }
 
 // updateDropdown is a key while a list is open: up and down move, enter takes the value, esc closes it.
-func (m *Model) updateDropdown(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateDropdown(key tea.KeyPressMsg) tea.Cmd {
 	d := m.dd
 	switch key.String() {
 	case "up":

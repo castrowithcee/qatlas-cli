@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // providerTable is how every provider row is chosen: a table of all the providers the row offers, with
@@ -102,7 +102,7 @@ func (m *Model) openProviderTable() {
 // selected provider and esc leaves the row, and every row that depends on it, as it was. In the guided setup
 // the table is the whole provider step, so taking a provider goes on to the next step and esc cancels the
 // setup like on every other step.
-func (m *Model) updateProviderTable(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateProviderTable(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		if m.wizard != nil {

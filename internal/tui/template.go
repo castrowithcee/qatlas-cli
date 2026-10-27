@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -164,7 +164,7 @@ func (m *Model) templateNoun() string {
 	return m.section.entry()
 }
 
-func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateTemplate(key tea.KeyPressMsg) tea.Cmd {
 	t := m.template
 	if t == nil {
 		m.screen = screenList
@@ -272,7 +272,7 @@ func (m *Model) templateView() string {
 				return nil
 			}
 			m.template.index = index
-			return m.press(tea.KeyMsg{Type: tea.KeyEnter})
+			return m.press(tea.KeyPressMsg{Code: tea.KeyEnter})
 		})
 		b.WriteString(text + "\n")
 	}

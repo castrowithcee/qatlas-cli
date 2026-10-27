@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
@@ -125,7 +125,7 @@ func TestPanelAndFieldCarrySurfaces(t *testing.T) {
 	if !strings.HasPrefix(strings.TrimPrefix(lines[1], panelStyle(false).Render("│")), panelBG) {
 		t.Fatalf("panel content does not open with the panel colour: %q", lines[1])
 	}
-	if !strings.Contains(lines[1], "\x1b[0m"+panelBG+" tail") {
+	if !strings.Contains(lines[1], "\x1b[m"+panelBG+" tail") {
 		t.Fatalf("panel colour lost after a styled run: %q", lines[1])
 	}
 	if f := surfaceRow("name", 10); !strings.Contains(f, fieldBG) || strings.Contains(f, panelBG) {

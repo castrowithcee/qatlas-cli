@@ -19,9 +19,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -869,8 +869,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleSelftest(msg)
 	case restartFailedMsg:
 		m.restartFailed(msg)
-		// The terminal was released for the replacement, which turned the mouse off; it stays this editor's.
-		return m, m.mouseResume()
+		return m, nil
+	case tea.PasteMsg:
+		_, cmd := m.Update(pasteKey(msg.Content))
+		return m, cmd
 	case tea.MouseMsg:
 		return m, m.updateMouse(msg)
 	case tea.WindowSizeMsg:
@@ -884,7 +886,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.layoutWorkspace()
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if m.infoOpen {
 			if msg.String() == "ctrl+c" {
 				return m, m.interrupt()
@@ -1013,7 +1015,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // area has one; down from the option bar, enter, or tab move the focus into the workspace, and up on the
 // option bar returns to the tab line. home/end and pgup/pgdown jump to the first or last area. Moving
 // changes the active section at once, so the workspace below always shows what the marker stands on.
-func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
@@ -1119,7 +1121,7 @@ func (m *Model) previewSection(s section) tea.Cmd {
 	return cmd
 }
 
-func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 	if m.section == sectionOverview {
 		return m.updateOverview(key)
 	}
@@ -1264,7 +1266,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 
 // updateFilter is the list while its filter is typed. Every printable key belongs to the filter, including
 // the letters and digits that are list keys otherwise; the arrows still move through what it matches.
-func (m *Model) updateFilter(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateFilter(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case keyOf(actBack):
 		m.list.clearFilter()
@@ -1378,7 +1380,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.closeCommandLine()
 		return nil
 	case screenSelftest:
-		return m.updateSelftest(tea.KeyMsg{Type: tea.KeyEsc})
+		return m.updateSelftest(tea.KeyPressMsg{Code: tea.KeyEscape})
 	case screenUpdate:
 		m.screen = m.updateFrom
 		return nil
@@ -1389,9 +1391,9 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenForm, screenSummary:
 		return m.requestLeave()
 	case screenTargets:
-		return m.updateTargets(tea.KeyMsg{Type: tea.KeyEsc})
+		return m.updateTargets(tea.KeyPressMsg{Code: tea.KeyEscape})
 	case screenPaths:
-		return m.updatePaths(tea.KeyMsg{Type: tea.KeyEsc})
+		return m.updatePaths(tea.KeyPressMsg{Code: tea.KeyEscape})
 	case screenProviders:
 		if m.wizard != nil {
 			return m.setupEsc()
@@ -1592,7 +1594,7 @@ func (m *Model) formState() string {
 // updateLeave answers the leave question. F2 saves, or goes on in the guided setup, d drops the input and
 // goes on, or ends the program after ctrl+c, and esc returns to where it came from unchanged. Nothing else
 // answers it, not even y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
-func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateLeave(key tea.KeyPressMsg) tea.Cmd {
 	from := m.leaveFrom
 	switch key.String() {
 	case keyOf(actBack):
@@ -1724,7 +1726,7 @@ func (m *Model) saveAndLeave() tea.Cmd {
 	})
 }
 
-func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 	if m.payloadSaving {
 		// The values are on their way to the store; nothing typed now could still take part.
 		return nil
@@ -1853,7 +1855,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	var cmd tea.Cmd
-	current.input, cmd = current.input.Update(key)
+	current.input, cmd = current.input.Update(inputMsg(key))
 	return cmd
 }
 
@@ -1936,12 +1938,12 @@ func (m *Model) openPicker() {
 
 // updatePicker handles the picker. Every printable key belongs to the filter; enter takes the selected
 // value and esc leaves the row as it was.
-func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updatePicker(key tea.KeyPressMsg) tea.Cmd {
 	if m.pickerMarks != nil {
 		// A tool list or the effects take any number of values: space ticks the selected one instead of
 		// typing a blank, which no tool ID or effect contains, and enter keeps every tick at once.
 		switch key.String() {
-		case " ":
+		case "space":
 			if choice, ok := m.picker.selected(); ok && m.pickerEffects != nil && isEffectRow(choice) {
 				m.pickerEffects.toggle(choice, m.pickerMarks, m.searchVisible())
 			} else if ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
@@ -2474,7 +2476,7 @@ func (m *Model) replaceEffectChoices(provider string) {
 	f.hint, f.detail = m.permissionHint(provider), m.permissionDetail(provider)
 }
 
-func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 	if m.vaultLockConfirm {
 		switch key.String() {
 		case "y":
@@ -3684,18 +3686,21 @@ func sectionShortcut(key string) (section, bool) {
 	return areaSections[key[0]-'1'][0], true
 }
 
-// View is the Bubble Tea entry point; all drawing lives in render.
-func (m *Model) View() string {
-	return m.render()
+// View is the Bubble Tea entry point; all drawing lives in render. The editor draws inline, below the shell
+// prompt, never on the alternate screen.
+func (m *Model) View() tea.View {
+	v := tea.NewView(m.render())
+	v.MouseMode = m.mouseMode()
+	return v
 }
 
 // render draws the frame: the configuration path, the sections, and the workspace with the current screen.
 func (m *Model) render() string {
 	view := m.renderFrame()
-	if !styles.filled || view == "" {
-		return view
+	if styles.filled && view != "" {
+		view = paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
 	}
-	return paintCanvas(view, styles.canvasPrefix(), m.termWidth, m.termHeight)
+	return shown(view)
 }
 
 // renderFrame is the frame before the background of the preference is applied.
@@ -4269,7 +4274,7 @@ func (m *Model) searchLineIn(room int, l *filterList, label string) string {
 	if !l.editing {
 		return prefix + truncateCells(l.query(), width)
 	}
-	return prefix + fitInput(l.input, width).View()
+	return prefix + inputView(fitInput(l.input, width))
 }
 
 // fitInput returns in scrolling horizontally inside width cells, the cell of the cursor included. The
@@ -4296,7 +4301,7 @@ func (m *Model) inputLine(prefix string, in textinput.Model) string {
 // inputLineIn is inputLine within the first room cells of the workspace.
 func (m *Model) inputLineIn(room int, prefix string, in textinput.Model) string {
 	prefix, width := m.fitIn(room, prefix)
-	return prefix + fitInput(in, width).View()
+	return prefix + inputView(fitInput(in, width))
 }
 
 // listRows draws the shown entry at index i of the list as a row of its table, with the columns laid out
@@ -4957,8 +4962,12 @@ func Run(opts Options) error {
 	if prefs == (uiprefs.Prefs{}) {
 		prefs = uiprefs.Default()
 	}
-	// The colour scheme is settled before the program takes the terminal, so a background query never
+	// The colour scheme is settled before the program takes the terminal, so the background query never
 	// races the editor's own input.
+	setProfile(detectProfile(opts.Out))
+	if os.Getenv("NO_COLOR") == "" {
+		detectBackground(opts.In, opts.Out)
+	}
 	applyColorScheme(prefs.Theme, prefs.Background)
 	setLanguage(prefs.Language)
 	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
@@ -4989,12 +4998,8 @@ func Run(opts Options) error {
 		model.adopt(predecessor)
 	}
 	fragments := newFragmentFilter(time.Now)
-	programOptions := []tea.ProgramOption{tea.WithInput(opts.In), tea.WithOutput(opts.Out),
-		tea.WithFilter(fragments.filter)}
-	if prefs.MouseEnabled() {
-		programOptions = append(programOptions, tea.WithMouseCellMotion())
-	}
-	program := tea.NewProgram(model, programOptions...)
+	program := tea.NewProgram(model, tea.WithInput(opts.In), tea.WithOutput(legacyKeys{opts.Out}),
+		tea.WithFilter(fragments.filter), tea.WithColorProfile(toColorprofile(currentProfile())))
 	fragments.program = program
 	_, err = program.Run()
 	return err

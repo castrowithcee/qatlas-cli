@@ -3,9 +3,9 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // filterList is a selection over a list of names that a typed filter can narrow and that scrolls inside
@@ -142,10 +142,10 @@ func (l *filterList) clearFilter() {
 }
 
 // updateFilter hands one key to the filter being typed and applies the result at once.
-func (l *filterList) updateFilter(key tea.KeyMsg) tea.Cmd {
+func (l *filterList) updateFilter(key tea.KeyPressMsg) tea.Cmd {
 	before := l.input.Value()
 	var cmd tea.Cmd
-	l.input, cmd = l.input.Update(key)
+	l.input, cmd = l.input.Update(inputMsg(key))
 	if l.input.Value() != before {
 		l.refilter()
 	}

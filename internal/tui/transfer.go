@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -200,7 +200,7 @@ func (m *Model) secretsUnavailable() string {
 	return ""
 }
 
-func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateExport(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
 	if e == nil {
 		m.screen = screenList
@@ -216,9 +216,9 @@ func (m *Model) updateExport(key tea.KeyMsg) tea.Cmd {
 		switch e.step {
 		case exportSelect, exportMode, exportPassphrase, exportTarget:
 			// F2 goes on like enter, which also confirms the one-line dialogs.
-			key = tea.KeyMsg{Type: tea.KeyEnter}
+			key = tea.KeyPressMsg{Code: tea.KeyEnter}
 		case exportResult:
-			key = tea.KeyMsg{Type: tea.KeyEnter}
+			key = tea.KeyPressMsg{Code: tea.KeyEnter}
 		}
 	}
 	switch e.step {
@@ -281,7 +281,7 @@ func scrollOffset(offset int, key string, height int) int {
 	return offset
 }
 
-func (m *Model) updateExportSelect(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateExportSelect(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
 	switch key.String() {
 	case "up":
@@ -291,7 +291,7 @@ func (m *Model) updateExportSelect(key tea.KeyMsg) tea.Cmd {
 	case "pgup", "pgdown", "home", "end":
 		start, end := m.exportRowWindow()
 		e.rows.page(key.String(), start, end)
-	case " ":
+	case "space":
 		if name, ok := e.rows.selected(); ok {
 			e.marks[name] = !e.marks[name]
 		}
@@ -379,7 +379,7 @@ func (m *Model) exportBack() tea.Cmd {
 	return nil
 }
 
-func (m *Model) updateExportMode(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateExportMode(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
 	switch key.String() {
 	case "up":
@@ -420,7 +420,7 @@ func maskedInput() textinput.Model {
 }
 
 // updateExportPassphrase takes the export passphrase twice; a difference asks again from the start.
-func (m *Model) updateExportPassphrase(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateExportPassphrase(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
 	if key.String() != "enter" {
 		return e.input.update(key)
@@ -455,7 +455,7 @@ func (m *Model) askExportTarget() {
 	e.input.open(value, m.startDir)
 }
 
-func (m *Model) updateExportTarget(key tea.KeyMsg) tea.Cmd {
+func (m *Model) updateExportTarget(key tea.KeyPressMsg) tea.Cmd {
 	e := m.export
 	if key.String() != "enter" {
 		return e.input.update(key)

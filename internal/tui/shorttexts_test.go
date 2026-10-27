@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -139,15 +139,15 @@ func TestTheToolPickerDimsTheIDOfInactiveRows(t *testing.T) {
 	}
 
 	setProfile(profile16)
-	faint := "\x1b[" + strings.TrimSuffix(strings.TrimPrefix(styles.hint.Render("x"), "\x1b["), "mx\x1b[0m") + "m"
-	row := m.pickerRowText(index)
+	faint := "\x1b[" + strings.TrimSuffix(strings.TrimPrefix(shown(styles.hint.Render("x")), "\x1b["), "mx\x1b[m") + "m"
+	row := shown(m.pickerRowText(index))
 	at := strings.Index(row, faint)
 	if at < 0 || !strings.HasPrefix(row[at+len(faint):], "bookstack.pages.list") ||
 		strings.Index(row, "List BookStack pages") > at {
 		t.Errorf("the inactive row does not dim from the ID on: %q", row)
 	}
 	setProfile(profileNone)
-	if row := m.pickerRowText(index); strings.Contains(row, "\x1b[") ||
+	if row := shown(m.pickerRowText(index)); strings.Contains(row, "\x1b[") ||
 		!strings.Contains(row, "List BookStack pages  bookstack.pages.list  read") {
 		t.Errorf("without colour the row is not plain readable text: %q", row)
 	}

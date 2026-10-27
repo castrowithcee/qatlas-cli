@@ -9,12 +9,13 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // listSource is a fake provider listing: list answers each request, and every request is recorded together
@@ -447,7 +448,7 @@ func TestLeavingThePickerCancelsTheRunningRead(t *testing.T) {
 	if m.targetPick == nil {
 		t.Fatal("enter did not reopen the picker")
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	deliver(m, read)
 	if got := src.cancelled[len(src.cancelled)-1]; !got {
 		t.Fatal("quitting left the read running")

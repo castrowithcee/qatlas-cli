@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -59,7 +59,7 @@ func keyRowValue(f field) string {
 }
 
 // keyRowKey handles the keys of a focused key row: enter waits for the new key, r restores the standard.
-func (m *Model) keyRowKey(key tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) keyRowKey(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	f := &m.fields[m.focus]
 	switch key.String() {
 	case "enter":
@@ -78,8 +78,8 @@ func (m *Model) keyRowKey(key tea.KeyMsg) (tea.Cmd, bool) {
 // captureKey takes the next key press as the binding of the focused key row. It runs ahead of every global
 // key, so ?, :, F2, and ctrl+l can be bound too; only a rule keeps a key from being taken, and the refusal
 // names it.
-func (m *Model) captureKey(key tea.KeyMsg) tea.Cmd {
-	if key.Paste {
+func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
+	if _, ok := pasted(key); ok {
 		return nil
 	}
 	m.keyCapture = false
@@ -94,7 +94,12 @@ func (m *Model) captureKey(key tea.KeyMsg) tea.Cmd {
 	f := &m.fields[m.focus]
 	// The other rows of the form are what the key must not collide with, so a rebinding in several steps
 	// checks against what is shown, not against what was saved.
-	chosen, err := m.keysOfForm().Check(f.action, key.String())
+	name := key.String()
+	if name == "space" {
+		// The rules name the space bar by its character, as bindings always have been.
+		name = " "
+	}
+	chosen, err := m.keysOfForm().Check(f.action, name)
 	if err != nil {
 		m.fail = err.Error()
 		return nil

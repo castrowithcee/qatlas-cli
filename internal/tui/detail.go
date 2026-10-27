@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -83,7 +83,7 @@ func (m *Model) marksEntry() bool {
 
 // updateDetail is a key while the pane has the focus: left/right change the tab, tab goes on to the filter
 // bar (or the tab line), shift+tab and the back key return to the rows. Every other key is the rows'.
-func (m *Model) updateDetail(key tea.KeyMsg) (tea.Cmd, bool) {
+func (m *Model) updateDetail(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch key.String() {
 	case "left", "right":
 		if m.marksEntry() {

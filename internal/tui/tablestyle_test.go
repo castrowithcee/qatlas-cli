@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 // A list screen draws its table in a panel under a title line with the section, its entry count and the position, the column names in
@@ -47,8 +47,8 @@ func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
 	if row := findRow(coloured, "tracker-issues"); !strings.Contains(row, "\x1b[") || strings.Contains(row, "▌") || hasBackground(row) {
 		t.Errorf("an unmarked row must carry cell colours, no mark and no bar: %q", row)
 	}
-	if connectionStateTone("active").Render("x") == connectionStateTone("expired").Render("x") ||
-		connectionStateTone("disabled").Render("x") == connectionStateTone("active").Render("x") {
+	if shown(connectionStateTone("active").Render("x")) == shown(connectionStateTone("expired").Render("x")) ||
+		shown(connectionStateTone("disabled").Render("x")) == shown(connectionStateTone("active").Render("x")) {
 		t.Error("active, expired and disabled share one style")
 	}
 

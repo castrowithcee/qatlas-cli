@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -1323,7 +1323,7 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	go func() { answered <- guard() }()
 
 	// The changed form asks before it is lost; discarding it ends the editor while the check still waits.
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if m.quitting || m.screen != screenLeave {
 		t.Fatalf("ctrl+c on a changed form did not ask: screen %v", m.screen)
 	}

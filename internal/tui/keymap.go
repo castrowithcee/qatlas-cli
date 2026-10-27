@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -22,7 +22,7 @@ const (
 	actDelete  action = "delete"
 )
 
-// keymap maps each action to the key string bubbletea reports for it (tea.KeyMsg.String); "" is unbound.
+// keymap maps each action to the key string bubbletea reports for it (tea.KeyPressMsg.String); "" is unbound.
 var keymap = map[action]string{
 	actInfo:    "i",
 	actSave:    "f2",
@@ -57,7 +57,7 @@ func applyKeys(k uiprefs.Keys) {
 func keyOf(a action) string { return keymap[a] }
 
 // keyIs reports whether the key press triggers the action. An unbound action never matches.
-func keyIs(key tea.KeyMsg, a action) bool {
+func keyIs(key tea.KeyPressMsg, a action) bool {
 	k := keymap[a]
 	return k != "" && key.String() == k
 }
