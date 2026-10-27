@@ -41,6 +41,9 @@ func TestEditorStartsOnTheOverview(t *testing.T) {
 			t.Errorf("the Overview does not show %q:\n%s", want, view)
 		}
 	}
+	if !strings.Contains(view, "─ Vault ") || !strings.Contains(view, "none configured") {
+		t.Errorf("a missing vault is not told in a framed element:\n%s", view)
+	}
 	if strings.Contains(view, "Library:") {
 		t.Errorf("the Overview shows an option bar:\n%s", view)
 	}
@@ -54,7 +57,7 @@ func TestEditorStartsOnTheOverview(t *testing.T) {
 	}
 }
 
-// The counts follow the configuration and the areas that hold them; a card shows the label above the value.
+// The counts follow the configuration and the areas that hold them; a card shows the label in its top border and the value inside.
 func TestOverviewCountsMatchTheAreas(t *testing.T) {
 	m, _, _ := newEnvModel2(t)
 	overviewModel(t, m)
@@ -77,7 +80,7 @@ func TestOverviewCountsMatchTheAreas(t *testing.T) {
 	}
 }
 
-// assertCard checks the tile of the label and that the view shows its value on the line under its label.
+// assertCard checks the tile of the label and that the view shows its value in the card under its titled border.
 func assertCard(t *testing.T, m *Model, want overviewItem) {
 	t.Helper()
 	var got *overviewItem
@@ -91,11 +94,19 @@ func assertCard(t *testing.T, m *Model, want overviewItem) {
 	}
 	lines := strings.Split(ansi.Strip(m.render()), "\n")
 	for i, line := range lines {
-		at := strings.Index(line, "│ "+want.label+" ")
+		// The label sits in the top border: "╭─ Label ", the value on the line below, after "│ ".
+		at := -1
+		for _, mark := range []string{"─ " + want.label + " ", "═ " + want.label + " ", "─ > " + want.label + " ", "═ > " + want.label + " "} {
+			if j := strings.Index(line, mark); j >= 0 {
+				at = len([]rune(line[:j])) - 1
+				break
+			}
+		}
 		if at < 0 || i+1 >= len(lines) {
 			continue
 		}
-		if next := lines[i+1]; strings.HasPrefix(next[at:], "│ "+want.value) {
+		next := []rune(lines[i+1])
+		if at+2 <= len(next) && (strings.HasPrefix(string(next[at:]), "│ "+want.value) || strings.HasPrefix(string(next[at:]), "║ "+want.value)) {
 			return
 		}
 	}

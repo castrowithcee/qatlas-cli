@@ -34,8 +34,8 @@ type overviewHit struct{ x0, y0, x1, y1 int }
 const (
 	// overviewWide is the width from which the recent calls and the heatmap stand side by side.
 	overviewWide = 120
-	// overviewCardHeight is the height of a card: two lines in a frame.
-	overviewCardHeight = 4
+	// overviewCardHeight is the height of a card: the label in the top border, one value line.
+	overviewCardHeight = 3
 	// overviewSidePanel is the outer width of the heatmap panel beside the recent calls.
 	overviewSidePanel = 44
 	// overviewStackedRecent is the most calls the recent calls list when it stands above the heatmap.
@@ -129,23 +129,21 @@ func (m *Model) overviewHeader(width, n int) []string {
 	return lines
 }
 
-// overviewCardLabel is the label line of a card: the icon with the preference, and "> " in front of the
+// overviewCardLabel is the title of a card: the icon with the preference, and "> " in front of the
 // selected one where it fits, so the selection shows without colour as well.
 func (m *Model) overviewCardLabel(item overviewItem, inner int, selected bool) string {
 	label := item.label
 	if m.prefs.Icons == uiprefs.IconsNerdFont {
 		label = overviewIcons[item.target] + " " + label
 	}
-	style := styles.hint
 	if selected {
-		style = styles.active
 		if lipgloss.Width(label)+2 <= inner {
 			label = "> " + label
 		} else {
 			label = ">" + label
 		}
 	}
-	return style.Render(truncateCells(label, inner))
+	return truncateCells(label, inner)
 }
 
 // overviewCards draws the counts as framed cards in as few rows as their widest text allows, and returns the
@@ -157,7 +155,8 @@ func (m *Model) overviewCards(tiles []overviewItem, width int) (lines []string, 
 		if m.prefs.Icons == uiprefs.IconsNerdFont {
 			label += 2
 		}
-		need = max(need, label, lipgloss.Width(t.value))
+		// The title sits in the top border with a space on each side, so it needs one cell more than the value.
+		need = max(need, label+1, lipgloss.Width(t.value))
 	}
 	per := min(len(tiles), (width+1)/(need+4+1))
 	if per < 1 {
@@ -181,7 +180,7 @@ func (m *Model) overviewCards(tiles []overviewItem, width int) (lines []string, 
 			if tiles[i].dim {
 				value = styles.hint.Render(truncateCells(tiles[i].value, inner))
 			}
-			cards = append(cards, panel("", []string{m.overviewCardLabel(tiles[i], inner, selected), value}, inner, 2,
+			cards = append(cards, panel(m.overviewCardLabel(tiles[i], inner, selected), []string{value}, inner, 1,
 				panelOpts{focused: selected}))
 			hits = append(hits, overviewHit{x, r * overviewCardHeight, x + w, (r + 1) * overviewCardHeight})
 			x += w + 1
@@ -324,13 +323,10 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 		shown = min(len(steps), room-1)
 		room -= shown + 1
 	}
-	// The vault and the release come before the steps in the view: they are state, the steps are advice.
+	// The header already shows the vault state; only a missing vault is told here, since the header is
+	// silent about it.
 	var state []string
-	if v := m.vaultHeaderText(); v != "" {
-		state = append(state, tr(tOverviewVault, v))
-	} else {
-		state = append(state, styles.hint.Render(tr(tOverviewVaultNone)))
-	}
+	vaultNone := m.vaultHeaderText() == ""
 	if banner := m.updateBanner(m.usable(0)); banner != "" {
 		state = append(state, styles.ok.Render(banner))
 	}
@@ -338,6 +334,12 @@ func (m *Model) overviewLines() (lines []string, items []overviewItem, foot stri
 	room -= len(state)
 	for _, line := range state {
 		lines = append(lines, truncateCells(line, width))
+	}
+
+	if vaultNone && room >= 3 {
+		lines = append(lines, panel(sectionVault.title(), []string{styles.hint.Render(tr(tOverviewVaultNone))}, width-4, 1,
+			panelOpts{})...)
+		room -= 3
 	}
 
 	if shown > 0 {

@@ -138,7 +138,6 @@ const (
 	tValueRunsThis                           textID = "ValueRunsThis"
 	tOverviewVaultLocked                     textID = "OverviewVaultLocked"
 	tOverviewNeedsVault                      textID = "OverviewNeedsVault"
-	tOverviewVault                           textID = "OverviewVault"
 	tOverviewVaultNone                       textID = "OverviewVaultNone"
 	tOverviewNextSteps                       textID = "OverviewNextSteps"
 	tOverviewActivity                        textID = "OverviewActivity"
