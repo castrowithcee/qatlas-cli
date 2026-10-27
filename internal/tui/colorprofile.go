@@ -79,6 +79,7 @@ func setHasDarkBackground(dark bool) { darkBackground = dark }
 // shown is a frame as the terminal of the current profile is sent it, so what render returns is what the
 // terminal shows. Bubble Tea steps the frame down to the same profile, which leaves it unchanged.
 func shown(frame string) string {
+	frame = strings.ReplaceAll(frame, cursorMark, "")
 	if profile == profileTrueColor {
 		return frame
 	}
