@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -32,8 +33,8 @@ func sectionNames(m *Model) []string {
 // focus lands on the first row of the section chosen.
 func TestSectionListAndJumpToASection(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
-		m := connectionFormModel(t, 110, 40)
-		if got, want := strings.Join(sectionNames(m), ","), "General,Service,Credential,Targets,Access,Advanced"; got != want {
+		m := advancedFormModel(t, 110, 40)
+		if got, want := strings.Join(sectionNames(m), ","), "General,Service,Credential,Targets,Tools,Access,Advanced"; got != want {
 			t.Fatalf("sections = %s, want %s", got, want)
 		}
 		view := screenOf(m)
@@ -77,15 +78,25 @@ func TestSectionListAndJumpToASection(t *testing.T) {
 	})
 }
 
+// advancedFormModel opens the form of a new connection whose provider can read local files, so Advanced has a row.
+func advancedFormModel(t *testing.T, width, height int) *Model {
+	t.Helper()
+	m, _, _ := filesModel(t, config.LocalFilesSupport{Read: true, Write: true}, nil)
+	openSectionByName(t, m, sectionConnections)
+	pressNew(t, m)
+	m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return m
+}
+
 // Advanced is closed while none of its rows holds a value or a problem, opens when one does, and a jump into it
 // opens it.
 func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
-		m := connectionFormModel(t, 110, 40)
+		m := advancedFormModel(t, 110, 40)
 		if !m.sectionClosed(secAdvanced) {
 			t.Fatal("Advanced is open on a new connection")
 		}
-		if view := screenOf(m); strings.Contains(view, labelText(activeForLabel)) {
+		if view := screenOf(m); strings.Contains(view, labelText(filesReadLabel)) {
 			t.Fatalf("a closed Advanced shows its rows:\n%s", view)
 		}
 		before := m.focus
@@ -97,18 +108,20 @@ func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 		}
 		m.focus = before
 
-		press(t, m, "pgdown", "pgdown", "pgdown", "pgdown", "pgdown")
-		if m.currentSection() != secAdvanced || m.fields[m.focus].label != activeForLabel {
+		for m.currentSection() != secAdvanced {
+			press(t, m, "pgdown")
+		}
+		if m.currentSection() != secAdvanced || m.fields[m.focus].label != filesReadLabel {
 			t.Fatalf("jump focused %q in %q, want the first Advanced row", m.fields[m.focus].label, m.currentSection())
 		}
-		if view := screenOf(m); !strings.Contains(view, labelText(activeForLabel)) || strings.Contains(view, sectionText(secAdvanced)+tr(tSectionClosedMark)) {
+		if view := screenOf(m); !strings.Contains(view, labelText(filesReadLabel)) || strings.Contains(view, sectionText(secAdvanced)+tr(tSectionClosedMark)) {
 			t.Fatalf("a jump did not open Advanced:\n%s", view)
 		}
 
 		// A value keeps it open without the jump.
-		m = connectionFormModel(t, 110, 40)
-		focusField(t, m, activeForLabel)
-		press(t, m, "right")
+		m = advancedFormModel(t, 110, 40)
+		focusField(t, m, filesReadLabel)
+		m.field(filesReadLabel).entries = []string{"/srv/in"}
 		press(t, m, "pgup", "pgup", "pgup", "pgup", "pgup", "pgup")
 		if m.currentSection() == secAdvanced || m.sectionClosed(secAdvanced) {
 			t.Fatalf("a value in Advanced: section %q closed %v, want it open while the focus is elsewhere",
@@ -116,9 +129,9 @@ func TestAdvancedOpensOnAValueAnErrorOrAJump(t *testing.T) {
 		}
 
 		// A problem opens it, and it closes again when the problem is gone.
-		m = connectionFormModel(t, 110, 40)
-		f := *m.field(activeForLabel)
-		m.problems = problemState{rows: map[string][]string{activeForLabel: {"refused"}}, at: map[string]string{activeForLabel: f.value()}}
+		m = advancedFormModel(t, 110, 40)
+		f := *m.field(filesReadLabel)
+		m.problems = problemState{rows: map[string][]string{filesReadLabel: {"refused"}}, at: map[string]string{filesReadLabel: f.value()}}
 		if m.sectionClosed(secAdvanced) {
 			t.Fatal("a problem in Advanced left it closed")
 		}
@@ -179,8 +192,8 @@ func TestLongLabelsMoveNoValues(t *testing.T) {
 // Below the width the list needs, each section is a heading above its rows and the list is gone.
 func TestNarrowFormsHaveHeadingsInsteadOfTheList(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
-		for _, size := range []struct{ w, h int }{{40, 14}, {80, 24}, {sectionListMinWidth - 1, 40}} {
-			m := connectionFormModel(t, size.w, size.h)
+		for _, size := range []struct{ w, h int }{{40, 14}, {80, 30}, {sectionListMinWidth - 1, 40}} {
+			m := advancedFormModel(t, size.w, size.h)
 			view := screenOf(m)
 			assertViewFits(t, view, size.w, size.h)
 			lines := strings.Split(view, "\n")
@@ -198,7 +211,7 @@ func TestNarrowFormsHaveHeadingsInsteadOfTheList(t *testing.T) {
 				t.Errorf("%dx%d: headings missing:\n%s", size.w, size.h, view)
 			}
 		}
-		m := connectionFormModel(t, sectionListMinWidth, 40)
+		m := advancedFormModel(t, sectionListMinWidth, 40)
 		if !m.sectionListFits(m.formSections()) {
 			t.Errorf("the list does not stand at the minimum width %d", sectionListMinWidth)
 		}
@@ -209,7 +222,7 @@ func TestNarrowFormsHaveHeadingsInsteadOfTheList(t *testing.T) {
 func TestSectionedFormsFitEverySize(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		for _, size := range []struct{ w, h int }{{40, 14}, {80, 24}, {160, 40}} {
-			m := connectionFormModel(t, size.w, size.h)
+			m := advancedFormModel(t, size.w, size.h)
 			assertViewFits(t, m.render(), size.w, size.h)
 			press(t, m, "pgdown", "pgdown", "pgdown", "pgdown", "pgdown")
 			assertViewFits(t, m.render(), size.w, size.h)
@@ -289,4 +302,24 @@ func TestTheConnectionFormLeadsWithTheProvider(t *testing.T) {
 			t.Errorf("the provider row stands below the name row:\n%s", strings.Join(lines, "\n"))
 		}
 	})
+}
+
+// "Active for" stands in General directly under "State", in the form and in the guided setup alike.
+func TestActiveForStandsUnderStateInGeneral(t *testing.T) {
+	m := advancedFormModel(t, 110, 40)
+	for i, f := range m.fields {
+		if f.label != stateLabel {
+			continue
+		}
+		if i+1 >= len(m.fields) || m.fields[i+1].label != activeForLabel {
+			t.Fatalf("the row after state is not active for: %v", labelsOf(m.fields))
+		}
+		if got := m.sectionOfRow(m.fields[i+1], -1); got != secGeneral {
+			t.Errorf("active for is in %q, want General", got)
+		}
+		break
+	}
+	if got := m.sectionOfRow(field{label: activeForLabel}, stepScope); got != secGeneral {
+		t.Errorf("setup step: active for is in %q, want General", got)
+	}
 }
