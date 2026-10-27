@@ -297,10 +297,10 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 // approvalRoom is how many body lines of the detail screen fit around its frame and above its keys; when the
 // body is longer, one of them goes to the position line and the keys gain the scroll keys.
 func (m *Model) approvalRoom(keys string, lines int) int {
-	room := m.height - detailChrome - strings.Count(m.keyHint(keys), "\n") - 1
+	room := m.height - m.detailChrome() - strings.Count(m.keyHint(keys), "\n") - 1
 	if lines > room {
 		longer := m.keyHint("up/down scroll · " + keys)
-		room = m.height - detailChrome - strings.Count(longer, "\n") - 2
+		room = m.height - m.detailChrome() - strings.Count(longer, "\n") - 2
 	}
 	return max(room, 1)
 }
