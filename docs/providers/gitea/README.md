@@ -199,8 +199,9 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Actions administration](actions-admin.md): the secrets, variables, and runners of a repository, an
   organization, or the user behind the token, and the state of a workflow
 - [Instance administration](administration.md): the runners, workflow runs, workflow jobs, packages, user
-  accounts, email addresses, keys and access tokens of other accounts, organizations, unadopted repositories,
-  and cron tasks of the whole instance, as an administrator, and organizations and repositories created for users
+  accounts, email addresses, badges, keys and access tokens of other accounts, organizations, unadopted
+  repositories, cron tasks, and system webhooks of the whole instance, as an administrator, and organizations and
+  repositories created for users
 - [Commits, comparison, status, and Git objects](commits.md): commits, diffs, comparisons, commit statuses, blobs,
   trees, references, annotated tags, and notes
 - [Contents](contents.md): files, raw content, archives, editor configuration, and writing files as commits
@@ -214,8 +215,9 @@ No tool of either provider covers ActivityPub and federation, repository migrati
 repositories of an organization, creating or changing tokens, keys, deploy tokens, webhooks, or OAuth2
 applications, showing key texts, listing or revoking Gitea deploy tokens, listing the tokens of Gitea or revoking a
 listed token of Forgejo (both need Basic Auth), reading the tokens of other people, changing or testing a webhook
-(including pausing it), system webhooks, creating push mirrors, changing Git hook scripts, creating users, adding
-email addresses, registering runners (including registration tokens), or acting as another user (Sudo).
+(including pausing it), creating or changing system webhooks, creating push mirrors, changing Git hook scripts,
+creating users, adding email addresses, registering runners (including registration tokens), or acting as another
+user (Sudo).
 
 ## Setup profile
 

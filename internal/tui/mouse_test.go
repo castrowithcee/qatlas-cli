@@ -1005,15 +1005,15 @@ func TestTheWheelLeadsFromTheTabLineIntoTheContentOnly(t *testing.T) {
 func TestTheWheelScrollsATextAreaByThreeLines(t *testing.T) {
 	m := sizedModel(groupModel(t), 100, 40)
 	m.openHelp()
-	m.helpOffset = 0
+	m.help.reset()
 	m.render()
 	wheelAt(t, m, 20, 10, tea.MouseWheelDown)
-	if m.helpOffset != 3 {
-		t.Errorf("the wheel down moved the help by %d lines, want 3", m.helpOffset)
+	if m.help.offset() != 3 {
+		t.Errorf("the wheel down moved the help by %d lines, want 3", m.help.offset())
 	}
 	wheelAt(t, m, 20, 10, tea.MouseWheelUp)
-	if m.helpOffset != 0 {
-		t.Errorf("the wheel up left the help at %d, want 0", m.helpOffset)
+	if m.help.offset() != 0 {
+		t.Errorf("the wheel up left the help at %d, want 0", m.help.offset())
 	}
 }
 

@@ -119,12 +119,12 @@ func TestVimKeysMoveLikeTheArrowsOnEveryKindOfScreen(t *testing.T) {
 			t.Fatalf("h = topic %d, want 0", m.helpTopic)
 		}
 		press(t, m, "j")
-		if m.helpOffset != 1 {
-			t.Fatalf("j = offset %d, want 1", m.helpOffset)
+		if m.help.offset() != 1 {
+			t.Fatalf("j = offset %d, want 1", m.help.offset())
 		}
 		press(t, m, "k")
-		if m.helpOffset != 0 {
-			t.Fatalf("k = offset %d, want 0", m.helpOffset)
+		if m.help.offset() != 0 {
+			t.Fatalf("k = offset %d, want 0", m.help.offset())
 		}
 	})
 
@@ -385,8 +385,8 @@ func TestSpaceOnlyTicksInMultipleChoices(t *testing.T) {
 
 	m.screen = screenNav
 	press(t, m, "?", " ")
-	if m.helpOffset != 0 {
-		t.Fatalf("space in the help scrolled to %d", m.helpOffset)
+	if m.help.offset() != 0 {
+		t.Fatalf("space in the help scrolled to %d", m.help.offset())
 	}
 
 	f := newLogFixture(t)

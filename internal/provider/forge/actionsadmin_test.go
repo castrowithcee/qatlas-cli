@@ -84,7 +84,7 @@ func newAdminEnvironment(t *testing.T, p *product, v string, api func(call) *htt
 		Fields: []string{"a", "b"}}
 	var ids []string
 	for _, tl := range slices.Concat(adminTools, runnerTools, instanceTools, adminUserTools, adminEmailTools,
-		adminOrgTools, adminUnadoptedTools, adminCronTools, adminCredentialTools) {
+		adminOrgTools, adminUnadoptedTools, adminCronTools, adminCredentialTools, adminBadgeTools, adminWebhookTools) {
 		if _, ok := tl.since[p.id]; ok {
 			ids = append(ids, p.toolID(tl))
 		}

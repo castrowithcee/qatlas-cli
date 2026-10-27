@@ -481,6 +481,7 @@ var accessWiring = map[string]struct{ methods, paths []string }{
 	"tokens.go":           {[]string{"MethodDelete"}, []string{"/tokens", "/token"}},
 	"oauth2apps.go":       {nil, []string{"/user/applications/oauth2"}},
 	"admincredentials.go": {[]string{"MethodDelete"}, []string{"/keys/", "/tokens", "/tokens/"}},
+	"adminwebhooks.go":    {[]string{"MethodDelete"}, []string{"/admin/hooks"}},
 }
 
 // accessRouteWords mark a path literal as an access route that accessWiring must list.
@@ -527,7 +528,10 @@ func TestOnlyTheListedAccessRoutesAndMethodsAreWired(t *testing.T) {
 				for _, bad := range forbiddenPaths {
 					// The administration tools are the only files that wire administrator routes.
 					if bad == "/admin/" && slices.Contains([]string{"instanceadmin.go", "quotaadmin.go", "adminusers.go",
-						"adminemails.go", "adminorgs.go", "adminunadopted.go", "admincron.go", "admincredentials.go"}, name) {
+						"adminemails.go", "adminorgs.go", "adminunadopted.go", "admincron.go", "admincredentials.go", "adminbadges.go", "adminwebhooks.go"}, name) {
+						continue
+					}
+					if bad == "/admin/hooks" && name == "adminwebhooks.go" {
 						continue
 					}
 					if strings.Contains(value, bad) && strings.Contains(value, "/") {

@@ -172,6 +172,27 @@ func (m *Model) wheelScreens() bool {
 		screenTargets, screenPaths, screenTemplate, screenFindings, screenCommand:
 		return true
 	}
+	return m.textScreen()
+}
+
+// textScreen reports whether what the screen shows is a plain text area, which the wheel moves by wheelText
+// rows. The steps of a transfer or rename that ask for input or move over rows are not.
+func (m *Model) textScreen() bool {
+	switch m.screen {
+	case screenHelp, screenSelftest:
+		return true
+	case screenConfirm:
+		return m.approvalDetail != ""
+	case screenRename:
+		return m.rename != nil && m.rename.plan != nil
+	case screenTransfer:
+		if e := m.export; e != nil {
+			return e.step == exportPreview || e.step == exportResult
+		}
+		if e := m.imp; e != nil {
+			return e.step >= importPreview
+		}
+	}
 	return false
 }
 
@@ -217,7 +238,7 @@ func (m *Model) wheel(event tea.Mouse) tea.Cmd {
 	if up {
 		key = tea.KeyUp
 	}
-	if m.screen == screenHelp {
+	if m.textScreen() {
 		times = wheelText
 	}
 	if m.screen == screenForm && event.X < m.sectionListWidth {

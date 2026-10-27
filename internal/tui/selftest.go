@@ -72,7 +72,7 @@ type selftestState struct {
 	cancelled bool
 	// saved is the file the report was written to, saveErr why that failed.
 	saved, saveErr string
-	offset         int
+	view           textScroll
 }
 
 // selftestCommands is one register entry per scenario of the selftest register.
@@ -161,6 +161,7 @@ func (m *Model) handleSelftest(msg selftestMsg) tea.Cmd {
 	}
 	st.cancel()
 	st.done = true
+	st.view.reset()
 	st.report = msg.report
 	switch {
 	case st.cancelling && msg.err != nil:
@@ -201,20 +202,10 @@ func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actBack):
 		m.screen = st.from
 		m.st = nil
-	case keyIs(key, actDown):
-		st.offset++
-	case keyIs(key, actUp):
-		st.offset--
-	case keyIs(key, actPageDown):
-		st.offset += m.selftestRoom()
-	case keyIs(key, actPageUp):
-		st.offset -= m.selftestRoom()
-	case keyIs(key, actHome):
-		st.offset = 0
-	case keyIs(key, actEnd):
-		st.offset = 1 << 20
 	case keyIs(key, actWrite):
 		m.saveSelftest()
+	default:
+		st.view.scroll(key, m.selftestRoom())
 	}
 	return nil
 }
@@ -392,16 +383,10 @@ func (m *Model) selftestView() string {
 	p := m.dialogPanelOf()
 	head, foot, room := m.selftestFrame("")
 	body := m.selftestBody(p)
-	start := 0
-	if !st.done {
-		// Progress shows its newest lines.
-		start = max(len(body)-room, 0)
-	} else {
-		st.offset = max(min(st.offset, len(body)-room), 0)
-		start = st.offset
-	}
-	shown := body[start:min(start+room, len(body))]
+	// Progress follows its newest lines; the finished report starts at its top.
+	shown := st.view.window(body, room, !st.done)
 	if p.framed && len(body) > room {
+		start := st.view.offset()
 		head, _, _ = m.selftestFrame(fmt.Sprintf("%d-%d/%d", start+1, start+len(shown), len(body)))
 	}
 	return head + strings.Join(shown, "\n") + "\n" + foot

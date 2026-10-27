@@ -494,9 +494,9 @@ type Model struct {
 	approvalDetail    string
 	approveAllConfirm bool
 	// approvalExpanded spells out the unchanged entries of a list change on the detail screen, which
-	// approvalOffset scrolls; both start over each time the screen opens.
+	// approval scrolls; both start over each time the screen opens.
 	approvalExpanded bool
-	approvalOffset   int
+	approval         textScroll
 	approvalPage     int
 	// approvalOrigin is where the change of the connection approvalOriginFor came from, once the log was
 	// read; approvalOriginReady is false until then (see approvalOriginMsg).
@@ -614,11 +614,11 @@ type Model struct {
 	// inPane is set while the left part of a screen with a pane is drawn, whose width is already reduced.
 	inPane    bool
 	infoShown infoSubject
-	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
+	// helpTopic is the topic the help screen shows, scrolled by help; helpFrom is the screen it
 	// returns to.
-	helpTopic  int
-	helpOffset int
-	helpFrom   screen
+	helpTopic int
+	help      textScroll
+	helpFrom  screen
 
 	// Self-update state. release is a newer stable release the check at start found; updated names the
 	// version installed since, which takes effect only after a restart. updateFrom is the screen the update
@@ -1235,7 +1235,8 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if m.section == sectionApprovals {
-			m.approvalDetail, m.approvalExpanded, m.approvalOffset = name, false, 0
+			m.approvalDetail, m.approvalExpanded = name, false
+			m.approval.reset()
 			m.screen = screenConfirm
 			m.clearMessages()
 			return m.loadApprovalOrigin(name)
@@ -2568,18 +2569,8 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 			m.approvalExpanded = !m.approvalExpanded
 		case keyIs(key, actLogs):
 			return m.openApprovalLogs(name)
-		case keyIs(key, actDown):
-			m.scrollApproval(1)
-		case keyIs(key, actUp):
-			m.scrollApproval(-1)
-		case keyIs(key, actPageDown):
-			m.scrollApproval(max(m.approvalPage, 1))
-		case keyIs(key, actPageUp):
-			m.scrollApproval(-max(m.approvalPage, 1))
-		case keyIs(key, actHome):
-			m.approvalOffset = 0
-		case keyIs(key, actEnd):
-			m.approvalOffset = 1 << 20
+		default:
+			m.approval.scroll(key, m.approvalPage)
 		}
 		return nil
 	}
