@@ -418,6 +418,11 @@ type Model struct {
 	// detailFocus is set while the detail pane of a list has the focus, detailTab is the tab it shows then.
 	detailFocus bool
 	detailTab   detailTab
+	// detailPane scrolls the text of the detail pane that is longer than the pane, infoPane the one of the
+	// explanation pane beside a form; info scrolls the explanation overlay.
+	detailPane paneScroll
+	infoPane   paneScroll
+	info       textScroll
 	// dd is the open list of a dropdown field of a bar (see dropdown.go).
 	dd *dropdown
 
@@ -897,7 +902,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if keyIs(msg, actForceQuit) {
 				return m, m.interrupt()
 			}
-			m.updateInfo(msg.String())
+			m.updateInfo(msg)
 			return m, nil
 		}
 		if !fits && m.activeScreenTooSmall() {
@@ -4176,6 +4181,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = "enter review · up/{back} rows · {command} cmds · {help} help · q quit"
 	case m.barFocus > 0:
 		keys = m.barKeys()
+	case m.detailFocused() && m.detailPane.more:
+		keys = "←/→ tab · tab next · shift+tab rows · up/down move · pgup/pgdn scroll · enter edit · {back} rows · {command} cmds · {help} help · q quit"
 	case m.detailFocused():
 		keys = "←/→ tab · tab next · shift+tab rows · up/down move · enter edit · {back} rows · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals && m.vaultLocked():
