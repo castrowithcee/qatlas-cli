@@ -83,8 +83,8 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 			t.Fatalf("%dx%d: the agents topic does not say it scrolls:\n%s", size.width, size.height, view)
 		}
 		press(t, m, "down", "down")
-		if m.helpOffset != 2 {
-			t.Errorf("%dx%d: down twice scrolled to %d", size.width, size.height, m.helpOffset)
+		if m.help.offset() != 2 {
+			t.Errorf("%dx%d: down twice scrolled to %d", size.width, size.height, m.help.offset())
 		}
 		press(t, m, "end")
 		view = m.render()
@@ -93,21 +93,21 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 		if !strings.Contains(view, strings.TrimSpace(lines[len(lines)-1])) {
 			t.Errorf("%dx%d: end does not show the last line:\n%s", size.width, size.height, view)
 		}
-		end := m.helpOffset
+		end := m.help.offset()
 		press(t, m, "down")
-		if m.helpOffset != end {
+		if m.help.offset() != end {
 			t.Errorf("%dx%d: down scrolled past the end", size.width, size.height)
 		}
 		press(t, m, "home")
-		if m.helpOffset != 0 {
-			t.Errorf("%dx%d: home scrolled to %d", size.width, size.height, m.helpOffset)
+		if m.help.offset() != 0 {
+			t.Errorf("%dx%d: home scrolled to %d", size.width, size.height, m.help.offset())
 		}
 		press(t, m, "pgdown")
-		if m.helpOffset == 0 {
+		if m.help.offset() == 0 {
 			t.Errorf("%dx%d: pgdown did not scroll", size.width, size.height)
 		}
 		press(t, m, "right")
-		if m.helpOffset != 0 {
+		if m.help.offset() != 0 {
 			t.Errorf("%dx%d: a new topic does not start at its top", size.width, size.height)
 		}
 		press(t, m, "esc")
@@ -166,7 +166,8 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 				// The list of keys comes with its heading in bold.
 				for i, line := range m.helpLines() {
 					if line == keysHeading {
-						m.helpOffset = i
+						m.clampHelp()
+						m.help.vp.SetYOffset(i)
 					}
 				}
 				if !strings.Contains(m.render(), colourOf(styles.title)+keysHeading) {

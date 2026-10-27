@@ -15,7 +15,7 @@ import (
 func (m *Model) openHelp() {
 	m.helpFrom = m.screen
 	m.screen = screenHelp
-	m.helpOffset = 0
+	m.help.reset()
 	m.clearMessages()
 }
 
@@ -26,21 +26,14 @@ func (m *Model) updateHelp(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actBack) || keyIs(key, actHelp):
 		m.screen = m.helpFrom
 	case keyIs(key, actRight) || keyIs(key, actTopicNext):
-		m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
+		m.helpTopic = wrap(m.helpTopic+1, topics)
+		m.help.reset()
 	case keyIs(key, actLeft) || keyIs(key, actTopicPrev):
-		m.helpTopic, m.helpOffset = wrap(m.helpTopic-1, topics), 0
-	case keyIs(key, actDown):
-		m.helpOffset++
-	case keyIs(key, actUp):
-		m.helpOffset--
-	case keyIs(key, actPageDown):
-		m.helpOffset += room
-	case keyIs(key, actPageUp):
-		m.helpOffset -= room
-	case keyIs(key, actHome):
-		m.helpOffset = 0
-	case keyIs(key, actEnd):
-		m.helpOffset = len(m.helpLines())
+		m.helpTopic = wrap(m.helpTopic-1, topics)
+		m.help.reset()
+	default:
+		m.clampHelp()
+		m.help.scroll(key, room)
 	}
 	m.clampHelp()
 	return nil
@@ -168,9 +161,10 @@ func (m *Model) helpFrame() (string, string, int) {
 		}
 		if lines > room {
 			room--
-			first := min(m.helpOffset+1, lines)
+			offset := m.help.offset()
+			first := min(offset+1, lines)
 			foot = "\n" + render(styles.hint, m.helpInner(), fmt.Sprintf("lines %d-%d of %d", first,
-				min(m.helpOffset+max(room, 1), lines), lines)) + foot
+				min(offset+max(room, 1), lines), lines)) + foot
 		}
 		return head, foot, room
 	}
@@ -184,21 +178,20 @@ func (m *Model) helpFrame() (string, string, int) {
 	return head, foot, max(room, 1)
 }
 
-// clampHelp keeps the scroll position inside the text, also after a resize.
-func (m *Model) clampHelp() {
+// clampHelp hands the text and the room it has to the scroll area, which keeps the position inside the
+// text, also after a resize.
+func (m *Model) clampHelp() []string {
 	_, _, room := m.helpFrame()
-	m.helpOffset = max(min(m.helpOffset, len(m.helpLines())-room), 0)
+	return m.help.window(m.helpLines(), room, false)
 }
 
 // helpView draws the current topic from its scroll position.
 func (m *Model) helpView() string {
-	m.clampHelp()
-	head, foot, room := m.helpFrame()
-	lines := m.helpLines()
-	end := min(m.helpOffset+room, len(lines))
-	shown := make([]string, 0, end-m.helpOffset)
+	rows := m.clampHelp()
+	head, foot, _ := m.helpFrame()
+	shown := make([]string, 0, len(rows))
 	headings := m.helpHeadings()
-	for _, line := range lines[m.helpOffset:end] {
+	for _, line := range rows {
 		shown = append(shown, helpLine(line, headings))
 	}
 	return head + strings.Join(shown, "\n") + "\n" + foot

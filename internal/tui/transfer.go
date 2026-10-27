@@ -78,9 +78,9 @@ type exportState struct {
 	first, passphrase string
 	confirming        bool
 	target            string
-	// lines and offset are the preview or the result, one line each, and the first one shown.
-	lines  []string
-	offset int
+	// lines and view are the preview or the result, one line each, and the scroll position in them.
+	lines []string
+	view  textScroll
 	// writing is true while the core writes the file; no key acts then.
 	writing bool
 }
@@ -261,26 +261,7 @@ func (m *Model) updateExport(key tea.KeyPressMsg) tea.Cmd {
 }
 
 func (e *exportState) scroll(key tea.KeyPressMsg, height int) {
-	e.offset = scrollOffset(e.offset, key, height)
-}
-
-// scrollOffset is the first shown line after a scroll key; the view clamps it to the lines there are.
-func scrollOffset(offset int, key tea.KeyPressMsg, height int) int {
-	switch {
-	case keyIs(key, actDown):
-		return offset + 1
-	case keyIs(key, actUp):
-		return max(offset-1, 0)
-	case keyIs(key, actPageDown):
-		return offset + max(height/2, 1)
-	case keyIs(key, actPageUp):
-		return max(offset-max(height/2, 1), 0)
-	case keyIs(key, actHome):
-		return 0
-	case keyIs(key, actEnd):
-		return 1 << 20
-	}
-	return offset
+	e.view.scroll(key, halfPage(height))
 }
 
 func (m *Model) updateExportSelect(key tea.KeyPressMsg) tea.Cmd {
@@ -478,7 +459,8 @@ func (m *Model) updateExportTarget(key tea.KeyPressMsg) tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	e.target, e.offset = path, 0
+	e.target = path
+	e.view.reset()
 	e.lines = m.exportLines(res, true)
 	e.step = exportPreview
 	return nil
@@ -535,7 +517,7 @@ func (m *Model) handleExportDone(msg exportDoneMsg) tea.Cmd {
 		return nil
 	}
 	e.first, e.passphrase = "", ""
-	e.offset = 0
+	e.view.reset()
 	e.lines = m.exportLines(msg.res, false)
 	e.step = exportResult
 	m.clearMessages()
@@ -703,7 +685,7 @@ func (m *Model) exportView() string {
 	if e.writing {
 		keys = tr(tWorkWritingWait)
 	}
-	return m.linesView(title, question, keys, e.lines, &e.offset, e.step == exportResult)
+	return m.linesView(title, question, keys, e.lines, &e.view, e.step == exportResult)
 }
 
 // exportPrompt is the one-line dialog the export is at, if it is at one.
@@ -742,10 +724,10 @@ func isWarningLine(line string) bool {
 	return strings.HasPrefix(line, strings.Fields(tr(tExLineWarning))[0])
 }
 
-// linesView draws a preview or a result: the lines scrolled to *offset, which it clamps, in a panel under
-// its title and above the question and keys of the step. A line that starts with "warning" is drawn as one,
+// linesView draws a preview or a result: the lines scrolled to the position of view, which it clamps, in a
+// panel under its title and above the question and keys of the step. A line that starts with "warning" is drawn as one,
 // with its mark; a finished step opens with its state.
-func (m *Model) linesView(title, question, keys string, lines []string, offset *int, done bool) string {
+func (m *Model) linesView(title, question, keys string, lines []string, view *textScroll, done bool) string {
 	p := m.dialogPanelOf()
 	var body []string
 	warned := false
@@ -777,10 +759,9 @@ func (m *Model) linesView(title, question, keys string, lines []string, offset *
 	}
 	foot += m.keyHint(keys) + m.notes()
 	room := max(m.height-strings.Count(head, "\n")-strings.Count(foot, "\n")-1, 3)
-	*offset = max(min(*offset, len(body)-room), 0)
-	shown := body[*offset:min(*offset+room, len(body))]
+	shown := view.window(body, room, false)
 	if p.framed && len(body) > room {
-		head = headOf(fmt.Sprintf("%d-%d/%d", *offset+1, *offset+len(shown), len(body)))
+		head = headOf(fmt.Sprintf("%d-%d/%d", view.offset()+1, view.offset()+len(shown), len(body)))
 	}
 	return head + strings.Join(shown, "\n") + "\n" + foot
 }

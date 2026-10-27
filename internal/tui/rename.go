@@ -22,8 +22,8 @@ type renameState struct {
 	input     textinput.Model
 	// plan is nil while the new name is typed and set while the dry run waits for the answer.
 	plan *manage.RenamePlan
-	// offset is the first shown line of a dry run longer than the screen.
-	offset int
+	// view scrolls a dry run longer than the screen.
+	view textScroll
 	// back is the screen a cancelled dry run returns to; screenFindings for a rename found in the vault (see
 	// renamefind.go), the list otherwise.
 	back screen
@@ -98,18 +98,8 @@ func (m *Model) updateRename(key tea.KeyPressMsg) tea.Cmd {
 			return m.requireAdmin(m.runRename)
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.cancelRename()
-		case keyIs(key, actDown):
-			r.offset++
-		case keyIs(key, actUp):
-			r.offset = max(r.offset-1, 0)
-		case keyIs(key, actPageDown):
-			r.offset += max(m.height/2, 1)
-		case keyIs(key, actPageUp):
-			r.offset = max(r.offset-max(m.height/2, 1), 0)
-		case keyIs(key, actHome):
-			r.offset = 0
-		case keyIs(key, actEnd):
-			r.offset = 1 << 20
+		default:
+			r.view.scroll(key, halfPage(m.height))
 		}
 		return nil
 	}
@@ -134,7 +124,8 @@ func (m *Model) planRename() tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	r.plan, r.offset = plan, 0
+	r.plan = plan
+	r.view.reset()
 	return nil
 }
 
@@ -371,8 +362,7 @@ func (m *Model) renameView() string {
 		all := q.details
 		q.details = nil
 		room := max(m.height-strings.Count(m.questionText(q), "\n")-strings.Count(notes, "\n")-2-m.framedChrome(), 3)
-		r.offset = max(min(r.offset, len(all)-room), 0)
-		q.details = all[r.offset:min(r.offset+room, len(all))]
+		q.details = r.view.window(all, room, false)
 		return m.questionText(q)
 	})
 	return text + notes
