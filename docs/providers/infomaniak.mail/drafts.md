@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-22
+updated: 2026-10-27
 ---
 
 # Drafts
@@ -50,13 +50,13 @@ to replace plus the same fields, as a complete new draft (nothing is merged); `d
 - **Drafts folder.** The one folder the server marks with the SPECIAL-USE attribute `\Drafts`, found like the
   [trash folder](changes.md#changing-a-message): never by name, and refused as an invalid request, without naming
   a folder, when the server has no SPECIAL-USE, marks none or several, or the folder is outside the folder
-  targets. `drafts.update` and
+  targets or excluded. `drafts.update` and
   `drafts.delete` accept only a reference into that folder.
-- **Only drafts.** The draft is stored with one `APPEND` and the flag `\Draft` alone. `update` and `delete`
-  read the message first; one without `\Draft` answers `not-found`, exactly like a missing UID, and nothing
-  changes, so no ordinary message can be replaced or removed through a draft tool. The sender list applies as
-  to every read: a connection with sender targets must list its own mailbox to create drafts, and a draft from
-  another sender answers `not-found`.
+- **Only drafts.** The draft is stored with one `APPEND` and the flag `\Draft` alone. `update` and `delete` read the
+  message first; one without `\Draft` answers `not-found`, exactly like a missing UID, and nothing changes, so no
+  ordinary message can be replaced or removed through a draft tool. The sender list applies as to every read: a
+  connection with sender targets must list its own mailbox to create drafts and a connection that excludes it as a
+  sender cannot, and a draft from another sender answers `not-found`.
 - **Update.** IMAP cannot change a message. `update` first checks `UIDPLUS` (a server without it is refused
   with nothing written), then stores the new draft with one `APPEND`, then marks the old UID `\Deleted` and
   sends `UID EXPUNGE` for that UID alone. If the second step fails, the error says the new draft was created
