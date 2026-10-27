@@ -23,15 +23,12 @@ import (
 // FileName is the name of the preferences file inside the configuration directory.
 const FileName = "tui.yaml"
 
-// Values of Prefs.Theme, Prefs.Background and Prefs.Icons.
+// Values of Prefs.Theme and Prefs.Icons. Whether another name is a theme is the editor's to decide; this
+// package only keeps the text.
 const (
-	ThemeAuto  = "auto"
-	ThemeLight = "light"
-	ThemeDark  = "dark"
-
-	// Background terminal leaves the terminal's own background; qatlas paints the whole screen.
-	BackgroundTerminal = "terminal"
-	BackgroundQatlas   = "qatlas"
+	ThemeTerminal    = "terminal"
+	ThemeQatlasDark  = "qatlas dark"
+	ThemeQatlasLight = "qatlas light"
 
 	IconsNone     = "none"
 	IconsNerdFont = "nerdfont"
@@ -52,13 +49,14 @@ const (
 // to decide; this package only keeps the text.
 const DefaultStart = "overview"
 
+// formerThemes are the values of the former colour scheme and the themes they stand for now.
+var formerThemes = map[string]string{"auto": ThemeTerminal, "light": ThemeQatlasLight, "dark": ThemeQatlasDark}
+
 // Prefs are the device-local preferences.
 type Prefs struct {
 	Theme string `yaml:"theme"`
-	// Background is empty in a Prefs built without it; every reader takes that as BackgroundTerminal.
-	Background string `yaml:"background"`
-	Start      string `yaml:"start"`
-	Icons      string `yaml:"icons"`
+	Start string `yaml:"start"`
+	Icons string `yaml:"icons"`
 	// Language is empty in a Prefs built without it; every reader takes that as LanguageEnglish.
 	Language string `yaml:"language"`
 	// MouseOff switches the mouse off; the zero value keeps it on, so a Prefs built without it has it on.
@@ -71,7 +69,7 @@ func (p Prefs) MouseEnabled() bool { return !p.MouseOff }
 
 // Default returns the preferences of a device that has none.
 func Default() Prefs {
-	return Prefs{Theme: ThemeAuto, Background: BackgroundTerminal, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
+	return Prefs{Theme: ThemeTerminal, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
 }
 
 // Path returns the preferences file that belongs to the configuration directory dir.
@@ -90,13 +88,12 @@ func Load(path string) (Prefs, []string) {
 		return prefs, []string{fmt.Sprintf("cannot read %s, using the defaults: %v", path, err)}
 	}
 	var raw struct {
-		Theme      *string `yaml:"theme"`
-		Background *string `yaml:"background"`
-		Start      *string `yaml:"start"`
-		Icons      *string `yaml:"icons"`
-		Language   *string `yaml:"language"`
-		Mouse      *string `yaml:"mouse"`
-		Keys       *struct {
+		Theme    *string `yaml:"theme"`
+		Start    *string `yaml:"start"`
+		Icons    *string `yaml:"icons"`
+		Language *string `yaml:"language"`
+		Mouse    *string `yaml:"mouse"`
+		Keys     *struct {
 			Info    *string `yaml:"info"`
 			Save    *string `yaml:"save"`
 			Help    *string `yaml:"help"`
@@ -109,21 +106,14 @@ func Load(path string) (Prefs, []string) {
 	}
 	var warnings []string
 	if raw.Theme != nil {
-		switch *raw.Theme {
-		case ThemeAuto, ThemeLight, ThemeDark:
+		theme, former := formerThemes[*raw.Theme]
+		switch {
+		case former:
+			prefs.Theme = theme
+		case *raw.Theme == "":
+			warnings = append(warnings, fmt.Sprintf("%s: theme is empty, using %s", path, ThemeTerminal))
+		default:
 			prefs.Theme = *raw.Theme
-		default:
-			warnings = append(warnings, fmt.Sprintf("%s: theme %q is not auto, light or dark, using %s",
-				path, *raw.Theme, ThemeAuto))
-		}
-	}
-	if raw.Background != nil {
-		switch *raw.Background {
-		case BackgroundTerminal, BackgroundQatlas:
-			prefs.Background = *raw.Background
-		default:
-			warnings = append(warnings, fmt.Sprintf("%s: background %q is not terminal or qatlas, using %s",
-				path, *raw.Background, BackgroundTerminal))
 		}
 	}
 	if raw.Start != nil {
@@ -172,17 +162,8 @@ func Load(path string) (Prefs, []string) {
 // Save writes prefs to path through a temporary file and a rename, so a reader sees the old file or the new
 // one, never half of one. A value that is not valid is refused and nothing is written.
 func Save(path string, prefs Prefs) error {
-	switch prefs.Theme {
-	case ThemeAuto, ThemeLight, ThemeDark:
-	default:
-		return fmt.Errorf("theme %q is not auto, light or dark", prefs.Theme)
-	}
-	switch prefs.Background {
-	case "":
-		prefs.Background = BackgroundTerminal
-	case BackgroundTerminal, BackgroundQatlas:
-	default:
-		return fmt.Errorf("background %q is not terminal or qatlas", prefs.Background)
+	if prefs.Theme == "" {
+		return errors.New("theme must not be empty")
 	}
 	switch prefs.Icons {
 	case IconsNone, IconsNerdFont:

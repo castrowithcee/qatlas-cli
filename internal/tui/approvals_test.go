@@ -840,7 +840,7 @@ func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
 
 	setProfile(profileTrueColor)
 	t.Setenv("NO_COLOR", "")
-	applyColorScheme("dark", "")
+	useDarkColours()
 	view := m.approvalChangeView("Approve gh?", toolsChange())
 	for plus, style := range map[string]lipgloss.Style{"+ github.pull-requests.get": styles.ok, "- github.repositories.archive": styles.fail} {
 		found := false

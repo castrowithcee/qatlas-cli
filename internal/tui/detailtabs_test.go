@@ -204,7 +204,7 @@ func TestDetailPaneReadsWithoutColourAtItsSmallestSize(t *testing.T) {
 	before := currentProfile()
 	setProfile(profileNone)
 	saved := styles
-	setTheme(buildTheme(true, true, false))
+	setTheme(noColorTheme())
 	t.Cleanup(func() { setProfile(before); setTheme(saved) })
 
 	// The smallest height that has a pane in all three lists is the one that frames their tables.

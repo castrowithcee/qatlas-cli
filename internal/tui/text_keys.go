@@ -117,8 +117,6 @@ const (
 	tSettingsSaveFailed                      textID = "SettingsSaveFailed"
 	tThemeHint                               textID = "ThemeHint"
 	tThemeDetail                             textID = "ThemeDetail"
-	tBackgroundHint                          textID = "BackgroundHint"
-	tBackgroundDetail                        textID = "BackgroundDetail"
 	tStartHint                               textID = "StartHint"
 	tIconsHint                               textID = "IconsHint"
 	tIconsTest                               textID = "IconsTest"
