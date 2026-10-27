@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
@@ -202,8 +201,12 @@ func TestContainerWriteOutputIsReduced(t *testing.T) {
 
 func TestContainerWritesReportUncertainty(t *testing.T) {
 	const hint = "this change may have taken effect, read the current state in BookStack before repeating it"
-	run := func(name string, handler http.HandlerFunc, timeout time.Duration, wantHint bool) {
+	run := func(name string, handler http.HandlerFunc, arrival bool, wantHint bool) {
 		t.Run(name, func(t *testing.T) {
+			newCtx := func() context.Context { return context.Background() }
+			if arrival {
+				handler, newCtx = cancelOnArrival(t)
+			}
 			rec := &recorder{}
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				rec.record(r)
@@ -227,13 +230,11 @@ func TestContainerWritesReportUncertainty(t *testing.T) {
 				},
 			}
 			for _, call := range calls {
-				ctx := context.Background()
-				if timeout > 0 {
-					var cancel context.CancelFunc
-					ctx, cancel = context.WithTimeout(ctx, timeout)
-					defer cancel()
+				err := call(newCtx())
+				if arrival {
+					wantTimeout(t, err)
 				}
-				if err := call(ctx); err == nil || strings.Contains(err.Error(), hint) != wantHint {
+				if err == nil || strings.Contains(err.Error(), hint) != wantHint {
 					t.Errorf("error = %v, hint wanted %v", err, wantHint)
 				}
 			}
@@ -242,15 +243,10 @@ func TestContainerWritesReportUncertainty(t *testing.T) {
 			}
 		})
 	}
-	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0, true)
-	run("timeout", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case <-r.Context().Done():
-		case <-time.After(2 * time.Second):
-		}
-	}, 500*time.Millisecond, true)
-	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, 0, true)
-	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, 0, false)
+	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, false, true)
+	run("timeout", nil, true, true)
+	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, false, true)
+	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, false, false)
 }
 
 func TestContainerWriteRisk(t *testing.T) {

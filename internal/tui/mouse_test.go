@@ -225,7 +225,7 @@ func TestClickOnASectionOfAFormMovesTheFocus(t *testing.T) {
 	if len(entries) < 2 {
 		t.Fatalf("sections = %v", entries)
 	}
-	target := entries[len(entries)-1].name
+	target := entries[2].name
 	x, y := cellOf(t, m, target)
 	if x >= m.sectionListWidth {
 		t.Fatalf("%q found at column %d, not in the section list", target, x)
