@@ -279,7 +279,8 @@ const (
 	ExcludeDuplicate
 	// ExcludeIsTarget equals a target of the connection.
 	ExcludeIsTarget
-	// ExcludeWildcard is the provider's wildcard or has a segment "*".
+	// ExcludeWildcard is the provider's wildcard or "*", or has a segment "*" that no form of an excludable kind
+	// spells at that place.
 	ExcludeWildcard
 	// ExcludeForm is not spelled in a form of an excludable kind or fails the provider's Validate.
 	ExcludeForm
@@ -311,7 +312,10 @@ func (t TargetMetadata) CheckExcludes(excludes, targets []string) []ExcludeFindi
 			fault = ExcludeDuplicate
 		case isTarget[strings.TrimSpace(value)]:
 			fault = ExcludeIsTarget
-		case value == t.Wildcard || slices.Contains(strings.Split(value, "/"), "*"):
+		case value == t.Wildcard || value == "*" ||
+			slices.Contains(strings.Split(value, "/"), "*") && !t.excludableForm(value):
+			// A "*" a form spells literally, such as the subtree mark of folder/PATH/*, belongs to the form; a "*"
+			// in place of a placeholder would be a pattern.
 			fault = ExcludeWildcard
 		case !t.excludableForm(value):
 			fault = ExcludeForm

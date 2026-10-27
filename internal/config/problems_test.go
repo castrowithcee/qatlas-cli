@@ -198,7 +198,7 @@ func TestProblemsAreStructured(t *testing.T) {
 			"connections.ex.exclude[1]", CodeDuplicateExclude, "connections.ex.exclude[1]: an exclusion is listed", "exclude", 1},
 		{"exclude is target", func(c *Config) { withExcluder(c, "repos/a/b", "repos/a/b") },
 			"connections.ex.exclude[0]", CodeExcludeIsTarget, "connections.ex.exclude[0]: an exclusion equals a target", "exclude", 0},
-		{"exclude wildcard", func(c *Config) { withExcluder(c, "repos/a/b", "repos/a/*") },
+		{"exclude wildcard", func(c *Config) { withExcluder(c, "repos/a/b", "repos/*/c") },
 			"connections.ex.exclude[0]", CodeExcludeWildcard, "connections.ex.exclude[0]: an exclusion must not be a wildcard", "exclude", 0},
 		{"invalid exclude", func(c *Config) { withExcluder(c, "repos/a/b", "orgs/x") },
 			"connections.ex.exclude[0]", CodeInvalidExclude, "connections.ex.exclude[0]: an exclusion is not in a form", "exclude", 0},
