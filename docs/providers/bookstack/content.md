@@ -167,6 +167,15 @@ profile; the connection must release the directory for writing, and an existing 
 confirmation. The answer never carries the content. A ZIP export
 contains the attachments and images of the exported content.
 
+BookStack inserts page includes (`{{@ID}}`, see [Pages](#pages)) into every export format, `markdown` too, by
+what the token may read. On a connection with targets both tools therefore read the stored HTML of every page
+the export contains (the page, the pages of a chapter, all pages of a book), however many, and of the pages
+they include up to three levels, once per page and call. They refuse the export as `invalid-request` before any
+export request if one include names a page outside the targets, or if the includes need more reads than one
+call allows (50 pages that are only included). A `rate-limited` answer while reading is reported as such; export
+smaller items then. A connection without targets reads nothing extra. Images of other pages are embedded by
+BookStack by its own storage rights; Qatlas does not check them.
+
 The token rights are listed under [Content](setup.md#content). On a connection with targets the item is proven first (see [Targets](README.md#targets)).
 
 ## Deleting

@@ -569,6 +569,7 @@ type Client struct {
 	// for them.
 	included      map[int64]*includedPage
 	includeReads  int
+	exportedBytes int
 	includedBytes int
 }
 

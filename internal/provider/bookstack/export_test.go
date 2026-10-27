@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,12 +20,13 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/localfile"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 const exportCanary = "CANARY-provider-text-5c1e"
 
 // exportServer answers evidence reads (page 1 and chapter 10 belong to book 7, page 2 and chapter 20 to book
-// 9) and every export path with body. A 403 for id 403 carries a canary that must never be relayed.
+// 9, book 7 is empty) and every export path with body. A 403 for id 403 carries a canary that must never be relayed.
 func exportServer(t *testing.T, rec *recorder, body []byte) *httptest.Server {
 	t.Helper()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +39,10 @@ func exportServer(t *testing.T, rec *recorder, body []byte) *httptest.Server {
 		}
 		if len(parts) == 4 && parts[2] == "export" {
 			_, _ = w.Write(body)
+			return
+		}
+		if strings.Join(parts, "/") == "books/7" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 7, "contents": []any{}})
 			return
 		}
 		books := map[string]int{"pages/1": 7, "pages/2": 9, "chapters/10": 7, "chapters/20": 9}
@@ -251,7 +257,7 @@ func TestExportBindingPerType(t *testing.T) {
 			ok       bool
 			requests []string
 		}{
-			"own book":        {"book", 7, true, []string{"/api/books/7/export/html"}},
+			"own book":        {"book", 7, true, []string{"/api/books/7", "/api/books/7/export/html"}},
 			"own chapter":     {"chapter", 10, true, []string{"/api/chapters/10", "/api/chapters/10/export/html"}},
 			"own page":        {"page", 1, true, []string{"/api/pages/1", "/api/pages/1/export/html"}},
 			"foreign chapter": {"chapter", 20, false, []string{"/api/chapters/20"}},
@@ -325,5 +331,247 @@ func TestExportDescriptors(t *testing.T) {
 		if (d.ID == contentExport.ID || d.ID == contentDownload.ID) && d.Group != contentGroup {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}
+	}
+}
+
+// includeExportServer serves a bound book 1 with a chapter 5 (pages 11, 12) and the loose page 10, and a foreign
+// book 2 whose pages have ids from 200. The stored HTML of each page comes from raw; every request is recorded.
+type includeExportServer struct {
+	rec *recorder
+	raw map[int64]string
+	url string
+}
+
+func newIncludeExportServer(t *testing.T, raw map[int64]string) *includeExportServer {
+	t.Helper()
+	s := &includeExportServer{rec: &recorder{}, raw: raw}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.rec.record(r)
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/"), "/")
+		switch {
+		case len(parts) == 4 && parts[2] == "export":
+			_, _ = w.Write([]byte("exported"))
+		case strings.Join(parts, "/") == "books/1":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "contents": []any{
+				map[string]any{"type": "page", "id": 10},
+				map[string]any{"type": "chapter", "id": 5, "pages": []any{map[string]any{"id": 11}, map[string]any{"id": 12}}},
+			}})
+		case strings.Join(parts, "/") == "chapters/5":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 5, "book_id": 1, "pages": []any{
+				map[string]any{"id": 11}, map[string]any{"id": 12},
+			}})
+		case parts[0] == "pages" && len(parts) == 2:
+			id, _ := strconv.ParseInt(parts[1], 10, 64)
+			book := int64(1)
+			if id >= 200 {
+				book = 2
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "book_id": book, "raw_html": s.raw[id]})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	server := httptest.NewTLSServer(mux)
+	t.Cleanup(server.Close)
+	s.url = server.URL
+	return s
+}
+
+func (s *includeExportServer) exported() bool {
+	for _, p := range exportPaths(s.rec) {
+		if strings.Contains(p, "/export/") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestExportRefusesIncludesOutsideTheTargets(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	dir := t.TempDir()
+	cases := map[string]map[int64]string{
+		"direct":  {10: "a", 11: "{{@222}}", 12: "b"},
+		"depth 2": {10: "a", 11: "{{@12}}", 12: "{{@222}}"},
+		"depth 3": {10: "a", 11: "{{@12}}", 12: "{{@13}}", 13: "{{@222#x}}"},
+		"entity":  {10: "a", 11: "{{&#64;222}}x {{@222}}", 12: "b"},
+	}
+	targets := []struct {
+		kind string
+		id   int
+	}{{"page", 11}, {"chapter", 5}, {"book", 1}}
+	for name, raw := range cases {
+		for _, tool := range []string{contentExport.ID, contentDownload.ID} {
+			for _, format := range downloadFormats {
+				if tool == contentExport.ID && !slicesContains(inlineFormats, format) {
+					continue
+				}
+				for _, tc := range targets {
+					server := newIncludeExportServer(t, raw)
+					path := ""
+					if tool == contentDownload.ID {
+						path = filepath.Join(dir, "out-"+format)
+					}
+					resolved := exportResolved(server.url, dir, "book/1")
+					_, err := lookup(t, tool)(context.Background(), resolved, resolver(nil), nil, exportArgs(tc.kind, tc.id, format, path))
+					label := name + " " + tool + " " + tc.kind + " " + format
+					if !isInvalidRequest(err) {
+						t.Errorf("%s: err = %v, want an invalid request", label, err)
+						continue
+					}
+					for _, leak := range []string{"222", "11", "book/1"} {
+						if strings.Contains(err.Error(), leak) {
+							t.Errorf("%s: refusal %q names %q", label, err, leak)
+						}
+					}
+					if server.exported() {
+						t.Errorf("%s: export requested: %v", label, exportPaths(server.rec))
+					}
+				}
+			}
+		}
+	}
+}
+
+func slicesContains(list []string, v string) bool {
+	for _, e := range list {
+		if e == v {
+			return true
+		}
+	}
+	return false
+}
+
+func TestExportWithIncludesInReachIsUnchanged(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	// Includes inside the book, including a cycle, and one at depth 4 from page 10 that BookStack leaves as text.
+	raw := map[int64]string{10: "a {{@11}}", 11: "{{@12}}", 12: "{{@13}} {{@10}}", 13: "{{@14}}", 14: "{{@15}}", 15: "{{@222}}"}
+	for _, tc := range []struct {
+		kind  string
+		id    int
+		reads []string
+	}{
+		{"page", 10, []string{"/api/pages/10", "/api/pages/11", "/api/pages/12", "/api/pages/13"}},
+		{"chapter", 5, []string{"/api/chapters/5", "/api/pages/10", "/api/pages/11", "/api/pages/12", "/api/pages/13", "/api/pages/14", "/api/pages/15"}},
+		{"book", 1, []string{"/api/books/1", "/api/pages/10", "/api/pages/11", "/api/pages/12", "/api/pages/13", "/api/pages/14", "/api/pages/15"}},
+	} {
+		server := newIncludeExportServer(t, raw)
+		result, err := lookup(t, contentExport.ID)(context.Background(), exportResolved(server.url, "", "book/1"), resolver(nil), nil, exportArgs(tc.kind, tc.id, "html", ""))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.kind, err)
+		}
+		if fields := result.(output.Object).Fields; fields[3].Value != "exported" {
+			t.Errorf("%s: content = %v", tc.kind, fields[3].Value)
+		}
+		want := append(append([]string{}, tc.reads...), "/api/"+tc.kind+"s/"+strconv.Itoa(tc.id)+"/export/html")
+		got := exportPaths(server.rec)
+		sort.Strings(got)
+		sort.Strings(want)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%s: requests = %v, want %v", tc.kind, got, want)
+		}
+		if strings.Contains(strings.Join(got, ","), "/222") {
+			t.Errorf("%s: foreign page read", tc.kind)
+		}
+	}
+}
+
+func TestExportWithoutTargetsReadsNothingExtra(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	server := newIncludeExportServer(t, map[int64]string{11: "{{@222}}"})
+	for _, kind := range []string{"page", "chapter", "book"} {
+		id := map[string]int{"page": 11, "chapter": 5, "book": 1}[kind]
+		if _, err := lookup(t, contentExport.ID)(context.Background(), exportResolved(server.url, ""), resolver(nil), nil, exportArgs(kind, id, "html", "")); err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+	}
+	want := "/api/pages/11/export/html,/api/chapters/5/export/html,/api/books/1/export/html"
+	if got := strings.Join(exportPaths(server.rec), ","); got != want {
+		t.Errorf("requests = %s, want %s", got, want)
+	}
+}
+
+func TestExportOverTheCheckLimitIsRefused(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	// With the read budget spent the page cannot be read, so its includes cannot be checked.
+	server := newIncludeExportServer(t, map[int64]string{10: "{{@11}}", 11: "x"})
+	client := boundClient(t, server.url, "book/1")
+	client.includeReads = maxIncludedPages
+	err := client.requireExportBound(context.Background(), exportRequest{Type: "page", ID: 10})
+	if !isInvalidRequest(err) || strings.Contains(err.Error(), "10") {
+		t.Errorf("err = %v", err)
+	}
+	// Only the exported page itself is read, and no export is requested.
+	if got := exportPaths(server.rec); server.exported() || len(got) != 1 || got[0] != "/api/pages/10" {
+		t.Errorf("requests = %v", got)
+	}
+}
+
+func TestExportReportsARateLimitWhileCheckingIncludes(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	rec := &recorder{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(server.Close)
+	_, err := lookup(t, contentExport.ID)(context.Background(), exportResolved(server.URL, "", "book/1"), resolver(nil), nil, exportArgs("page", 10, "html", ""))
+	var perr *provider.Error
+	if !errors.As(err, &perr) || perr.Class != provider.ClassRateLimited {
+		t.Errorf("err = %v, want rate-limited", err)
+	}
+	if got := exportPaths(rec); len(got) != 1 {
+		t.Errorf("requests = %v", got)
+	}
+}
+
+func TestExportOfALargeBookReadsEveryPageOnce(t *testing.T) {
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	rec := &recorder{}
+	const pages = maxIncludedPages + 20
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/"), "/")
+		switch {
+		case len(parts) == 4 && parts[2] == "export":
+			_, _ = w.Write([]byte("exported"))
+		case parts[0] == "books":
+			contents := make([]any, 0, pages)
+			for i := 1; i <= pages; i++ {
+				contents = append(contents, map[string]any{"type": "page", "id": i})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "contents": contents})
+		default:
+			id, _ := strconv.Atoi(parts[1])
+			// Every page includes the one before it, which the book contains as well.
+			raw := "{{@" + strconv.Itoa(id-1) + "}}"
+			if id == 1 {
+				raw = ""
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "book_id": 1, "raw_html": raw})
+		}
+	}))
+	t.Cleanup(server.Close)
+	if _, err := lookup(t, contentExport.ID)(context.Background(), exportResolved(server.URL, "", "book/1"), resolver(nil), nil, exportArgs("book", 1, "html", "")); err != nil {
+		t.Fatal(err)
+	}
+	got := exportPaths(rec)
+	seen := map[string]int{}
+	for _, p := range got {
+		seen[p]++
+	}
+	for p, n := range seen {
+		if n != 1 {
+			t.Errorf("%s requested %d times", p, n)
+		}
+	}
+	if len(got) != 1+pages+1 || got[len(got)-1] != "/api/books/1/export/html" {
+		t.Errorf("%d requests, last %q", len(got), got[len(got)-1])
 	}
 }

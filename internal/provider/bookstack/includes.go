@@ -108,6 +108,18 @@ func withholdHTML(page *pageJSON) {
 // without a read; any other one is read once, which is both the evidence of its reach and its stored HTML.
 // A page the token cannot read is empty, as in BookStack.
 func (c *Client) includedPage(ctx context.Context, id int64) (*includedPage, error) {
+	return c.readIncludedPage(ctx, id, false)
+}
+
+// exportedPage is includedPage for a page the export itself contains: its read counts against neither the
+// read limit nor the byte limit of includes, so that the size of an export is no reason to refuse it. Its
+// stored HTML stays cached for later includes only up to maxIncludedBytes in total; a page beyond that is
+// read again if it is included, and then counted.
+func (c *Client) exportedPage(ctx context.Context, id int64) (*includedPage, error) {
+	return c.readIncludedPage(ctx, id, true)
+}
+
+func (c *Client) readIncludedPage(ctx context.Context, id int64, free bool) (*includedPage, error) {
 	if p, ok := c.included[id]; ok {
 		return p, nil
 	}
@@ -117,10 +129,12 @@ func (c *Client) includedPage(ctx context.Context, id int64) (*includedPage, err
 	}
 	fetched, missing := false, false
 	fetch := func() error {
-		if c.includeReads >= maxIncludedPages {
-			return errIncludeLimit
+		if !free {
+			if c.includeReads >= maxIncludedPages {
+				return errIncludeLimit
+			}
+			c.includeReads++
 		}
-		c.includeReads++
 		fetched = true
 		err := c.get(ctx, "get page", "/api/pages/"+strconv.FormatInt(id, 10), nil, &read, nil, provider.ClassPermission)
 		var perr *provider.Error
@@ -145,7 +159,12 @@ func (c *Client) includedPage(ctx context.Context, id int64) (*includedPage, err
 	case err != nil:
 		return nil, err
 	}
-	if c.includedBytes += len(p.raw); c.includedBytes > maxIncludedBytes {
+	if free {
+		if c.exportedBytes+len(p.raw) > maxIncludedBytes {
+			return p, nil
+		}
+		c.exportedBytes += len(p.raw)
+	} else if c.includedBytes += len(p.raw); c.includedBytes > maxIncludedBytes {
 		return nil, errIncludeLimit
 	}
 	if c.included == nil {

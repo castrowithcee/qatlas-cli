@@ -3,8 +3,10 @@ package bookstack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -134,17 +136,112 @@ func readExportRequest(raw json.RawMessage, formats []string) (exportRequest, st
 
 // requireExportBound proves that the exported item lies in the connection: a book must be reached as a whole,
 // a chapter must be bound or lie in such a book, a page must lie in the connection. An unbound connection reads
-// nothing.
+// nothing. BookStack inserts page includes into an export by what the token may read, so on a bound connection
+// the export is also refused when a contained page includes a page outside the targets.
 func (c *Client) requireExportBound(ctx context.Context, in exportRequest) error {
+	if in.Type == "page" && c.scope.bound() {
+		// The read that proves the page also serves the include check.
+		return c.requireNoOutsideInclude(ctx, []int64{in.ID})
+	}
 	switch in.Type {
 	case "book":
-		return c.requireBook(ctx, in.ID)
+		if err := c.requireBook(ctx, in.ID); err != nil {
+			return err
+		}
 	case "chapter":
-		_, err := c.chapterIn(ctx, in.ID)
-		return err
+		if !c.scope.mayReachChapter(in.ID) {
+			return c.scope.outside(outsideChapter)
+		}
 	default:
 		return c.requirePageBound(ctx, strconv.FormatInt(in.ID, 10))
 	}
+	if !c.scope.bound() {
+		return nil
+	}
+	ids, err := c.exportedPages(ctx, in)
+	if err != nil {
+		return err
+	}
+	return c.requireNoOutsideInclude(ctx, ids)
+}
+
+// exportedPages lists the pages a chapter or book export contains, each once.
+func (c *Client) exportedPages(ctx context.Context, in exportRequest) ([]int64, error) {
+	id := strconv.FormatInt(in.ID, 10)
+	var entries []entryJSON
+	if in.Type == "book" {
+		var book bookJSON
+		if err := c.get(ctx, "get book", "/api/books/"+id, nil, &book, nil, provider.ClassPermission); err != nil {
+			return nil, err
+		}
+		entries = book.Contents
+	} else {
+		var chapter chapterJSON
+		if err := c.get(ctx, "get chapter", "/api/chapters/"+id, nil, &chapter, nil, provider.ClassPermission); err != nil {
+			return nil, err
+		}
+		entries = chapter.Pages
+		// This read is also the evidence of the chapter's book.
+		if c.scope.bound() && !c.scope.hasChapter(in.ID) {
+			allowed, err := c.bookAllowed(ctx, chapter.BookID)
+			if err != nil {
+				return nil, err
+			}
+			if !allowed {
+				return nil, c.scope.outside(outsideChapter)
+			}
+		}
+	}
+	var ids []int64
+	add := func(e entryJSON) {
+		if e.ID > 0 && !slices.Contains(ids, e.ID) {
+			ids = append(ids, e.ID)
+		}
+	}
+	for _, e := range entries {
+		if e.Type == "chapter" {
+			for _, p := range e.Pages {
+				add(p)
+			}
+		} else {
+			add(e)
+		}
+	}
+	return ids, nil
+}
+
+// requireNoOutsideInclude refuses an export when a page, or a page it includes up to the last depth, includes a
+// page outside the targets. A call that cannot check every include is refused as well.
+func (c *Client) requireNoOutsideInclude(ctx context.Context, ids []int64) error {
+	r := &includeRenderer{ctx: ctx, c: c, seen: map[[2]int64]bool{}}
+	for _, id := range ids {
+		p, err := c.exportedPage(ctx, id)
+		if err != nil {
+			return exportIncludeError(err)
+		}
+		if p.outside {
+			return c.scope.outside(outsidePage)
+		}
+		candidates := includeCandidates(p.raw)
+		if len(candidates) == 0 {
+			continue
+		}
+		outside, err := r.outsideIn(candidates, 1)
+		if err != nil {
+			return exportIncludeError(err)
+		}
+		if outside {
+			return c.scope.outside("a page included in the export")
+		}
+	}
+	return nil
+}
+
+func exportIncludeError(err error) error {
+	if errors.Is(err, errIncludeLimit) {
+		return invalidRequest("the export includes more pages than one call checks")
+	}
+	return err
 }
 
 func invokeContentExport(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
