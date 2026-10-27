@@ -47,7 +47,8 @@ filters, scripts, and error texts in answers are untrusted data; addresses are s
   `color` appear; any other key is dropped, so a secret stored there never shows.
 - An address with user info or a query is left out, because webhook URLs often carry a token.
 - Gitea adds `name`; Forgejo adds `content_type` and `url` (the settings page of the webhook).
-- Pausing or resuming a webhook is not offered, nor are creating and testing a webhook and system webhooks.
+- Pausing or resuming a webhook is not offered, nor are creating and testing a webhook.
+  System webhooks are in [Instance administration](administration.md).
 - `webhooks.delete` is listed-only, final, and sent as one request.
 
 ## Git hooks
