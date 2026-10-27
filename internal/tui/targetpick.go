@@ -451,39 +451,39 @@ func (m *Model) updatePick(key tea.KeyPressMsg) tea.Cmd {
 	p := m.targetPick
 	lv := p.top()
 	m.clearMessages()
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		if len(p.marks) > 0 {
 			p.marks, p.markOrder = map[string]config.TargetEntry{}, nil
 			m.status = tr(tPickMarksCleared)
 			return nil
 		}
 		m.closePick()
-	case "enter":
+	case keyIs(key, actEnter):
 		m.pickTake(true)
-	case "right":
+	case keyIs(key, actRight):
 		return m.pickOpen(lv)
-	case "left":
+	case keyIs(key, actLeft):
 		return m.pickBack()
-	case "tab":
+	case keyIs(key, actNext):
 		m.pickMark(lv)
-	case "ctrl+t":
+	case key.String() == "ctrl+t":
 		return m.pickNextKind(lv)
-	case "ctrl+r":
+	case key.String() == "ctrl+r":
 		return m.pickLoad(lv, "")
-	case "up":
+	case keyIs(key, actUp):
 		lv.list.move(-1)
 		return m.pickMore(lv)
-	case "down":
+	case keyIs(key, actDown):
 		if lv.next != "" && len(lv.list.matches) > 0 && lv.list.cursor == len(lv.list.matches)-1 {
 			// The end is not a place to wrap from while more entries are coming.
 			return m.pickMore(lv)
 		}
 		lv.list.move(1)
 		return m.pickMore(lv)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.pickWindow()
-		lv.list.page(key.String(), start, end)
+		lv.list.page(key, start, end)
 		return m.pickMore(lv)
 	default:
 		before := lv.list.query()

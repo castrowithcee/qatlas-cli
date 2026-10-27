@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 // noProviderGroup titles the group of entries whose provider cannot be determined. It sorts last.
@@ -228,7 +230,7 @@ func (m *Model) entryPosition() (shown, pos int) {
 
 // foldKey handles enter, left and right on a group row or, for left, on an entry. It reports whether the
 // key was a fold key of this list. While a filter is set the groups show unfolded and stay as they are.
-func (m *Model) foldKey(key string) bool {
+func (m *Model) foldKey(key tea.KeyPressMsg) bool {
 	if m.groups == nil || m.list.query() != "" {
 		return false
 	}
@@ -238,11 +240,11 @@ func (m *Model) foldKey(key string) bool {
 	}
 	var target string
 	switch {
-	case key == "enter" && isGroupRow(row):
+	case keyIs(key, actEnter) && isGroupRow(row):
 		m.groups.toggle(row)
 		target = row
-	case key == "left" || key == "right":
-		target = m.groups.fold(row, key == "left")
+	case keyIs(key, actLeft) || keyIs(key, actRight):
+		target = m.groups.fold(row, keyIs(key, actLeft))
 	default:
 		return false
 	}

@@ -22,24 +22,24 @@ func (m *Model) openHelp() {
 func (m *Model) updateHelp(key tea.KeyPressMsg) tea.Cmd {
 	topics := len(helptopics.All())
 	_, _, room := m.helpFrame()
-	switch key.String() {
-	case keyOf(actBack), keyOf(actHelp):
+	switch {
+	case keyIs(key, actBack) || keyIs(key, actHelp):
 		m.screen = m.helpFrom
-	case "right", "tab":
+	case keyIs(key, actRight) || keyIs(key, actTopicNext):
 		m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
-	case "left", "shift+tab":
+	case keyIs(key, actLeft) || keyIs(key, actTopicPrev):
 		m.helpTopic, m.helpOffset = wrap(m.helpTopic-1, topics), 0
-	case "down":
+	case keyIs(key, actDown):
 		m.helpOffset++
-	case "up":
+	case keyIs(key, actUp):
 		m.helpOffset--
-	case "pgdown":
+	case keyIs(key, actPageDown):
 		m.helpOffset += room
-	case "pgup":
+	case keyIs(key, actPageUp):
 		m.helpOffset -= room
-	case "home":
+	case keyIs(key, actHome):
 		m.helpOffset = 0
-	case "end":
+	case keyIs(key, actEnd):
 		m.helpOffset = len(m.helpLines())
 	}
 	m.clampHelp()

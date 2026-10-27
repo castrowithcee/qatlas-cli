@@ -430,8 +430,8 @@ func (m *Model) addAsk() string {
 // updateAdd handles the menu and the builder. Every printable key belongs to the typed line.
 func (m *Model) updateAdd(key tea.KeyPressMsg) tea.Cmd {
 	a := m.targetAdd
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		switch {
 		case a.kind >= 0 && len(a.history) > 1:
 			m.stepBack()
@@ -442,7 +442,7 @@ func (m *Model) updateAdd(key tea.KeyPressMsg) tea.Cmd {
 			m.targetAdd = nil
 			m.clearMessages()
 		}
-	case "enter":
+	case keyIs(key, actEnter):
 		if choice, ok := a.choices.selected(); ok {
 			if kind, isPick := strings.CutPrefix(choice, addPick); isPick && a.kind < 0 {
 				return m.startPick(kind)
@@ -454,13 +454,13 @@ func (m *Model) updateAdd(key tea.KeyPressMsg) tea.Cmd {
 			}
 			m.pickAdd(choice)
 		}
-	case "up":
+	case keyIs(key, actUp):
 		a.choices.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		a.choices.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.addWindow()
-		a.choices.page(key.String(), start, end)
+		a.choices.page(key, start, end)
 	default:
 		before := a.choices.query()
 		cmd := a.choices.updateFilter(key)

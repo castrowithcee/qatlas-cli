@@ -888,22 +888,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPressMsg:
 		if m.infoOpen {
-			if msg.String() == "ctrl+c" {
+			if keyIs(msg, actForceQuit) {
 				return m, m.interrupt()
 			}
 			m.updateInfo(msg.String())
 			return m, nil
 		}
 		if !fits && m.activeScreenTooSmall() {
-			switch msg.String() {
-			case "ctrl+c":
+			switch {
+			case keyIs(msg, actForceQuit):
 				return m, m.interrupt()
-			case "q":
+			case keyIs(msg, actQuit):
 				// q is a letter in a form, so it quits only where nothing typed can be lost.
 				if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 					return m, m.quit()
 				}
-			case keyOf(actBack):
+			case keyIs(msg, actBack):
 				// Leaving is what makes this a notice instead of a trap: a screen too large for the
 				// terminal must not be the only way out of the editor.
 				return m, m.leaveScreen()
@@ -917,7 +917,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// screen that already asks its own question, and is a no-op while vaultBusy, so it can never step on
 		// a passphrase dialog, a confirmation, or vault work already running.
 		if m.keyCapture {
-			if msg.String() != "ctrl+c" {
+			if !keyIs(msg, actForceQuit) {
 				return m, m.captureKey(msg)
 			}
 			// ctrl+c ends the editor everywhere, so it ends the capture first and then acts as usual.
@@ -926,7 +926,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyIs(msg, actLock) && m.vaultLockKeyAllowed() {
 			return m, m.handleVaultLockKey()
 		}
-		if msg.String() == "ctrl+c" {
+		if keyIs(msg, actForceQuit) {
 			return m, m.interrupt()
 		}
 		if m.dd != nil {
@@ -1019,16 +1019,19 @@ func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case "q":
+	if m.setupUpdateKey(key) {
+		return nil
+	}
+	switch {
+	case keyIs(key, actQuit):
 		return m.quit()
-	case "pgup", "home":
+	case keyIs(key, actPageUp) || keyIs(key, actHome):
 		return m.previewArea(0)
-	case "pgdown", "end":
+	case keyIs(key, actPageDown) || keyIs(key, actEnd):
 		return m.previewArea(areaCount - 1)
-	case "left", "right":
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		step := 1
-		if key.String() == "left" {
+		if keyIs(key, actLeft) {
 			step = -1
 		}
 		if m.navSub && m.hasSubTabs() {
@@ -1036,22 +1039,18 @@ func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 			return m.previewSection(tabs[wrap(m.section.index()+step, len(tabs))])
 		}
 		return m.previewArea(area(wrap(int(m.section.area())+step, int(areaCount))))
-	case "up":
+	case keyIs(key, actUp):
 		m.navSub = false
-	case "down":
+	case keyIs(key, actDown):
 		if !m.navSub && m.hasSubTabs() {
 			m.navSub = true
 			return nil
 		}
 		return m.focusList()
-	case "enter", "tab", "shift+tab":
+	case keyIs(key, actEnter) || keyIs(key, actNext) || keyIs(key, actPrev):
 		// The bars and the workspace are the stops, so next and previous lead to the same one.
 		return m.focusList()
-	case "c":
-		m.askSetupTemplate()
-	case "u":
-		m.askUpdate()
-	case "n":
+	case key.String() == "n":
 		if m.section != sectionOverview {
 			return m.newEntry()
 		}
@@ -1141,8 +1140,11 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	if m.setupUpdateKey(key) {
+		return nil
+	}
+	switch {
+	case keyIs(key, actBack):
 		if m.testing {
 			// Cancelling the test returns to the editor with the configuration untouched.
 			m.stopTest()
@@ -1155,7 +1157,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "tab":
+	case keyIs(key, actNext):
 		// The stops run rows, the detail pane, the fields of the filter bar, the tab line.
 		if m.paneWidth() > 0 {
 			m.detailFocus, m.detailTab = true, tabOverview
@@ -1164,17 +1166,13 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 		} else {
 			m.focusNav()
 		}
-	case "shift+tab":
+	case keyIs(key, actPrev):
 		m.focusNav()
-	case "c":
-		m.askSetupTemplate()
-	case "u":
-		m.askUpdate()
-	case "q":
+	case keyIs(key, actQuit):
 		return m.quit()
-	case "/":
+	case keyIs(key, actSearch):
 		m.list.startFilter()
-	case "up":
+	case keyIs(key, actUp):
 		// No wraparound: the first entry is where the list ends and the filter bar or, without one, the tab
 		// line begins, in an empty list just as much as a full one.
 		if m.list.cursor <= 0 {
@@ -1186,25 +1184,25 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 		} else {
 			m.list.jump(-1)
 		}
-	case "down":
+	case keyIs(key, actDown):
 		m.list.jump(1)
-	case "pgup", "pgdown", "home", "end":
-		m.jumpList(key.String())
-	case "left", "right":
-		m.foldKey(key.String())
-	case "n":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
+		m.jumpList(key)
+	case keyIs(key, actLeft) || keyIs(key, actRight):
+		m.foldKey(key)
+	case key.String() == "n":
 		return m.newEntry()
-	case "p":
+	case key.String() == "p":
 		return m.duplicateSelected()
-	case "r":
+	case key.String() == "r":
 		return m.askRename()
-	case "f":
+	case key.String() == "f":
 		return m.openFindings()
-	case "s":
+	case key.String() == "s":
 		if m.section == sectionCredentials {
 			return m.openPayloadNew()
 		}
-	case "enter":
+	case keyIs(key, actEnter):
 		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
 			// like any other here, gated behind requireAdmin, whose "Unlock vault to continue" dialog
@@ -1212,7 +1210,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			// rebuilds the list, now that Pending can read it.
 			return m.requireAdmin(func() tea.Cmd { return m.returnToList("") })
 		}
-		if m.foldKey("enter") {
+		if m.foldKey(key) {
 			return nil
 		}
 		name, ok := m.selected()
@@ -1233,7 +1231,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		return m.openForm(name)
-	case keyOf(actDelete):
+	case keyIs(key, actDelete):
 		if m.section == sectionApprovals {
 			return nil
 		}
@@ -1245,9 +1243,9 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			m.screen = screenConfirm
 			m.clearMessages()
 		}
-	case "t":
+	case key.String() == "t":
 		return m.startTest()
-	case "a":
+	case key.String() == "a":
 		if m.section != sectionApprovals {
 			return nil
 		}
@@ -1267,17 +1265,17 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 // updateFilter is the list while its filter is typed. Every printable key belongs to the filter, including
 // the letters and digits that are list keys otherwise; the arrows still move through what it matches.
 func (m *Model) updateFilter(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.list.clearFilter()
-	case "enter":
+	case keyIs(key, actEnter):
 		m.list.stopFilter()
-	case "up":
+	case keyIs(key, actUp):
 		m.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.list.move(1)
-	case "pgup", "pgdown", "home", "end":
-		m.jumpList(key.String())
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
+		m.jumpList(key)
 	default:
 		return m.list.updateFilter(key)
 	}
@@ -1285,7 +1283,7 @@ func (m *Model) updateFilter(key tea.KeyPressMsg) tea.Cmd {
 }
 
 // jumpList moves by one screen of entries or to either end of the list.
-func (m *Model) jumpList(key string) {
+func (m *Model) jumpList(key tea.KeyPressMsg) {
 	start, end := m.listWindow()
 	m.list.page(key, start, end)
 }
@@ -1596,16 +1594,16 @@ func (m *Model) formState() string {
 // answers it, not even y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
 func (m *Model) updateLeave(key tea.KeyPressMsg) tea.Cmd {
 	from := m.leaveFrom
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.screen, m.leaveQuit = from, false
 		m.status = tr(tFormStillEditingNothingWasSaved)
-	case "d":
+	case key.String() == "d":
 		if m.leaveQuit {
 			return m.quit()
 		}
 		return m.discard()
-	case keyOf(actSave):
+	case keyIs(key, actSave):
 		m.leaveQuit = false
 		switch from {
 		case screenTargets:
@@ -1732,11 +1730,11 @@ func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.payloadRemoveAsk {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.payloadRemoveAsk = false
 			m.removePayloadField()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.payloadRemoveAsk = false
 			m.status = tr(tFormFieldKept)
 		}
@@ -1753,8 +1751,8 @@ func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 	switch m.fields[m.focus].kind {
 	case fieldProvider, fieldChoice, fieldMultiChoice, fieldToolList:
 		// Every choice row opens its values on enter and /, the way a provider row opens its table.
-		switch key.String() {
-		case "enter", "/":
+		switch {
+		case keyIs(key, actEnter) || keyIs(key, actSearch):
 			if m.fields[m.focus].kind == fieldProvider {
 				m.openProviderTable()
 			} else {
@@ -1764,18 +1762,18 @@ func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 		}
 	case fieldTargets, fieldPaths:
 		// A target or path list opens like a choice row, and left/right fold it in the form like a tree.
-		switch key.String() {
-		case "enter", "/":
+		switch {
+		case keyIs(key, actEnter) || keyIs(key, actSearch):
 			if m.fields[m.focus].kind == fieldPaths {
 				m.openPaths()
 			} else {
 				m.openTargets()
 			}
 			return nil
-		case "right":
+		case keyIs(key, actRight):
 			m.fields[m.focus].expanded = true
 			return nil
-		case "left":
+		case keyIs(key, actLeft):
 			m.fields[m.focus].expanded = false
 			return nil
 		}
@@ -1785,40 +1783,40 @@ func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 		}
 	case fieldVaultAction:
 		// An action row runs at once on enter, never deferred to F2 like the rest of the form.
-		switch key.String() {
-		case "enter":
+		switch {
+		case keyIs(key, actEnter):
 			return m.runVaultActionField(m.fields[m.focus].action)
 		}
 	case fieldSecret:
 		// enter opens the masked prompt of a role row.
-		if key.String() == "enter" {
+		if keyIs(key, actEnter) {
 			return m.secretRowKey(m.fields[m.focus].label, key)
 		}
 	}
 	if m.isPayloadForm() && m.payloadKey(key) {
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		// Leaving a form never drops input silently: an unchanged form closes, a changed one asks first.
 		if m.wizard != nil {
 			return m.setupEsc()
 		}
 		return m.requestLeave()
-	case "tab", "down":
+	case keyIs(key, actNext) || keyIs(key, actDown):
 		m.moveFocus(1)
 		return nil
-	case "shift+tab", "up":
+	case keyIs(key, actPrev) || keyIs(key, actUp):
 		m.moveFocus(-1)
 		return nil
-	case "pgdown":
+	case keyIs(key, actPageDown):
 		// Page keys are unused on a form row, text rows included: they pick the next or previous section.
 		m.jumpSection(1)
 		return nil
-	case "pgup":
+	case keyIs(key, actPageUp):
 		m.jumpSection(-1)
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		// A text row goes on to the next row; on the last one enter does nothing.
 		if m.hasNextField() {
 			m.moveFocus(1)
@@ -1831,10 +1829,10 @@ func (m *Model) updateForm(key tea.KeyPressMsg) tea.Cmd {
 	case fieldChoice:
 		// left/right step through the values in place, a quick way on a row of few values.
 		previous := current.value()
-		switch key.String() {
-		case "left":
+		switch {
+		case keyIs(key, actLeft):
 			current.index = wrap(current.index-1, len(current.choices))
-		case "right":
+		case keyIs(key, actRight):
 			current.index = wrap(current.index+1, len(current.choices))
 		default:
 			return nil
@@ -1942,8 +1940,8 @@ func (m *Model) updatePicker(key tea.KeyPressMsg) tea.Cmd {
 	if m.pickerMarks != nil {
 		// A tool list or the effects take any number of values: space ticks the selected one instead of
 		// typing a blank, which no tool ID or effect contains, and enter keeps every tick at once.
-		switch key.String() {
-		case "space":
+		switch {
+		case keyIs(key, actSpace):
 			if choice, ok := m.picker.selected(); ok && m.pickerEffects != nil && isEffectRow(choice) {
 				m.pickerEffects.toggle(choice, m.pickerMarks, m.searchVisible())
 			} else if ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
@@ -1952,11 +1950,11 @@ func (m *Model) updatePicker(key tea.KeyPressMsg) tea.Cmd {
 				toggleMark(m.pickerMarks, choice, m.fields[m.focus].kind == fieldMultiChoice)
 			}
 			return nil
-		case "enter":
+		case keyIs(key, actEnter):
 			m.keepPicker()
 			m.screen = screenForm
 			return nil
-		case keyOf(actBack):
+		case keyIs(key, actBack):
 			if m.pickerChanged() {
 				m.askLeave(false)
 			} else {
@@ -1965,10 +1963,10 @@ func (m *Model) updatePicker(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.screen = screenForm
-	case "enter":
+	case keyIs(key, actEnter):
 		choice, ok := m.picker.selected()
 		if !ok {
 			// Nothing matches the filter, so there is nothing to take.
@@ -1976,25 +1974,25 @@ func (m *Model) updatePicker(key tea.KeyPressMsg) tea.Cmd {
 		}
 		m.screen = screenForm
 		return m.choose(choice)
-	case "left", "right":
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		// In the grouped tool list these fold the group under the cursor; while a search is typed they stay
 		// with the search text, whose matches show every group unfolded anyway.
 		if m.pickerGroups == nil || m.picker.query() != "" {
 			return m.picker.updateFilter(key)
 		}
 		if choice, ok := m.picker.selected(); ok && !isEffectRow(choice) {
-			if row := m.pickerGroups.fold(choice, key.String() == "left"); row != "" {
+			if row := m.pickerGroups.fold(choice, keyIs(key, actLeft)); row != "" {
 				m.picker.refilter()
 				m.picker.selectName(row)
 			}
 		}
-	case "up":
+	case keyIs(key, actUp):
 		m.picker.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		m.picker.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.pickerWindow()
-		m.picker.page(key.String(), start, end)
+		m.picker.page(key, start, end)
 	default:
 		return m.picker.updateFilter(key)
 	}
@@ -2478,12 +2476,12 @@ func (m *Model) replaceEffectChoices(provider string) {
 
 func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 	if m.vaultLockConfirm {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
 			return m.beginVaultLock()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
 			m.status = "Cancelled; the vault stays unlocked"
@@ -2491,34 +2489,34 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.decryptConfirm {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			passphrase := m.decryptPassphrase
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
 			return m.runVaultDecrypt(passphrase)
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
 			m.status = "Cancelled; the vault stays encrypted"
 		}
 		return nil
 	}
 	if m.migratePlanConfirm {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.migratePlanConfirm = false
 			return m.beginVaultMigrateWrite()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.migratePlanConfirm, m.migrate, m.screen = false, nil, screenForm
 			m.status = "Cancelled; credentials.yaml was not touched"
 		}
 		return nil
 	}
 	if m.migrateDeleteConfirm {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.migrateDeleteConfirm = false
 			return m.deleteLegacyCredentials()
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.migrateDeleteConfirm, m.screen = false, screenForm
 			m.status = m.migrateResult + "; the file was kept"
 			m.migrate, m.migrateResult = nil, ""
@@ -2529,57 +2527,57 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 		return cmd
 	}
 	if name := m.approvalDetail; name != "" {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.approvalDetail, m.screen = "", screenList
 			return m.requireAdmin(func() tea.Cmd { return m.approveOne(name) })
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.approvalDetail, m.screen = "", screenList
 			m.status = tr(tCancelled)
-		case "e":
+		case key.String() == "e":
 			m.approvalExpanded = !m.approvalExpanded
-		case "o":
+		case key.String() == "o":
 			return m.openApprovalLogs(name)
-		case "down":
+		case keyIs(key, actDown):
 			m.scrollApproval(1)
-		case "up":
+		case keyIs(key, actUp):
 			m.scrollApproval(-1)
-		case "pgdown":
+		case keyIs(key, actPageDown):
 			m.scrollApproval(max(m.approvalPage, 1))
-		case "pgup":
+		case keyIs(key, actPageUp):
 			m.scrollApproval(-max(m.approvalPage, 1))
-		case "home":
+		case keyIs(key, actHome):
 			m.approvalOffset = 0
-		case "end":
+		case keyIs(key, actEnd):
 			m.approvalOffset = 1 << 20
 		}
 		return nil
 	}
 	if m.approveAllConfirm {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.approveAllConfirm, m.screen = false, screenList
 			return m.requireAdmin(m.approveAll)
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.approveAllConfirm, m.screen = false, screenList
 			m.status = tr(tCancelled)
 		}
 		return nil
 	}
 	if profile := m.pendingProfile; profile != "" {
-		switch key.String() {
-		case "y":
+		switch {
+		case keyIs(key, actYes):
 			m.pendingProfile, m.screen = "", screenForm
 			m.applyProfile(profile)
 			m.status = tr(tFormProfileTickedReviewTheSelected, profile)
-		case "n", keyOf(actBack):
+		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.pendingProfile, m.screen = "", screenForm
 			m.status = tr(tFormProfileNotAppliedTheTicks)
 		}
 		return nil
 	}
-	switch key.String() {
-	case "y":
+	switch {
+	case keyIs(key, actYes):
 		// Deleting an entry, or a stored secret, is a managing action: requireAdmin gates the
 		// actual removal behind this window's admin session, run only once the confirmation itself is given.
 		if role := m.confirmRole; role != "" {
@@ -2594,7 +2592,7 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 		}
 		m.screen = screenList
 		return m.requireAdmin(m.delete)
-	case "n", keyOf(actBack):
+	case keyIs(key, actNo) || keyIs(key, actBack):
 		if m.confirmRole != "" {
 			m.confirmRole = ""
 			m.screen = screenForm
@@ -5068,5 +5066,5 @@ func (m *Model) confirmView() string {
 		consequence = tr(tFormItsStoredSecretsAreNot)
 	}
 	return m.questionText(question{title: tr(tFormDelete, name), consequence: consequence, keys: keys, danger: true,
-		labels: map[string]string{"y": tr(tButtonDelete), "n": tr(tButtonCancel)}})
+		labels: map[string]string{keyOf(actYes): tr(tButtonDelete), keyOf(actNo): tr(tButtonCancel)}})
 }

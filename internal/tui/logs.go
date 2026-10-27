@@ -629,10 +629,10 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case "q":
+	switch {
+	case keyIs(key, actQuit):
 		return m.quit()
-	case keyOf(actBack):
+	case keyIs(key, actBack):
 		if lv.stats {
 			lv.stats, lv.sessions = false, false
 			return nil
@@ -642,13 +642,13 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "tab":
+	case keyIs(key, actNext):
 		lv.moveFocus(1)
-	case "shift+tab":
+	case keyIs(key, actPrev):
 		lv.moveFocus(-1)
-	case "left", "right":
+	case keyIs(key, actLeft) || keyIs(key, actRight):
 		by := 1
-		if key.String() == "left" {
+		if keyIs(key, actLeft) {
 			by = -1
 		}
 		switch lv.focus {
@@ -664,12 +664,12 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 				m.focusNav()
 			}
 		}
-	case "s":
+	case key.String() == "s":
 		lv.stats, lv.sessions, lv.heat = !lv.stats, false, false
-	case "m":
+	case key.String() == "m":
 		on := !(lv.stats && lv.sessions)
 		lv.stats, lv.sessions, lv.scroll, lv.heat = on, on, 0, false
-	case "enter":
+	case keyIs(key, actEnter):
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
@@ -684,27 +684,27 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 				m.clearMessages()
 			}
 		}
-	case "up", "down", "pgup", "pgdown", "home", "end":
+	case keyIs(key, actUp) || keyIs(key, actDown) || keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		lv.focus = logFocusRows
 		if lv.heat {
 			break
 		}
 		if lv.stats && lv.sessions {
-			m.scrollSessions(key.String())
+			m.scrollSessions(key)
 			break
 		}
-		switch key.String() {
-		case "up":
+		switch {
+		case keyIs(key, actUp):
 			lv.list.move(-1)
-		case "down":
+		case keyIs(key, actDown):
 			lv.list.move(1)
 		default:
 			start, end := m.logsWindow()
-			lv.list.page(key.String(), start, end)
+			lv.list.page(key, start, end)
 		}
-	case "f":
+	case key.String() == "f":
 		m.openLogPick(-1)
-	case "/":
+	case keyIs(key, actSearch):
 		lv.focus = logFocusRows
 		lv.list.startFilter()
 	}
@@ -743,18 +743,18 @@ func (m *Model) openLogBarDropdown() {
 // updateLogSearch is the Logs screen while its search is typed; every printable key is search text.
 func (m *Model) updateLogSearch(key tea.KeyPressMsg) tea.Cmd {
 	lv := m.logs
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		lv.list.clearFilter()
-	case "enter":
+	case keyIs(key, actEnter):
 		lv.list.stopFilter()
-	case "up":
+	case keyIs(key, actUp):
 		lv.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		lv.list.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.logsWindow()
-		lv.list.page(key.String(), start, end)
+		lv.list.page(key, start, end)
 	default:
 		return lv.list.updateFilter(key)
 	}
@@ -766,8 +766,8 @@ func (m *Model) updateLogDetail(key tea.KeyPressMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.screen = screenLogs
 	}
 	return nil
@@ -802,20 +802,20 @@ func (m *Model) openLogDateDialog() {
 
 func (m *Model) updateLogDateDialog(key tea.KeyPressMsg) tea.Cmd {
 	lv, d := m.logs, m.logs.dialog
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		lv.dialog = nil
 		return nil
-	case "tab", "shift+tab", "up", "down":
+	case keyIs(key, actNext) || keyIs(key, actPrev) || keyIs(key, actUp) || keyIs(key, actDown):
 		d.inputs[d.focus].Blur()
 		by := 1
-		if key.String() == "shift+tab" || key.String() == "up" {
+		if keyIs(key, actPrev) || keyIs(key, actUp) {
 			by = -1
 		}
 		d.focus = wrap(d.focus+by, len(d.inputs))
 		d.inputs[d.focus].Focus()
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		var days []string
 		for _, in := range d.inputs {
 			value := strings.TrimSpace(in.Value())
@@ -889,15 +889,15 @@ func filterText(value string) string {
 
 func (m *Model) updateLogPick(key tea.KeyPressMsg) tea.Cmd {
 	lv, p := m.logs, m.logs.pick
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		if p.filter >= 0 {
 			m.openLogPick(-1)
 			m.logs.pick.list.selectName(strconv.Itoa(p.filter))
 			return nil
 		}
 		lv.pick = nil
-	case "enter":
+	case keyIs(key, actEnter):
 		choice, ok := p.list.selected()
 		if !ok {
 			return nil
@@ -910,13 +910,13 @@ func (m *Model) updateLogPick(key tea.KeyPressMsg) tea.Cmd {
 		lv.filters[p.filter] = choice
 		lv.pick = nil
 		lv.applyFilters()
-	case "up":
+	case keyIs(key, actUp):
 		p.list.move(-1)
-	case "down":
+	case keyIs(key, actDown):
 		p.list.move(1)
-	case "pgup", "pgdown", "home", "end":
+	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		start, end := m.logPickWindow()
-		p.list.page(key.String(), start, end)
+		p.list.page(key, start, end)
 	default:
 		return p.list.updateFilter(key)
 	}
@@ -1381,15 +1381,25 @@ func (m *Model) sessionRoom() int {
 }
 
 // scrollSessions moves the shown part of the session summary; the view clamps it again for its own room.
-func (m *Model) scrollSessions(key string) {
+func (m *Model) scrollSessions(key tea.KeyPressMsg) {
 	lv := m.logs
 	room := max(m.sessionRoom()-1, 1)
 	last := max(len(m.logSessionStats().order)-room, 0)
-	by := map[string]int{"up": -1, "down": 1, "pgup": -room, "pgdown": room}[key]
-	switch key {
-	case "home":
+	by := 0
+	switch {
+	case keyIs(key, actUp):
+		by = -1
+	case keyIs(key, actDown):
+		by = 1
+	case keyIs(key, actPageUp):
+		by = -room
+	case keyIs(key, actPageDown):
+		by = room
+	}
+	switch {
+	case keyIs(key, actHome):
 		lv.scroll = 0
-	case "end":
+	case keyIs(key, actEnd):
 		lv.scroll = last
 	default:
 		lv.scroll = min(max(lv.scroll+by, 0), last)

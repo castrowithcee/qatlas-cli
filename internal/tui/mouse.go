@@ -257,11 +257,11 @@ func (m *Model) pressName(name string) tea.Cmd {
 // keyByName is the key press a footer's key name stands for, for the keys a dialog's buttons use.
 func keyByName(name string) (tea.KeyPressMsg, bool) {
 	switch name {
-	case "enter":
+	case keyOf(actEnter):
 		return tea.KeyPressMsg{Code: tea.KeyEnter}, true
-	case "esc":
+	case keyOf(actBack):
 		return tea.KeyPressMsg{Code: tea.KeyEscape}, true
-	case "tab":
+	case keyOf(actNext):
 		return tea.KeyPressMsg{Code: tea.KeyTab}, true
 	}
 	if key, ok := functionKeys[strings.ToUpper(name)]; ok {
@@ -836,6 +836,9 @@ type keysMsg []tea.KeyPressMsg
 // heldKeyMsg is the end of the hold of the "[" number id.
 type heldKeyMsg struct{ id int }
 
+// fragmentEsc is the filter state after a lone escape; it names that state, not a key to dispatch on.
+const fragmentEsc = "esc"
+
 // fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read with a
 // pause between them longer than the input reader waits: the reader then reports the start it has as an
 // unknown sequence, or as an escape or alt+[, and the rest as typed characters like "<65;12;5M", which a text
@@ -849,7 +852,7 @@ type fragmentFilter struct {
 	now     func() time.Time
 	program *tea.Program
 
-	state string // "esc" or "[" when that key came last, "tail" while a report lacks its end
+	state string // fragmentEsc or "[" when that key came last, "tail" while a report lacks its end
 	at    time.Time
 	held  *tea.KeyPressMsg
 	id    int
@@ -943,8 +946,8 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	switch {
 	case isPaste:
 	case key.Code == tea.KeyEscape && key.Mod == 0:
-		f.state, f.at = "esc", at
-	case f.program != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == "esc" && text == "["):
+		f.state, f.at = fragmentEsc, at
+	case f.program != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == fragmentEsc && text == "["):
 		f.state, f.at = "[", at
 		f.held = &key
 		f.id++

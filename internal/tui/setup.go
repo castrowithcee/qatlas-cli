@@ -451,10 +451,10 @@ func (m *Model) updateSummary(key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if w.saved != "" {
-		switch key.String() {
-		case "t":
+		switch {
+		case key.String() == "t":
 			return m.testConnection(w.saved)
-		case keyOf(actBack):
+		case keyIs(key, actBack):
 			if m.testing {
 				m.stopTest()
 				m.status = tr(tSetupConnectionTestCancelled)
@@ -464,10 +464,10 @@ func (m *Model) updateSummary(key tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		return m.setupEsc()
-	case keyOf(actSave):
+	case keyIs(key, actSave):
 		return m.startSetupSave()
 	}
 	return nil

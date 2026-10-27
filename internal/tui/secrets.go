@@ -351,13 +351,13 @@ func (m *Model) askSecret(role string) {
 
 // updateSecret handles the masked prompt.
 func (m *Model) updateSecret(key tea.KeyPressMsg) tea.Cmd {
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		m.secretInput.Reset()
 		m.screen = screenForm
 		m.status = tr(tCancelled)
 		return nil
-	case "enter":
+	case keyIs(key, actEnter):
 		value := m.secretInput.Value()
 		// The value leaves the model in the same event that submitted it: from here on it exists only
 		// inside the closure requireAdmin may hold onto briefly, and then the command that hands it to the
@@ -498,14 +498,14 @@ func (m *Model) openVaultOfferFor(title, hint string, optional, twice bool,
 // writing anything.
 func (m *Model) updateVaultOffer(key tea.KeyPressMsg) tea.Cmd {
 	o := m.vaultOffer
-	switch key.String() {
-	case keyOf(actBack):
+	switch {
+	case keyIs(key, actBack):
 		cancel := o.cancel
 		o.input.Reset()
 		o.first = ""
 		m.vaultOffer = nil
 		return cancel()
-	case "enter":
+	case keyIs(key, actEnter):
 		typed := o.input.Value()
 		o.input.Reset()
 		m.clearMessages()
@@ -930,8 +930,7 @@ func (m *Model) secretKeys() string {
 
 // secretRowKey handles the keys of a focused secret row.
 func (m *Model) secretRowKey(role string, key tea.KeyPressMsg) tea.Cmd {
-	action := key.String()
-	if action != "enter" && action != keyOf(actDelete) {
+	if !keyIs(key, actEnter) && !keyIs(key, actDelete) {
 		return nil
 	}
 	if m.editing == "" {
@@ -947,10 +946,10 @@ func (m *Model) secretRowKey(role string, key tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 
-	switch action {
-	case "enter":
+	switch {
+	case keyIs(key, actEnter):
 		m.askSecret(role)
-	case keyOf(actDelete):
+	case keyIs(key, actDelete):
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here. A
 		// vault locked at this point is unlocked, masked and never on this process's own terminal, only once
 		// that confirmation is given and the removal itself is about to run (see requireAdmin in

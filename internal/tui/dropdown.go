@@ -103,18 +103,18 @@ func (m *Model) noteField(id string, x, y int) {
 // updateDropdown is a key while a list is open: up and down move, enter takes the value, esc closes it.
 func (m *Model) updateDropdown(key tea.KeyPressMsg) tea.Cmd {
 	d := m.dd
-	switch key.String() {
-	case "up":
+	switch {
+	case keyIs(key, actUp):
 		d.cursor = max(d.cursor-1, 0)
-	case "down":
+	case keyIs(key, actDown):
 		d.cursor = min(d.cursor+1, len(d.values)-1)
-	case "home":
+	case keyIs(key, actHome):
 		d.cursor = 0
-	case "end":
+	case keyIs(key, actEnd):
 		d.cursor = len(d.values) - 1
-	case "enter":
+	case keyIs(key, actEnter):
 		return m.chooseDropdown(d.cursor)
-	case keyOf(actBack):
+	case keyIs(key, actBack):
 		m.dd = nil
 	}
 	return nil
