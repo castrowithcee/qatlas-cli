@@ -39,6 +39,14 @@ func problemsBase(t *testing.T) *Config {
 	return cfg
 }
 
+// withExcluder adds a connection "ex" over the provider that declares exclusions, bound to one target and
+// carrying the given exclusions.
+func withExcluder(c *Config, target string, exclude ...string) {
+	c.Services["ex"] = Service{Provider: "excluder", BaseURL: "https://ex.example.invalid"}
+	c.Credentials["exkey"] = Credential{Type: CredentialTypeEnv, Values: map[string]string{"token": "EX_TOKEN"}}
+	c.Connections["ex"] = Connection{Service: "ex", Credential: "exkey", Targets: []string{target}, Exclude: exclude}
+}
+
 func TestProblemsAreStructured(t *testing.T) {
 	seenCodes := map[string]bool{}
 	long := strings.Repeat("a", 201)
@@ -182,6 +190,18 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh.targets", CodeInvalidTargetSet, "connections.gh.targets: several GitHub targets", "targets", -1},
 		{"wildcard", func(c *Config) { conn(c, "seat", func(v *Connection) { v.Targets = []string{"*", "t1"} }) },
 			"connections.seat.targets", CodeWildcardNotAlone, "connections.seat.targets: wildcard \"*\" must be", "targets", -1},
+		{"exclude unsupported", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Exclude = []string{"repos/a/c"} }) },
+			"connections.gh.exclude", CodeExcludeUnsupported, "connections.gh.exclude: provider \"github\" does not support", "exclude", -1},
+		{"empty exclude", func(c *Config) { withExcluder(c, "repos/a/b", " ") },
+			"connections.ex.exclude[0]", CodeEmptyExclude, "connections.ex.exclude[0]: exclusions must not be empty", "exclude", 0},
+		{"duplicate exclude", func(c *Config) { withExcluder(c, "repos/a/b", "repos/a/c", "repos/a/c") },
+			"connections.ex.exclude[1]", CodeDuplicateExclude, "connections.ex.exclude[1]: an exclusion is listed", "exclude", 1},
+		{"exclude is target", func(c *Config) { withExcluder(c, "repos/a/b", "repos/a/b") },
+			"connections.ex.exclude[0]", CodeExcludeIsTarget, "connections.ex.exclude[0]: an exclusion equals a target", "exclude", 0},
+		{"exclude wildcard", func(c *Config) { withExcluder(c, "repos/a/b", "repos/a/*") },
+			"connections.ex.exclude[0]", CodeExcludeWildcard, "connections.ex.exclude[0]: an exclusion must not be a wildcard", "exclude", 0},
+		{"invalid exclude", func(c *Config) { withExcluder(c, "repos/a/b", "orgs/x") },
+			"connections.ex.exclude[0]", CodeInvalidExclude, "connections.ex.exclude[0]: an exclusion is not in a form", "exclude", 0},
 		{"duplicate tool", func(c *Config) {
 			conn(c, "gh", func(v *Connection) { v.Tools = []string{"github.issues.get", "github.issues.get"} })
 		}, "connections.gh.tools", CodeDuplicateTool, "connections.gh.tools: tool \"github.issues.get\" is listed", "tools", -1},

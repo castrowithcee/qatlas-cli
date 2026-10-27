@@ -31,6 +31,7 @@ const (
 	FieldOrigin      = "origin"
 	FieldEffects     = "effects"
 	FieldTargets     = "targets"
+	FieldExclude     = "exclude"
 	FieldTools       = "tools"
 	FieldPaths       = "paths"
 	FieldFiles       = "files"
@@ -414,6 +415,7 @@ func diff(approved vault.Approval, now vault.Scope, id string, catalog config.Pr
 	addList(FieldEffects, false, before.Effects, after.Effects,
 		list(before.Effects), list(after.Effects))
 	addList(FieldTargets, false, before.Targets, after.Targets, list(before.Targets), list(after.Targets))
+	addList(FieldExclude, false, before.Exclude, after.Exclude, list(before.Exclude), list(after.Exclude))
 	var renamedTools []Rename
 	if before.Tools != nil && after.Tools != nil && (before.Provider == after.Provider || providerRenamed) {
 		renamedTools = renamedEntries(catalog, after.Provider, before.Tools, after.Tools)

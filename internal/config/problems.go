@@ -60,6 +60,12 @@ const (
 	CodeInvalidTarget                = "invalid-target"
 	CodeInvalidTargetSet             = "invalid-target-set"
 	CodeWildcardNotAlone             = "wildcard-not-alone"
+	CodeExcludeUnsupported           = "exclude-unsupported"
+	CodeEmptyExclude                 = "empty-exclude"
+	CodeDuplicateExclude             = "duplicate-exclude"
+	CodeExcludeIsTarget              = "exclude-is-target"
+	CodeExcludeWildcard              = "exclude-wildcard"
+	CodeInvalidExclude               = "invalid-exclude"
 	CodeDuplicateTool                = "duplicate-tool"
 	CodeToolEffectNotPermitted       = "tool-effect-not-permitted"
 	CodeEffectsAndTools              = "effects-and-tools"
@@ -127,6 +133,12 @@ var hints = map[string]string{
 	CodeInvalidTarget:                "Correct the target to the form the provider accepts.",
 	CodeInvalidTargetSet:             "Correct the list of targets to the combination the provider accepts.",
 	CodeWildcardNotAlone:             "Keep only the wildcard as target, or list explicit targets without it.",
+	CodeExcludeUnsupported:           "Remove the exclusions; the provider does not support them.",
+	CodeEmptyExclude:                 "Fill in the exclusion, or remove the entry.",
+	CodeDuplicateExclude:             "Remove the repeated exclusion.",
+	CodeExcludeIsTarget:              "Remove the exclusion, or remove the target it repeats.",
+	CodeExcludeWildcard:              "Name one exact entry to exclude, without a wildcard.",
+	CodeInvalidExclude:               "Correct the exclusion to a form the provider accepts for exclusions.",
 	CodeDuplicateTool:                "Remove the repeated tool.",
 	CodeToolEffectNotPermitted:       "Remove these tools, or list their effect among the former permissions.",
 	CodeEffectsAndTools:              "Keep either effects, to offer every tool of those effects, or tools, to offer exactly the listed tools, and remove the other.",
