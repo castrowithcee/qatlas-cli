@@ -438,9 +438,9 @@ func (m *Model) overviewView() string {
 
 // overviewKeys is the key line of the Overview, with the focus on the tab line or on the lines.
 func (m *Model) overviewKeys() string {
-	keys := "←/→ move · down open · 1-6 open · c setup · {command} cmds · {help} help · q quit"
+	keys := "←/→ move · down open · 1-6 open · g setup · {command} cmds · {help} help · q quit"
 	if m.screen == screenList {
-		keys = "up/down move · enter open · 1-6 areas · {back}/tab areas · c setup · {command} cmds · {help} help · q quit"
+		keys = "up/down move · enter open · 1-6 areas · {back}/tab areas · g setup · {command} cmds · {help} help · q quit"
 	}
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
@@ -484,13 +484,13 @@ func (m *Model) updateOverview(key tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// setupUpdateKey handles c (guided setup) and u (update), which mean the same on the Overview, the tab line
+// setupUpdateKey handles g (guided setup) and u (update), which mean the same on the Overview, the tab line
 // and every list. It reports whether the key was one of them.
 func (m *Model) setupUpdateKey(key tea.KeyPressMsg) bool {
 	switch {
-	case key.String() == "c":
+	case keyIs(key, actSetup):
 		m.askSetupTemplate()
-	case key.String() == "u":
+	case keyIs(key, actUpdate):
 		m.askUpdate()
 	default:
 		return false

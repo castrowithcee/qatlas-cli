@@ -394,7 +394,7 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	switch {
-	case key.String() == "s":
+	case keyIs(key, actReveal):
 		if m.tokenValueShown() {
 			m.tokenReveal = false
 			return nil, true
@@ -415,7 +415,7 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 	return nil, true
 }
 
-// tokenDetailView draws the detail screen of one token: its state, its value, masked until s reveals it, its
+// tokenDetailView draws the detail screen of one token: its state, its value, masked until v reveals it, its
 // vorbilder with a warning in words beside every one that covers nothing now, its expiry, and when it was
 // created.
 func (m *Model) tokenDetailView() string {
@@ -481,7 +481,7 @@ func (m *Model) tokenDetailView() string {
 	}
 	facts = append(facts, fact("created", entry.token.Created.Local().Format("2006-01-02 15:04"), lipgloss.NewStyle()))
 	lines := factLinesIn(facts, inner, column, func(s string) string { return s })
-	return m.frameDetail(heading, state, lines) + "\n" + m.keyHint("s reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help")
+	return m.frameDetail(heading, state, lines) + "\n" + m.keyHint("v reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help")
 }
 
 // tokenRevokeView draws the question asked before a token is revoked.

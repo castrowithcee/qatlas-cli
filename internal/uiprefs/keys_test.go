@@ -23,7 +23,9 @@ func TestCheckRejectsWithReason(t *testing.T) {
 		{ActionInfo, "3", "digits"},
 		{ActionInfo, "f5", "terminals take"},
 		{ActionInfo, "f21", "F1 to F20"},
-		{ActionInfo, "ctrl+a", "text lines or the terminal"},
+		{ActionInfo, "ctrl+a", "text lines, the terminal, or a screen"},
+		{ActionLock, "ctrl+r", "text lines, the terminal, or a screen"},
+		{ActionSave, "ctrl+t", "text lines, the terminal, or a screen"},
 		{ActionInfo, "j", "acts on text lines"},
 		{ActionInfo, "!", "acts on text lines"},
 		{ActionInfo, ".", "acts on text lines"},
@@ -110,12 +112,31 @@ func TestSaveRefusesInvalidKeys(t *testing.T) {
 
 func TestFileSwapIsValidAsAWhole(t *testing.T) {
 	path := Path(t.TempDir())
-	if err := os.WriteFile(path, []byte("keys:\n  save: ctrl+l\n  lock: ctrl+r\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("keys:\n  save: ctrl+l\n  lock: ctrl+o\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
-	if got.Keys.Save != "ctrl+l" || got.Keys.Lock != "ctrl+r" || len(warnings) != 0 {
+	if got.Keys.Save != "ctrl+l" || got.Keys.Lock != "ctrl+o" || len(warnings) != 0 {
 		t.Fatalf("keys = %+v, warnings %v; want the swap kept", got.Keys, warnings)
+	}
+}
+
+// ctrl+t and ctrl+r were free keys once, so a file can still hold them: they are the target picker's now, and the
+// action keeps its standard with a warning that names the reason, as for any other key that breaks a rule.
+func TestFileWithPickerKeysFallsBackToTheStandard(t *testing.T) {
+	path := Path(t.TempDir())
+	if err := os.WriteFile(path, []byte("keys:\n  lock: ctrl+r\n  save: ctrl+t\n  help: ctrl+g\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if got.Keys.Lock != DefaultKeys().Lock || got.Keys.Save != DefaultKeys().Save || got.Keys.Help != "ctrl+g" {
+		t.Fatalf("keys = %+v, want the standard for lock and save and the valid help key kept", got.Keys)
+	}
+	if len(warnings) != 2 || !strings.Contains(warnings[0], "keys.save") || !strings.Contains(warnings[1], "keys.lock") {
+		t.Fatalf("warnings = %v, want one each for lock and save", warnings)
+	}
+	if err := got.Keys.Validate(); err != nil {
+		t.Fatalf("the result is invalid: %v", err)
 	}
 }
 

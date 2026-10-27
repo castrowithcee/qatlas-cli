@@ -467,9 +467,9 @@ func (m *Model) updatePick(key tea.KeyPressMsg) tea.Cmd {
 		return m.pickBack()
 	case keyIs(key, actNext):
 		m.pickMark(lv)
-	case key.String() == "ctrl+t":
+	case keyIs(key, actNextKind):
 		return m.pickNextKind(lv)
-	case key.String() == "ctrl+r":
+	case keyIs(key, actReload):
 		return m.pickLoad(lv, "")
 	case keyIs(key, actUp):
 		lv.list.move(-1)

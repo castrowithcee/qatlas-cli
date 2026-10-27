@@ -452,7 +452,7 @@ func (m *Model) updateSummary(key tea.KeyPressMsg) tea.Cmd {
 	}
 	if w.saved != "" {
 		switch {
-		case key.String() == "t":
+		case keyIs(key, actTest):
 			return m.testConnection(w.saved)
 		case keyIs(key, actBack):
 			if m.testing {

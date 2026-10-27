@@ -90,10 +90,10 @@ func (p *pathField) update(key tea.KeyPressMsg) tea.Cmd {
 			p.complete()
 			return nil
 		}
-	case keyIs(key, actUp) || keyIs(key, actDown) || key.String() == "ctrl+p" || key.String() == "ctrl+n":
+	case keyIs(key, actUp) || keyIs(key, actDown) || keyIs(key, actSuggestPrev) || keyIs(key, actSuggestNext):
 		if p.mode != pathPlain {
 			step := 1
-			if keyIs(key, actUp) || key.String() == "ctrl+p" {
+			if keyIs(key, actUp) || keyIs(key, actSuggestPrev) {
 				step = -1
 			}
 			p.move(step)

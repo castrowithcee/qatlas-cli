@@ -94,7 +94,7 @@ func pickerModelOn(t *testing.T, reg *capability.Registry, src *listSource, targ
 	m.svc = m.svc.WithTargetSource(src.targetSource())
 	openEntryForm(t, m, sectionConnections, "lst")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	return m
 }
 
@@ -590,7 +590,7 @@ func TestANewConnectionReadsTheListAsADraft(t *testing.T) {
 		openSectionByName(t, m, sectionConnections)
 		pressNew(t, m)
 		openTargetList(t, m)
-		press(t, m, "a")
+		press(t, m, "n")
 	}
 	pickerSetup(m)
 	openPicker(t, m)
@@ -632,7 +632,7 @@ func TestAChangedFormReadsTheDraftNotTheSavedConnection(t *testing.T) {
 		t.Fatalf("service = %q, want the form changed to the other one", m.fieldValue("service"))
 	}
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	openPicker(t, m)
 	if len(src.seen) != 1 || src.seen[0].Name != "" || src.seen[0].Service != "other" {
 		t.Fatalf("read for %+v, want the draft with the changed service", src.seen)
@@ -648,7 +648,7 @@ func TestADraftFailureIsShownWithCodeAndText(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	openPicker(t, m)
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	if !strings.Contains(view, "unsaved-secret: the credential has no saved secret yet") {
@@ -662,12 +662,12 @@ func TestTheGuidedSetupReadsTheListAsADraft(t *testing.T) {
 	m.svc = m.svc.WithTargetSource(src.targetSource())
 	m.screen = screenNav
 	// Provider, existing service, existing credential, then the scope step with its targets row.
-	press(t, m, "c", "enter", "f2", "f2")
+	press(t, m, "g", "enter", "f2", "f2")
 	focusField(t, m, targetsLabel)
 	if m.fields[m.focus].label != targetsLabel {
 		t.Fatalf("focus on %q, want the targets row", m.fields[m.focus].label)
 	}
-	press(t, m, "enter", "a")
+	press(t, m, "enter", "n")
 	openPicker(t, m)
 	if len(src.seen) != 1 || src.seen[0].Name != "" || src.seen[0].Service != "wiki" ||
 		src.seen[0].Credential != "reader" {
@@ -702,7 +702,7 @@ func encryptedListerModel(t *testing.T, src *listSource, passphrase string) *Mod
 	m.svc = m.svc.WithTargetSource(src.targetSource())
 	openEntryForm(t, m, sectionConnections, "lst")
 	openTargetList(t, m)
-	press(t, m, "a")
+	press(t, m, "n")
 	return m
 }
 
@@ -777,9 +777,9 @@ func keyCmd(m *Model, key string) tea.Cmd {
 func pickInSetup(t *testing.T, m *Model, take ...string) {
 	t.Helper()
 	m.screen = screenNav
-	press(t, m, "c", "enter", "f2", "f2")
+	press(t, m, "g", "enter", "f2", "f2")
 	focusField(t, m, targetsLabel)
-	press(t, m, "enter", "a")
+	press(t, m, "enter", "n")
 	openPicker(t, m)
 	for range take {
 		press(t, m, "tab", "down")

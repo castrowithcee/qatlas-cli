@@ -16,8 +16,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// pressNew presses n and answers the template question, when it is asked, with "empty", the way a person
-// starts a new entry from nothing.
+// pressNew presses n and answers the questions that follow, when they are asked, with "credential" and
+// "empty", the way a person starts a new entry from nothing.
 func pressNew(t *testing.T, m *Model) {
 	t.Helper()
 	if m.section == sectionConnections {
@@ -26,9 +26,18 @@ func pressNew(t *testing.T, m *Model) {
 		return
 	}
 	press(t, m, "n")
-	if m.screen == screenTemplate {
-		press(t, m, "enter")
+	// Credentials first ask for the kind, which "credential" answers, and then the template question.
+	for range 2 {
+		if m.screen == screenTemplate {
+			press(t, m, "enter")
+		}
 	}
+}
+
+// pressNewPayload presses n in Credentials and answers the kind question with "payload secret".
+func pressNewPayload(t *testing.T, m *Model) {
+	t.Helper()
+	press(t, m, "n", "down", "enter")
 }
 
 // templateConnection has its own rights, tools, targets and description, none of which the recommended
@@ -305,7 +314,7 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	}
 }
 
-// Without an entry to copy n goes straight to the empty form.
+// Without an entry to copy, the kind answer "credential" goes straight to the empty form.
 func TestNewWithoutEntriesSkipsTheQuestion(t *testing.T) {
 	m, _, _ := newModel(t)
 	mustNoError(t, m.cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
@@ -313,9 +322,9 @@ func TestNewWithoutEntriesSkipsTheQuestion(t *testing.T) {
 	syncRevision(t, m)
 	openSectionByName(t, m, sectionCredentials)
 	m.screen = screenList
-	press(t, m, "n")
+	press(t, m, "n", "enter")
 	if m.screen != screenForm {
-		t.Errorf("n in an empty list: screen %v, want the form", m.screen)
+		t.Errorf("n and the kind credential in an empty list: screen %v, want the form", m.screen)
 	}
 }
 
@@ -378,7 +387,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 	m, path := templateModel(t)
 	m.screen = screenNav
 
-	press(t, m, "c")
+	press(t, m, "g")
 	if m.screen != screenTemplate || !m.template.setup {
 		t.Fatalf("c: screen %v, want the template question of the setup", m.screen)
 	}
@@ -428,7 +437,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 func TestSetupWithoutConnectionsSkipsTheQuestion(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.screen = screenNav
-	press(t, m, "c")
+	press(t, m, "g")
 	if m.screen != screenProviders || m.wizard == nil || m.wizard.template != "" {
 		t.Errorf("c: screen %v, want the provider table", m.screen)
 	}

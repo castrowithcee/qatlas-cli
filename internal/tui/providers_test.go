@@ -93,7 +93,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 				switch form {
 				case "setup":
 					m.screen = screenNav
-					press(t, m, "c")
+					press(t, m, "g")
 				default:
 					openProviderRow(t, m, map[string]section{
 						"service": sectionServices, "credential": sectionCredentials,
@@ -330,7 +330,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 
 	m, _ = providerModel(t, providerRegistry(t, 55))
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: minimumHeight})
-	press(t, m, "c")
+	press(t, m, "g")
 	if m.screen != screenProviders {
 		t.Fatalf("the guided setup opened screen %v, want the provider table", m.screen)
 	}
@@ -344,7 +344,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 	m, path := providerModel(t, providerRegistry(t, 8))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
-	press(t, m, "c")
+	press(t, m, "g")
 	if m.screen != screenProviders {
 		t.Fatalf("c opened screen %v, want the provider table", m.screen)
 	}

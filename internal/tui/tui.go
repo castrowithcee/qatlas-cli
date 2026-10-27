@@ -411,6 +411,10 @@ type Model struct {
 	// (1-based), 0 while the rows do (see listbar.go).
 	listOpts map[section]*listOptions
 	barFocus int
+	// noticeFocus is set while the hint line about the renames found has the focus, the stop below the last
+	// row; noticeAt and noticeRows are where the last frame drew that line in the foot (see renamefind.go).
+	noticeFocus          bool
+	noticeAt, noticeRows int
 	// detailFocus is set while the detail pane of a list has the focus, detailTab is the tab it shows then.
 	detailFocus bool
 	detailTab   detailTab
@@ -1052,7 +1056,7 @@ func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actEnter) || keyIs(key, actNext) || keyIs(key, actPrev):
 		// The bars and the workspace are the stops, so next and previous lead to the same one.
 		return m.focusList()
-	case key.String() == "n":
+	case keyIs(key, actNew):
 		if m.section != sectionOverview {
 			return m.newEntry()
 		}
@@ -1061,9 +1065,10 @@ func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 }
 
 // newEntry is n from the tab line or a list: the form of a new entry of the active section, unless a missing
-// prerequisite blocks it. A new agent token is a managing action from the start (see newToken). In
-// Connections n is the guided setup, the same flow as c, because it creates a missing service or credential
-// on the way instead of sending the person to the Library.
+// prerequisite blocks it. In Credentials it first asks for a credential or a payload secret. A new agent
+// token is a managing action from the start (see newToken). In Connections n is the guided setup, the same
+// flow as g, because it creates a missing service or credential on the way instead of sending the person to
+// the Library.
 func (m *Model) newEntry() tea.Cmd {
 	if m.section == sectionConnections {
 		m.askSetupTemplate()
@@ -1072,6 +1077,10 @@ func (m *Model) newEntry() tea.Cmd {
 	if reason := m.newEntryBlocked(); reason != "" {
 		m.status = ""
 		m.fail = reason
+		return nil
+	}
+	if m.section == sectionCredentials {
+		m.askKind()
 		return nil
 	}
 	if m.templateOffered() {
@@ -1145,6 +1154,11 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 	if m.setupUpdateKey(key) {
 		return nil
 	}
+	if m.noticeFocused() {
+		if cmd, done := m.updateNotice(key); done {
+			return cmd
+		}
+	}
 	switch {
 	case keyIs(key, actBack):
 		if m.testing {
@@ -1187,23 +1201,24 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			m.list.jump(-1)
 		}
 	case keyIs(key, actDown):
-		m.list.jump(1)
+		if m.list.cursor >= len(m.list.matches)-1 && len(m.sectionFindings()) > 0 {
+			// The stop below the last row is the hint line about the renames found.
+			m.noticeFocus = true
+		} else {
+			m.list.jump(1)
+		}
 	case keyIs(key, actPageUp) || keyIs(key, actPageDown) || keyIs(key, actHome) || keyIs(key, actEnd):
 		m.jumpList(key)
 	case keyIs(key, actLeft) || keyIs(key, actRight):
 		m.foldKey(key)
-	case key.String() == "n":
+	case keyIs(key, actNew):
 		return m.newEntry()
-	case key.String() == "p":
+	case keyIs(key, actDuplicate):
 		return m.duplicateSelected()
-	case key.String() == "r":
+	case keyIs(key, actRename):
 		return m.askRename()
-	case key.String() == "f":
-		return m.openFindings()
-	case key.String() == "s":
-		if m.section == sectionCredentials {
-			return m.openPayloadNew()
-		}
+	case keyIs(key, actEdit):
+		return m.editSelected()
 	case keyIs(key, actEnter):
 		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
@@ -1226,7 +1241,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			return m.loadApprovalOrigin(name)
 		}
 		if m.section == sectionTokens {
-			// The detail screen shows the value masked; s there reveals it, in an admin session only.
+			// The detail screen shows the value masked; v there reveals it, in an admin session only.
 			m.tokenDetail, m.tokenReveal = name, false
 			m.screen = screenConfirm
 			m.clearMessages()
@@ -1245,9 +1260,9 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			m.screen = screenConfirm
 			m.clearMessages()
 		}
-	case key.String() == "t":
+	case keyIs(key, actTest):
 		return m.startTest()
-	case key.String() == "a":
+	case keyIs(key, actApproveAll):
 		if m.section != sectionApprovals {
 			return nil
 		}
@@ -1262,6 +1277,19 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// editSelected is e on a list: the form of the selected entry, as enter opens it. A group row, an approval,
+// and an agent token have no form, so e leaves them alone (enter folds, reviews, or shows them).
+func (m *Model) editSelected() tea.Cmd {
+	if m.section == sectionApprovals || m.section == sectionTokens {
+		return nil
+	}
+	name, ok := m.selected()
+	if !ok || isGroupRow(name) {
+		return nil
+	}
+	return m.openForm(name)
 }
 
 // updateFilter is the list while its filter is typed. Every printable key belongs to the filter, including
@@ -1447,7 +1475,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 // focusNav hands the focus to the bar above the workspace: the option bar when the area has one, else the
 // tab line. The workspace keeps showing the list of the active section.
 func (m *Model) focusNav() {
-	m.barFocus = 0
+	m.barFocus, m.noticeFocus = 0, false
 	m.leaveDetail()
 	m.screen = screenNav
 	m.navSub = m.hasSubTabs()
@@ -1600,7 +1628,7 @@ func (m *Model) updateLeave(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actBack):
 		m.screen, m.leaveQuit = from, false
 		m.status = tr(tFormStillEditingNothingWasSaved)
-	case key.String() == "d":
+	case keyIs(key, actDiscard):
 		if m.leaveQuit {
 			return m.quit()
 		}
@@ -2536,9 +2564,9 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.approvalDetail, m.screen = "", screenList
 			m.status = tr(tCancelled)
-		case key.String() == "e":
+		case keyIs(key, actSpace):
 			m.approvalExpanded = !m.approvalExpanded
-		case key.String() == "o":
+		case keyIs(key, actLogs):
 			return m.openApprovalLogs(name)
 		case keyIs(key, actDown):
 			m.scrollApproval(1)
@@ -2715,7 +2743,7 @@ func (m *Model) stopTest() {
 
 // openSection shows a section from its first entry, without a filter.
 func (m *Model) openSection(s section) tea.Cmd {
-	m.section = s
+	m.section, m.noticeFocus = s, false
 	m.layoutWorkspace()
 	m.resetList(s)
 	if s.isPage() {
@@ -3855,7 +3883,7 @@ func (m *Model) editorView() string {
 		case fieldVaultAction:
 			keys = "enter run · tab next field · " + formKeys
 		case fieldKey:
-			keys = "enter press new key · r standard · tab next field · " + formKeys
+			keys = "enter press new key · d standard · tab next field · " + formKeys
 		}
 		if m.keyCapture {
 			keys = "press the new key · {back} cancel"
@@ -4062,9 +4090,12 @@ func (m *Model) listView() string {
 	m.hitList(header, start, end, row)
 	if m.paneWidth() > 0 {
 		room := m.height - strings.Count(footer, "\n") - 1
-		return m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room, m.titleRows())
+		out := m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room, m.titleRows())
+		m.hitNotice(out, footer)
+		return out
 	}
 	b.WriteString(footer)
+	m.hitNotice(b.String(), footer)
 	return b.String()
 }
 
@@ -4150,6 +4181,8 @@ func (m *Model) listFrame() (string, string) {
 		keys = m.navKeys()
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · {back} clear filter"
+	case m.noticeFocused():
+		keys = "enter review · up/{back} rows · {command} cmds · {help} help · q quit"
 	case m.barFocus > 0:
 		keys = m.barKeys()
 	case m.detailFocused():
@@ -4157,7 +4190,7 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · " + findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
+		keys = "enter details · a approve all · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
 		keys = "enter unlock · n new · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && total == 0:
@@ -4165,17 +4198,17 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionTokens:
 		keys = "/ filter · n new · p duplicate · enter show · {delete} revoke · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · ←/→ fold · n new · p duplicate · enter edit/fold · r rename · {delete} delete · t test · c setup · " +
-			findKeys(finds) + back +
+		keys = "/ filter · ←/→ fold · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · t test · g setup · " +
+			back +
 			" · {command} cmds · {help} help · q quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · ←/→ fold · n new · s new payload secret · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " +
-			findKeys(finds) + back + " · {command} cmds · {help} help · q quit"
+		keys = "/ filter · ←/→ fold · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · g setup · " +
+			back + " · {command} cmds · {help} help · q quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter edit/fold · r rename · {delete} delete · c setup · " + back +
+		keys = "/ filter · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · g setup · " + back +
 			" · {command} cmds · {help} help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · {delete} delete · c setup · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "/ filter · n new · enter/e edit · {delete} delete · g setup · " + back + " · {command} cmds · {help} help · q quit"
 	}
 	if hint := m.vaultLockKeyHint(); hint != "" && !m.list.editing {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
@@ -4184,7 +4217,14 @@ func (m *Model) listFrame() (string, string) {
 		// The first esc clears the filter, so the areas keep their digits only.
 		keys = strings.Replace(keys, "1-6/{back} areas", "1-6 areas", 1) + " · {back} clear filter"
 	}
-	foot := m.findingsNotice(finds) + m.keyHint(keys)
+	notice := m.findingsNotice(finds)
+	foot := notice + m.keyHint(keys)
+	m.noticeAt, m.noticeRows = -1, 0
+	if notice != "" {
+		// The notice starts with the blank line a hint has, so its text is the second line of the foot.
+		m.noticeAt, m.noticeRows = 1, strings.Count(notice, "\n")
+	}
+	lines := strings.Count(foot, "\n")
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
 			if !isGroupRow(name) && m.needsDescription(name) {
@@ -4204,6 +4244,9 @@ func (m *Model) listFrame() (string, string) {
 			}
 		}
 		foot = m.testLine() + idle.String() + foot
+	}
+	if m.noticeAt >= 0 {
+		m.noticeAt += strings.Count(foot, "\n") - lines
 	}
 	foot += m.notes()
 	if framed {
@@ -4234,19 +4277,11 @@ func (m *Model) tableRoom() int {
 	return m.listWidth()
 }
 
-// findKeys is the key that reviews the renames found, with its separator, where there are any.
-func findKeys(finds []renameFinding) string {
-	if len(finds) == 0 {
-		return ""
-	}
-	return "f renames · "
-}
-
 // navKeys is the key line while the tab line has the focus: left/right step through the sections, and
 // down (like enter and tab) moves the focus into the workspace below it; up does nothing here, so it is left
 // out of the hint. Kept short enough to still wrap into two lines at the minimum terminal width.
 func (m *Model) navKeys() string {
-	keys := "←/→ move · down open · 1-6 open · n new · c setup · {command} cmds · {help} help · q quit"
+	keys := "←/→ move · down open · 1-6 open · n new · g setup · {command} cmds · {help} help · q quit"
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
@@ -4317,7 +4352,7 @@ func (m *Model) listRows() func(i int) string {
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
-		active := i == m.list.cursor && m.screen != screenNav && m.barFocus == 0
+		active := i == m.list.cursor && m.screen != screenNav && m.barFocus == 0 && !m.noticeFocused()
 		var row string
 		if isGroupRow(name) {
 			row = m.listRowIn(room, active, m.groups.styledRow(name, m.groups.open(name) || m.list.query() != ""))

@@ -30,6 +30,11 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 		actVimUp: "k", actVimDown: "j", actVimLeft: "h", actVimRight: "l",
 		actTopicNext: "tab", actTopicPrev: "shift+tab",
 		actEnter: "enter", actSpace: "space", actSearch: "/", actQuit: "q", actYes: "y", actNo: "n", actDiscard: "d",
+		actSetup: "g", actCopy: "c", actNew: "n", actApproveAll: "a", actEdit: "e", actRename: "r", actReveal: "v",
+		actSummary: "s", actFilter: "f", actRevert: "b", actSessions: "m", actLogs: "o", actDuplicate: "p",
+		actTest: "t", actUpdate: "u", actWrite: "w",
+		actRemoveField: "ctrl+d", actSuggestPrev: "ctrl+p", actSuggestNext: "ctrl+n", actNextKind: "ctrl+t",
+		actReload: "ctrl+r",
 	}
 	if len(keymap) != len(want) {
 		t.Fatalf("keymap has %d actions, want %d", len(keymap), len(want))
@@ -146,11 +151,11 @@ func assertNoCollisions(t *testing.T) {
 func TestNoTwoActionsOfALevelShareAKey(t *testing.T) {
 	keepKeys(t)
 	assertNoCollisions(t)
-	// d is both global (delete) and a confirmation answer (discard): different levels.
-	if keyOf(actDelete) != keyOf(actDiscard) || actDelete == actDiscard {
-		t.Error("delete and discard should share d on different levels")
+	// d is both delete and, in a question, discard; n is both new and, in a question, no: different levels.
+	if keyOf(actDelete) != keyOf(actDiscard) || actDelete == actDiscard || keyOf(actNew) != keyOf(actNo) || actNew == actNo {
+		t.Error("delete and discard, new and no should share a key on different levels")
 	}
-	applyKeys(uiprefs.Keys{Info: "f3", Save: "f4", Help: "ctrl+g", Command: "ctrl+o", Lock: "ctrl+r"})
+	applyKeys(uiprefs.Keys{Info: "f3", Save: "f4", Help: "ctrl+g", Command: "ctrl+o", Lock: "ctrl+x"})
 	assertNoCollisions(t)
 }
 
@@ -244,38 +249,26 @@ func TestCheckRefusesTheKeysOfTheTable(t *testing.T) {
 // of a String() with one.
 var keyLiteral = regexp.MustCompile(`^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*"[^"]*"\s*[,:]|\.String\(\)\s*[!=]=\s*"`)
 
-// keyLiteralDebt are the files that still switch on literal letter or ctrl keys; those actions are not in the
-// keymap yet. Each follow-up step removes files from this list; it never grows. The names of tableKeys are
-// banned in these files too (see TestTableKeysAreNeverLiterals).
-var keyLiteralDebt = []string{
-	"keybinding.go",
-	"listbar.go",
-	"logs.go",
-	"overview.go",
-	"pathinput.go",
-	"paths.go",
-	"payload.go",
-	"renamefind.go",
-	"selftest.go",
-	"setup.go",
-	"targetpick.go",
-	"targets.go",
-	"tokens.go",
-	"tui.go",
-}
-
 // nonKeySwitches are files whose string cases are no keys (names, colour codes, footer groups, filter
-// states); a file that also has key literals is on keyLiteralDebt as well.
+// states). TestTableKeysAreNeverLiterals still covers them for every key of the table.
 var nonKeySwitches = []string{"canvas.go", "footer.go", "logs.go", "mouse.go", "template.go", "tui.go"}
 
-// tableKeys are the key names whose actions the keymap owns: moves, confirmations and answers, the global
-// escape and interrupt. No file but keymap.go spells one as a key value, not even a file on keyLiteralDebt.
-// n is the answer "no" but also the letter action "new", which is still a literal; only its answer form
-// (a case item) is banned.
-var tableKeys = []string{"up", "down", "left", "right", "home", "end", "pgup", "pgdown", "tab", "shift+tab",
-	"enter", "space", "/", "q", "y", "n", "esc", "ctrl+c"}
+// tableKeys are the key names the keymap owns: every default key of every action. No file but keymap.go
+// spells one as a key value.
+func tableKeys() []string {
+	var keys []string
+	for _, d := range keyDefs {
+		for _, k := range d.keys {
+			if !slices.Contains(keys, k) {
+				keys = append(keys, k)
+			}
+		}
+	}
+	return keys
+}
 
-// Key values live in the keymap: outside it, only the files of the two exception lists spell one.
+// Key values live in the keymap: outside it, only the files of nonKeySwitches may switch on strings, and
+// even those never on a key of the table.
 func TestKeyLiteralsStayInTheKeymap(t *testing.T) {
 	for _, f := range keyLiteralFindings(t, "*.go") {
 		t.Errorf("%s", f)
@@ -283,7 +276,7 @@ func TestKeyLiteralsStayInTheKeymap(t *testing.T) {
 }
 
 // The keys of the table have no literal anywhere: a case item or a comparison that spells one fails, in a
-// file of the exception lists as much as in any other.
+// file of nonKeySwitches as much as in any other.
 func TestTableKeysAreNeverLiterals(t *testing.T) {
 	for _, f := range tableKeyFindings(t, "*.go") {
 		t.Errorf("%s", f)
@@ -298,6 +291,16 @@ func tableKeyFindings(t *testing.T, glob string) []string {
 		t.Fatal(err)
 	}
 	var found []string
+	type literal struct {
+		key string
+		re  *regexp.Regexp
+	}
+	var literals []literal
+	for _, k := range tableKeys() {
+		q := regexp.QuoteMeta(`"` + k + `"`)
+		item := `^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*` + q + `\s*[,:]`
+		literals = append(literals, literal{k, regexp.MustCompile(item + `|[!=]=\s*` + q + `|` + q + `\s*[!=]=`)})
+	}
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" {
 			continue
@@ -310,15 +313,9 @@ func tableKeyFindings(t *testing.T, glob string) []string {
 			if strings.HasPrefix(strings.TrimSpace(line), "//") {
 				continue
 			}
-			for _, k := range tableKeys {
-				q := regexp.QuoteMeta(`"` + k + `"`)
-				item := `^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*` + q + `\s*[,:]`
-				pattern := item + `|[!=]=\s*` + q + `|` + q + `\s*[!=]=`
-				if k == "n" {
-					pattern = item
-				}
-				if regexp.MustCompile(pattern).MatchString(line) {
-					found = append(found, f+":"+strconv.Itoa(i+1)+" spells the table key "+k+"; use the keymap: "+strings.TrimSpace(line))
+			for _, l := range literals {
+				if l.re.MatchString(line) {
+					found = append(found, f+":"+strconv.Itoa(i+1)+" spells the table key "+l.key+"; use the keymap: "+strings.TrimSpace(line))
 				}
 			}
 		}
@@ -326,7 +323,7 @@ func tableKeyFindings(t *testing.T, glob string) []string {
 	return found
 }
 
-// keyLiteralFindings lists the key literals of the files matching glob that no exception list covers.
+// keyLiteralFindings lists the key literals of the files matching glob, except the files of nonKeySwitches.
 func keyLiteralFindings(t *testing.T, glob string) []string {
 	t.Helper()
 	files, err := filepath.Glob(glob)
@@ -335,7 +332,7 @@ func keyLiteralFindings(t *testing.T, glob string) []string {
 	}
 	var found []string
 	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" || slices.Contains(keyLiteralDebt, f) || slices.Contains(nonKeySwitches, f) {
+		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" || slices.Contains(nonKeySwitches, f) {
 			continue
 		}
 		src, err := os.ReadFile(f)

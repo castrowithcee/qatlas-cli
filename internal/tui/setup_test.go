@@ -23,7 +23,7 @@ import (
 func walkSetup(t *testing.T, m *Model, until int) {
 	t.Helper()
 	m.screen = screenNav
-	walkSetupFrom(t, m, "c", until)
+	walkSetupFrom(t, m, "g", until)
 }
 
 // walkSetupFrom starts the guided setup with key (c on the tab line, or n on the Connections list) and walks
@@ -190,7 +190,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
 
 	m.screen = screenNav
-	press(t, m, "c", "enter")
+	press(t, m, "g", "enter")
 	if m.fieldValue("service") != "wiki" || !m.field("name").hidden {
 		t.Fatalf("service step does not offer the configured service first: %q", m.fieldValue("service"))
 	}
@@ -267,7 +267,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	}
 
 	m.screen = screenNav
-	press(t, m, "c", "enter")
+	press(t, m, "g", "enter")
 	selectChoice(t, m, newService)
 	press(t, m, "tab")
 	typeText(t, m, "wiki")
@@ -453,7 +453,7 @@ func TestSetupAndEditorOfferTheSameStorageRow(t *testing.T) {
 
 	e, _, _, _, _ := newStoreModel(t)
 	openSectionByName(t, e, sectionCredentials)
-	press(t, e, "n")
+	pressNew(t, e)
 	editorRow := e.field(storageLabel)
 	if editorRow == nil {
 		t.Fatalf("the credential form has no %q row: %v", storageLabel, labelsOf(e.fields))
@@ -507,7 +507,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 			t.Fatalf("New() = %v", err)
 		}
 		m.screen = screenNav
-		press(t, m, "c", "enter", "f2")
+		press(t, m, "g", "enter", "f2")
 		selectChoice(t, m, credential)
 		view := screenOf(m)
 		assertNoRawStorageTerm(t, "the setup reusing "+credential, view)
@@ -525,7 +525,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	// The credential form of a new credential, on its storage row and on a role row, and the list.
 	e, _, _, _, _ := newStoreModel(t)
 	openSectionByName(t, e, sectionCredentials)
-	press(t, e, "n")
+	pressNew(t, e)
 	for _, choice := range []string{storageKeyring, storageEnv} {
 		focusField(t, e, storageLabel)
 		selectChoice(t, e, choice)
@@ -599,7 +599,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 			// The credential form.
 			e, _, path, secrets, _ := newStoreModel(t)
 			openSectionByName(t, e, sectionCredentials)
-			press(t, e, "n")
+			pressNew(t, e)
 			typeText(t, e, "reader")
 			focusField(t, e, providerLabel)
 			selectChoice(t, e, "bookstack")

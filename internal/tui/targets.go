@@ -124,7 +124,7 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case keyIs(key, actBack):
 		return m.leaveTargets()
-	case key.String() == "a":
+	case keyIs(key, actNew):
 		metadata := m.targetMetadata()
 		if !metadata.Multiple && len(m.targetList.all) > 0 {
 			m.status = ""
@@ -133,14 +133,14 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.startAdd()
-	case keyIs(key, actEnter) || key.String() == "e":
+	case keyIs(key, actEnter) || keyIs(key, actEdit):
 		if !selected {
 			// An empty list has nothing to edit, so enter adds its first target.
 			m.startAdd()
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
-	case key.String() == "r":
+	case keyIs(key, actRename):
 		// The guided setup saves no labels, so it offers none.
 		if selected && m.wizard == nil {
 			m.editLabel(target)
@@ -362,9 +362,9 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "{save} next step"
 	}
-	keys := "a add · enter edit · r label · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
+	keys := "n new · enter/e edit · r rename · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	if m.wizard != nil {
-		keys = "a add · enter edit · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
+		keys = "n new · enter/e edit · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	}
 	switch {
 	case m.labelEdit:

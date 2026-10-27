@@ -84,9 +84,9 @@ func (m *Model) updatePaths(key tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case keyIs(key, actBack):
 		return m.leavePaths()
-	case key.String() == "a":
+	case keyIs(key, actNew):
 		m.editPath(len(m.pathList.all), "")
-	case keyIs(key, actEnter) || key.String() == "e":
+	case keyIs(key, actEnter) || keyIs(key, actEdit):
 		if !selected {
 			// An empty list has nothing to edit, so enter adds its first path.
 			m.editPath(len(m.pathList.all), "")
@@ -250,7 +250,7 @@ func (m *Model) pathFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · {delete} remove · up/down move · {save} save · {back} close · {command} cmds · {help} help"
+	keys := "n new · enter/e edit · {delete} remove · up/down move · {save} save · {back} close · {command} cmds · {help} help"
 	switch {
 	case m.pathEdit >= 0 && m.backdrop:
 		// The typed path stands in its own dialog (see pathPrompt) over this screen.

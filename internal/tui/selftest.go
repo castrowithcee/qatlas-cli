@@ -213,7 +213,7 @@ func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 		st.offset = 0
 	case keyIs(key, actEnd):
 		st.offset = 1 << 20
-	case key.String() == "w":
+	case keyIs(key, actWrite):
 		m.saveSelftest()
 	}
 	return nil

@@ -50,15 +50,41 @@ const (
 	actYes     action = "yes"
 	actNo      action = "no"
 	actDiscard action = "discard"
+
+	actSetup      action = "setup"
+	actCopy       action = "copy"
+	actNew        action = "new"
+	actApproveAll action = "approveall"
+	actEdit       action = "edit"
+	actRename     action = "rename"
+	actReveal     action = "reveal"
+	actSummary    action = "summary"
+	actFilter     action = "filter"
+	actRevert     action = "revert"
+	actSessions   action = "sessions"
+	actLogs       action = "logs"
+	actDuplicate  action = "duplicate"
+	actTest       action = "test"
+	actUpdate     action = "update"
+	actWrite      action = "write"
+
+	actRemoveField action = "removefield"
+	actSuggestPrev action = "suggestprev"
+	actSuggestNext action = "suggestnext"
+	actNextKind    action = "nextkind"
+	actReload      action = "reload"
 )
 
 // keyLevel is the set of actions that can be pressed in the same place. Within one level no two actions
-// share a key; across levels one key may mean different things (d deletes globally and discards in a
-// confirmation).
+// share a key; across levels one key may mean different things only where the levels never meet: the
+// answers of a question (y, n, d) and the keys only the help overlay knows. Every other key has one meaning
+// on every screen.
 type keyLevel string
 
 const (
 	levelGlobal  keyLevel = "global"
+	levelLetter  keyLevel = "letter"
+	levelCtrl    keyLevel = "ctrl"
 	levelMove    keyLevel = "move"
 	levelConfirm keyLevel = "confirm"
 	levelVim     keyLevel = "vim"
@@ -75,14 +101,41 @@ var keyDefs = []struct {
 	keys  []string
 	help  textID
 }{
-	{actInfo, levelGlobal, []string{"i"}, tKeyHelpInfo},
 	{actSave, levelGlobal, []string{"f2"}, tKeyHelpSave},
 	{actHelp, levelGlobal, []string{"?"}, tKeyHelpHelp},
 	{actCommand, levelGlobal, []string{":"}, tKeyHelpCommand},
 	{actLock, levelGlobal, []string{"ctrl+l"}, tKeyHelpLock},
 	{actBack, levelGlobal, []string{"esc"}, tKeyHelpBack},
-	{actDelete, levelGlobal, []string{"d"}, tKeyHelpDelete},
 	{actForceQuit, levelGlobal, []string{"ctrl+c"}, tKeyHelpForceQuit},
+
+	// The letter actions: each letter means one thing on every screen where nothing is typed. c is reserved
+	// for copying, which has no effect yet.
+	{actInfo, levelLetter, []string{"i"}, tKeyHelpInfo},
+	{actDelete, levelLetter, []string{"d"}, tKeyHelpDelete},
+	{actQuit, levelLetter, []string{"q"}, tKeyHelpQuit},
+	{actSetup, levelLetter, []string{"g"}, tKeyHelpSetup},
+	{actCopy, levelLetter, []string{"c"}, tKeyHelpCopy},
+	{actNew, levelLetter, []string{"n"}, tKeyHelpNew},
+	{actApproveAll, levelLetter, []string{"a"}, tKeyHelpApproveAll},
+	{actEdit, levelLetter, []string{"e"}, tKeyHelpEdit},
+	{actRename, levelLetter, []string{"r"}, tKeyHelpRename},
+	{actReveal, levelLetter, []string{"v"}, tKeyHelpReveal},
+	{actSummary, levelLetter, []string{"s"}, tKeyHelpSummary},
+	{actFilter, levelLetter, []string{"f"}, tKeyHelpFilter},
+	{actRevert, levelLetter, []string{"b"}, tKeyHelpRevert},
+	{actSessions, levelLetter, []string{"m"}, tKeyHelpSessions},
+	{actLogs, levelLetter, []string{"o"}, tKeyHelpLogs},
+	{actDuplicate, levelLetter, []string{"p"}, tKeyHelpDuplicate},
+	{actTest, levelLetter, []string{"t"}, tKeyHelpTest},
+	{actUpdate, levelLetter, []string{"u"}, tKeyHelpUpdate},
+	{actWrite, levelLetter, []string{"w"}, tKeyHelpWrite},
+
+	// The control keys of text lines and of the target picker. None can be rebound to a global action.
+	{actRemoveField, levelCtrl, []string{"ctrl+d"}, tKeyHelpRemoveField},
+	{actSuggestPrev, levelCtrl, []string{"ctrl+p"}, tKeyHelpSuggestPrev},
+	{actSuggestNext, levelCtrl, []string{"ctrl+n"}, tKeyHelpSuggestNext},
+	{actNextKind, levelCtrl, []string{"ctrl+t"}, tKeyHelpNextKind},
+	{actReload, levelCtrl, []string{"ctrl+r"}, tKeyHelpReload},
 
 	{actUp, levelMove, []string{"up"}, tKeyHelpUp},
 	{actDown, levelMove, []string{"down"}, tKeyHelpDown},
@@ -97,7 +150,6 @@ var keyDefs = []struct {
 	{actEnter, levelMove, []string{"enter"}, tKeyHelpEnter},
 	{actSpace, levelMove, []string{"space"}, tKeyHelpSpace},
 	{actSearch, levelMove, []string{"/"}, tKeyHelpSearch},
-	{actQuit, levelMove, []string{"q"}, tKeyHelpQuit},
 
 	{actVimUp, levelVim, []string{"k"}, tKeyHelpUp},
 	{actVimDown, levelVim, []string{"j"}, tKeyHelpDown},

@@ -191,7 +191,7 @@ func TestNoFormRowOfAnyProviderBlocksTheFormAtUsualSizes(t *testing.T) {
 			m, _ := providerModel(t, reg)
 			m.Update(tea.WindowSizeMsg{Width: size.w, Height: size.h})
 			m.screen = screenNav
-			press(t, m, "c")
+			press(t, m, "g")
 			m.wizard.provider = id
 			for step := stepService; step <= stepEffects; step++ {
 				m.setupShow(step)

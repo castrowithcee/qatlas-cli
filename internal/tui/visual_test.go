@@ -588,7 +588,7 @@ func visualTargetPicker(t *testing.T, m *Model) {
 	m.svc = m.svc.WithTargetSource(source)
 	openEntryForm(t, m, sectionConnections, "tables-ops")
 	openTargetList(t, m)
-	pump(t, m, "a")
+	pump(t, m, "n")
 	pickRow(t, m, "from the provider's list")
 	pump(t, m, "enter")
 	if m.screen == screenAdminAuth {

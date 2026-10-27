@@ -29,8 +29,12 @@ type templateChoice struct {
 	setup bool
 	// picking is true once "from existing" was chosen and the entries are searched.
 	picking bool
-	// index is the row of the question: 0 for empty, 1 for from existing.
+	// index is the row of the question: 0 for empty, 1 for from existing; in the kind question, 0 for a
+	// credential, 1 for a payload secret.
 	index int
+	// kind is true while the question is which kind of credential to create (see askKind); the template
+	// question of a credential follows an answer of credential.
+	kind bool
 }
 
 // templateSection reports whether a section holds reusable entries that can be copied.
@@ -64,7 +68,14 @@ func (m *Model) askTemplate(setup bool) {
 	m.clearMessages()
 }
 
-// askSetupTemplate is c: the guided setup starts at once without a connection to copy, and otherwise asks
+// askKind opens the question behind n in Credentials: a credential or a payload secret.
+func (m *Model) askKind() {
+	m.template = &templateChoice{from: m.screen, kind: true}
+	m.screen = screenTemplate
+	m.clearMessages()
+}
+
+// askSetupTemplate is g: the guided setup starts at once without a connection to copy, and otherwise asks
 // whether to start empty or from an existing connection first.
 func (m *Model) askSetupTemplate() {
 	if len(m.cfg.Connections) == 0 {
@@ -181,6 +192,20 @@ func (m *Model) updateTemplate(key tea.KeyPressMsg) tea.Cmd {
 			t.index = 0
 		case keyIs(key, actPageDown) || keyIs(key, actEnd):
 			t.index = 1
+		case keyIs(key, actEnter) && t.kind:
+			if t.index == 1 {
+				m.template = nil
+				m.screen = t.from
+				return m.openPayloadNew()
+			}
+			if m.templateOffered() {
+				t.kind, t.index = false, 0
+				m.templateList.reset(m.templateNames(false))
+				return nil
+			}
+			m.template = nil
+			m.screen = t.from
+			return m.newEmptyEntry()
 		case keyIs(key, actEnter):
 			if t.index == 1 {
 				t.picking = true
@@ -248,12 +273,16 @@ func (m *Model) templateView() string {
 	if m.template.setup {
 		title = tr(tTemplateGuidedSetup)
 	}
+	rows := []string{tr(tFormTemplateEmpty), tr(tFormTemplateExisting, m.templateNoun())}
+	if m.template.kind {
+		title = tr(tTemplateKindTitle)
+		rows = []string{tr(tTemplateKindCredential), tr(tTemplateKindPayload)}
+	}
 	if m.boxed() {
 		b.WriteString(m.boxTop(title, ""))
 	} else {
 		b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	}
-	rows := []string{tr(tFormTemplateEmpty), tr(tFormTemplateExisting, m.templateNoun())}
 	for i, row := range rows {
 		mark, style := "( ) ", styles.hint
 		if i == m.template.index {
