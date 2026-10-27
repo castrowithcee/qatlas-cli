@@ -165,7 +165,7 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		want = append(want, p.id+".admin-users.list", p.id+".admin-users.update", p.id+".admin-users.rename",
 			p.id+".admin-users.delete", p.id+".admin-emails.list", p.id+".admin-emails.search",
 			p.id+".admin-orgs.list", p.id+".admin-orgs.create", p.id+".admin-repositories.create",
-			p.id+".admin-unadopted.list", p.id+".admin-unadopted.adopt", p.id+".admin-unadopted.delete")
+			p.id+".admin-unadopted.list", p.id+".admin-unadopted.adopt", p.id+".admin-unadopted.delete", p.id+".admin-cron.list", p.id+".admin-cron.run")
 		if p == forgejo {
 			want = append(want, p.id+".admin-user-emails.list", p.id+".admin-user-emails.delete")
 		}
