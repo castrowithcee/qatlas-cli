@@ -103,7 +103,14 @@ func (m *Model) infoSubject() infoSubject {
 		return m.pickerSubject()
 	case screenTargets:
 		return m.targetsSubject()
+	case screenLogs:
+		return m.logs.compactSubject()
 	case screenNav, screenList:
+		if m.section == sectionLogs {
+			if s := m.logs.compactSubject(); !s.empty() {
+				return s
+			}
+		}
 		return infoSubject{title: m.section.title()}.withTerm(sectionTerms[m.section])
 	}
 	return infoSubject{}
