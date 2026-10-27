@@ -27,6 +27,9 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-users.list` | read | both |
 | `admin-users.update` | update | both |
 | `admin-users.rename`, `admin-users.delete` | update and delete, listed only | both |
+| `admin-emails.list`, `admin-emails.search` | read | both |
+| `admin-user-emails.list` | read | Forgejo |
+| `admin-user-emails.delete` | delete, listed only | Forgejo |
 
 ## Binding
 
@@ -82,8 +85,16 @@ than the requested one is refused as `invalid-provider-response`.
 removes everything the account owns. Both are offered only by a connection whose `tools` list names them and are in
 no setup profile. Creating an account is not offered.
 
+### Email addresses
+
+`admin-emails.list` and `admin-emails.search` list the email addresses of all accounts with every member of the
+email object; `q` of the search is optional. `admin-user-emails.list` lists the addresses of one account, without
+paging and capped. `admin-user-emails.delete` removes up to 20 distinct addresses of one account in one request; it
+is offered only by a connection whose `tools` list names it and is in no setup profile. Adding an address is not
+offered. The two tools of `admin-user-emails` exist on Forgejo only.
+
 ## Changes
 
-`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users` that change need confirmation, send
-exactly one request, and are never repeated; when the outcome is open, the message says that the change may have
-been applied. No tool of this group is in a setup profile.
+`admin-runners.update`, `admin-runners.delete`, and the tools of `admin-users` and `admin-user-emails` that change
+need confirmation, send exactly one request, and are never repeated; when the outcome is open, the message says that
+the change may have been applied. No tool of this group is in a setup profile.
