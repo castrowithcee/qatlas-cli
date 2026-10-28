@@ -310,3 +310,145 @@ func TestSearchPagingFollowsTheCursorContract(t *testing.T) {
 		t.Error("a foreign cursor reached the credential or GitHub")
 	}
 }
+
+func exclusionSearchCore(t *testing.T, f *fakeGitHub, reads *int) *application.Core {
+	t.Helper()
+	cfg := coreConfig(serve(t, f))
+	all := config.Effects()
+	add := func(name string, targets, excludes []string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+			Targets: targets, Exclude: excludes}
+	}
+	add("ex", nil, []string{"orgs/hidden", "users/jane", "repos/octo-org/secret", "repos/acme/*",
+		"orgs/octo-org/projects/9"})
+	add("ex-targets", []string{"orgs/octo-org"}, []string{"repos/octo-org/secret"})
+	add("ex-project", []string{"orgs/octo-org/projects/7"}, []string{"repos/octo-org/secret"})
+	many := make([]string, 0, 15)
+	for i := 0; i < 15; i++ {
+		many = append(many, "repos/octo-org/r"+string(rune('a'+i)))
+	}
+	add("ex-many", nil, many)
+	red := &redact.Redactor{}
+	return application.New(registry(t), cfg, resolver(red, reads), red)
+}
+
+// A connection that only excludes searches without a positive qualifier, and carries the negations of its
+// exclusions: an owner by its scope, a repository pattern as both, a repository, never a project.
+func TestSearchForcesNegationsForExclusions(t *testing.T) {
+	f := &fakeGitHub{}
+	core := exclusionSearchCore(t, f, nil)
+	const negations = "-org:hidden -user:jane -user:acme -org:acme -repo:octo-org/secret"
+	for _, tt := range []struct{ name, operation, connection, wantQ string }{
+		{"repositories", repositoriesSearch.ID, "ex", negations + " example"},
+		{"code", codeSearch.ID, "ex", negations + " example"},
+		{"issues", issuesSearch.ID, "ex", "is:issue " + negations + " example"},
+		{"pull requests", pullRequestsSearch.ID, "ex", "is:pr " + negations + " example"},
+		{"commits", commitsSearch.ID, "ex", negations + " example"},
+		{"targets and exclusions", repositoriesSearch.ID, "ex-targets", "org:octo-org -repo:octo-org/secret example"},
+	} {
+		if _, err := invoke(t, core, tt.operation, tt.connection, `{"terms":"example"}`, false); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		if got := lastQuery(t, f); got != tt.wantQ {
+			t.Errorf("%s: q = %q, want %q", tt.name, got, tt.wantQ)
+		}
+	}
+
+	if _, err := invoke(t, core, repositoriesSearch.ID, "ex-many", `{"terms":"example"}`, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(lastQuery(t, f), "-repo:"); got != maxSearchNegations {
+		t.Errorf("negations = %d, want the bound %d", got, maxSearchNegations)
+	}
+
+	// Exclusions alone do not make a project target narrow a search.
+	before := len(f.recorded())
+	_, err := invoke(t, core, repositoriesSearch.ID, "ex-project", `{"terms":"example"}`, false)
+	if !isInvalidRequest(err) || len(f.recorded()) != before {
+		t.Errorf("project target with exclusions = %v, want an invalid request before any request", err)
+	}
+}
+
+// The row filter alone guarantees the exclusions: a row from an excluded repository or owner, or one that
+// cannot be placed, is dropped by every search, also without advanced_search and search_type.
+func TestSearchDropsRowsFromExclusions(t *testing.T) {
+	f := &fakeGitHub{searchBodies: map[string]string{
+		"repositories": `{"total_count":4,"incomplete_results":false,"items":[` +
+			`{"full_name":"octo-org/secret"},{"full_name":"hidden/any"},{"full_name":"ACME/Thing"},` +
+			`{"full_name":"octo-org/example"},{"full_name":"nonsense"}]}`,
+		"code": `{"total_count":3,"incomplete_results":false,"items":[` +
+			`{"path":"a.go","repository":{"full_name":"octo-org/secret"}},` +
+			`{"path":"b.go","repository":{"full_name":"jane/x"}},` +
+			`{"path":"c.go","repository":{"full_name":"octo-org/example"}},` +
+			`{"path":"d.go","repository":{}}]}`,
+		"issues": `{"total_count":3,"incomplete_results":false,"items":[` +
+			`{"number":1,"repository_url":"https://api.github.com/repos/octo-org/secret"},` +
+			`{"number":2,"repository_url":"https://api.github.com/repos/octo-org/example"},` +
+			`{"number":3,"repository_url":"https://api.github.com/orgs/x"}]}`,
+		"commits": `{"total_count":2,"incomplete_results":false,"items":[` +
+			`{"sha":"s1","repository":{"full_name":"hidden/r"},"commit":{"message":"m","author":{"name":"n"}}},` +
+			`{"sha":"s2","repository":{"full_name":"octo-org/example"},"commit":{"message":"m","author":{"name":"n"}}}]}`,
+	}}
+	core := exclusionSearchCore(t, f, nil)
+	for _, tt := range []struct{ operation, arguments, kept string }{
+		{repositoriesSearch.ID, `{"terms":"x"}`, `"repository":"octo-org/example"`},
+		{codeSearch.ID, `{"terms":"x"}`, `"path":"c.go"`},
+		{issuesSearch.ID, `{"terms":"x"}`, `"number":2`},
+		{issuesSearch.ID, `{"terms":"x","advanced_search":true}`, `"number":2`},
+		{pullRequestsSearch.ID, `{"terms":"x"}`, `"number":2`},
+		{commitsSearch.ID, `{"terms":"x"}`, `"sha":"s2"`},
+	} {
+		raw, err := invoke(t, core, tt.operation, "ex", tt.arguments, false)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.operation, err)
+		}
+		var result map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &result)
+		var rows []json.RawMessage
+		for _, key := range []string{"repositories", "files", "issues", "pull_requests", "commits"} {
+			if value, ok := result[key]; ok {
+				_ = json.Unmarshal(value, &rows)
+			}
+		}
+		if len(rows) != 1 || !strings.Contains(string(raw), tt.kept) {
+			t.Errorf("%s %s = %s, want exactly the one row outside the exclusions", tt.operation, tt.arguments, raw)
+		}
+		for _, leak := range []string{"secret", "hidden", "jane", "ACME", "nonsense"} {
+			if strings.Contains(string(raw), leak) {
+				t.Errorf("%s leaked %q: %s", tt.operation, leak, raw)
+			}
+		}
+	}
+}
+
+// A positive qualifier that hits an exclusion is refused before any request, without naming the object; a
+// connection that only excludes keeps OR and parentheses, and other qualifiers.
+func TestSearchRefusesQualifiersOnExclusions(t *testing.T) {
+	f := &fakeGitHub{}
+	reads := 0
+	core := exclusionSearchCore(t, f, &reads)
+	for _, terms := range []string{"repo:octo-org/secret", "REPO:Octo-Org/SECRET x", "org:hidden", "user:Hidden",
+		"owner:jane", "user:jane,other", "x (repo:acme/thing OR y)", "repo:acme/*", "org:\\\"hidden\\\""} {
+		reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, repositoriesSearch.ID, "ex", `{"terms":"`+terms+`"}`, false)
+		if !isInvalidRequest(err) || reads != 0 || len(f.recorded()) != before {
+			t.Errorf("terms %q: err = %v (reads %d), want an invalid request before any I/O", terms, err, reads)
+		}
+		for _, name := range []string{"secret", "hidden", "jane", "acme", "octo-org"} {
+			if err != nil && strings.Contains(strings.ToLower(err.Error()), name) {
+				t.Errorf("terms %q: the refusal names %q: %v", terms, name, err)
+			}
+		}
+	}
+	for _, terms := range []string{"repo:octo-org/example OR user:other", "(a OR b) -repo:octo-org/other",
+		"repo:octo-org/secretive"} {
+		if _, err := invoke(t, core, repositoriesSearch.ID, "ex", `{"terms":"`+terms+`"}`, false); err != nil {
+			t.Errorf("terms %q = %v, want them allowed beside exclusions only", terms, err)
+		}
+	}
+	// With targets the forced qualifiers still refuse every positive scope qualifier, and OR.
+	if _, err := invoke(t, core, repositoriesSearch.ID, "ex-targets", `{"terms":"a OR b"}`, false); !isInvalidRequest(err) {
+		t.Errorf("OR with targets = %v, want it refused as before", err)
+	}
+}

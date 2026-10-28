@@ -65,6 +65,25 @@ token stays an independent upper bound: the targets never grant what the token l
 widens the targets, so a call reaches only what both allow. The single `target: ...` form and existing lists,
 such as a project followed by the repositories it plans in, stay valid and are read as the same allow-list.
 
+`exclude` is an optional deny-list in the same spelling, taking `repos/OWNER/REPO`, `repos/OWNER/*`, `users/LOGIN`,
+`orgs/LOGIN`, `users/LOGIN/projects/NUMBER`, `orgs/LOGIN/projects/NUMBER`, and `users/LOGIN/projects/*` or
+`orgs/LOGIN/projects/*`; a lone `*` or a `*` anywhere else is invalid. An exclusion always wins over a target, even
+a `*` pattern: an owner exclusion takes every repository, project, and gist of that owner out of reach, and
+`users/X` and `orgs/X` name the same login. An exclusion that equals a target is invalid; one that covers nothing
+is valid and harmless. Exclusions never withhold a tool. A call whose argument names an excluded object is an
+`invalid-request` before any I/O; an object found only after a read is `not-found`, and neither refusal names the
+object or the exclusion. Lists, stars, notifications, and gist lists drop excluded rows; forking or creating into,
+and copying a project into, an excluded owner is refused. A linked repository inside an exclusion shows only its
+identifiers, sub-issues and dependencies from exclusions count in `withheld`, and references to issues or pull
+requests from exclusions are left out. The profile tools (`github.accounts.me`,
+`github.users.search`, `github.organizations.search`, profile fields) stay visible, and counts that GitHub sums
+(`public_repos`, `totalCount`, `total_count`) still include excluded objects. [Search](search.md#exclusions) and
+[project items](project-items.md#items-and-drafts) describe their own enforcement.
+
+Two limits hold: repository lookups ask GitHub not to follow renames, but a repository renamed outside Qatlas
+leaves a name-based exclusion no longer matching it; and organization rulesets and organization custom properties
+stay allowed, even for an excluded repository or owner.
+
 One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
 offers is decided by `effects` or `tools` alone. Reads are a connection's only default: a connection that
 selects by `effects` needs `create` or `update` among them for a change and `execute` for an Actions

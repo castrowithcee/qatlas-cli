@@ -162,7 +162,7 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 				Message: "GitHub returned an issue without a usable number"}
 		}
 		issue := IssueSummary{Number: node.Number, Title: node.Title, State: strings.ToLower(node.State),
-			Assignees: []string{}, Labels: []string{}, UpdatedAt: node.UpdatedAt, IssueListWidth: node.width()}
+			Assignees: []string{}, Labels: []string{}, UpdatedAt: node.UpdatedAt, IssueListWidth: node.width(c.allowed)}
 		if node.Assignees != nil {
 			for _, assignee := range node.Assignees.Nodes {
 				if assignee != nil {

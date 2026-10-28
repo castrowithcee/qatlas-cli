@@ -44,8 +44,8 @@ var issueDependenciesList = capability.Descriptor{
 	Title:   "List GitHub issue dependencies",
 	Description: "List the issues that block one issue and the issues it blocks, of a repository a " +
 		"connection allows; a dependency may cross repositories, named in full when it does; when " +
-		"the connection's targets name any, a dependency outside them is withheld and counted in withheld " +
-		"instead of being listed",
+		"the connection's targets name any, a dependency outside them or in an excluded repository is " +
+		"withheld and counted in withheld instead of being listed",
 	Tags:        []string{"github", "issues", "issuedependencies", "list"},
 	Risk:        readRisk,
 	Provider:    Provider,

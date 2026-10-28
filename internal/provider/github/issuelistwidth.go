@@ -151,13 +151,13 @@ func suggestionRef(id, name, dataType *string) *IssueSuggestionRef {
 	return &IssueSuggestionRef{ID: gqlName(id), Name: gqlName(name), DataType: gqlName(dataType)}
 }
 
-func (r *pendingSuggestionRaw) project() *IssuePendingSuggestion {
+func (r *pendingSuggestionRaw) project(allowed allowlist) *IssuePendingSuggestion {
 	if r == nil {
 		return nil
 	}
 	s := &IssuePendingSuggestion{Type: gqlName(r.Typename), ID: gqlName(r.ID), Actor: r.Actor.project(),
 		Assignee: r.Assignee.project(), CreatedAt: gqlName(r.CreatedAt), UpdatedAt: gqlName(r.UpdatedAt),
-		Rationale: gqlText(r.Rationale), StateReason: gqlName(r.StateReason), DuplicateOf: r.DuplicateOf.project(),
+		Rationale: gqlText(r.Rationale), StateReason: gqlName(r.StateReason), DuplicateOf: r.DuplicateOf.projectIn(allowed),
 		SuggestedValue: gqlText(r.SuggestedValue)}
 	if r.IssueField != nil {
 		s.IssueField = suggestionRef(r.IssueField.ID, r.IssueField.Name, r.IssueField.DataType)
@@ -483,7 +483,7 @@ type IssueListWidth struct {
 var issueListLinkKeys = []string{"resource_path", "body_resource_path", "body_url"}
 
 // width maps the members beyond the compact issue. A reaction group nobody gave says nothing and stays out.
-func (n *issueNodeRaw) width() IssueListWidth {
+func (n *issueNodeRaw) width(allowed allowlist) IssueListWidth {
 	body, cut := cleanText(filled(n.Body), issueListBodyLimit, true)
 	w := IssueListWidth{ID: gqlName(n.ID), DatabaseID: n.DatabaseID, FullDatabaseID: n.FullDatabaseID.text(),
 		URL: address(n.URL), AuthorDetail: n.Author.project(), AuthorAssociation: gqlName(n.AuthorAssociation),
@@ -493,7 +493,7 @@ func (n *issueNodeRaw) width() IssueListWidth {
 		PublishedAt: gqlName(n.PublishedAt), Editor: n.Editor.project(), Locked: n.Locked,
 		ActiveLockReason: gqlName(n.ActiveLockReason), StateReason: gqlName(n.StateReason), IsPinned: n.IsPinned,
 		IsReadByViewer: n.IsReadByViewer, MilestoneDetail: n.Milestone.project(),
-		IssueTypeDetail: n.IssueType.project(), Parent: n.Parent.project(), DuplicateOf: n.DuplicateOf.project(),
+		IssueTypeDetail: n.IssueType.project(), Parent: n.Parent.projectIn(allowed), DuplicateOf: n.DuplicateOf.projectIn(allowed),
 		PinnedIssueComment: n.PinnedIssueComment.project(), ReactionGroups: projectGivenReactionGroups(n.ReactionGroups),
 		TrackedIssuesCount: n.TrackedIssuesCount,
 		Links:              gqlLinks(issueListLinkKeys, n.ResourcePath, n.BodyResourcePath, n.BodyURL),
@@ -526,7 +526,7 @@ func (n *issueNodeRaw) width() IssueListWidth {
 		connectionPage(n.AssignedActors, issueConnectionFirst, projectActor)
 	w.ClosedByPullRequestsReferences, w.ClosedByPullRequestsReferencesTotalCount,
 		w.ClosedByPullRequestsReferencesTruncated =
-		connectionPage(n.ClosedByPullRequestsReferences, issueConnectionFirst, (*gqlReferenceRaw).project)
+		connectionPage(n.ClosedByPullRequestsReferences, issueConnectionFirst, referencesIn(allowed))
 	w.LinkedBranches, w.LinkedBranchesTotalCount, w.LinkedBranchesTruncated =
 		connectionPage(n.LinkedBranches, issueConnectionFirst, (*issueLinkedBranchRaw).project)
 	w.Participants, w.ParticipantsTotalCount, w.ParticipantsTruncated =
@@ -534,13 +534,13 @@ func (n *issueNodeRaw) width() IssueListWidth {
 	w.ProjectsV2, w.ProjectsV2TotalCount, w.ProjectsV2Truncated =
 		connectionPage(n.ProjectsV2, issueConnectionFirst, (*issueProjectRaw).project)
 	w.RelatesTo, w.RelatesToTotalCount, w.RelatesToTruncated =
-		connectionPage(n.RelatesTo, issueConnectionFirst, (*gqlReferenceRaw).project)
+		connectionPage(n.RelatesTo, issueConnectionFirst, referencesIn(allowed))
 	w.SuggestedActors, w.SuggestedActorsTotalCount, w.SuggestedActorsTruncated =
 		connectionPage(n.SuggestedActors, issueConnectionFirst, projectActor)
 	w.TrackedInIssues, w.TrackedInIssuesTotalCount, w.TrackedInIssuesTruncated =
-		connectionPage(n.TrackedInIssues, issueConnectionFirst, (*gqlReferenceRaw).project)
+		connectionPage(n.TrackedInIssues, issueConnectionFirst, referencesIn(allowed))
 	w.TrackedIssues, w.TrackedIssuesTotalCount, w.TrackedIssuesTruncated =
-		connectionPage(n.TrackedIssues, issueConnectionFirst, (*gqlReferenceRaw).project)
+		connectionPage(n.TrackedIssues, issueConnectionFirst, referencesIn(allowed))
 	shown := 0
 	for _, suggestion := range n.PendingSuggestions {
 		if suggestion == nil {
@@ -551,7 +551,7 @@ func (n *issueNodeRaw) width() IssueListWidth {
 			break
 		}
 		shown++
-		if v := suggestion.project(); v != nil {
+		if v := suggestion.project(allowed); v != nil {
 			w.PendingSuggestions = append(w.PendingSuggestions, *v)
 		}
 	}

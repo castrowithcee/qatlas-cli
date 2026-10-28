@@ -52,6 +52,11 @@ creates the issue in `repository`, which the targets must allow beside the proje
 and URL. The item keeps its identifier, place, and field values, so a repeated conversion finds no draft and
 opens no second issue.
 
+Where the connection has [exclusions](README.md#targets), an issue or pull request item whose repository is
+excluded, or cannot be told apart from an excluded one, is listed as `type: redacted` with only `id` and `type`;
+drafts and items that merely lie outside the targets stay unchanged. A mutation of a redacted item is `not-found`
+after exactly one read of its evidence, and an item target in an excluded repository is refused.
+
 ## Batches and partial results
 
 A project change reads the project, its fields, their options and iterations, and the item or issue it

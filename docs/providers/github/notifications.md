@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # GitHub notifications
@@ -48,7 +48,8 @@ through an owner target. Without `repository`, a connection whose targets name r
 repository they name exactly, otherwise it is an invalid request; a connection without targets lists the
 whole account; a connection whose targets name only owners lists the account narrowed to the repositories of
 those owners. GitHub cannot narrow "mark everything read" to an owner, so `mark-all` without `repository` is
-allowed only on a connection without any target. Every refusal happens before a credential is resolved,
+allowed only on a connection without any target or exclusion; with [exclusions](README.md#targets) the list drops
+notifications of excluded repositories. Every refusal happens before a credential is resolved,
 except the thread check, which needs the credential for its one read.
 
 Every change is sent once and is never retried, see [confirmed changes](README.md#confirmed-changes).

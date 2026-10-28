@@ -494,6 +494,13 @@ var itemTypes = map[string]string{
 	"ISSUE": "issue", "PULL_REQUEST": "pull_request", "DRAFT_ISSUE": "draft_issue", "REDACTED": "redacted",
 }
 
+// hidesContent reports whether an item's content must be shown as redacted: with exclusions, any item that is
+// not a draft issue and whose repository, read from the content, an exclusion covers or cannot be told apart
+// from one. A draft issue belongs to the project alone; an item outside the targets but not excluded stays.
+func (a allowlist) hidesContent(itemType, repository string) bool {
+	return itemType != "DRAFT_ISSUE" && a.dropsRow(repository)
+}
+
 // normalize reduces one GitHub item to the compact Qatlas view. Field values are named through the field
 // model resolved for this request; only single-select, multi-select, text, number, date, and iteration
 // values are kept, a multi-select value as the list of its option names, and the Status value becomes its
@@ -502,6 +509,15 @@ func (info *projectInfo) normalize(raw itemJSON, allowed allowlist, bodyLimit in
 	kind, ok := itemTypes[raw.Type]
 	if !ok {
 		kind = strings.ToLower(raw.Type)
+	}
+	repository := ""
+	if raw.Content != nil && raw.Content.Repository != nil {
+		repository = raw.Content.Repository.NameWithOwner
+	}
+	if allowed.hidesContent(raw.Type, repository) {
+		return normalizedItem{Item: Item{ID: raw.ID, Type: itemTypes["REDACTED"], Fields: map[string]any{},
+			Assignees: []string{}, Labels: []string{}},
+			assigneesComplete: true, labelsComplete: true, fieldsComplete: true}
 	}
 	item := normalizedItem{
 		Item:              Item{ID: raw.ID, Type: kind, Fields: map[string]any{}, Assignees: []string{}, Labels: []string{}},
