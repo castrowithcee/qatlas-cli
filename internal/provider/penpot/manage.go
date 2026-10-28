@@ -70,7 +70,8 @@ var projectsDelete = capability.Descriptor{
 	ID: Provider + ".projects.delete", Version: 1, Title: "Delete a Penpot project",
 	Description: "Delete one project of a bound team with all its files. Penpot marks the project as deleted and " +
 		"removes it after its deletion delay; it refuses the default project of a team. A project that is in the " +
-		"connection's project allow-list may be deleted. " + manageNote,
+		"connection's project allow-list may be deleted; a project that holds an excluded file, also a deleted one " +
+		"that can still be restored, is refused. " + manageNote,
 	Tags: []string{"penpot", "projects", "delete", "design"}, Provider: Provider, RequiresToolAllowList: true,
 	Risk:         manageRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema:  schemaOf(`"project_id":`+uuidSchema, `"project_id"`),
@@ -293,7 +294,11 @@ func invokeProjectsDelete(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	if err := client.locateProject(ctx, op, projectID); err != nil {
+	teamID, err := client.locateProjectTeam(ctx, op, "project_id", projectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.refuseExcludedInProject(ctx, op, teamID, projectID); err != nil {
 		return nil, err
 	}
 	if _, err := client.change(ctx, op, cmdDeleteProject, map[string]any{"id": projectID}); err != nil {
