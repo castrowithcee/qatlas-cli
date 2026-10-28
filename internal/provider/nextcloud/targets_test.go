@@ -242,7 +242,10 @@ func TestInvalidExclusionsFailClosedWithoutQuotingValues(t *testing.T) {
 		"calendar reserved":           {[]string{"calendar"}, []string{"calendar/inbox"}},
 		"system addressbook":          {[]string{"addressbook"}, []string{"addressbook/" + systemAddressbook}},
 		"deck not numeric":            {[]string{"deck"}, []string{"deck/SECRET"}},
-		"folder beside talk":          {[]string{"folder/Team", "talk"}, []string{"folder/Team/SECRET"}},
+		"talk below ID target":        {[]string{"talk/abcd1234"}, []string{"talk/SECRET"}},
+		"talk without target":         {folder, []string{"talk/SECRET"}},
+		"talk repeated by case":       {[]string{"talk"}, []string{"talk/SECRET", "talk/secret"}},
+		"talk with slash":             {[]string{"talk"}, []string{"talk/SECRET/x"}},
 		"folder beside account":       {[]string{"folder/Team", "account"}, []string{"folder/Team/SECRET"}},
 		"notes beside account":        {[]string{"notes", "account"}, []string{"notes/SECRET"}},
 	}
@@ -302,24 +305,27 @@ func TestExclusionsOutOfReachAreInvalid(t *testing.T) {
 	}
 }
 
-func TestTalkExclusionsAndTheRemainingTransitionLocksStay(t *testing.T) {
-	if _, err := excluding(t, []string{"talk"}, []string{"talk/token1"}); err != errExcludeNotYet {
-		t.Errorf("talk/token1 = %v, want the transition lock", err)
+func TestTalkExclusionsAreValidAndTheAccountLockStays(t *testing.T) {
+	for _, tc := range []struct{ targets, excludes []string }{
+		{[]string{"talk"}, []string{"talk/token1"}},
+		{[]string{"talk"}, []string{"talk/token1", "talk/Token2"}},
+		{[]string{"folder/Team", "talk"}, []string{"folder/Team/A"}},
+		{[]string{"folder/Team", "talk"}, []string{"folder/Team/A", "talk/token1"}},
+		{[]string{"notes", "talk"}, []string{"notes/A"}},
+		{[]string{"calendar", "talk"}, []string{"calendar/A"}},
+	} {
+		if _, err := excluding(t, tc.targets, tc.excludes); err != nil {
+			t.Errorf("%v with %v = %v", tc.targets, tc.excludes, err)
+		}
 	}
-	if _, err := excluding(t, []string{"folder/Team", "talk"}, []string{"folder/Team/A"}); err != errExcludeBesideKind {
-		t.Errorf("folder beside talk = %v", err)
-	}
-	if _, err := excluding(t, []string{"folder", "account"}, []string{"folder/A"}); err != errExcludeBesideKind {
-		t.Errorf("beside account = %v", err)
-	}
-	if _, err := excluding(t, []string{"calendar", "account"}, []string{"calendar/A"}); err != errExcludeBesideKind {
-		t.Errorf("calendar beside account = %v", err)
-	}
-	if _, err := excluding(t, []string{"notes", "talk"}, []string{"notes/A"}); err != nil {
-		t.Errorf("notes beside talk = %v", err)
-	}
-	if _, err := excluding(t, []string{"calendar", "talk"}, []string{"calendar/A"}); err != nil {
-		t.Errorf("calendar beside talk = %v", err)
+	for _, tc := range []struct{ targets, excludes []string }{
+		{[]string{"folder", "account"}, []string{"folder/A"}},
+		{[]string{"calendar", "account"}, []string{"calendar/A"}},
+		{[]string{"talk", "account"}, []string{"talk/token1"}},
+	} {
+		if _, err := excluding(t, tc.targets, tc.excludes); err != errExcludeBesideKind {
+			t.Errorf("%v beside account = %v", tc.targets, err)
+		}
 	}
 }
 
