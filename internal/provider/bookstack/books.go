@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -300,6 +301,9 @@ func invokeBooksGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := bound.checkBook(in.ID); err != nil {
 		return nil, err
 	}
+	if err := bound.checkExcluded(bookPrefix, in.ID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -355,6 +359,13 @@ func invokeChaptersGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if in.ID <= 0 {
 		return nil, invalidRequest("id must be a positive integer")
 	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if err := bound.checkExcluded(chapterPrefix, in.ID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -363,7 +374,7 @@ func invokeChaptersGet(ctx context.Context, resolved *config.Resolved, secrets *
 }
 
 // ListBooks returns books. On a bound connection the rows are filtered here to the bound books and the books
-// on the bound shelves, so limit and offset count the remaining rows.
+// on the bound shelves, and excluded books are dropped, so limit and offset count the remaining rows.
 func (c *Client) ListBooks(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && !c.scope.bookWide() {
 		return output.Collection{}, needsBook("books.list")
@@ -371,11 +382,14 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int, q listQuery) 
 	if err := c.loadShelves(ctx, 0); err != nil {
 		return output.Collection{}, err
 	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Collection{}, err
+	}
 	spec := scanSpec[listedJSON]{
-		op: "list books", path: "/api/books", filtered: c.scope.bound(), limit: limit, offset: offset,
+		op: "list books", path: "/api/books", filtered: c.scope.limited(), limit: limit, offset: offset,
 		arguments: argNames(booksList),
 		id:        func(b listedJSON) int64 { return b.ID },
-		keep:      func(b listedJSON) bool { return !c.scope.bound() || c.inBook(b.ID) },
+		keep:      func(b listedJSON) bool { return (!c.scope.bound() || c.inBook(b.ID)) && !c.bookOut(b.ID) },
 		row: func(b listedJSON) output.Row {
 			row := output.Row{
 				"id": b.ID, "name": clip(b.Name, maxResultString), "slug": clip(b.Slug, maxResultString),
@@ -395,7 +409,7 @@ func (c *Client) ListBooks(ctx context.Context, limit, offset int, q listQuery) 
 }
 
 // ListChapters returns chapters, of one book when bookID is given. A bound connection always has a book here
-// (the argument or its only book); every row is checked against that book on the client.
+// (the argument or its only book); every row is checked against that book and the exclusions on the client.
 func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	bookID, err := c.scope.listBook(bookID, "chapters.list")
 	if err != nil {
@@ -406,15 +420,20 @@ func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset i
 			return output.Collection{}, err
 		}
 	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Collection{}, err
+	}
 	query := url.Values{}
 	if bookID != 0 {
 		query.Set("filter[book_id]", strconv.FormatInt(bookID, 10))
 	}
 	spec := scanSpec[listedJSON]{
-		op: "list chapters", path: "/api/chapters", query: query, filtered: bookID != 0,
+		op: "list chapters", path: "/api/chapters", query: query, filtered: bookID != 0 || c.scope.limited(),
 		limit: limit, offset: offset, narrow: "book_id", arguments: argNames(chaptersList),
-		id:   func(ch listedJSON) int64 { return ch.ID },
-		keep: func(ch listedJSON) bool { return bookID == 0 || ch.BookID == bookID },
+		id: func(ch listedJSON) int64 { return ch.ID },
+		keep: func(ch listedJSON) bool {
+			return (bookID == 0 || ch.BookID == bookID) && !c.scope.excludesChapter(ch.ID) && !c.bookOut(ch.BookID)
+		},
 		row: func(ch listedJSON) output.Row {
 			row := output.Row{
 				"id": ch.ID, "book_id": ch.BookID, "name": clip(ch.Name, maxResultString), "slug": clip(ch.Slug, maxResultString),
@@ -438,7 +457,8 @@ func (c *Client) ListChapters(ctx context.Context, bookID int64, limit, offset i
 	return output.Collection{Columns: fieldNames(chaptersList), Rows: rows}, nil
 }
 
-// GetBook returns one book with its content tree. The book is checked against the targets before any request.
+// GetBook returns one book with its content tree. The book is checked against the targets and the exclusions
+// before any request; excluded chapters and pages are left out of the tree.
 func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 	if err := c.requireBook(ctx, id); err != nil {
 		return output.Object{}, err
@@ -451,6 +471,9 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 	contents := make([]map[string]any, 0, len(book.Contents))
 	truncated := false
 	for _, e := range book.Contents {
+		if e.Type == "chapter" && c.scope.excludesChapter(e.ID) || e.Type != "chapter" && c.scope.excludesPage(e.ID) {
+			continue
+		}
 		if budget <= 0 {
 			truncated = true
 			break
@@ -458,7 +481,7 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 		budget--
 		item := treeEntry(e)
 		if e.Type == "chapter" {
-			pages, cut := treePages(e.Pages, &budget, nil)
+			pages, cut := treePages(c.withoutExcludedPages(e.Pages), &budget, nil)
 			item["pages"] = pages
 			truncated = truncated || cut
 		}
@@ -480,6 +503,9 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 	if !c.scope.bound() {
 		shelves := make([]map[string]any, 0, len(book.Shelves))
 		for _, s := range book.Shelves {
+			if c.scope.excludesShelf(s.ID) {
+				continue
+			}
 			shelves = append(shelves, map[string]any{"id": s.ID, "name": clip(s.Name, maxResultString), "slug": clip(s.Slug, maxResultString)})
 		}
 		fields = append(fields, output.Field{Name: "shelves", Value: shelves})
@@ -491,19 +517,18 @@ func (c *Client) GetBook(ctx context.Context, id int64) (output.Object, error) {
 	return output.Object{Fields: fields}, nil
 }
 
-// GetChapter returns one chapter. On a bound connection a bound chapter is read as it is; for any other one
-// this single read is also the evidence that its book is reached, and a foreign chapter is refused before
-// anything is shown.
+// GetChapter returns one chapter. This single read is also the evidence that its book is reached and not
+// excluded, and a foreign or excluded chapter is refused before anything is shown; excluded pages are left out.
 func (c *Client) GetChapter(ctx context.Context, id int64) (output.Object, error) {
-	if !c.scope.mayReachChapter(id) {
+	if !c.scope.mayReachChapter(id) || c.scope.excludesChapter(id) {
 		return output.Object{}, c.scope.outside(outsideChapter)
 	}
 	var chapter chapterJSON
 	if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &chapter, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
-	if c.scope.bound() && !c.scope.hasChapter(id) {
-		allowed, err := c.bookAllowed(ctx, chapter.BookID)
+	if c.scope.limited() {
+		allowed, err := c.chapterAllowed(ctx, id, chapter.BookID)
 		if err != nil {
 			return output.Object{}, err
 		}
@@ -512,7 +537,7 @@ func (c *Client) GetChapter(ctx context.Context, id int64) (output.Object, error
 		}
 	}
 	budget := maxTreeEntries
-	pages, truncated := treePages(chapter.Pages, &budget, func(p entryJSON, item map[string]any) {
+	pages, truncated := treePages(c.withoutExcludedPages(chapter.Pages), &budget, func(p entryJSON, item map[string]any) {
 		if p.Priority != nil {
 			item["priority"] = *p.Priority
 		}
@@ -548,6 +573,15 @@ func (c *Client) GetChapter(ctx context.Context, id int64) (output.Object, error
 		output.Field{Name: "tags", Value: orderedTags(chapter.Tags)},
 		output.Field{Name: "pages", Value: pages}, output.Field{Name: "truncated", Value: truncated},
 	)}, nil
+}
+
+// withoutExcludedPages drops the pages excluded by their identifier from the pages of a chapter that is itself
+// in reach; a page cannot fall under another exclusion there.
+func (c *Client) withoutExcludedPages(pages []entryJSON) []entryJSON {
+	if len(c.scope.exPages) == 0 {
+		return pages
+	}
+	return slices.DeleteFunc(slices.Clone(pages), func(p entryJSON) bool { return c.scope.excludesPage(p.ID) })
 }
 
 // treeEntry shows one page or chapter of a tree without its children.
