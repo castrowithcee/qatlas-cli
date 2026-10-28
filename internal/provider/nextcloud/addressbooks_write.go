@@ -145,7 +145,14 @@ func openOwnAddressbook(ctx context.Context, op string, resolved *config.Resolve
 	if err != nil {
 		return nil, err
 	}
-	if !contactChildID(uri) || !bound.holdsAddressbook(uri) {
+	if !contactChildID(uri) {
+		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAddressbookNone}
+	}
+	// An excluded address book answers like one that does not exist.
+	if bound.hides(uri) {
+		return nil, hiddenError(op)
+	}
+	if !bound.holdsAddressbook(uri) {
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAddressbookNone}
 	}
 	if uri == systemAddressbook {

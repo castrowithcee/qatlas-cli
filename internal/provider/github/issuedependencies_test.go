@@ -206,3 +206,31 @@ func TestIssueDependenciesRefuseANonRepositoryTargetBeforeIO(t *testing.T) {
 		t.Error("list on a project-scoped connection reached the credential or GitHub")
 	}
 }
+
+// A dependency in an excluded repository is withheld and counted, also on a connection without targets.
+func TestIssueDependenciesListWithholdsExcludedRepositories(t *testing.T) {
+	_, g, base := serveIssueGraph(t)
+	g.blockedBy[issueKey("octo-org/example", 42)] = []int64{
+		fakeIssueID("octo-org/example", 40),
+		fakeIssueID("octo-org/other", 8),
+		fakeIssueID("octo-org/blocked", 88),
+	}
+	cfg := coreConfig(base)
+	cfg.Connections["ex"] = config.Connection{Service: "gh", Credential: "gh-reader",
+		Exclude: []string{"repos/Octo-Org/BLOCKED"}}
+	cfg.Connections["ex-owner"] = config.Connection{Service: "gh", Credential: "gh-reader",
+		Exclude: []string{"orgs/octo-org"}}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	args := `{"repository":"octo-org/example","number":42}`
+
+	listed, err := invoke(t, core, issueDependenciesList.ID, "ex", args, false)
+	if err != nil || strings.Contains(string(listed), `"octo-org/blocked"`) ||
+		!strings.Contains(string(listed), `"octo-org/other"`) || !strings.Contains(string(listed), `"withheld":1`) {
+		t.Errorf("list = %s, %v, want the excluded dependency withheld and counted", listed, err)
+	}
+	// An excluded owner refuses its own repository as the target, before any I/O.
+	if _, err := invoke(t, core, issueDependenciesList.ID, "ex-owner", args, false); !isInvalidRequest(err) {
+		t.Errorf("list in an excluded owner = %v, want an invalid request", err)
+	}
+}

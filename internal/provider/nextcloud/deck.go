@@ -576,11 +576,22 @@ func (c *Client) listDeckBoards(ctx context.Context, bound selection, read deckR
 	if details {
 		read.query = url.Values{"details": {"true"}}
 	}
+	// A precondition and the entity tag cover every board, so they would show a change of an excluded one. With
+	// exclusions the list is read unconditionally, modified_since is applied to the kept boards, and no tag is given.
+	var since time.Time
+	excluding := len(bound.excluded) > 0
+	if excluding {
+		since, _ = http.ParseTime(read.modifiedSince)
+		read.modifiedSince, read.etag = "", ""
+	}
 	body, header, notModified, err := c.deckFetch(ctx, op, read, "boards")
 	if err != nil {
 		return nil, err
 	}
 	result := &DeckBoardsResult{Boards: []DeckBoardEntry{}, ETag: listETag(header, read.etag, notModified)}
+	if excluding {
+		result.ETag = ""
+	}
 	if notModified {
 		result.Unchanged = true
 		return result, nil
@@ -591,6 +602,9 @@ func (c *Client) listDeckBoards(ctx context.Context, bound selection, read deckR
 	}
 	for _, item := range items {
 		if item.ID == "" || item.DeletedAt != 0 || !bound.holds(string(item.ID)) {
+			continue
+		}
+		if !since.IsZero() && item.LastModified.value <= since.Unix() {
 			continue
 		}
 		if len(result.Boards) == maxDeckBoards {
@@ -810,6 +824,9 @@ func (c *Client) GetDeckCard(ctx context.Context, boardID, stackID, cardID strin
 
 // holds reports whether the selection covers a board.
 func (s selection) holds(id string) bool {
+	if s.hides(id) {
+		return false
+	}
 	if s.all {
 		return true
 	}
@@ -843,7 +860,7 @@ func requireDeck(resolved *config.Resolved) (selection, error) {
 			Class: provider.ClassPermission, Op: "open", Message: "this connection is not bound to Deck boards",
 		}
 	}
-	return s.decks, nil
+	return s.decks.excluding(s.excludes.decks, true), nil
 }
 
 // openDeck refuses a board the connection does not bind before any credential access or request, then opens

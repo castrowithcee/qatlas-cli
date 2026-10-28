@@ -401,3 +401,116 @@ func TestNotificationRefusalsNameTheRequiredToken(t *testing.T) {
 		t.Error("an unknown route answered")
 	}
 }
+
+func exclusionNotificationRig(t *testing.T) (*fakeGitHub, *application.Core, *int) {
+	t.Helper()
+	f := &fakeGitHub{}
+	f.failure = (&fakeNotifications{title: "t", f: f}).route
+	cfg := notificationsConfig(serve(t, f))
+	add := func(name string, excludes []string, tools ...string) {
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader",
+			Exclude: excludes}, config.Effects(), tools)
+	}
+	add("ex-repo", []string{"repos/octo-org/other"})
+	add("ex-repo-listed", []string{"repos/octo-org/other"}, notificationsMarkAll.ID)
+	add("ex-owner", []string{"users/Hubot"})
+	add("ex-pattern", []string{"repos/octo-org/*"})
+	red := &redact.Redactor{}
+	reads := 0
+	return f, application.New(registry(t), cfg, resolver(red, &reads), red), &reads
+}
+
+func TestNotificationExclusionsDropRowsAndRefuseTargets(t *testing.T) {
+	f, core, reads := exclusionNotificationRig(t)
+	for _, tt := range []struct {
+		connection string
+		want, miss []string
+	}{
+		{"ex-repo", []string{`"id":"100"`, `"id":"200"`}, []string{`"id":"300"`}},
+		{"ex-owner", []string{`"id":"100"`, `"id":"300"`}, []string{`"id":"200"`}},
+		{"ex-pattern", []string{`"id":"200"`}, []string{`"id":"100"`, `"id":"300"`}},
+	} {
+		out, err := invoke(t, core, notificationsList.ID, tt.connection, `{}`, false)
+		if err != nil {
+			t.Fatalf("list on %s = %v", tt.connection, err)
+		}
+		for _, w := range tt.want {
+			if !strings.Contains(string(out), w) {
+				t.Errorf("list on %s lacks %s: %s", tt.connection, w, out)
+			}
+		}
+		for _, m := range tt.miss {
+			if strings.Contains(string(out), m) {
+				t.Errorf("list on %s shows %s", tt.connection, m)
+			}
+		}
+	}
+
+	// An excluded repository argument is refused before a secret or a request; so is the list of one.
+	for _, call := range []struct{ tool, connection, arguments string }{
+		{notificationsList.ID, "ex-repo", `{"repository":"octo-org/other"}`},
+		{notificationsList.ID, "ex-owner", `{"repository":"hubot/elsewhere"}`},
+		{notificationsMarkAll.ID, "ex-repo-listed", `{"repository":"OCTO-ORG/Other"}`},
+		{notificationsMarkAll.ID, "ex-repo-listed", `{}`},
+		{repositorySubscriptionsSet.ID, "ex-repo", `{"repository":"octo-org/other","action":"watch"}`},
+	} {
+		*reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, call.tool, call.connection, call.arguments, true)
+		if !isInvalidRequest(err) || *reads != 0 || len(f.recorded()) != before {
+			t.Errorf("%s %s = %v (reads %d), want an invalid request before any I/O", call.tool, call.arguments, err, *reads)
+		}
+		if err != nil && (strings.Contains(err.Error(), "octo-org") || strings.Contains(err.Error(), "ubot")) {
+			t.Errorf("%s refusal names the object: %v", call.tool, err)
+		}
+	}
+	// With a reachable repository the whole mark-all stays allowed.
+	if _, err := invoke(t, core, notificationsMarkAll.ID, "ex-repo-listed", `{"repository":"octo-org/example"}`, true); err != nil {
+		t.Errorf("mark all of a reachable repository = %v", err)
+	}
+
+	// A thread of an excluded repository is read once, then answers not-found without any change.
+	for _, call := range []struct{ tool, connection, arguments string }{
+		{notificationsGet.ID, "ex-repo", `{"thread_id":"300"}`},
+		{notificationsDismiss.ID, "ex-repo", `{"thread_id":"300","state":"done"}`},
+		{threadSubscriptionsSet.ID, "ex-owner", `{"thread_id":"200","action":"ignore"}`},
+	} {
+		before := len(f.recorded())
+		_, err := invoke(t, core, call.tool, call.connection, call.arguments, true)
+		if classOf(err) != provider.ClassNotFound {
+			t.Errorf("%s %s = %v, want not-found", call.tool, call.arguments, err)
+		}
+		if requests := sent(f, before); len(requests) != 1 || requests[0].method != http.MethodGet ||
+			!strings.HasPrefix(requests[0].path, notificationPrefix+"/notifications/threads/") {
+			t.Errorf("%s %s sent %+v, want the one proof read", call.tool, call.arguments, requests)
+		}
+	}
+	// A thread outside the exclusions still works.
+	if _, err := invoke(t, core, notificationsGet.ID, "ex-repo", `{"thread_id":"100"}`, false); err != nil {
+		t.Errorf("get of a free thread = %v", err)
+	}
+}
+
+func TestNotificationListDropsUnreadableRepositoriesOnlyWithExclusions(t *testing.T) {
+	f := &fakeGitHub{}
+	f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method != http.MethodGet || !strings.HasSuffix(r.URL.Path, "/notifications") {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, "[%s,%s]", notificationThreadJSON("100", "octo-org/example", "fine"),
+			strings.Replace(notificationThreadJSON("400", "octo-org/example", "broken"),
+				`"full_name":"octo-org/example"`, `"full_name":"broken"`, 1))
+		return true
+	}
+	cfg := notificationsConfig(serve(t, f))
+	cfg.Connections["ex"] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader",
+		Exclude: []string{"repos/octo-org/other"}}, config.Effects(), nil)
+	red := &redact.Redactor{}
+	reads := 0
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+	out, err := invoke(t, core, notificationsList.ID, "ex", `{}`, false)
+	if err != nil || !strings.Contains(string(out), `"id":"100"`) || strings.Contains(string(out), `"id":"400"`) {
+		t.Errorf("with an exclusion = %s, %v, want the unreadable thread dropped", out, err)
+	}
+}

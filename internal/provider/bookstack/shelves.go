@@ -335,6 +335,9 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 	if err := checkShelfID(id); err != nil {
 		return nil, err
 	}
+	if err := boundExcluded(resolved, shelfPrefix, id); err != nil {
+		return nil, err
+	}
 	if change.empty() {
 		return nil, invalidRequest("at least one field to change is required")
 	}
@@ -429,11 +432,38 @@ func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) 
 	return output.Object{Fields: fields}, nil
 }
 
-// CreateShelf sends one create request.
+// boundExcluded is checkExcluded for a connection read from the configuration, for a caller that has no scope.
+func boundExcluded(resolved *config.Resolved, prefix string, id int64) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
+	return bound.checkExcluded(prefix, id)
+}
+
+// withoutExcludedBooks drops the books the connection excludes from a book list, as BookStack leaves out the
+// books its user may not see when it assigns the books of a shelf. It keeps an omitted list omitted.
+func (c *Client) withoutExcludedBooks(ctx context.Context, books *[]int64) (*[]int64, error) {
+	if books == nil || !c.scope.excludesBooks() {
+		return books, nil
+	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return nil, err
+	}
+	kept := slices.DeleteFunc(slices.Clone(*books), c.bookOut)
+	return &kept, nil
+}
+
+// CreateShelf sends one create request. Excluded books are not sent.
 func (c *Client) CreateShelf(ctx context.Context, input shelfMutation) (output.Object, error) {
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
 	}
+	books, err := c.withoutExcludedBooks(ctx, input.Books)
+	if err != nil {
+		return output.Object{}, err
+	}
+	input.Books = books
 	var shelf shelfJSON
 	if err := c.mutate(ctx, "create shelf", http.MethodPost, "/api/shelves", input, &shelf, argNames(shelvesCreate)); err != nil {
 		return output.Object{}, err
@@ -441,10 +471,28 @@ func (c *Client) CreateShelf(ctx context.Context, input shelfMutation) (output.O
 	return shelfWriteObject(shelf), nil
 }
 
-// UpdateShelf sends one update request.
+// UpdateShelf sends one update request. BookStack's assignment of books removes every book of the shelf that
+// the list lacks, so a book of the shelf that the connection excludes is read first and sent again behind the
+// others, where BookStack itself keeps the books its user may not see.
 func (c *Client) UpdateShelf(ctx context.Context, id int64, input shelfMutation) (output.Object, error) {
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
+	}
+	if input.Books != nil && c.scope.excludesBooks() {
+		var current shelfJSON
+		if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &current, nil, provider.ClassPermission); err != nil {
+			return output.Object{}, err
+		}
+		books, err := c.withoutExcludedBooks(ctx, input.Books)
+		if err != nil {
+			return output.Object{}, err
+		}
+		for _, b := range current.Books {
+			if c.bookOut(b.ID) && !slices.Contains(*books, b.ID) {
+				*books = append(*books, b.ID)
+			}
+		}
+		input.Books = books
 	}
 	var shelf shelfJSON
 	if err := c.mutate(ctx, "update shelf", http.MethodPut, "/api/shelves/"+strconv.FormatInt(id, 10), input, &shelf, argNames(shelvesUpdate)); err != nil {
@@ -488,6 +536,9 @@ func invokeShelvesDelete(ctx context.Context, resolved *config.Resolved, secrets
 		return nil, err
 	}
 	if err := checkShelfID(id); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, shelfPrefix, id); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

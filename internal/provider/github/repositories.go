@@ -267,6 +267,9 @@ func parseAllowedOrganization(allowed allowlist, name, value string) (target, bo
 		return target{}, false, invalidRequest(name + " must be an organization, as orgs/LOGIN; GitHub creates " +
 			"or forks a repository only under the token's own account or an organization")
 	}
+	if allowed.excluded(parsed) {
+		return target{}, false, invalidRequest(name + " is not available on this connection; pass another one")
+	}
 	if !allowed.allows(parsed) {
 		return target{}, false, invalidRequest(name + " is outside the targets of this connection; pass one " +
 			"they allow, or add it to the connection's targets")
@@ -277,6 +280,29 @@ func parseAllowedOrganization(allowed allowlist, name, value string) (target, bo
 		}
 	}
 	return parsed, true, nil
+}
+
+// refuseDestination refuses a repository that a create or fork would make under an owner and a name the
+// exclusions cover, either as the owner as a whole or as that exact repository. The error names neither.
+func (a allowlist) refuseDestination(owner, name string) error {
+	if a.excludedOwner(owner) || a.excluded(target{kind: kindRepository, owner: owner, repo: name}) {
+		return invalidRequest("the destination is not available on this connection; pass another one")
+	}
+	return nil
+}
+
+// refuseOwnAccount does the same for a repository made under the account behind the token, whose login is
+// known only from GitHub: it runs after the credential is resolved and sends one read, and only while the
+// connection excludes anything.
+func (c *Client) refuseOwnAccount(ctx context.Context, name string) error {
+	if len(c.allowed.excludes) == 0 {
+		return nil
+	}
+	account, err := c.getAccount(ctx)
+	if err != nil {
+		return err
+	}
+	return c.allowed.refuseDestination(account.Login, name)
 }
 
 // repositoryCreateArguments holds the arguments of github.repositories.create.
@@ -313,6 +339,11 @@ func invokeRepositoriesCreate(ctx context.Context, resolved *config.Resolved, se
 	if err != nil {
 		return nil, err
 	}
+	if bound {
+		if err := allowed.refuseDestination(owner.owner, arguments.Name); err != nil {
+			return nil, err
+		}
+	}
 	var client *Client
 	if bound {
 		client, err = openAt(ctx, resolved, secrets, red, owner)
@@ -321,6 +352,11 @@ func invokeRepositoriesCreate(ctx context.Context, resolved *config.Resolved, se
 	}
 	if err != nil {
 		return nil, err
+	}
+	if !bound {
+		if err := client.refuseOwnAccount(ctx, arguments.Name); err != nil {
+			return nil, err
+		}
 	}
 	private := true
 	if arguments.Private != nil {
@@ -452,9 +488,24 @@ func invokeRepositoriesFork(ctx context.Context, resolved *config.Resolved, secr
 	if err != nil {
 		return nil, err
 	}
+	// A fork keeps the name of its source unless the caller renames it.
+	forkName := arguments.Name
+	if forkName == "" {
+		forkName = bound.repo
+	}
+	if destinationBound {
+		if err := allowed.refuseDestination(destination.owner, forkName); err != nil {
+			return nil, err
+		}
+	}
 	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
+	}
+	if !destinationBound {
+		if err := client.refuseOwnAccount(ctx, forkName); err != nil {
+			return nil, err
+		}
 	}
 	return bound.locate(client.forkRepository(ctx, destination, destinationBound, arguments.Name,
 		arguments.DefaultBranchOnly))

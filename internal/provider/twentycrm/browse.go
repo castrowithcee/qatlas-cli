@@ -11,8 +11,8 @@ import (
 const browsePageSize = 100
 
 // browseList offers the objects of the workspace from one page of the metadata list, the same read as
-// meta-objects.list. The connection may be bound already; the read ignores its targets, so the choice
-// reaches beyond them. Twenty's metadata API has no search, so the surface filters the loaded pages.
+// meta-objects.list. The connection may be bound already; the read ignores its targets and exclusions, so the
+// choice reaches beyond them. Twenty's metadata API has no search, so the surface filters the loaded pages.
 func browseList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	req config.TargetListRequest) (config.TargetPage, error) {
 	if req.Kind != "object" || req.Parent != "" {
@@ -22,7 +22,7 @@ func browseList(ctx context.Context, resolved *config.Resolved, secrets *secret.
 		return config.TargetPage{}, providerError("choose targets", "no connection was selected")
 	}
 	unbound := *resolved
-	unbound.Target, unbound.Targets = "", nil
+	unbound.Target, unbound.Targets, unbound.Exclude = "", nil, nil
 	client, err := Open(ctx, &unbound, secrets, red)
 	if err != nil {
 		return config.TargetPage{}, err

@@ -453,3 +453,24 @@ func TestSubIssuesRefuseANonRepositoryTargetBeforeIO(t *testing.T) {
 		t.Error("list on a project-scoped connection reached the credential or GitHub")
 	}
 }
+
+// A sub-issue in an excluded repository is withheld and counted, also on a connection without targets.
+func TestSubIssuesListWithholdsExcludedRepositories(t *testing.T) {
+	_, g, base := serveIssueGraph(t)
+	g.children[issueKey("octo-org/example", 42)] = []int64{
+		fakeIssueID("octo-org/example", 43),
+		fakeIssueID("octo-org/other", 9),
+		fakeIssueID("octo-org/blocked", 99),
+	}
+	cfg := coreConfig(base)
+	cfg.Connections["ex"] = config.Connection{Service: "gh", Credential: "gh-reader",
+		Exclude: []string{"repos/octo-org/blocked"}}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+
+	listed, err := invoke(t, core, subIssuesList.ID, "ex", `{"repository":"octo-org/example","number":42}`, false)
+	if err != nil || strings.Contains(string(listed), `"octo-org/blocked"`) ||
+		!strings.Contains(string(listed), `"octo-org/other"`) || !strings.Contains(string(listed), `"withheld":1`) {
+		t.Errorf("list = %s, %v, want the excluded sub-issue withheld and counted", listed, err)
+	}
+}

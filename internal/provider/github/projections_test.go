@@ -327,3 +327,30 @@ func TestLinkSchemasCoverTheEmittedLinks(t *testing.T) {
 		}
 	}
 }
+
+// A linked repository an exclusion covers shows only its identifiers, on both the REST and the GraphQL
+// shape, although the targets would admit it; an unrelated exclusion changes nothing.
+func TestExcludedLinkedRepositoryShowsOnlyIdentifiers(t *testing.T) {
+	var raw repositoryRaw
+	if err := json.Unmarshal([]byte(exampleFullRepository), &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, excludes := range [][]string{{"repos/octocat/Hello-World"}, {"repos/OCTOCAT/*"}, {"users/octocat"}} {
+		list, err := parseAllowlistExcluding(nil, excludes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertJSON(t, raw.project(list), `{"id":1296269,"node_id":"MDEwOlJlcG9zaXRvcnkxMjk2MjY5","full_name":"octocat/Hello-World"}`)
+		nested := gqlNestedRepositoryRaw{NameWithOwner: ptr("octocat/Hello-World"), Name: ptr("Hello-World")}
+		if got := nested.project(list); got.Name != nil {
+			t.Errorf("excludes %v showed the name of a linked GraphQL repository", excludes)
+		}
+	}
+	list, err := parseAllowlistExcluding(nil, []string{"repos/someone/else"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := raw.project(list); got.Owner == nil || got.Name == nil {
+		t.Error("an unrelated exclusion withheld a repository")
+	}
+}
