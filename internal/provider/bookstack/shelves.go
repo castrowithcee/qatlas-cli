@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -290,6 +291,9 @@ func invokeShelvesGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := checkShelfID(in.ID); err != nil {
 		return nil, err
 	}
+	if err := bound.checkExcluded(shelfPrefix, in.ID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -344,13 +348,13 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 	return client.UpdateShelf(ctx, id, change)
 }
 
-// ListShelves returns shelves of the instance.
+// ListShelves returns shelves of the instance without the excluded ones.
 func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
 	spec := scanSpec[listedJSON]{
-		op: "list shelves", path: "/api/shelves", limit: limit, offset: offset,
+		op: "list shelves", path: "/api/shelves", filtered: c.scope.excludes(), limit: limit, offset: offset,
 		arguments: argNames(shelvesList),
 		id:        func(s listedJSON) int64 { return s.ID },
-		keep:      func(listedJSON) bool { return true },
+		keep:      func(s listedJSON) bool { return !c.scope.excludesShelf(s.ID) },
 		row: func(s listedJSON) output.Row {
 			row := output.Row{
 				"id": s.ID, "name": clip(s.Name, maxResultString), "slug": clip(s.Slug, maxResultString),
@@ -369,15 +373,23 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery
 	return output.Collection{Columns: fieldNames(shelvesList), Rows: rows}, nil
 }
 
-// GetShelf returns one shelf with its books. A bound connection reads only a bound shelf.
+// GetShelf returns one shelf with its books, without the excluded ones. A bound connection reads only a bound
+// shelf.
 func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) {
 	if c.scope.bound() && !c.scope.hasShelf(id) {
 		return output.Object{}, instanceRefusal(c.scope, shelvesInstanceWide)
+	}
+	if c.scope.excludesShelf(id) {
+		return output.Object{}, c.scope.outside(outsideShelf)
 	}
 	var shelf shelfJSON
 	if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &shelf, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Object{}, err
+	}
+	shelf.Books = slices.DeleteFunc(shelf.Books, func(b shelfBookJSON) bool { return c.bookOut(b.ID) })
 	truncated := len(shelf.Books) > maxTreeEntries
 	books := make([]map[string]any, 0, min(len(shelf.Books), maxTreeEntries))
 	for _, b := range shelf.Books {

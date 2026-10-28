@@ -157,8 +157,9 @@ func invokeContentSearch(ctx context.Context, resolved *config.Resolved, secrets
 }
 
 // Search runs one search against a fixed endpoint. On a bound connection every hit is checked against the
-// connection and the target, and foreign or unattributable hits are dropped. A connection bound to pages alone
-// scans the search of the instance for its pages, see searchPages.
+// connection and the target, and foreign or unattributable hits are dropped; excluded hits are dropped on every
+// connection. total stays BookStack's own estimate. A connection bound to pages alone scans the search of the
+// instance for its pages, see searchPages.
 func (c *Client) Search(ctx context.Context, query string, target listTarget, page, count int) (output.Object, error) {
 	if target.pagesOnly {
 		return c.searchPages(ctx, query, page, count)
@@ -183,9 +184,12 @@ func (c *Client) Search(ctx context.Context, query string, target listTarget, pa
 	if err != nil {
 		return output.Object{}, err
 	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Object{}, err
+	}
 	results := make([]map[string]any, 0, len(found.Data))
 	for _, h := range found.Data {
-		if (c.scope.bound() || bookID != 0) && !c.hitAllowed(h, target, bookID) {
+		if (c.scope.bound() || bookID != 0) && !c.hitAllowed(h, target, bookID) || c.hitExcluded(h) {
 			continue
 		}
 		results = append(results, c.hitResult(h))
@@ -231,11 +235,34 @@ func (c *Client) hitAllowed(h searchHit, target listTarget, bookID int64) bool {
 	return false
 }
 
+// hitExcluded reports whether a hit falls under an exclusion by its own identifier, its chapter, or its book;
+// it decides only after every excluded shelf was read. With exclusions, a hit of a kind this provider does not
+// know cannot be attributed and counts as excluded.
+func (c *Client) hitExcluded(h searchHit) bool {
+	if !c.scope.excludes() {
+		return false
+	}
+	switch h.Type {
+	case "bookshelf":
+		return c.scope.excludesShelf(h.ID)
+	case "book":
+		return c.bookOut(h.ID)
+	case "chapter":
+		return c.scope.excludesChapter(h.ID) || c.bookOut(h.BookID)
+	case "page":
+		return c.pageOut(h.ID, h.ChapterID, h.BookID)
+	}
+	return true
+}
+
 // searchPages answers a search of a connection bound to pages alone. BookStack has no search within one page,
 // so the search of the instance is read in pages of 100 hits until every bound page is found or the hits run
 // out, at most maxSearchScans requests; page and count then apply to the bound pages found, and total counts
 // them, so no number of foreign hits is shown.
 func (c *Client) searchPages(ctx context.Context, query string, page, count int) (output.Object, error) {
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Object{}, err
+	}
 	var kept []map[string]any
 	seen := map[string]bool{}
 	found := map[int64]bool{}
@@ -257,8 +284,11 @@ func (c *Client) searchPages(ctx context.Context, query string, page, count int)
 			seen[key] = true
 			added++
 			if h.Type == "page" && c.scope.hasPage(h.ID) && !found[h.ID] {
+				// An excluded bound page counts as found, so the scan does not look for it to the end.
 				found[h.ID] = true
-				kept = append(kept, c.hitResult(h))
+				if !c.hitExcluded(h) {
+					kept = append(kept, c.hitResult(h))
+				}
 			}
 		}
 		if added == 0 || server*maxSearchCount >= answer.Total {
