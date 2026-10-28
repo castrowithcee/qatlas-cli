@@ -21,12 +21,6 @@ type exclusions struct {
 	calendars, addressbooks, talks, decks []string
 }
 
-// excludeKindEnforced reports whether the provider enforces exclusions of the kind. A kind that is parsed
-// and checked but not listed here is refused as a whole, so no exclusion is accepted that nothing enforces.
-func excludeKindEnforced(kind string) bool {
-	return kind == kindFolder || kind == kindNotes || kind == kindCalendar || kind == kindAddressbook || kind == kindDeck
-}
-
 // crossExcludes are the exclusions of one kind seen from the other: the Notes app keeps its notes as files
 // below the notes path, so a folder exclusion hides notes and a notes exclusion hides folders. They are
 // derived from the Notes settings of the identity, which only a read gives, so they are empty until the
@@ -65,8 +59,7 @@ var (
 		"addressbook/ID, deck/ID, or talk/ID, below a target of the same kind, named once, and not nested " +
 		"in another exclusion")
 	errExcludeTooMany    = errors.New("a Nextcloud connection may list at most 100 exclusions per kind")
-	errExcludeNotYet     = errors.New("this kind of Nextcloud exclusion is not supported yet")
-	errExcludeBesideKind = errors.New("a Nextcloud exclusion is not supported next to this kind of target yet")
+	errExcludeBesideKind = errors.New("a Nextcloud exclusion is not supported next to the account target yet")
 )
 
 // comparisonForm brings a segment into the form exclusions are compared in: canonical composition, then
@@ -211,8 +204,8 @@ func (ex *exclusions) add(kind, rest string) error {
 }
 
 // check validates the parsed exclusions against the targets: each lies strictly below a target of its
-// kind, none repeats or nests, and no kind exceeds its bound. The transition locks come last, so that an
-// exclusion that is otherwise valid is refused only because it is not enforced yet.
+// kind, none repeats or nests, and no kind exceeds its bound. The account target takes none, because its
+// tools are not enforced yet.
 func (ex exclusions) check(s scope) error {
 	for _, n := range []int{len(ex.folders), len(ex.notes), len(ex.calendars), len(ex.addressbooks),
 		len(ex.talks), len(ex.decks)} {
@@ -245,13 +238,7 @@ func (ex exclusions) check(s scope) error {
 			}
 		}
 	}
-	for kind, n := range map[string]int{kindCalendar: len(ex.calendars), kindAddressbook: len(ex.addressbooks),
-		kindTalk: len(ex.talks), kindDeck: len(ex.decks), kindFolder: len(ex.folders), kindNotes: len(ex.notes)} {
-		if n > 0 && !excludeKindEnforced(kind) {
-			return errExcludeNotYet
-		}
-	}
-	if s.account || (len(ex.folders) > 0 && s.talks.bound()) {
+	if s.account {
 		return errExcludeBesideKind
 	}
 	return nil

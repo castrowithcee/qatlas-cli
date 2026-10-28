@@ -93,6 +93,9 @@ type rawRoomState struct {
 	Type            json.Number `json:"type"`
 	ParticipantType json.Number `json:"participantType"`
 	ObjectType      string      `json:"objectType"`
+	// ObjectID is the token of the parent for a breakout room and the file ID for a file conversation.
+	ObjectID         flexString `json:"objectId"`
+	BreakoutRoomMode flexString `json:"breakoutRoomMode"`
 }
 
 func validRoomName(name string) bool {
@@ -121,26 +124,25 @@ func talkRoomError(op string, err error, messages map[int]string, notFound strin
 
 // managedRoom is the one read before a change. It requires an owner or moderator of an ordinary
 // conversation of an internal type; the answer is the same for every refusal and never names the token.
-func (c *Client) managedRoom(ctx context.Context, op, token string, types ...int64) error {
-	data, err := c.ocsGet(ctx, op, ocsRequest{app: ocsTalkRooms, suffix: []string{token},
-		query: url.Values{"noStatusUpdate": {"1"}}})
+func (c *Client) managedRoom(ctx context.Context, op, token string, types ...int64) (rawRoomState, error) {
+	raw, err := c.readRoomState(ctx, op, token, messageTalkNoRoom)
 	if err != nil {
-		return talkNotFound(op, err, messageTalkNoRoom)
+		return raw, err
 	}
-	var raw rawRoomState
-	if err := json.Unmarshal(data, &raw); err != nil || raw.Token != token {
-		return invalidResponse(op, "the Nextcloud conversation could not be read")
+	// Excluded is checked before the role and the type, so that no refusal tells it from a missing one.
+	if err := c.roomGate(ctx, op, messageTalkNoRoom, raw.ObjectType, string(raw.ObjectID)); err != nil {
+		return raw, err
 	}
 	if role, _ := raw.ParticipantType.Int64(); role != 1 && role != 2 {
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkNotModerator}
+		return raw, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkNotModerator}
 	}
 	kind, _ := raw.Type.Int64()
 	for _, allowed := range types {
 		if kind == allowed && raw.ObjectType == "" {
-			return nil
+			return raw, nil
 		}
 	}
-	return &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkNotInternal}
+	return raw, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkNotInternal}
 }
 
 // CreateRoom creates one internal conversation after a single capability read: a one-to-one conversation
@@ -177,7 +179,7 @@ func (c *Client) UpdateRoom(ctx context.Context, token string, name, description
 		name != nil && !validRoomName(*name) || description != nil && !validRoomDescription(*description) {
 		return nil, providerError(op, "the conversation arguments are unusable")
 	}
-	if err := c.managedRoom(ctx, op, token, roomTypeGroup); err != nil {
+	if _, err := c.managedRoom(ctx, op, token, roomTypeGroup); err != nil {
 		return nil, err
 	}
 	request := ocsRequest{app: ocsTalkRooms, suffix: []string{token}}
@@ -202,6 +204,9 @@ func (c *Client) MarkRoomRead(ctx context.Context, token string) (*RoomReadResul
 	if !validTalkToken(token) {
 		return nil, providerError(op, "a conversation token is unusable")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoRoom); err != nil {
+		return nil, err
+	}
 	if err := c.talkFeature(ctx, op, featureReadMarker, featureReadLast); err != nil {
 		return nil, err
 	}
@@ -218,8 +223,15 @@ func (c *Client) DeleteRoom(ctx context.Context, token string) (*RoomDeleteResul
 	if !validTalkToken(token) {
 		return nil, providerError(op, "a conversation token is unusable")
 	}
-	if err := c.managedRoom(ctx, op, token, roomTypeOneToOne, roomTypeGroup); err != nil {
+	raw, err := c.managedRoom(ctx, op, token, roomTypeOneToOne, roomTypeGroup)
+	if err != nil {
 		return nil, err
+	}
+	// Deleting a conversation deletes its breakout rooms, so it must not reach one that is excluded.
+	if holds, err := c.breakoutHoldsExcluded(ctx, op, token, raw.BreakoutRoomMode); err != nil {
+		return nil, err
+	} else if holds {
+		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkHoldsExcluded}
 	}
 	if _, err := c.ocsSend(ctx, op, http.MethodDelete, ocsRequest{app: ocsTalkRooms, suffix: []string{token}}, nil,
 		uncertainRoomDelete); err != nil {
@@ -366,7 +378,7 @@ func invokeTalkRoomsUpdate(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	if err := requireTalkToken(resolved, input.Token); err != nil {
+	if err := requireTalkToken(resolved, op, messageTalkNoRoom, input.Token); err != nil {
 		return nil, err
 	}
 	if input.Kind != "" || input.User != nil || (input.Name == nil) == (input.Description == nil) ||
@@ -387,7 +399,7 @@ func invokeTalkRoomsDelete(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	if err := requireTalkToken(resolved, input.Token); err != nil {
+	if err := requireTalkToken(resolved, op, messageTalkNoRoom, input.Token); err != nil {
 		return nil, err
 	}
 	if input.Kind != "" || input.Name != nil || input.User != nil || input.Description != nil {
@@ -407,7 +419,7 @@ func invokeTalkRoomsMarkRead(ctx context.Context, resolved *config.Resolved, sec
 	if err != nil {
 		return nil, err
 	}
-	if err := requireTalkToken(resolved, input.Token); err != nil {
+	if err := requireTalkToken(resolved, op, messageTalkNoRoom, input.Token); err != nil {
 		return nil, err
 	}
 	if input.Kind != "" || input.Name != nil || input.User != nil || input.Description != nil {
