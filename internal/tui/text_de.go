@@ -259,6 +259,8 @@ var textDE = map[textID]string{
 	tCmdNoExclusions:                   "Dieser Provider erklärt keine Ausschlüsse",
 	tTargetExcludedMark:                "[ausgeschlossen] ",
 	tTargetExceptCount:                 "außer %d",
+	tTargetsOutdatedWarning:            "diese Targets haben eine frühere Bedeutung und werden nicht verwendet: Die Connection bietet keine Tools, bis ihre Targets in dieser Liste neu gewählt und gespeichert sind; dieselbe Liste erneut zu speichern lässt sie gesperrt",
+	tTargetsOutdatedCell:               "veraltet, neu wählen",
 	tTargetCannotBeExcluded:            "Dieser Eintrag (%s) lässt sich nicht ausschließen",
 	tTargetNewExclusion:                "neuer Ausschluss: ",
 	tTargetTakenAsExclusion:            "Einträge werden als Ausschluss übernommen: Sie bleiben außerhalb dessen, was die Targets erreichen.",

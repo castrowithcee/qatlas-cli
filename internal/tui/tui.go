@@ -4825,6 +4825,9 @@ func (m *Model) fieldWarning(f field) string {
 	if f.kind != fieldTargets {
 		return ""
 	}
+	if m.section == sectionConnections && m.editing != "" && m.cfg.Connections[m.editing].TargetsOutdated {
+		return tr(tTargetsOutdatedWarning)
+	}
 	provider := m.cfg.Services[m.fieldValue("service")].Provider
 	if m.wizard != nil {
 		provider = m.wizard.provider
@@ -4996,6 +4999,10 @@ func (m *Model) cells(name string) []string {
 				targets = tr(tLogAll)
 			}
 			targets += " · " + tr(tTargetExceptCount, len(conn.Exclude))
+		}
+		if conn.TargetsOutdated {
+			// The former targets are not what the connection reaches; the row must not read as if they were.
+			targets = tr(tTargetsOutdatedCell)
 		}
 		description := m.logText(conn.Description)
 		if description == "" && m.needsDescription(name) {

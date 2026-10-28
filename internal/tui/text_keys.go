@@ -252,6 +252,8 @@ const (
 	tCmdNoExclusions                         textID = "CmdNoExclusions"
 	tTargetExcludedMark                      textID = "TargetExcludedMark"
 	tTargetExceptCount                       textID = "TargetExceptCount"
+	tTargetsOutdatedWarning                  textID = "TargetsOutdatedWarning"
+	tTargetsOutdatedCell                     textID = "TargetsOutdatedCell"
 	tTargetCannotBeExcluded                  textID = "TargetCannotBeExcluded"
 	tTargetNewExclusion                      textID = "TargetNewExclusion"
 	tTargetTakenAsExclusion                  textID = "TargetTakenAsExclusion"

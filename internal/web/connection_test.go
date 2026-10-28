@@ -889,3 +889,29 @@ func TestGuidedConnectionSummaryMasksTheBaseURLCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectionPageSaysOutdatedTargetsNeedAChoice(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetService("books", config.Service{Provider: "book", BaseURL: "https://books.example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetCredential("reader", config.Credential{Provider: "book", Type: config.CredentialTypeKeyring}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.SetConnection("old", config.Connection{Service: "books", Credential: "reader",
+		Targets: []string{"shelf/former"}, TargetsOutdated: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	body := s.request(t, http.MethodGet, "/connections/old", s.addr, cookie, nil).Body.String()
+	if !strings.Contains(body, "Outdated: the stored targets") || strings.Contains(body, "shelf/former") {
+		t.Fatalf("outdated connection page:\n%s", body)
+	}
+}
