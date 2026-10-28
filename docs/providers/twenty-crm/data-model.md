@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Twenty CRM: data model
@@ -18,7 +18,10 @@ left out and named in `omitted_fields`.
 
 `meta-objects.create`, `update`, `delete` and `meta-fields.create`, `update`, `delete` change the schema for
 every user and integration of the workspace. Rights: [Data model](setup.md#data-model). The writers need a `tools`
-entry; no profile ticks them.
+entry; no profile ticks them. The read tools also show excluded objects. `meta-objects.update`, `delete` and
+`meta-fields.create`, `update`, `delete` are refused after the proving read when they concern an excluded object,
+as its own object or as the other side of a relation (see [Object targets and
+exclusions](README.md#object-targets-and-exclusions)).
 `meta-fields.create` adds a field to any object Twenty accepts, standard or custom; Twenty decides, Qatlas
 does not pre-check the object. A field added to a standard object is a custom field.
 `meta-objects.update` and `meta-fields.update` change standard and system objects and fields too, with every

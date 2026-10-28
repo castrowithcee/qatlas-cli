@@ -17,6 +17,9 @@ photo, logo, sound, key, or agent data, as it would come embedded. The system ad
 no profile; deleting and sharing need a tools list. A contact update replaces by `etag`, refusing a card it cannot write
 whole. A new address book needs the general `addressbook` target; changing, deleting (with all contacts), or sharing one
 needs it bound and owned. Sharing: one user or group, never link, e-mail, or team; unknown ones are ignored (`shares`).
+An excluded address book is neither listed nor reachable (contacts, shares, and changes answer as for a missing
+address book); see [Exclusions](README.md#exclusions). The system address book is not in the reach of the kind alone,
+so it cannot be excluded.
 Vendor properties of an address book are not standards and are not read; only `oc:invite` is, as `shares`.
 
 Contact filters only narrow the answer; every href keeps its address book binding, and the list never sends

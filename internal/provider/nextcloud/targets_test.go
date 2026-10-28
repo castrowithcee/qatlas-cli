@@ -237,6 +237,10 @@ func TestInvalidExclusionsFailClosedWithoutQuotingValues(t *testing.T) {
 		"too many":                    {[]string{"folder/Team"}, many},
 		"calendar without target":     {folder, []string{"calendar/SECRET"}},
 		"calendar below ID target":    {[]string{"calendar/x"}, []string{"calendar/SECRET"}},
+		"addressbook below ID target": {[]string{"addressbook/x"}, []string{"addressbook/SECRET"}},
+		"deck below ID target":        {[]string{"deck/1"}, []string{"deck/2"}},
+		"calendar reserved":           {[]string{"calendar"}, []string{"calendar/inbox"}},
+		"system addressbook":          {[]string{"addressbook"}, []string{"addressbook/" + systemAddressbook}},
 		"deck not numeric":            {[]string{"deck"}, []string{"deck/SECRET"}},
 		"folder beside talk":          {[]string{"folder/Team", "talk"}, []string{"folder/Team/SECRET"}},
 		"folder beside account":       {[]string{"folder/Team", "account"}, []string{"folder/Team/SECRET"}},
@@ -255,19 +259,52 @@ func TestInvalidExclusionsFailClosedWithoutQuotingValues(t *testing.T) {
 	}
 }
 
-func TestExclusionsOfOtherKindsAreParsedButLocked(t *testing.T) {
+func TestIDExclusionsAreValidOnlyUnderTheWholeKind(t *testing.T) {
 	for _, tc := range []struct{ target, exclude string }{
-		{"calendar", "calendar/work"}, {"addressbook", "addressbook/book"},
-		{"deck", "deck/42"}, {"talk", "talk/token1"},
+		{"calendar", "calendar/work"}, {"addressbook", "addressbook/book"}, {"deck", "deck/42"},
 	} {
-		_, err := excluding(t, []string{tc.target}, []string{tc.exclude})
-		if err != errExcludeNotYet {
-			t.Errorf("%s = %v, want the transition lock", tc.exclude, err)
+		if _, err := excluding(t, []string{tc.target}, []string{tc.exclude}); err != nil {
+			t.Errorf("%s under %s = %v", tc.exclude, tc.target, err)
+		}
+		other := map[string]string{"calendar": "x1", "addressbook": "x1", "deck": "1"}[tc.target]
+		if _, err := excluding(t, []string{tc.target + "/" + other}, []string{tc.exclude}); err != errExcludeInvalid {
+			t.Errorf("%s under an ID target = %v", tc.exclude, err)
+		}
+		if _, err := excluding(t, []string{"folder"}, []string{tc.exclude}); err != errExcludeInvalid {
+			t.Errorf("%s without a target = %v", tc.exclude, err)
 		}
 	}
-	// A malformed value of a locked kind is invalid, not merely locked.
-	if _, err := excluding(t, []string{"deck"}, []string{"deck/x"}); err != errExcludeInvalid {
-		t.Errorf("malformed deck exclusion = %v", err)
+	s, err := excluding(t, []string{"calendar", "addressbook", "deck"},
+		[]string{"calendar/Work", "addressbook/Book", "deck/007"})
+	if err != nil || len(s.excludes.calendars) != 1 || s.excludes.decks[0] != "7" {
+		t.Errorf("scope = %+v, %v", s.excludes, err)
+	}
+}
+
+func TestExclusionsOutOfReachAreInvalid(t *testing.T) {
+	for _, tc := range []struct{ target, exclude string }{
+		{"addressbook", "addressbook/" + systemAddressbook},
+		{"addressbook", "addressbook/Z-Server-Generated--System"},
+		{"calendar", "calendar/inbox"}, {"calendar", "calendar/OUTBOX"}, {"calendar", "calendar/Trashbin"},
+		{"calendar", "calendar/work/x"}, {"deck", "deck/x"}, {"deck", "deck/-1"},
+	} {
+		_, err := excluding(t, []string{tc.target}, []string{tc.exclude})
+		if err != errExcludeInvalid {
+			t.Errorf("%s = %v, want invalid", tc.exclude, err)
+		}
+	}
+	// A board ID repeats after its leading zeros are dropped.
+	if _, err := excluding(t, []string{"deck"}, []string{"deck/7", "deck/07"}); err != errExcludeInvalid {
+		t.Errorf("repeated board = %v", err)
+	}
+	if _, err := excluding(t, []string{"calendar"}, []string{"calendar/Work", "calendar/WORK"}); err != errExcludeInvalid {
+		t.Errorf("repeated calendar = %v", err)
+	}
+}
+
+func TestTalkExclusionsAndTheRemainingTransitionLocksStay(t *testing.T) {
+	if _, err := excluding(t, []string{"talk"}, []string{"talk/token1"}); err != errExcludeNotYet {
+		t.Errorf("talk/token1 = %v, want the transition lock", err)
 	}
 	if _, err := excluding(t, []string{"folder/Team", "talk"}, []string{"folder/Team/A"}); err != errExcludeBesideKind {
 		t.Errorf("folder beside talk = %v", err)
@@ -275,8 +312,14 @@ func TestExclusionsOfOtherKindsAreParsedButLocked(t *testing.T) {
 	if _, err := excluding(t, []string{"folder", "account"}, []string{"folder/A"}); err != errExcludeBesideKind {
 		t.Errorf("beside account = %v", err)
 	}
+	if _, err := excluding(t, []string{"calendar", "account"}, []string{"calendar/A"}); err != errExcludeBesideKind {
+		t.Errorf("calendar beside account = %v", err)
+	}
 	if _, err := excluding(t, []string{"notes", "talk"}, []string{"notes/A"}); err != nil {
 		t.Errorf("notes beside talk = %v", err)
+	}
+	if _, err := excluding(t, []string{"calendar", "talk"}, []string{"calendar/A"}); err != nil {
+		t.Errorf("calendar beside talk = %v", err)
 	}
 }
 
