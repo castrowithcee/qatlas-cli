@@ -236,7 +236,7 @@ func readThread(ctx context.Context, c *Client, allowed allowlist, op string, id
 // proveRepository reads the repository of a path and requires its canonical name to lie inside the targets, so
 // that a renamed repository cannot be reached under its old name.
 func proveRepository(ctx context.Context, c *Client, allowed allowlist, op string, repo target) error {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return nil
 	}
 	var answer object
@@ -362,7 +362,7 @@ var notificationsCheckNew = &tool{
 		}
 	},
 	prepare: func(p *product, allowed allowlist, raw json.RawMessage) (run, error) {
-		if len(allowed) != 0 {
+		if !allowed.open() {
 			return nil, invalidArgument("the number of new notifications covers every repository of the account, " +
 				"beyond this connection's targets; use a connection without targets")
 		}
@@ -460,7 +460,7 @@ var notificationsMarkThread = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "mark notification"
-			if len(allowed) != 0 {
+			if !allowed.open() {
 				if _, err := readThread(ctx, c, allowed, op, a.ID); err != nil {
 					return nil, err
 				}
@@ -506,7 +506,7 @@ var notificationsMarkAllRead = &tool{
 		if err := decodeArguments(raw, &a); err != nil {
 			return nil, err
 		}
-		if len(allowed) != 0 {
+		if !allowed.open() {
 			return nil, invalidArgument("marking every notification reaches past this connection's targets; use a " +
 				"connection without targets")
 		}

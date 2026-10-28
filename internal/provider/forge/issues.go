@@ -83,7 +83,7 @@ func issueRepository(o object) (string, bool) {
 // it reports. Without targets everything the token reaches is admitted; with them, an object that names no
 // repository is not.
 func admitted(allowed allowlist, issue object) bool {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return true
 	}
 	name, ok := issueRepository(issue)
