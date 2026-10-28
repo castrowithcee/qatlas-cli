@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # GitHub code
@@ -167,12 +167,12 @@ profile, offered only where a connection's `tools` list names them, like
 | `github.code.search` | code, without file bodies; `text_matches` on request |
 | `github.commits.search` | commits, optionally sorted by `sort` and `order`, with `text_matches` on request |
 
-Both read GitHub's own search index with `terms`, under the rules described in [Search](README.md#search); they
-force the [target qualifiers](README.md#target-scoping). `sort` and `order` are arguments of their own, never part
+Both read GitHub's own search index with `terms`, under the rules described in [Search](search.md); they
+force the [target qualifiers](search.md#target-scoping). `sort` and `order` are arguments of their own, never part
 of `terms`. `github.code.search` has neither: GitHub marks the code search sort as closing down, and its order has
 no effect without it. `text_matches` adds the places the terms matched as untrusted fragments, never a file body.
 The repository of a code match follows the [result object rules](README.md#result-objects).
 `github.code.search` shares GitHub's separate, lower search rate limit, see
-[errors and rate limits](README.md#errors-and-rate-limits). The repository search is described with the
+[errors and rate limits](search.md#errors-and-rate-limits). The repository search is described with the
 [repositories](repositories.md#search), the user and organization search with the
 [accounts](accounts.md#search).
