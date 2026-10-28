@@ -362,9 +362,9 @@ func (c *Client) fileColumn(ctx context.Context, op string, selected target, col
 // cellEntries reads the current entries of the file cell of one row as raw values.
 func (c *Client) cellEntries(ctx context.Context, op string, input FileInput) (
 	entries []json.RawMessage, access *baseAccess, kind string, err error) {
-	selected, err := c.scope.selectTarget(input.Table)
+	selected, err := c.selectTable(ctx, op, input.Table)
 	if err != nil {
-		return nil, nil, "", providerError(op, err.Error())
+		return nil, nil, "", err
 	}
 	if access, err = c.access(ctx, op); err != nil {
 		return nil, nil, "", err

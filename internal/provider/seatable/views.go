@@ -89,7 +89,7 @@ var viewsList = capability.Descriptor{
 		{Name: "table", Description: "The selected table reference"},
 		{Name: "views", Description: "The views with id, name, type, is_locked, filters, sorts, hidden column keys, " +
 			"filter_conjunction, rows, formula_rows, summaries, groupbys, group_rows, groups and omitted_fields, untrusted data; " +
-			"formula_rows appears only for a wildcard connection"},
+			"formula_rows appears only for a wildcard connection, and with exclusions only for a table without a link into a table the connection does not reach"},
 		{Name: "truncated", Description: "True when the table holds more views than one answer carries"},
 	},
 	Examples: []capability.Example{{Description: "List the views of the only configured table", Arguments: json.RawMessage(`{}`)}},
@@ -108,7 +108,7 @@ var viewsGet = capability.Descriptor{
 		{Name: "table", Description: "The selected table reference"},
 		{Name: "view", Description: "The view with id, name, type, is_locked, filters, sorts, hidden column keys, " +
 			"filter_conjunction, groupbys, group_rows, groups, colorbys, rows, formula_rows, link_rows, summaries, colors and " +
-			"omitted_fields, untrusted data; formula_rows and link_rows appear only for a wildcard connection"},
+			"omitted_fields, untrusted data; formula_rows and link_rows appear only for a wildcard connection, and with exclusions only for a table without a link into a table the connection does not reach"},
 	},
 	Examples: []capability.Example{{Description: "Read one view by name", Arguments: json.RawMessage(`{"view":"Aktive"}`)}},
 }
@@ -200,11 +200,15 @@ func openForView(ctx context.Context, op string, resolved *config.Resolved, secr
 	if err != nil {
 		return nil, input, providerError(op, err.Error())
 	}
-	if _, err := bound.selectTarget(input.Table); err != nil {
+	selected, err := bound.selectTarget(input.Table)
+	if err != nil {
 		return nil, input, providerError(op, err.Error())
 	}
 	if err := checkViewRequest(op, kind, input); err != nil {
 		return nil, input, err
+	}
+	if (kind == "create" || kind == "update") && bound.claimsViewText(selected, input.Name) {
+		return nil, input, providerError(op, errViewNameClaimed)
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	return client, input, err
@@ -278,14 +282,18 @@ type viewScope struct {
 	selected target
 	table    tableJSON
 	access   *baseAccess
+	document metadataJSON
+	scope    scope
 }
+
+const errViewNameClaimed = "the view name is claimed by an exclusion of this connection"
 
 // resolveViewTable finds the selected table in the base metadata. The token exchange and the metadata read
 // are the only provider I/O that precedes a refusal based on the metadata.
 func (c *Client) resolveViewTable(ctx context.Context, op, table string) (*viewScope, error) {
-	selected, err := c.scope.selectTarget(table)
+	selected, err := c.selectTable(ctx, op, table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
@@ -303,7 +311,7 @@ func (c *Client) resolveViewTable(ctx context.Context, op, table string) (*viewS
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "SeaTable returned a table without a usable name"}
 	}
-	return &viewScope{selected: selected, table: *candidate, access: access}, nil
+	return &viewScope{selected: selected, table: *candidate, access: access, document: document, scope: c.scope}, nil
 }
 
 // find returns the identifier and name of the view a reference names in this table.
@@ -314,6 +322,10 @@ func (s *viewScope) find(op, reference string) (id, name string, err error) {
 	}
 	for _, view := range s.table.Views {
 		if (byID && view.ID == ref) || (!byID && view.Name == ref) {
+			// An excluded view answers like one the table does not hold.
+			if s.scope.viewExcluded(s.table, view.ID, view.Name) {
+				break
+			}
 			return view.ID, view.Name, nil
 		}
 	}
@@ -414,8 +426,8 @@ func shortText(value string) string {
 
 // normalizeView keeps the fields of the stable envelope within their bounds and drops everything else. The
 // free members pass through unchanged but bounded; one beyond the bounds is left out and named. The members
-// that may hold values of linked tables, formula_rows and link_rows, appear only for a wildcard connection.
-func normalizeView(op string, wire viewWire, wildcard bool) (View, error) {
+// that may hold values of linked tables, formula_rows and link_rows, appear only when linked says so.
+func normalizeView(op string, wire viewWire, linked bool) (View, error) {
 	if wire.Name == "" || len(wire.Name) > maxViewText {
 		return View{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "SeaTable returned a view without a usable name"}
@@ -493,7 +505,7 @@ func normalizeView(op string, wire viewWire, wildcard bool) (View, error) {
 		{"summaries", wire.Summaries, &view.Summaries, false},
 		{"colors", wire.Colors, &view.Colors, false},
 	} {
-		if !present(member.raw) || (member.linked && !wildcard) {
+		if !present(member.raw) || (member.linked && !linked) {
 			continue
 		}
 		value, ok := boundedContainer(member.raw)
@@ -520,16 +532,17 @@ func (c *Client) ListViews(ctx context.Context, input ViewInput) (*ViewsResult, 
 		scoped.access.token, maxResponseBytes, &answer); err != nil {
 		return nil, err
 	}
+	linked := c.linkedViewMembersVisible(scoped.document, scoped.table)
 	result := &ViewsResult{Table: formatTarget(scoped.selected), Views: []View{}}
 	for _, wire := range answer.Views {
-		if !scoped.inBinding(wire.ID, wire.Name) {
+		if !scoped.inBinding(wire.ID, wire.Name) || c.scope.viewExcluded(scoped.table, wire.ID, wire.Name) {
 			continue
 		}
 		if len(result.Views) >= maxViews {
 			result.Truncated = true
 			break
 		}
-		view, err := normalizeView(op, wire, c.scope.wholeBase())
+		view, err := normalizeView(op, wire, linked)
 		if err != nil {
 			return nil, err
 		}
@@ -572,7 +585,7 @@ func (c *Client) GetView(ctx context.Context, input ViewInput) (*ViewResult, err
 	if wire.ID == "" {
 		wire.ID = id
 	}
-	view, err := normalizeView(op, wire, c.scope.wholeBase())
+	view, err := normalizeView(op, wire, c.linkedViewMembersVisible(scoped.document, scoped.table))
 	if err != nil {
 		return nil, err
 	}
@@ -590,6 +603,9 @@ func (c *Client) CreateView(ctx context.Context, op string, input ViewInput) err
 	}
 	if scoped.selected.view != "" {
 		return providerError(op, "a table selection narrowed to one view cannot create views")
+	}
+	if c.scope.claimsViewName(scoped.table, input.Name) {
+		return providerError(op, errViewNameClaimed)
 	}
 	body, err := json.Marshal(map[string]string{"name": input.Name})
 	if err != nil {
@@ -638,6 +654,9 @@ func (c *Client) UpdateView(ctx context.Context, op string, input ViewInput) err
 	scoped, name, err := c.changeTarget(ctx, op, input)
 	if err != nil {
 		return err
+	}
+	if input.Name != "" && c.scope.claimsViewName(scoped.table, input.Name) {
+		return providerError(op, errViewNameClaimed)
 	}
 	keys := func(column string) (string, bool) { return columnKey(scoped.table, column) }
 	payload := map[string]any{}

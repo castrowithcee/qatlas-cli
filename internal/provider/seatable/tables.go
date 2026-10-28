@@ -130,7 +130,7 @@ func invokeTablesChange(op, kind string, change func(*Client, context.Context, s
 // wildcard, and a rename cannot give an allowed table a name that an allow-list entry already claims.
 func checkTableRequest(op, kind string, bound scope, input TableInput) error {
 	if kind == "create" || kind == "duplicate" {
-		if !bound.wholeBase() {
+		if !bound.wildcard {
 			return providerError(op, "this change needs a connection that exposes the whole base with *, "+
 				"because the new table cannot be part of an allow-list")
 		}
@@ -138,6 +138,9 @@ func checkTableRequest(op, kind string, bound scope, input TableInput) error {
 	if kind == "create" || kind == "rename" {
 		if err := checkNewTableName(input.Name); err != nil {
 			return providerError(op, err.Error())
+		}
+		if bound.claimsTableName(input.Name) {
+			return providerError(op, errTableNameClaimed)
 		}
 	}
 	if kind == "create" {
@@ -150,7 +153,7 @@ func checkTableRequest(op, kind string, bound scope, input TableInput) error {
 	if selected.view != "" {
 		return providerError(op, "a table selection narrowed to one view cannot be changed")
 	}
-	if kind != "rename" || bound.wholeBase() {
+	if kind != "rename" || bound.wildcard {
 		return nil
 	}
 	if selected.tableParam == "table_name" {
@@ -173,6 +176,8 @@ func checkNewTableName(name string) error {
 	}
 	return nil
 }
+
+const errTableNameClaimed = "the table name is claimed by an exclusion of this connection"
 
 var errTableName = errors.New("a table name has 1 to 255 printable characters, no '/', no surrounding blanks, " +
 	"no 'id:' prefix, and is not '*'")
@@ -207,7 +212,7 @@ func (c *Client) RenameTable(ctx context.Context, op string, input TableInput) e
 		return providerError(op, "the table already has this name")
 	}
 	if c.scope.namedTarget(scoped.table) {
-		return providerError(op, "a table that is configured as a connection target by name cannot be renamed")
+		return providerError(op, "a table that is configured in this connection by name cannot be renamed")
 	}
 	return c.changeTable(ctx, op, http.MethodPut, tablesURL(scoped.access, tablesPath), scoped.access,
 		map[string]any{"table_name": scoped.table.Name, "new_table_name": input.Name})
@@ -220,6 +225,9 @@ func (c *Client) DuplicateTable(ctx context.Context, op string, input TableInput
 	}
 	scoped, err := c.resolveViewTable(ctx, op, input.Table)
 	if err != nil {
+		return err
+	}
+	if err := c.guardCounterparts(op, scoped); err != nil {
 		return err
 	}
 	return c.changeTable(ctx, op, http.MethodPost, tablesURL(scoped.access, duplicatePath), scoped.access,
@@ -235,8 +243,34 @@ func (c *Client) DeleteTable(ctx context.Context, op string, input TableInput) e
 	if err != nil {
 		return err
 	}
+	if err := c.guardCounterparts(op, scoped); err != nil {
+		return err
+	}
 	return c.changeTable(ctx, op, http.MethodDelete, tablesURL(scoped.access, tablesPath), scoped.access,
 		map[string]any{"table_name": scoped.table.Name})
+}
+
+// guardCounterparts refuses to delete or copy a table that has a link column to an excluded table: the
+// change would reach the counterpart column there. A link whose other table cannot be determined counts as
+// excluded.
+func (c *Client) guardCounterparts(op string, scoped *viewScope) error {
+	if !c.scope.excludes() {
+		return nil
+	}
+	for _, column := range scoped.table.Columns {
+		if column.Type != "link" {
+			continue
+		}
+		other, ok := counterpart(scoped.table, column)
+		var joined *tableJSON
+		if ok {
+			joined = findTable(scoped.document, target{tableParam: "table_id", table: other})
+		}
+		if joined == nil || c.scope.tableExcluded(*joined) {
+			return providerError(op, "the table has a link column to a table outside this connection's allow-list")
+		}
+	}
+	return nil
 }
 
 // changeTable sends one change and drops the cached metadata, because the schema of the base has changed
