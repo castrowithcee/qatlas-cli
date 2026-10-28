@@ -924,7 +924,7 @@ func (c *Client) listCodeScanningAlerts(ctx context.Context, a *alertArguments) 
 		if entry.Number < 1 {
 			return nil, invalidEntry(op, "an alert")
 		}
-		result.Alerts = append(result.Alerts, entry.view(false, nil))
+		result.Alerts = append(result.Alerts, entry.view(false, allowlist{}))
 	}
 	result.HasMore, result.NextCursor = morePage(a.binding, a.page, a.perPage, hasNext)
 	return result, nil
