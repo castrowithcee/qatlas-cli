@@ -897,8 +897,8 @@ func excludableListerRegistry(t *testing.T) *capability.Registry {
 	err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: "lister", Name: "Lister",
 		Target: config.TargetMetadata{Label: "target", Multiple: true, Wildcard: "*", Kinds: []config.TargetKind{
-			{Name: "group", Forms: []string{"g/NAME"}, Excludable: true},
-			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}, Excludable: true},
+			{Name: "group", Forms: []string{"g/NAME"}, ExcludeForms: []string{"g/NAME"}},
+			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}, ExcludeForms: []string{"g/NAME/i/ID"}},
 		}},
 	}, nil)
 	if err != nil {

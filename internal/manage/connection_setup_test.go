@@ -460,7 +460,7 @@ type excludeCatalog struct{}
 var excludeProviders = []config.ProviderMetadata{{
 	ID: "ex", SecretRoles: []config.SecretRole{{Name: "token"}},
 	Target: config.TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
-		Kinds:    []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true}},
+		Kinds:    []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}}},
 		Validate: func(string) error { return nil }},
 }}
 

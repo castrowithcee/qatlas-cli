@@ -33,8 +33,8 @@ func TestExclusionsAreDeclaredAndParsedFailClosedWithoutQuotingValues(t *testing
 		t.Fatalf("metadata = %+v, want declared exclusions", metadata)
 	}
 	for _, k := range metadata.Target.Kinds {
-		if k.Name == "channel" != k.Excludable {
-			t.Fatalf("kind %s Excludable = %t, want only channel excludable", k.Name, k.Excludable)
+		if k.Name == "channel" != (len(k.ExcludeForms) > 0) {
+			t.Fatalf("kind %s Excludable = %t, want only channel excludable", k.Name, (len(k.ExcludeForms) > 0))
 		}
 	}
 	targets := []string{"team/" + teamA, "channel/" + chanA}

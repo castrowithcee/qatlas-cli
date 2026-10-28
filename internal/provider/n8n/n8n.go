@@ -462,14 +462,14 @@ func Register(reg *capability.Registry) error {
 				Description: "one project (Enterprise Projects feature) of the bound instance; optional, and " +
 					"may be listed more than once; find its ID in the n8n editor's project settings URL or in " +
 					"a workflow's own project membership",
-				Forms:      []string{"project/PROJECT_ID"},
-				Excludable: true,
+				Forms:        []string{"project/PROJECT_ID"},
+				ExcludeForms: []string{"project/PROJECT_ID"},
 			}, {
-				Name:        "workflow",
-				Description: "one workflow of the bound instance; optional, and may be listed more than once",
-				Forms:       []string{"workflow/WORKFLOW_ID"},
-				Parents:     []string{"project"},
-				Excludable:  true,
+				Name:         "workflow",
+				Description:  "one workflow of the bound instance; optional, and may be listed more than once",
+				Forms:        []string{"workflow/WORKFLOW_ID"},
+				Parents:      []string{"project"},
+				ExcludeForms: []string{"workflow/WORKFLOW_ID"},
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

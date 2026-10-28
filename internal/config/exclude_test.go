@@ -91,7 +91,7 @@ func TestExcludeValidity(t *testing.T) {
 }
 
 func TestExcludeStarAloneIsAWildcardEvenWhereAFormSpellsIt(t *testing.T) {
-	meta := TargetMetadata{Kinds: []TargetKind{{Name: "all", Forms: []string{"*"}, Excludable: true}}}
+	meta := TargetMetadata{Kinds: []TargetKind{{Name: "all", Forms: []string{"*"}, ExcludeForms: []string{"*"}}}}
 	got := meta.CheckExcludes([]string{"*"}, nil)
 	if len(got) != 1 || got[0].Fault != ExcludeWildcard {
 		t.Errorf("findings = %v, want one wildcard", got)
@@ -230,5 +230,22 @@ func TestExcludeDoesNotChangeIdleWarning(t *testing.T) {
 	}
 	if a, b := plain.IdleWarning("ex"), with.IdleWarning("ex"); a != b {
 		t.Errorf("idle IdleWarning = %q with exclusions, %q without", b, a)
+	}
+}
+
+func TestCheckExcludesReadsEveryFormByItsOwnDeclaration(t *testing.T) {
+	meta := TargetMetadata{Kinds: []TargetKind{
+		{Name: "site", Forms: []string{"site", "site/ID"}, ExcludeForms: []string{"site/ID"}},
+		{Name: "calendar", Forms: []string{"calendar", "calendar/URI"}, ExcludeForms: []string{"calendar/URI"}},
+		{Name: "instance", Forms: []string{"instance"}},
+	}}
+	for _, value := range []string{"site", "calendar", "instance"} {
+		got := meta.CheckExcludes([]string{value}, nil)
+		if len(got) != 1 || got[0].Fault != ExcludeForm {
+			t.Errorf("CheckExcludes(%q) = %+v, want a form fault", value, got)
+		}
+	}
+	if got := meta.CheckExcludes([]string{"site/7", "calendar/work"}, nil); len(got) != 0 {
+		t.Errorf("CheckExcludes(site/7, calendar/work) = %+v", got)
 	}
 }

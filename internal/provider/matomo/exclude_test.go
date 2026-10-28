@@ -55,8 +55,8 @@ func TestExclusionFormsAreDeclaredAndParsedWithoutQuotingValues(t *testing.T) {
 		t.Fatalf("metadata = %+v, want declared exclusions", metadata)
 	}
 	for _, kind := range metadata.Target.Kinds {
-		if kind.Excludable != (kind.Name == "site") {
-			t.Errorf("kind %s: Excludable = %t", kind.Name, kind.Excludable)
+		if (len(kind.ExcludeForms) > 0) != (kind.Name == "site") {
+			t.Errorf("kind %s: Excludable = %t", kind.Name, (len(kind.ExcludeForms) > 0))
 		}
 	}
 	for _, tc := range []struct {
@@ -90,7 +90,7 @@ func TestExclusionFormsAreDeclaredAndParsedWithoutQuotingValues(t *testing.T) {
 		valid    bool
 	}{
 		{[]string{"site/5"}, true}, {[]string{"site/0"}, false}, {[]string{"instance"}, false},
-		{[]string{"site/5", "site/5"}, false},
+		{[]string{"site/5", "site/5"}, false}, {[]string{"site"}, false}, {[]string{"site/7"}, true},
 	} {
 		if got := len(metadata.Target.CheckExcludes(tc.excludes, nil)) == 0; got != tc.valid {
 			t.Errorf("CheckExcludes(%v) valid = %t, want %t", tc.excludes, got, tc.valid)

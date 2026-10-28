@@ -332,14 +332,14 @@ func Register(reg *capability.Registry) error {
 				Name: tableKind,
 				Description: "a table, by name or as id:TABLEID, or * for every table of the base; the id: form " +
 					"survives a rename",
-				Forms:      []string{"TABLE", "*"},
-				Excludable: true,
+				Forms:        []string{"TABLE", "*"},
+				ExcludeForms: []string{"TABLE"},
 			}, {
-				Name:        "view",
-				Description: "one view of a table, by name or as id:TABLEID/id:VIEWID, narrowing rows.list to it",
-				Forms:       []string{"TABLE/VIEW"},
-				Parents:     []string{tableKind},
-				Excludable:  true,
+				Name:         "view",
+				Description:  "one view of a table, by name or as id:TABLEID/id:VIEWID, narrowing rows.list to it",
+				Forms:        []string{"TABLE/VIEW"},
+				Parents:      []string{tableKind},
+				ExcludeForms: []string{"TABLE/VIEW"},
 			}},
 			Reaches: reaches,
 			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +

@@ -218,7 +218,7 @@ func shelfRegistry(t *testing.T) *capability.Registry {
 	err := registry.RegisterProvider(config.ProviderMetadata{ID: "shelf", Name: "Shelf",
 		DefaultBaseURL: "https://shelf.example.test", SecretRoles: []config.SecretRole{{Name: "token"}},
 		Target: config.TargetMetadata{Label: "box", Multiple: true, MigrateTargets: migrate,
-			Kinds: []config.TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, Excludable: true}}}}, nil)
+			Kinds: []config.TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, ExcludeForms: []string{"box/NAME", "box/NAME/*"}}}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

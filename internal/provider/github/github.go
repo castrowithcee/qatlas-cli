@@ -562,22 +562,23 @@ func Register(reg *capability.Registry) error {
 				"a connection reaches whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "repository", Description: "one repository, or with * every repository of one owner",
-				Forms:      []string{"repos/OWNER/REPO", "repos/OWNER/*"},
-				Parents:    []string{"owner"},
-				Excludable: true,
+				Forms:        []string{"repos/OWNER/REPO", "repos/OWNER/*"},
+				Parents:      []string{"owner"},
+				ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"},
 			}, {
 				Name: "project", Description: "one project of a user or an organization, or with * every project of " +
 					"one owner",
 				Forms: []string{"users/LOGIN/projects/NUMBER", "orgs/LOGIN/projects/NUMBER", "users/LOGIN/projects/*",
 					"orgs/LOGIN/projects/*"},
-				Parents:    []string{"owner"},
-				Excludable: true,
+				Parents: []string{"owner"},
+				ExcludeForms: []string{"users/LOGIN/projects/NUMBER", "orgs/LOGIN/projects/NUMBER",
+					"users/LOGIN/projects/*", "orgs/LOGIN/projects/*"},
 			}, {
 				Name: "owner", Description: "a user or an organization whose projects and repositories may be " +
 					"listed and in which projects may be created or copied; allows no repository or existing project " +
 					"by itself",
-				Forms:      []string{"users/LOGIN", "orgs/LOGIN"},
-				Excludable: true,
+				Forms:        []string{"users/LOGIN", "orgs/LOGIN"},
+				ExcludeForms: []string{"users/LOGIN", "orgs/LOGIN"},
 			}},
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)

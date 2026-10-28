@@ -266,10 +266,10 @@ func Register(reg *capability.Registry) error {
 			Description: "optional objects as an allow-list; without targets the connection reaches every " +
 				"non-system object its API key reaches",
 			Kinds: []config.TargetKind{{
-				Name:        "object",
-				Description: "an object of the workspace whose records this connection may reach",
-				Forms:       []string{"object/NAME"},
-				Excludable:  true,
+				Name:         "object",
+				Description:  "an object of the workspace whose records this connection may reach",
+				Forms:        []string{"object/NAME"},
+				ExcludeForms: []string{"object/NAME"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

@@ -68,41 +68,42 @@ var toolGroups = []config.ToolGroup{{
 	Description: "Read-only view of the users and groups of the instance for an administrator or subadmin; the admin target binds them",
 }}
 
+// A bare kind as a target means "all"; as an exclusion it is not read, only the form with a name is.
 var targetKinds = []config.TargetKind{{
 	Name: kindFolder,
 	Description: "the Files folder this connection may access; optional, at most one; the kind alone binds the " +
 		"whole Files root of the identity, and PATH may have several segments such as Team/Reports",
-	Forms:      []string{kindFolder, kindFolder + "/PATH"},
-	Nested:     true,
-	Excludable: true,
+	Forms:        []string{kindFolder, kindFolder + "/PATH"},
+	Nested:       true,
+	ExcludeForms: []string{kindFolder + "/PATH"},
 }, {
-	Name:        kindCalendar,
-	Description: "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
-	Forms:       []string{kindCalendar, kindCalendar + "/URI"},
-	Excludable:  true,
+	Name:         kindCalendar,
+	Description:  "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
+	Forms:        []string{kindCalendar, kindCalendar + "/URI"},
+	ExcludeForms: []string{kindCalendar + "/URI"},
 }, {
 	Name: kindAddressbook,
 	Description: "all address books of the identity except the system address book, or one by its URI; optional, " +
 		"and may be listed more than once",
-	Forms:      []string{kindAddressbook, kindAddressbook + "/URI"},
-	Excludable: true,
+	Forms:        []string{kindAddressbook, kindAddressbook + "/URI"},
+	ExcludeForms: []string{kindAddressbook + "/URI"},
 }, {
-	Name:        kindTalk,
-	Description: "all Talk conversations of the identity, or one by its token; optional, and may be listed more than once",
-	Forms:       []string{kindTalk, kindTalk + "/TOKEN"},
-	Excludable:  true,
+	Name:         kindTalk,
+	Description:  "all Talk conversations of the identity, or one by its token; optional, and may be listed more than once",
+	Forms:        []string{kindTalk, kindTalk + "/TOKEN"},
+	ExcludeForms: []string{kindTalk + "/TOKEN"},
 }, {
-	Name:        kindDeck,
-	Description: "all Deck boards of the identity, or one by its numeric board ID; optional, and may be listed more than once",
-	Forms:       []string{kindDeck, kindDeck + "/BOARD_ID"},
-	Excludable:  true,
+	Name:         kindDeck,
+	Description:  "all Deck boards of the identity, or one by its numeric board ID; optional, and may be listed more than once",
+	Forms:        []string{kindDeck, kindDeck + "/BOARD_ID"},
+	ExcludeForms: []string{kindDeck + "/BOARD_ID"},
 }, {
 	Name: kindNotes,
 	Description: "all notes of the identity, or the notes of one category, which may be a sub-folder such as " +
 		"Work/Plans; optional, and may be listed more than once",
-	Forms:      []string{kindNotes, kindNotes + "/PATH"},
-	Nested:     true,
-	Excludable: true,
+	Forms:        []string{kindNotes, kindNotes + "/PATH"},
+	Nested:       true,
+	ExcludeForms: []string{kindNotes + "/PATH"},
 }, {
 	Name: kindAccount,
 	Description: "the account-wide and instance-wide reach of the identity: notifications, activity, search, " +

@@ -104,8 +104,9 @@ func Register(reg *capability.Registry) error {
 				Name: "site",
 				Description: "site binds every website of the token and cannot be combined with site/ID; " +
 					"site/ID binds exactly that website",
-				Forms:      []string{formSites, formSite},
-				Excludable: true,
+				Forms: []string{formSites, formSite},
+				// Bare site binds every website; as an exclusion it is not read.
+				ExcludeForms: []string{formSite},
 			}, {
 				Name:        "instance",
 				Description: "the Matomo instance itself, for tools that need Super User rights",

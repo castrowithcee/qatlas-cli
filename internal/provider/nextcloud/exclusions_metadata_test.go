@@ -13,8 +13,8 @@ func TestExclusionsAreDeclaredForTheEnforcedKindsOnly(t *testing.T) {
 	meta, _ := registry(t).ProviderMetadata(Provider)
 	for _, kind := range meta.Target.Kinds {
 		want := slices.Contains([]string{kindFolder, kindNotes, kindCalendar, kindAddressbook, kindDeck, kindTalk}, kind.Name)
-		if kind.Excludable != want {
-			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, kind.Excludable, want)
+		if (len(kind.ExcludeForms) > 0) != want {
+			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, (len(kind.ExcludeForms) > 0), want)
 		}
 	}
 }
@@ -85,5 +85,17 @@ func TestAggregatedValuesAreWarnedAboutInTheToolDescriptions(t *testing.T) {
 		if !strings.Contains(descriptor.Description, "excluded folder") {
 			t.Errorf("%s does not name the exclusion: %s", descriptor.ID, descriptor.Description)
 		}
+	}
+}
+
+func TestCoreRefusesABareKindAsExclusion(t *testing.T) {
+	meta, _ := registry(t).ProviderMetadata(Provider)
+	for _, value := range []string{kindFolder, kindNotes, kindCalendar, kindAddressbook, kindDeck, kindTalk} {
+		if got := meta.Target.CheckExcludes([]string{value}, nil); len(got) != 1 || got[0].Fault != config.ExcludeForm {
+			t.Errorf("CheckExcludes(%q) = %+v, want a form fault", value, got)
+		}
+	}
+	if got := meta.Target.CheckExcludes([]string{"calendar/work", "folder/Team/Private", "deck/42"}, nil); len(got) != 0 {
+		t.Errorf("CheckExcludes = %+v", got)
 	}
 }

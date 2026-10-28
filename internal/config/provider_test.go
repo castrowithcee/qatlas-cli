@@ -63,7 +63,7 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		SecretRoles: []SecretRole{{Name: "token", Description: "token"}},
 		Target: TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
 			Kinds: []TargetKind{
-				{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true},
+				{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}},
 				{Name: "org", Forms: []string{"orgs/ORG"}},
 			},
 			Validate: func(target string) error {

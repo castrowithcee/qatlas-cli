@@ -27,7 +27,7 @@ func excludeCore(t *testing.T, targets, exclude []string) *Core {
 	metadata := config.ProviderMetadata{ID: "fake", Name: "Fake", Target: config.TargetMetadata{
 		Multiple: true, Wildcard: "*",
 		Kinds: []config.TargetKind{{Name: "repository", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"},
-			Excludable: true}},
+			ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}}},
 	}}
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(metadata, nil); err != nil {

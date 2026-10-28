@@ -180,7 +180,7 @@ func TestRegisterDeclaresBothTargetKindsExcludable(t *testing.T) {
 		t.Fatal("seatable.base does not declare exclusions")
 	}
 	for _, kind := range meta.Target.Kinds {
-		if !kind.Excludable {
+		if !(len(kind.ExcludeForms) > 0) {
 			t.Errorf("kind %s is not excludable", kind.Name)
 		}
 	}

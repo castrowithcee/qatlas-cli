@@ -23,7 +23,7 @@ type shelfCatalog struct{ setupCatalog }
 var shelfProvider = config.ProviderMetadata{
 	ID: "shelf", DefaultBaseURL: "https://shelf.example.test", SecretRoles: []config.SecretRole{{Name: "token"}},
 	Target: config.TargetMetadata{Label: "box", Multiple: true, MigrateTargets: shelfMigrate,
-		Kinds: []config.TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, Excludable: true}}},
+		Kinds: []config.TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, ExcludeForms: []string{"box/NAME", "box/NAME/*"}}}},
 	Tools: []config.ToolMetadata{{ID: "shelf.boxes.list", Effect: config.EffectRead}},
 }
 

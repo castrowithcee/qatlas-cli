@@ -443,14 +443,14 @@ func Register(reg *capability.Registry) error {
 				Parents: []string{"mailbox"},
 				Description: "folder/PATH is the folder with that exact name and its subfolders, folder/PATH/* " +
 					"only its subfolders; optional, repeatable; no other wildcards; can be excluded in both forms",
-				Forms:      []string{"folder/PATH", "folder/PATH/*"},
-				Excludable: true,
+				Forms:        []string{"folder/PATH", "folder/PATH/*"},
+				ExcludeForms: []string{"folder/PATH", "folder/PATH/*"},
 			}, {
 				Name: "sender",
 				Description: "one sender address whose messages are listed; optional, repeatable; compared " +
 					"against the From address of each message, case-insensitively; can be excluded",
-				Forms:      []string{"sender/ADDRESS"},
-				Excludable: true,
+				Forms:        []string{"sender/ADDRESS"},
+				ExcludeForms: []string{"sender/ADDRESS"},
 			}},
 			Validate:       validateTarget,
 			ValidateSet:    func(values []string) error { _, err := parseScope(values); return err },

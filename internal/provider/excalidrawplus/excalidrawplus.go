@@ -376,17 +376,17 @@ func Register(reg *capability.Registry) error {
 				"reads; a scene is only reachable when it is listed or its own collection is allowed. An exclusion " +
 				"(collection/COLLECTION_ID or scene/SCENE_ID) takes a collection or scene out again and always wins",
 			Kinds: []config.TargetKind{{
-				Name:        "collection",
-				Description: "a collection whose scenes and scene content this connection may read",
-				Forms:       []string{"collection/COLLECTION_ID", "*"},
-				Excludable:  true,
+				Name:         "collection",
+				Description:  "a collection whose scenes and scene content this connection may read",
+				Forms:        []string{"collection/COLLECTION_ID", "*"},
+				ExcludeForms: []string{"collection/COLLECTION_ID"},
 			}, {
 				Name: "scene",
 				Description: "a single scene of the workspace that narrows the connection to it; optional, repeatable, " +
 					"and it does not open its collection",
-				Forms:      []string{"scene/SCENE_ID"},
-				Parents:    []string{"collection"},
-				Excludable: true,
+				Forms:        []string{"scene/SCENE_ID"},
+				Parents:      []string{"collection"},
+				ExcludeForms: []string{"scene/SCENE_ID"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

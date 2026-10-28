@@ -158,18 +158,20 @@ func (t TargetMetadata) knowsForm(form string) bool {
 // a surface offers no list for it, though entries of it can still come from a resolved web address. The zero
 // value is a listed kind.
 //
-// Excludable says that the provider reads an exclusion in a form of the kind (see Connection.Exclude): a
-// connection can take entries of the kind out of what its targets reach. It declares a promise of the
-// provider and widens nothing; without it on any kind, a connection may not carry exclusions at all.
+// ExcludeForms lists the forms of the kind that the provider reads as an exclusion (see Connection.Exclude): a
+// connection can take entries spelled in them out of what its targets reach. A form is listed only when it is
+// also one of Forms and the provider's exclusion parser takes it; a form left out, such as a bare kind that as a
+// target means "all", is no exclusion. It declares a promise of the provider and widens nothing; without it on
+// any kind, a connection may not carry exclusions at all.
 type TargetKind struct {
-	Name        string
-	Description string
-	Forms       []string
-	Parents     []string
-	Nested      bool
-	Top         bool
-	Unlisted    bool
-	Excludable  bool
+	Name         string
+	Description  string
+	Forms        []string
+	Parents      []string
+	Nested       bool
+	Top          bool
+	Unlisted     bool
+	ExcludeForms []string
 }
 
 // ErrTargetBrowseUnsupported is the error of choosing targets at a provider that describes no way to do so.
@@ -281,7 +283,7 @@ func (t TargetMetadata) ValidTarget(kind, target string) bool {
 
 // Excludes reports whether the provider declares exclusions for at least one kind of target.
 func (t TargetMetadata) Excludes() bool {
-	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool { return kind.Excludable })
+	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool { return len(kind.ExcludeForms) > 0 })
 }
 
 // ExcludeFault names why an exclusion of a connection is invalid.
@@ -343,13 +345,17 @@ func (t TargetMetadata) CheckExcludes(excludes, targets []string) []ExcludeFindi
 	return out
 }
 
-// excludableForm reports whether value, spelled exactly, is a valid target of an excludable kind.
+// excludableForm reports whether value, spelled exactly, is a valid target of a kind and spelled in one of its
+// exclusion forms.
 func (t TargetMetadata) excludableForm(value string) bool {
 	if value != strings.TrimSpace(value) {
 		return false
 	}
+	segments := strings.Split(value, "/")
 	return slices.ContainsFunc(t.Kinds, func(kind TargetKind) bool {
-		return kind.Excludable && t.ValidTarget(kind.Name, value)
+		return slices.ContainsFunc(kind.ExcludeForms, func(form string) bool {
+			return FitsForm(segments, strings.Split(form, "/"))
+		}) && t.ValidTarget(kind.Name, value)
 	})
 }
 
