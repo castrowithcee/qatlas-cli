@@ -999,6 +999,31 @@ func (j repositoryAdvisoryJSON) addWidth(v *RepositoryAdvisory, allowed allowlis
 	v.Links = j.links
 }
 
+// admitsAdvisory reports whether an organization advisory list may show a row, judged by the repository in
+// the path of its html_url, the only repository member the row names. Only exclusions narrow the list, since
+// the owner target the tool requires already admits the whole organization: with exclusions, an excluded or
+// unmapped row is dropped; without, every row stays.
+func (a allowlist) admitsAdvisory(htmlURL string) bool {
+	if len(a.excludes) == 0 {
+		return true
+	}
+	repository, ok := advisoryHTMLRepository(htmlURL)
+	return ok && a.admitsRepository(repository)
+}
+
+// advisoryHTMLRepository reads OWNER/REPO from the first two path segments of an advisory's html_url.
+func advisoryHTMLRepository(htmlURL string) (target, bool) {
+	parsed, err := url.Parse(htmlURL)
+	if err != nil {
+		return target{}, false
+	}
+	segments := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(segments) < 2 || !validLogin(segments[0]) || !validRepoName(segments[1]) {
+		return target{}, false
+	}
+	return target{kind: kindRepository, owner: segments[0], repo: segments[1]}, true
+}
+
 func (c *Client) listRepositoryAdvisories(ctx context.Context, a *advisoryArguments, path, permission string) (*RepositoryAdvisoryList, error) {
 	const op = "list repository security advisories"
 	query := a.query()
@@ -1013,6 +1038,9 @@ func (c *Client) listRepositoryAdvisories(ctx context.Context, a *advisoryArgume
 	for _, entry := range raw {
 		if entry.GHSAID == "" {
 			return nil, invalidEntry(op, "an advisory")
+		}
+		if c.target.kind == kindOwner && !a.allowed.admitsAdvisory(entry.HTMLURL) {
+			continue
 		}
 		result.Advisories = append(result.Advisories, entry.view(a.allowed))
 	}

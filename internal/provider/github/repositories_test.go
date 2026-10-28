@@ -264,3 +264,84 @@ func TestRepositoriesArgumentsAreValidatedBeforeIO(t *testing.T) {
 		}
 	}
 }
+
+// Exclusions refuse a create or fork whose destination owner or exact name they cover, and a fork whose
+// source they cover, before any secret or request; a destination in the token's own account needs one read
+// of the account, and is then refused without a change. Refusals name neither the object nor the exclusion.
+func TestRepositoriesCreateAndForkHonourExclusions(t *testing.T) {
+	f, _, base := serveRepositories(t)
+	reads := 0
+	red := &redact.Redactor{}
+	cfg := repositoriesConfig(base)
+	all := []config.Effect{config.EffectRead, config.EffectCreate}
+	add := func(name string, excludes ...string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+			Exclude: excludes}
+	}
+	add("ex-org", "orgs/octo-org")
+	add("ex-name", "repos/octo-org/new-repo")
+	add("ex-pattern", "repos/octo-org/*")
+	add("ex-source", "repos/octo-org/example")
+	add("ex-me", "users/octocat")
+	add("ex-me-name", "repos/octocat/new-repo")
+	add("ex-other", "orgs/hubot")
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+
+	for _, tt := range []struct {
+		name, operation, connection, arguments string
+	}{
+		{"create in an excluded owner", repositoriesCreate.ID, "ex-org", `{"owner":"orgs/OCTO-ORG","name":"x"}`},
+		{"create in an owner of a pattern", repositoriesCreate.ID, "ex-pattern", `{"owner":"orgs/octo-org","name":"x"}`},
+		{"create of an excluded name", repositoriesCreate.ID, "ex-name", `{"owner":"orgs/octo-org","name":"New-Repo"}`},
+		{"fork into an excluded owner", repositoriesFork.ID, "ex-org",
+			`{"repository":"octo-org/example","organization":"orgs/octo-org"}`},
+		{"fork under an excluded name", repositoriesFork.ID, "ex-name",
+			`{"repository":"octo-org/example","organization":"orgs/octo-org","name":"new-repo"}`},
+		{"fork of an excluded source", repositoriesFork.ID, "ex-source", `{"repository":"octo-org/example"}`},
+	} {
+		reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, tt.operation, tt.connection, tt.arguments, true)
+		if !isInvalidRequest(err) || reads != 0 || len(f.recorded()) != before {
+			t.Errorf("%s = %v (reads %d, requests %d), want an invalid request before any I/O", tt.name, err,
+				reads, len(f.recorded())-before)
+		}
+		if err != nil && (strings.Contains(err.Error(), "octo-org") || strings.Contains(err.Error(), "new-repo")) {
+			t.Errorf("%s: the refusal names the object: %v", tt.name, err)
+		}
+	}
+
+	// The token's own account is known only from GitHub: one read, then a refusal without a change.
+	for _, tt := range []struct{ name, operation, connection, arguments string }{
+		{"create in an excluded own account", repositoriesCreate.ID, "ex-me", `{"name":"x"}`},
+		{"create of an excluded name in the own account", repositoriesCreate.ID, "ex-me-name", `{"name":"new-repo"}`},
+		{"fork into an excluded own account", repositoriesFork.ID, "ex-me", `{"repository":"octo-org/example"}`},
+		{"fork under an excluded name into the own account", repositoriesFork.ID, "ex-me-name",
+			`{"repository":"octo-org/example","name":"new-repo"}`},
+	} {
+		before := len(f.recorded())
+		_, err := invoke(t, core, tt.operation, tt.connection, tt.arguments, true)
+		sent := f.recorded()[before:]
+		if !isInvalidRequest(err) || len(sent) != 1 || sent[0].method != http.MethodGet || !strings.HasSuffix(sent[0].path, "/user") {
+			t.Errorf("%s = %v (requests %+v), want an invalid request after one account read", tt.name, err, sent)
+		}
+	}
+
+	// A fork keeps the name of its source: excluding that name under the own account refuses the fork.
+	cfg.Connections["ex-me-source"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+		Exclude: []string{"repos/octocat/example"}}
+	if _, err := invoke(t, core, repositoriesFork.ID, "ex-me-source", `{"repository":"octo-org/example"}`, true); !isInvalidRequest(err) {
+		t.Errorf("fork keeping an excluded name = %v, want an invalid request", err)
+	}
+
+	// An exclusion elsewhere changes nothing.
+	for _, call := range []struct{ operation, arguments string }{
+		{repositoriesCreate.ID, `{"owner":"orgs/octo-org","name":"fresh"}`},
+		{repositoriesCreate.ID, `{"name":"fresh"}`},
+		{repositoriesFork.ID, `{"repository":"octo-org/example"}`},
+	} {
+		if _, err := invoke(t, core, call.operation, "ex-other", call.arguments, true); err != nil {
+			t.Errorf("%s %s with an unrelated exclusion = %v", call.operation, call.arguments, err)
+		}
+	}
+}
