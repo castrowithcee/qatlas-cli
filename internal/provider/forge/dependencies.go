@@ -91,7 +91,8 @@ func (r relation) example(extra string) json.RawMessage {
 }
 
 // bind checks everything the targets decide: the repository of the issue and the one of the counterpart. A
-// counterpart in another repository must be named and allowed; the refusal never quotes it.
+// counterpart in another repository must be named and allowed; the refusal never quotes it and does not say
+// that an exclusion, rather than the targets, took it out.
 func (r relation) bind(allowed allowlist, a relationCall) (home, other target, number int64, err error) {
 	if home, err = allowed.chooseRepository(a.Repository); err != nil {
 		return
@@ -111,6 +112,8 @@ func (r relation) bind(allowed allowlist, a relationCall) (home, other target, n
 		switch {
 		case !ok || !validName(owner) || !validRepoName(repo):
 			err = invalidArgument(r.repo + " must be OWNER/REPO")
+		case allowed.excluded(owner, repo):
+			err = unavailable(r.repo)
 		case !allowed.allowsRepository(owner, repo):
 			err = outsideTargets(r.repo)
 		default:
