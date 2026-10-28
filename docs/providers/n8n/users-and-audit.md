@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # n8n users and security audit
@@ -48,6 +48,24 @@ revoking, and deleting remain, so no tool invites a user.
   a secret is read; there is no default. The result names the consequence (`transferred` or
   `deleted_with_user`).
 
+### Exclusions for user deletion
+
+Where the connection excludes projects or workflows (see [README.md](README.md#exclusions)), `users.delete`
+checks before the delete request:
+
+- A `transfer_project_id` in an excluded project is refused before any request; a reachable project stays
+  allowed.
+- `delete_owned_resources: true` is refused when the user's resources would include something excluded. The
+  Public API names no personal project of a user, so membership is the proof: the user is a member of an
+  excluded project, or of a project that owns an excluded workflow. This is narrower than n8n, which deletes
+  only the personal project, because a project's type is not part of the proof. A project whose members cannot
+  be read, an excluded workflow without a reported owner, and a member list beyond 20 pages count as proof
+  against the deletion. An excluded workflow or project that n8n does not know is skipped, except that a
+  project whose members cannot be read refuses.
+
+The refusal names neither the user's project nor the excluded object. `users.list`, `.get` and `.set-role` are
+unchanged.
+
 ## Security audit
 
 `n8n.audit.generate` is instance-wide (refused locally on a connection with any `project/` or `workflow/`
@@ -61,3 +79,14 @@ limited, and their nodes are counted and named, nothing more of them. `documenta
 address Qatlas never fetches; it is untrusted text. All of it is untrusted data, capped per value, and
 `truncated` flags what was cut.
 The audit may be slow on a large instance; an error is never retried.
+
+### Exclusions for the audit
+
+Where the connection excludes projects or workflows, locations that carry a workflow ID (`workflow_id` of a
+node, or a `workflow` location) of an excluded workflow, or a `credential` ID that no reachable project holds,
+are left out before the counts and caps apply. A section that had locations and keeps none is dropped, and
+`section_count` follows. A workflow is placed through its own report, a credential through the credential list;
+a location that cannot be placed, or beyond 200 workflow reads per call, is left out. Without an excluded
+project nothing is read besides the audit. Sections of the `instance` category and values n8n computed over
+the whole instance (`settings`, `next_versions`) are summed up before the filter, so they still describe the
+whole instance; the tool description warns about it.
