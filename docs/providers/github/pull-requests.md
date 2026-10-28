@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # GitHub pull requests
@@ -249,7 +249,7 @@ requested, one not requested, and the pull request's own author are all left as 
 ## Pull request search
 
 `github.pull-requests.search` searches pull requests, never plain issues: it forces `is:pr` ahead of `terms`, next
-to the target qualifiers described under [Search](README.md#search). It takes the filters of
+to the target qualifiers described under [Search](search.md). It takes the filters of
 [issue search](issues.md#issue-search) as arguments of their own, never part of `terms`, and binds them to the
 cursor. With `advanced_search` or `search_type` set, GitHub reads the query differently, so every match is also
 checked against the connection's targets, and an answer outside them is refused as an invalid response. With
