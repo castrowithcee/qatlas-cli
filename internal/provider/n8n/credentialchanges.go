@@ -87,7 +87,8 @@ var credentialsCreate = capability.Descriptor{
 		{Name: "credential_type", Required: true,
 			Description: "Credential type name, letters, digits, '.', '_' and '-', at most 100 characters"},
 		credentialDataArgument, credentialSecretRefArgument,
-		{Name: "project_id", Description: "Project to create the credential in; required with a project allow-list"},
+		{Name: "project_id", Description: "Project to create the credential in; required with a project allow-list " +
+			"and on a connection that excludes projects"},
 	},
 	Fields: credentialChangeFields,
 	Examples: []capability.Example{{Description: "Create a basic-auth credential, the password from a released forward credential",
@@ -285,7 +286,7 @@ func selectCredentialProject(bound scope, projectID, argument string) error {
 	if !validTargetID(projectID) {
 		return invalidRequest(argument + " must be a usable n8n identifier")
 	}
-	if !bound.allowsProject(projectID) {
+	if !bound.reachesProject(projectID) {
 		return invalidRequest(argument + " is outside the targets of this connection")
 	}
 	return nil
@@ -325,6 +326,10 @@ func invokeCredentialsCreate(ctx context.Context, resolved *config.Resolved, sec
 		}
 	case len(bound.projects) > 0:
 		return nil, invalidRequest("project_id is required on a connection with a project allow-list")
+	default:
+		if err := bound.requireProjectID(input.ProjectID); err != nil {
+			return nil, err
+		}
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {

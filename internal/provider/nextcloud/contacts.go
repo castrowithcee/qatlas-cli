@@ -280,7 +280,7 @@ func requireAddressbook(resolved *config.Resolved) (selection, error) {
 	if !s.addressbooks.bound() {
 		return selection{}, &provider.Error{Class: provider.ClassPermission, Op: "open", Message: messageAddressbookNoBook}
 	}
-	return s.addressbooks, nil
+	return s.addressbooks.excluding(s.excludes.addressbooks, false), nil
 }
 
 // addressbookBound wraps a handler so a connection without an address book target refuses before the
@@ -308,7 +308,14 @@ func openAddressbook(ctx context.Context, op string, resolved *config.Resolved, 
 	if err != nil {
 		return nil, err
 	}
-	if !contactChildID(uri) || !bound.holdsAddressbook(uri) {
+	if !contactChildID(uri) {
+		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAddressbookNone}
+	}
+	// An excluded address book answers like one that does not exist.
+	if bound.hides(uri) {
+		return nil, hiddenError(op)
+	}
+	if !bound.holdsAddressbook(uri) {
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageAddressbookNone}
 	}
 	return open(ctx, resolved, secrets, red, false)

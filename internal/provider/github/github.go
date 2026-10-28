@@ -149,6 +149,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1306,12 +1307,28 @@ func (c *Client) graphqlRequest(ctx context.Context, op, document string, variab
 func (c *Client) post(ctx context.Context, op, document string, variables map[string]any,
 	change bool) (graphQLEnvelope, error) {
 	var envelope graphQLEnvelope
+	document = c.pinRepositories(document)
 	payload, err := json.Marshal(map[string]any{"query": c.scoped(ctx, op, document), "variables": variables})
 	if err != nil {
 		return envelope, providerError(op, "the request could not be built")
 	}
 	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil, nil)
 	return envelope, err
+}
+
+// repositoryLookup matches the GraphQL lookup of a repository by owner and name variables.
+var repositoryLookup = regexp.MustCompile(`repository\(owner:\s*\$\w+,\s*name:\s*\$\w+\)`)
+
+// pinRepositories stops GraphQL from following a renamed repository while the connection excludes anything:
+// a repository renamed away from its excluded name would otherwise answer under the old name. Without
+// exclusions the document stays as written. REST never follows such redirects.
+func (c *Client) pinRepositories(document string) string {
+	if len(c.allowed.excludes) == 0 {
+		return document
+	}
+	return repositoryLookup.ReplaceAllStringFunc(document, func(m string) string {
+		return m[:len(m)-1] + ",followRenames:false)"
+	})
 }
 
 // graphQLFailure classifies the errors of one GraphQL answer. GitHub names an explicit refusal of the token

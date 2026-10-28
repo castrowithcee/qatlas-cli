@@ -1,9 +1,11 @@
 package bookstack
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -25,6 +27,7 @@ type areaServer struct {
 	rec     *recorder
 	mu      sync.Mutex
 	shelves map[int64][]int64
+	bodies  []string
 	// searchFiller is the number of foreign page hits the instance search returns before the own ones.
 	searchFiller int
 }
@@ -173,9 +176,34 @@ func newAreaServer(t *testing.T) *areaServer {
 		s.rec.record(r)
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": s.hits(), "total": 4242})
 	})
-	s.Server = httptest.NewTLSServer(mux)
+	// A change request's body is kept for the tests that prove what was sent.
+	s.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			body, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(body))
+			s.mu.Lock()
+			s.bodies = append(s.bodies, string(body))
+			s.mu.Unlock()
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	t.Cleanup(s.Close)
 	return s
+}
+
+// lastBody returns the body of the last change request.
+func (s *areaServer) lastBody(t *testing.T) map[string]any {
+	t.Helper()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.bodies) == 0 {
+		t.Fatal("no change request was sent")
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(s.bodies[len(s.bodies)-1]), &body); err != nil {
+		t.Fatal(err)
+	}
+	return body
 }
 
 // hits is every kind of hit, of both books, as an instance that ignores the search scope answers.

@@ -31,3 +31,14 @@ project returns nothing of it. The language of an expression is named by `lang` 
 both RFC 3339 and at most three months apart. Its narrowing is passed to Todoist on every page, and the cursor
 is bound to it.
 
+## Exclusions
+
+Task rows of an excluded project, tree, or section are dropped after Todoist evaluated the filter, so a page can
+be short or empty while `has_more` stays true. This holds for expressions, the structured filters, and completed
+tasks alike; a completed task of an archived project below an excluded tree is dropped as well, and the archived
+projects are read for that. A `project_id` or `section_id` filter on an excluded object is refused.
+
+The saved filters of `todoist.filters.list` are listed whole, whatever the connection excludes: their names
+and queries can name excluded projects. Qatlas evaluates a saved filter only when its query is passed to
+`todoist.tasks.filter`, which drops excluded rows.
+

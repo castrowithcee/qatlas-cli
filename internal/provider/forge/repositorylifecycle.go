@@ -37,10 +37,11 @@ func repositoryPath(repo target) string {
 
 func fullName(repo target) string { return repo.owner + "/" + repo.repo }
 
-// namesOwnerOfScope reports whether the list admits the owner by an owner target of exactly that scope.
+// namesOwnerOfScope reports whether the list admits the owner by an owner target of exactly that scope; without
+// targets, every owner that no exclusion takes out.
 func (a allowlist) namesOwnerOfScope(scope, name string) bool {
-	if a.open() {
-		return true
+	if !a.bound() {
+		return !a.excludedOwner(name)
 	}
 	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == scope && strings.EqualFold(entry.owner, name) {
@@ -51,19 +52,19 @@ func (a allowlist) namesOwnerOfScope(scope, name string) bool {
 }
 
 // checkDestination checks where a new repository goes: the organization, which the targets name as orgs/NAME,
-// or, left out, the account behind the token, for which they must name some user. The account itself is proven
-// by reading it before the change.
-func (a allowlist) checkDestination(organization string) error {
+// or, left out, the account behind the token, for which they must name some user. Exclusions never bind: they
+// only take a destination out, and the account behind the token is proven by reading it before the change.
+func (a allowlist) checkDestination(organization, name string) error {
 	if organization != "" {
 		if !validName(organization) {
 			return invalidArgument("organization must be an organization name")
 		}
 		if !a.namesOwnerOfScope("orgs", organization) {
-			return outsideTargets("organization")
+			return a.outsideOwner("organization", organization)
 		}
-		return nil
+		return a.checkNewName(organization, name)
 	}
-	if a.open() {
+	if !a.bound() {
 		return nil
 	}
 	for _, entry := range a.targets {
@@ -75,24 +76,70 @@ func (a allowlist) checkDestination(organization string) error {
 		"connection's targets must name as users/NAME; pass organization or add that target")
 }
 
-// verifyOwnAccount is the evidence read before a change that lands in the account behind the token: that
-// account must be a user the targets name.
-func verifyOwnAccount(ctx context.Context, c *Client, op string, allowed allowlist) error {
+// checkNewName refuses a repository OWNER/NAME that an exclusion takes out, whether by its owner or by name. An
+// empty name is checked by the owner alone.
+func (a allowlist) checkNewName(owner, name string) error {
+	if a.excludedOwner(owner) || (name != "" && a.excluded(owner, name)) {
+		return unavailable("repository")
+	}
+	return nil
+}
+
+// ownAccount is the evidence read before a change that lands in the account behind the token: that account must
+// be a user the targets name and no exclusion takes out. It returns the login, empty when nothing restricts the
+// token and so nothing was read.
+func ownAccount(ctx context.Context, c *Client, op string, allowed allowlist) (string, error) {
 	if allowed.open() {
-		return nil
+		return "", nil
 	}
 	var account object
 	if _, err := c.get(ctx, op, "/user", nil, &account); err != nil {
-		return err
+		return "", err
 	}
 	login, ok := account.text("login")
 	if !ok || login == "" {
-		return provider.InvalidResponse(op, c.product.name+" returned an account without a login")
+		return "", provider.InvalidResponse(op, c.product.name+" returned an account without a login")
 	}
 	if !allowed.namesOwnerOfScope("users", login) {
-		return outsideTargets("account behind the token")
+		return "", allowed.outsideOwner("account behind the token", login)
+	}
+	return login, nil
+}
+
+// verifyOwnAccount is ownAccount for a change that needs only the proof.
+func verifyOwnAccount(ctx context.Context, c *Client, op string, allowed allowlist) error {
+	_, err := ownAccount(ctx, c, op, allowed)
+	return err
+}
+
+// verifyNewRepository proves where a repository named NAME lands when no organization is given: in the account
+// behind the token, which one exact exclusion of OWNER/NAME may take out.
+func verifyNewRepository(ctx context.Context, c *Client, op string, allowed allowlist, name string) error {
+	login, err := ownAccount(ctx, c, op, allowed)
+	if err != nil {
+		return err
+	}
+	if login != "" {
+		return allowed.checkNewName(login, name)
 	}
 	return nil
+}
+
+// hideExcludedParent drops the parent of a fork from a repository answer when an exclusion takes the parent
+// out; a parent outside the targets keeps its identifiers.
+func (a allowlist) hideExcludedParent(row object) object {
+	if parent, ok := row.child("parent"); ok {
+		if name, _ := parent.text("full_name"); a.excludedFullName(name) {
+			delete(row, "parent")
+		}
+	}
+	return row
+}
+
+// excludedFullName reports whether an exclusion takes out the canonical OWNER/REPO.
+func (a allowlist) excludedFullName(fullName string) bool {
+	owner, repo, ok := strings.Cut(fullName, "/")
+	return ok && a.excluded(owner, repo)
 }
 
 func repositoryNameCheck(field, value string) error {
@@ -123,7 +170,7 @@ func repositoryChange(p *product, allowed allowlist, key string, row object) map
 	result := map[string]any{key: true, "reachable": false}
 	if allowed.allowsFullName(name) {
 		result["reachable"] = true
-		result["repository"] = project(p, repositoryMembers, row)
+		result["repository"] = project(p, repositoryMembers, allowed.hideExcludedParent(row))
 	}
 	return result
 }
@@ -182,7 +229,7 @@ var repositoriesCreate = &tool{
 		if err := decodeArguments(raw, &a); err != nil {
 			return nil, err
 		}
-		if err := allowed.checkDestination(a.Organization); err != nil {
+		if err := allowed.checkDestination(a.Organization, a.Name); err != nil {
 			return nil, err
 		}
 		body, err := a.repositoryCreateOptions.body()
@@ -196,7 +243,7 @@ var repositoriesCreate = &tool{
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "create repository"
 			if a.Organization == "" {
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyNewRepository(ctx, c, op, allowed, a.Name); err != nil {
 					return nil, err
 				}
 			}
@@ -207,7 +254,7 @@ var repositoriesCreate = &tool{
 			if err := requireRepositoryAnswer(p, op, created); err != nil {
 				return nil, err
 			}
-			return project(p, repositoryMembers, created), nil
+			return project(p, repositoryMembers, allowed.hideExcludedParent(created)), nil
 		}, nil
 	},
 }
@@ -547,6 +594,11 @@ var repositoriesUpdate = &tool{
 		if len(body) == 0 {
 			return nil, invalidArgument("pass at least one setting to change")
 		}
+		if name, ok := body["name"].(string); ok {
+			if err := allowed.checkNewName(repo.owner, name); err != nil {
+				return nil, err
+			}
+		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "change repository"
 			var changed object
@@ -596,7 +648,11 @@ var repositoriesFork = &tool{
 		if err != nil {
 			return nil, err
 		}
-		if err := allowed.checkDestination(a.Organization); err != nil {
+		forkName := repo.repo
+		if a.Name != "" {
+			forkName = a.Name
+		}
+		if err := allowed.checkDestination(a.Organization, forkName); err != nil {
 			return nil, err
 		}
 		body := map[string]any{}
@@ -612,7 +668,7 @@ var repositoriesFork = &tool{
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "fork repository"
 			if a.Organization == "" {
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyNewRepository(ctx, c, op, allowed, forkName); err != nil {
 					return nil, err
 				}
 			}
@@ -623,7 +679,7 @@ var repositoriesFork = &tool{
 			if err := requireRepositoryAnswer(p, op, forked); err != nil {
 				return nil, err
 			}
-			return project(p, repositoryMembers, forked), nil
+			return project(p, repositoryMembers, allowed.hideExcludedParent(forked)), nil
 		}, nil
 	},
 }
@@ -676,7 +732,7 @@ var repositoriesListForks = &tool{
 			for _, row := range rows {
 				name, _ := row.text("full_name")
 				if row != nil && allowed.allowsFullName(name) {
-					forks = append(forks, project(p, repositoryMembers, row))
+					forks = append(forks, project(p, repositoryMembers, allowed.hideExcludedParent(row)))
 				}
 			}
 			next := page.next(header, len(rows))
@@ -764,9 +820,12 @@ var repositoriesGenerate = &tool{
 			return nil, err
 		}
 		if !allowed.namesActionsOwner(owner) {
-			return nil, outsideTargets("owner")
+			return nil, allowed.outsideOwner("owner", owner.owner)
 		}
 		if err := repositoryNameCheck("name", a.Name); err != nil {
+			return nil, err
+		}
+		if err := allowed.checkNewName(owner.owner, a.Name); err != nil {
 			return nil, err
 		}
 		body := map[string]any{"owner": owner.owner, "name": a.Name}
@@ -804,7 +863,7 @@ var repositoriesGenerate = &tool{
 			if err := requireRepositoryAnswer(p, op, created); err != nil {
 				return nil, err
 			}
-			return project(p, repositoryMembers, created), nil
+			return project(p, repositoryMembers, allowed.hideExcludedParent(created)), nil
 		}, nil
 	},
 }
@@ -1036,7 +1095,7 @@ func newRepositoryAction(s repositoryAction) *tool {
 					if err := requireRepositoryAnswer(p, s.op, answer); err != nil {
 						return nil, err
 					}
-					return project(p, repositoryMembers, answer), nil
+					return project(p, repositoryMembers, allowed.hideExcludedParent(answer)), nil
 				case s.moves:
 					if err := requireRepositoryAnswer(p, s.op, answer); err != nil {
 						return nil, err
@@ -1133,7 +1192,10 @@ var repositoriesTransfer = &tool{
 			return nil, err
 		}
 		if !allowed.namesActionsOwner(owner) {
-			return nil, outsideTargets("new_owner")
+			return nil, allowed.outsideOwner("new_owner", owner.owner)
+		}
+		if err := allowed.checkNewName(owner.owner, repo.repo); err != nil {
+			return nil, err
 		}
 		body := map[string]any{"new_owner": owner.owner}
 		if len(a.TeamIDs) > 0 {

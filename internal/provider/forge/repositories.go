@@ -187,7 +187,7 @@ var repositoriesList = &tool{
 				return nil, err
 			}
 			if !allowed.listsOwner(parsed.owner) {
-				return nil, outsideTargets("owner")
+				return nil, allowed.outsideOwner("owner", parsed.owner)
 			}
 			if arguments.OrderBy != "" {
 				return nil, invalidArgument("order_by applies only to the token's own repositories, without owner")
@@ -216,7 +216,7 @@ var repositoriesList = &tool{
 				fullName, _ := row.text("full_name")
 				login, _, _ := strings.Cut(fullName, "/")
 				if allowed.allowsFullName(fullName) && (ownerName == "" || strings.EqualFold(login, ownerName)) {
-					repositories = append(repositories, project(p, repositoryMembers, row))
+					repositories = append(repositories, project(p, repositoryMembers, allowed.hideExcludedParent(row)))
 				}
 			}
 			next := page.next(header, len(rows))
@@ -288,9 +288,9 @@ var repositoriesGet = &tool{
 				return nil, provider.InvalidResponse(op, p.name+" returned a repository without its name")
 			}
 			if !allowed.allowsFullName(fullName) {
-				return nil, outsideTargets("repository")
+				return nil, allowed.outside(op, c.product, fullName, "repository")
 			}
-			return project(p, repositoryMembers, repository), nil
+			return project(p, repositoryMembers, allowed.hideExcludedParent(repository)), nil
 		}, nil
 	},
 }

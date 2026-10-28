@@ -137,7 +137,7 @@ func TestForeignFolderIsRefusedWithoutIO(t *testing.T) {
 	e.f.folder(t, "Secret")
 	e.f.add(t, "Secret", "alice@example.net", "classified", base)
 
-	for _, folder := range []string{"Secret", "allowed", "Allowed/Child", "INBOX"} {
+	for _, folder := range []string{"Secret", "allowed", "Secret/Allowed", "INBOX"} {
 		_, err := e.invoke("infomaniak.mail.messages.list", "allowed", fmt.Sprintf(`{"folder":%q}`, folder))
 		if !isInvalidRequest(err) {
 			t.Errorf("folder %q: error = %v, want an invalid request", folder, err)

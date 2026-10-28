@@ -318,3 +318,50 @@ func TestUnclearProjectLifecycleChangesAreNeverRepeated(t *testing.T) {
 		})
 	}
 }
+
+// Exclusions refuse a copy, a creation, or a link whose owner, project, or repository they cover, before a
+// secret or a request, without naming the object or the exclusion. An owner whose projects are excluded as a
+// whole takes no new project, since its number is unknown.
+func TestProjectLifecycleHonoursExclusions(t *testing.T) {
+	f := &fakeGitHub{}
+	base := serve(t, f)
+	reads := 0
+	red := &redact.Redactor{}
+	cfg := lifecycleConfig(base)
+	changes := []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate}
+	add := func(name string, excludes ...string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: changes,
+			Exclude: excludes}
+	}
+	add("ex-owner", "orgs/hubot")
+	add("ex-project", "orgs/octo-org/projects/7")
+	add("ex-projects", "orgs/hubot/projects/*")
+	add("ex-repo", "repos/octo-org/other")
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+
+	for _, tt := range []struct{ name, operation, connection, arguments string }{
+		{"a copy into an excluded owner", projectsCopy.ID, "ex-owner",
+			`{"project":"orgs/octo-org/projects/7","owner":"orgs/hubot","title":"x"}`},
+		{"a copy of an excluded project", projectsCopy.ID, "ex-project",
+			`{"project":"orgs/octo-org/projects/7","owner":"orgs/octo-org","title":"x"}`},
+		{"a copy into an owner without any project", projectsCopy.ID, "ex-projects",
+			`{"project":"orgs/octo-org/projects/7","owner":"orgs/hubot","title":"x"}`},
+		{"a create in an owner without any project", projectsCreate.ID, "ex-projects",
+			`{"owner":"orgs/hubot","title":"x"}`},
+		{"a create in an excluded owner", projectsCreate.ID, "ex-owner", `{"owner":"orgs/hubot","title":"x"}`},
+		{"a link to an excluded repository", projectsLink.ID, "ex-repo",
+			`{"project":"orgs/octo-org/projects/7","repository":"octo-org/OTHER"}`},
+		{"a link of an excluded project", projectsLink.ID, "ex-project",
+			`{"project":"orgs/octo-org/projects/7","repository":"octo-org/example"}`},
+	} {
+		reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, tt.operation, tt.connection, tt.arguments, true)
+		if !isInvalidRequest(err) || reads != 0 || len(f.recorded()) != before {
+			t.Errorf("%s = %v (reads %d), want an invalid request before any I/O", tt.name, err, reads)
+		}
+		if err != nil && (strings.Contains(err.Error(), "hubot") || strings.Contains(err.Error(), "octo-org")) {
+			t.Errorf("%s: the refusal names the object: %v", tt.name, err)
+		}
+	}
+}

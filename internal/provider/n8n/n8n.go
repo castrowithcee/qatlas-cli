@@ -452,18 +452,24 @@ func Register(reg *capability.Registry) error {
 				"workflow allow-list is refused locally, before any request is sent. A configured project " +
 				"allow-list is checked against the instance's own report of a workflow's project membership, " +
 				"never against local configuration alone; an instance or Public API version that does not " +
-				"report it fails the check closed instead of guessing",
+				"report it fails the check closed instead of guessing. An optional exclude list of the same two forms " +
+				"takes a project or workflow out of what the connection reaches, also when a project allow-list, " +
+				"a share into a reachable project, or no target would otherwise admit it; it removes objects but " +
+				"never tools. Instance-wide tools filter or refuse single calls, and totals they report may still " +
+				"count excluded objects",
 			Kinds: []config.TargetKind{{
 				Name: "project",
 				Description: "one project (Enterprise Projects feature) of the bound instance; optional, and " +
 					"may be listed more than once; find its ID in the n8n editor's project settings URL or in " +
 					"a workflow's own project membership",
-				Forms: []string{"project/PROJECT_ID"},
+				Forms:      []string{"project/PROJECT_ID"},
+				Excludable: true,
 			}, {
 				Name:        "workflow",
 				Description: "one workflow of the bound instance; optional, and may be listed more than once",
 				Forms:       []string{"workflow/WORKFLOW_ID"},
 				Parents:     []string{"project"},
+				Excludable:  true,
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,

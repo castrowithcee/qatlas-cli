@@ -53,7 +53,8 @@ var insightsTop = capability.Descriptor{
 	Description: "Read one page of the ranking of one bound team for today, 7 days, or 28 days: the top " +
 		"channels, threads, or reactions, or the team members who joined in the time range. Channels and threads " +
 		"outside the channels this connection may reach and members it may not reach are left out; the author " +
-		"of a thread it may not reach shows only as an ID",
+		"of a thread it may not reach shows only as an ID; the ranking of reactions is counted over the whole team " +
+		"and includes reactions in excluded channels",
 	Tags:     []string{"infomaniak", "kchat", "teams", "insights", "top", "activity"},
 	Risk:     readRisk,
 	Provider: Provider,

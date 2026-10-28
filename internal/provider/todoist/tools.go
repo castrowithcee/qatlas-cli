@@ -273,7 +273,8 @@ func descriptor(object, action, title, description string, tags []string, input 
 
 var projectsList = descriptor("projects", "list", "List Todoist projects",
 	"List one bounded batch of the active projects of an explicit Todoist connection, optionally searched by "+
-		"name; a project connection lists only its own projects",
+		"name; a project connection lists only its own projects. Excluded projects are left out, so a batch can "+
+		"be shorter than limit, and parent_id of a project below an excluded parent stays as a plain ID",
 	[]string{"projects", "list", "search"},
 	`{"type":"object","properties":{"search":`+searchSchema+`,"workspace_id":`+positiveSchema+`,"folder_id":`+
 		positiveSchema+`,`+pageInput+`},"additionalProperties":false}`,
@@ -302,7 +303,8 @@ var projectsGet = descriptor("projects", "get", "Get a Todoist project",
 
 var sectionsList = descriptor("sections", "list", "List Todoist sections",
 	"List one bounded batch of the active sections of the projects of an explicit Todoist connection, "+
-		"optionally of one project or searched by name",
+		"optionally of one project or searched by name; excluded projects and sections are left out, so a "+
+		"batch can be shorter than limit",
 	[]string{"sections", "list", "search"},
 	`{"type":"object","properties":{"project_id":`+idSchema+`,"search":`+searchSchema+`,"workspace_id":`+positiveSchema+`,`+
 		pageInput+`},"additionalProperties":false}`,
@@ -331,7 +333,8 @@ var sectionsGet = descriptor("sections", "get", "Get a Todoist section",
 
 var labelsList = descriptor("labels", "list", "List Todoist labels",
 	"List one bounded batch of the personal labels of the account of an explicit Todoist connection, "+
-		"optionally searched by name; labels carry names only, never tasks",
+		"optionally searched by name; labels carry names only, never tasks, and are listed whatever the "+
+		"connection excludes",
 	[]string{"labels", "list", "search"},
 	`{"type":"object","properties":{"search":`+searchSchema+`,`+pageInput+`},"additionalProperties":false}`,
 	listOutput("labels", labelOutputSchema),
@@ -344,7 +347,8 @@ var labelsList = descriptor("labels", "list", "List Todoist labels",
 
 var tasksList = taskTool(descriptor("tasks", "list", "List Todoist tasks",
 	"List one bounded batch of active tasks of the projects of an explicit Todoist connection with "+
-		"structured ID, project, section, parent, label, and due filters; no filter expression is accepted",
+		"structured ID, project, section, parent, label, and due filters; no filter expression is accepted. "+
+		"Tasks of excluded projects and sections are left out, so a batch can be shorter than limit",
 	[]string{"tasks", "list"},
 	`{"type":"object","properties":{"project_id":`+idSchema+`,"section_id":`+idSchema+`,"parent_id":`+idSchema+`,`+
 		`"ids":`+idsSchema+`,"label":`+labelSchema+`,"due_from":`+dateSchema+`,"due_to":`+dateSchema+`,"without_due":{"type":"boolean"},`+
@@ -375,7 +379,9 @@ var tasksList = taskTool(descriptor("tasks", "list", "List Todoist tasks",
 
 var tasksFilter = taskTool(descriptor("tasks", "filter", "Filter Todoist tasks by expression",
 	"List one bounded batch of active tasks that match a Todoist filter expression, held to the "+
-		"projects of an explicit Todoist connection; the only active-task list that accepts a filter expression",
+		"projects of an explicit Todoist connection; the only active-task list that accepts a filter expression. "+
+		"Tasks of excluded projects and sections are left out after Todoist evaluated the expression, so a "+
+		"batch can be shorter than limit",
 	[]string{"tasks", "filter", "query"},
 	`{"type":"object","properties":{"query":`+querySchema+`,"lang":`+languageTagSchema+`,`+pageInput+`},`+
 		`"required":["query"],"additionalProperties":false}`,
@@ -404,7 +410,8 @@ var tasksGet = taskTool(descriptor("tasks", "get", "Get a Todoist task",
 var completedList = taskTool(descriptor("completed-tasks", "list", "List completed Todoist tasks",
 	"List one bounded batch of the tasks of the projects of an explicit Todoist connection completed in a time "+
 		"window of at most three months, optionally of one project or section or matching a Todoist filter "+
-		"expression; how far back Todoist answers depends on the account's plan",
+		"expression; how far back Todoist answers depends on the account's plan. Tasks of excluded projects "+
+		"and sections, also of archived projects, are left out, so a batch can be shorter than limit",
 	[]string{"tasks", "completed", "list", "history", "filter"},
 	`{"type":"object","properties":{"since":`+instantSchema+`,"until":`+instantSchema+`,"project_id":`+idSchema+`,`+
 		`"section_id":`+idSchema+`,"parent_id":`+idSchema+`,"workspace_id":`+positiveSchema+`,`+
@@ -438,7 +445,8 @@ var completedList = taskTool(descriptor("completed-tasks", "list", "List complet
 
 var commentsList = descriptor("comments", "list", "List Todoist comments",
 	"List one bounded batch of the comments of exactly one task or one project of an explicit Todoist "+
-		"connection, oldest first; the only tool that returns comments",
+		"connection, oldest first; the only tool that returns comments. The comments of an excluded task or "+
+		"project are refused",
 	[]string{"comments", "list"},
 	`{"type":"object","properties":{"task_id":`+idSchema+`,"project_id":`+idSchema+`,`+pageInput+`},`+
 		`"additionalProperties":false}`,
@@ -460,7 +468,9 @@ const reminderTaskRequired = "a project connection reads the reminders of one ta
 
 var remindersList = descriptor("reminders", "list", "List Todoist reminders",
 	"List one bounded batch of the time-based reminders of an explicit Todoist connection; a project "+
-		"connection reads those of one named task. Reminders depend on the account's plan",
+		"connection reads those of one named task. An account connection that excludes anything may omit "+
+		"task_id; each reminder is then held to its task, so a batch can be shorter than limit. Reminders "+
+		"depend on the account's plan",
 	[]string{"reminders", "list"},
 	`{"type":"object","properties":{"task_id":`+idSchema+`,`+pageInput+`},"additionalProperties":false}`,
 	listOutput("reminders", reminderSchema),
@@ -477,7 +487,8 @@ var remindersList = descriptor("reminders", "list", "List Todoist reminders",
 
 var filtersList = descriptor("filters", "list", "List Todoist saved filters",
 	"List the saved filters of the account bound to an explicit Todoist account connection; a project "+
-		"connection does not offer them, because a saved filter spans every project",
+		"connection does not offer them, because a saved filter spans every project; the queries are listed "+
+		"whatever the connection excludes and can name excluded projects",
 	[]string{"filters", "list"},
 	`{"type":"object","properties":{},"additionalProperties":false}`,
 	json.RawMessage(`{"type":"object","properties":{"filters":{"type":"array","items":`+filterSchema+`}},`+
@@ -841,6 +852,9 @@ func taskSelection(bound scope, projectID, sectionID string) (url.Values, string
 	}
 	if err := bound.selectProject(projectID); err != nil {
 		return nil, "", err
+	}
+	if bound.excludesSection(sectionID) {
+		return nil, "", outsideScope("section")
 	}
 	if sectionID != "" && !bound.projectLevel() && !bound.hasSection(sectionID) {
 		return nil, "", outsideScope("section")

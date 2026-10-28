@@ -15,14 +15,16 @@
 // connection's mailbox/ADDRESS target together with a mailbox password the person created for it; the
 // Infomaniak REST mail API plays no part here.
 //
-// A connection binds exactly one mailbox, plus optional allow-lists of folders (folder/PATH, or folder/PATH/* with its subfolders) and sender
-// addresses (sender/ADDRESS). Without a folder list every folder of the mailbox is reachable; a folder
-// outside a configured list is refused before any secret is read and before any network access, and the
-// refusal never names the folder that is allowed. The sender list is applied locally to the parsed From
+// A connection binds exactly one mailbox, plus optional allow-lists of folders and sender addresses
+// (sender/ADDRESS). folder/PATH is the folder with its subfolders, folder/PATH/* its subfolders without the
+// folder itself. Without a folder list every folder of the mailbox is reachable; a folder outside a
+// configured list is refused before any secret is read and before any network access, and the refusal never
+// names the folder that is allowed. Whether a name is a subfolder depends on the server's hierarchy
+// delimiter, so a name that only begins with a target's name is decided after login. The sender list is applied locally to the parsed From
 // address of every message; an IMAP SEARCH on its own is never trusted for it.
 //
-// A connection may also exclude folders (folder/PATH, or folder/PATH/* with its subfolders) and sender
-// addresses (sender/ADDRESS), and an exclusion always wins. An excluded folder behaves like a folder without
+// A connection may also exclude folders, in the same two forms, and sender addresses (sender/ADDRESS), and an
+// exclusion always wins: folder/PATH as target with folder/PATH/* as exclusion reaches exactly that folder. An excluded folder behaves like a folder without
 // IMAP rights and is left out of the folder listing; a message from an excluded sender behaves like a UID that
 // does not exist and is left out of a listing. An exclusion is applied locally, a server-side NOT FROM is never
 // sent, and no refusal names a folder, an address, or an exclusion. A special-use folder that is excluded is
@@ -220,15 +222,15 @@ type session struct {
 }
 
 // folderOK is the final folder check of one operation, run after login and before any SELECT, EXAMINE, or
-// MOVE on that folder. Without a folder/PATH/* target or exclusion it adds nothing: the check without network
-// access was already exact. With one it asks the server for the hierarchy delimiter once per session
-// (LIST "" "") unless a LIST answer already provided it. A failed question refuses without naming a folder.
+// MOVE on that folder. A folder that is a folder/PATH target itself (or any folder without folder targets)
+// and begins with no exclusion's name is decided without a question. Any other name may be a subfolder of a
+// target or an exclusion: the server's hierarchy delimiter decides, asked once per session (LIST "" "")
+// unless a LIST answer already provided it. A failed question refuses without naming a folder.
 func (s *session) folderOK(op, name string) error {
 	if s.scope.excludesFolder(name, "") {
 		return invalidRequest("folder is outside the targets of this connection")
 	}
-	// The delimiter decides whether the name is a subfolder of a folder/PATH/* target or exclusion.
-	if !s.scope.mayBeExcluded(name) && (len(s.scope.trees) == 0 || s.scope.allowsExact(name)) {
+	if s.scope.allowsExact(name) && !s.scope.mayBeExcluded(name) {
 		return nil
 	}
 	if !s.delimKnown {
@@ -426,11 +428,12 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "exactly one mailbox/ADDRESS target, which is also the IMAP login name, plus an optional, " +
-				"repeatable allow-list of folder/PATH targets and an optional, repeatable allow-list of " +
+				"repeatable allow-list of folder targets and an optional, repeatable allow-list of " +
 				"sender/ADDRESS targets; without a folder target every folder of the mailbox is reachable, and " +
-				"without a sender target every sender. A folder outside the list is refused before any secret " +
-				"is read; the sender list is applied locally to the parsed From address of every message. Exclusions " +
-				"(folder/PATH, folder/PATH/*, sender/ADDRESS) take folders and senders out again and always win",
+				"without a sender target every sender. A folder outside the list is refused; the sender list is " +
+				"applied locally to the parsed From address of every message. Exclusions (folder/PATH, " +
+				"folder/PATH/*, sender/ADDRESS) take folders and senders out again and always win; target " +
+				"folder/PATH with exclusion folder/PATH/* reaches exactly that folder",
 			Kinds: []config.TargetKind{{
 				Name:        "mailbox",
 				Description: "the one mailbox this connection logs in to; required, exactly one",
@@ -438,8 +441,8 @@ func Register(reg *capability.Registry) error {
 			}, {
 				Name:    "folder",
 				Parents: []string{"mailbox"},
-				Description: "one folder of the mailbox, by its exact name, or with folder/PATH/* that folder and " +
-					"its subfolders; optional, repeatable; no other wildcards; can be excluded",
+				Description: "folder/PATH is the folder with that exact name and its subfolders, folder/PATH/* " +
+					"only its subfolders; optional, repeatable; no other wildcards; can be excluded in both forms",
 				Forms:      []string{"folder/PATH", "folder/PATH/*"},
 				Excludable: true,
 			}, {
@@ -449,8 +452,9 @@ func Register(reg *capability.Registry) error {
 				Forms:      []string{"sender/ADDRESS"},
 				Excludable: true,
 			}},
-			Validate:    validateTarget,
-			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
+			Validate:       validateTarget,
+			ValidateSet:    func(values []string) error { _, err := parseScope(values); return err },
+			MigrateTargets: migrateTargets,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read folders, messages, and attachments", Recommended: true,

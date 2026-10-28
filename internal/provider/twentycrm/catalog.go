@@ -93,15 +93,38 @@ type catalogSubfield struct {
 
 // workspaceCatalog reads the workspace document at most once per client and returns its catalog.
 func (c *Client) workspaceCatalog(ctx context.Context, op string) (*catalog, error) {
-	if c.catalog != nil {
-		return c.catalog, nil
+	if c.catalog == nil {
+		var document openAPIJSON
+		if err := c.get(ctx, op, schemaPath, nil, maxSchemaBytes, &document); err != nil {
+			return nil, err
+		}
+		c.catalog = parseCatalog(&document)
 	}
-	var document openAPIJSON
-	if err := c.get(ctx, op, schemaPath, nil, maxSchemaBytes, &document); err != nil {
+	if err := c.scope.checkExcludes(c.catalog); err != nil {
 		return nil, err
 	}
-	c.catalog = parseCatalog(&document)
 	return c.catalog, nil
+}
+
+// checkExcludes fails closed when an exclusion names no object of the workspace: exclusions are names and
+// an own object can be renamed, so an unmatched name may mean the object is now reachable under another
+// one. An empty catalog is what an unusable key gets, so it reads as an authentication failure. The
+// message names no object.
+func (s scope) checkExcludes(cat *catalog) error {
+	if len(s.excluded) == 0 {
+		return nil
+	}
+	if len(cat.objects) == 0 {
+		return &provider.Error{Class: provider.ClassAuth, Op: "check exclusions",
+			Message: "the Twenty API key is unusable"}
+	}
+	for _, name := range s.excluded {
+		if _, ok := cat.objects[name]; !ok {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: "check exclusions",
+				Message: "this Twenty workspace does not hold an object excluded on this connection"}
+		}
+	}
+	return nil
 }
 
 // openAPIJSON mirrors the parts of the generated workspace document the catalog reads.
