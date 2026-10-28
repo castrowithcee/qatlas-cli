@@ -80,7 +80,8 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	}
 	if len(m.OutdatedTargets) > 0 {
 		fmt.Fprintf(stderr, "qatlas: no current form keeps the reach of the targets of these connections, so each "+
-			"stays as it was and is invalid until its targets are chosen again and its targets_outdated mark is removed: %s\n",
+			"stays as it was and offers no tool until its targets are chosen again ('qatlas tui'); the rest of "+
+			"the configuration stays usable: %s\n",
 			strings.Join(m.OutdatedTargets, ", "))
 	}
 	fmt.Fprintln(stderr, "qatlas: to go back, copy the backups back in place and install the previous qatlas version")

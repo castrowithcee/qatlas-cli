@@ -175,12 +175,16 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"  outside-targets           the connection's targets do not reach the tool, as the provider\n" +
 			"                            judges; the tool stays in the selection and is offered once the\n" +
 			"                            targets reach it\n" +
+			"  connection-targets-outdated\n" +
+			"                            the connection's targets keep a former meaning after a schema\n" +
+			"                            migration, so it offers no tool until a person chooses them again\n" +
 			"  connection-disabled       the connection would offer the tool, but a person switched it off\n" +
 			"  no-connection             the provider has no configured connection\n\n" +
 			"With --connection the reason is that connection's. Otherwise, where several connections refuse a\n" +
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
-			"connection-disabled, not-in-tools-list, requires-tool-allow-list, no-local-files,\n" +
-			"effect-not-permitted, outside-targets. 'qatlas tui' changes what a connection offers.\n\n" +
+			"connection-targets-outdated, connection-disabled, not-in-tools-list, requires-tool-allow-list,\n" +
+			"no-local-files, effect-not-permitted, outside-targets. 'qatlas tui' changes what a connection\n" +
+			"offers.\n\n" +
 			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
 			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +

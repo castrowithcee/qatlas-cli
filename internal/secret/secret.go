@@ -206,9 +206,14 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 	for i, permission := range resolved.Effects {
 		permissions[i] = string(permission)
 	}
-	targets := append([]string(nil), resolved.Targets...)
-	if len(targets) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		targets = []string{resolved.Target}
+	target, targets, exclude := resolved.Target, resolved.Targets, resolved.Exclude
+	if resolved.TargetsOutdated {
+		// The approval stays bound to the stored values, which the provider is not given.
+		target, targets, exclude = resolved.FormerTarget, resolved.FormerTargets, resolved.FormerExclude
+	}
+	targets = append([]string(nil), targets...)
+	if len(targets) == 0 && strings.TrimSpace(target) != "" {
+		targets = []string{target}
 	}
 	var tools []string
 	if resolved.Tools != nil {
@@ -217,7 +222,7 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 	return vault.Scope{
 		Connection: resolved.Name, Credential: resolved.Credential, Provider: resolved.Provider,
 		Origin: resolved.BaseURL, Effects: permissions, Targets: targets, Tools: tools,
-		Exclude: append([]string(nil), resolved.Exclude...),
+		Exclude: append([]string(nil), exclude...),
 		Paths:   append([]string(nil), resolved.Paths...), FilesRead: append([]string(nil), resolved.Files.Read...),
 		FilesWrite: append([]string(nil), resolved.Files.Write...), Forward: forwardOf(resolved),
 		Disabled: resolved.Disabled, ActiveUntil: resolved.ActiveUntil,

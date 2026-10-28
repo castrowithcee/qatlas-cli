@@ -36,6 +36,24 @@ type Resolved struct {
 	Disabled bool
 	// ActiveUntil is the limit as Connection.ActiveUntilCanonical gives it, empty when there is none.
 	ActiveUntil string
+	// TargetsOutdated is set for a connection marked TargetsOutdated (see HoldOutdatedTargets).
+	TargetsOutdated bool
+	// FormerTarget, FormerTargets and FormerExclude hold the stored values of such a connection. They serve the
+	// approval scope alone (secret.ScopeOf); no provider reads them and none is given them.
+	FormerTarget                 string
+	FormerTargets, FormerExclude []string
+}
+
+// HoldOutdatedTargets empties Target, Targets and Exclude of a connection marked TargetsOutdated, whose stored
+// values keep a former meaning, so no provider sees them; the values move to the Former fields, which keep the
+// approval of the connection matching. Any other connection is left as it is.
+func (r *Resolved) HoldOutdatedTargets(conn Connection) {
+	if !conn.TargetsOutdated {
+		return
+	}
+	r.TargetsOutdated = true
+	r.FormerTarget, r.FormerTargets, r.FormerExclude = r.Target, r.Targets, r.Exclude
+	r.Target, r.Targets, r.Exclude = "", nil, nil
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -96,7 +114,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 	service := c.Services[conn.Service]
 	cred := c.Credentials[conn.Credential]
 
-	return &Resolved{
+	resolved := &Resolved{
 		Name:           name,
 		ID:             conn.ID,
 		Provider:       service.Provider,
@@ -116,5 +134,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Forward:        c.ForwardCredentials(conn),
 		Disabled:       conn.Disabled,
 		ActiveUntil:    conn.ActiveUntilCanonical(),
-	}, nil
+	}
+	resolved.HoldOutdatedTargets(conn)
+	return resolved, nil
 }
