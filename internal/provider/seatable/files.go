@@ -342,22 +342,21 @@ func (c *Client) fileColumn(ctx context.Context, op string, selected target, col
 	if err != nil {
 		return "", err
 	}
-	for _, table := range document.Metadata.Tables {
-		if !matchesTable(selected, table) {
+	found := findTable(document, selected)
+	if found == nil {
+		return "", providerError(op, "the selected SeaTable table no longer exists")
+	}
+	table := *found
+	for _, candidate := range table.Columns {
+		if candidate.Name != column {
 			continue
 		}
-		for _, candidate := range table.Columns {
-			if candidate.Name != column {
-				continue
-			}
-			if candidate.Type != "file" && candidate.Type != "image" {
-				return "", providerError(op, "the selected column does not hold files or images")
-			}
-			return candidate.Type, nil
+		if candidate.Type != "file" && candidate.Type != "image" {
+			return "", providerError(op, "the selected column does not hold files or images")
 		}
-		return "", providerError(op, "the selected SeaTable table does not define this column")
+		return candidate.Type, nil
 	}
-	return "", providerError(op, "the selected SeaTable table no longer exists")
+	return "", providerError(op, "the selected SeaTable table does not define this column")
 }
 
 // cellEntries reads the current entries of the file cell of one row as raw values.

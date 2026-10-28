@@ -13,7 +13,8 @@ import (
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
 // add, which offers known targets and a builder where there are any, enter edits the selected target, and d
-// removes it after asking. r labels the selected target for the person, in a line of its own; an empty
+// removes it after asking. x switches the selected target between reachable and excluded where the provider
+// declares exclusions, and the add menu (or the command line) takes what is added next as exclusions. r labels the selected target for the person, in a line of its own; an empty
 // label removes it. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
 // only from its summary. esc is one level back: it closes an unchanged list, cancels an unchanged entry,
@@ -31,6 +32,8 @@ func (m *Model) targetMetadata() config.TargetMetadata {
 func (m *Model) openTargets() {
 	m.targetList.reset(append([]string(nil), m.fields[m.focus].entries...))
 	m.targetLabels = maps.Clone(m.fields[m.focus].labels)
+	m.targetExcluded = cloneExcluded(m.fields[m.focus].excluded)
+	m.targetAsExclusion = false
 	m.closePick()
 	m.targetEdit, m.targetRemove, m.targetAdd, m.labelEdit = -1, false, nil, false
 	m.targetInput.Blur()
@@ -67,6 +70,7 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 		if m.labelEdit {
 			m.takeLabel()
 		}
+		m.targetAsExclusion = false
 		// A remove question left unanswered keeps its target.
 		m.targetRemove = false
 		m.keepTargets()
@@ -126,7 +130,8 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 		return m.leaveTargets()
 	case keyIs(key, actNew):
 		metadata := m.targetMetadata()
-		if !metadata.Multiple && len(m.targetList.all) > 0 {
+		// A provider that takes one target still takes exclusions, where it declares them.
+		if !metadata.Multiple && len(m.targetList.all) > 0 && !metadata.Excludes() {
 			m.status = ""
 			m.fail = tr(tTargetThisProviderTakesOneOnly,
 				metadata.Label)
@@ -140,6 +145,10 @@ func (m *Model) updateTargets(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
+	case keyIs(key, actSpace):
+		if selected {
+			m.toggleExcluded()
+		}
 	case keyIs(key, actRename):
 		// The guided setup saves no labels, so it offers none.
 		if selected && m.wizard == nil {
@@ -166,6 +175,8 @@ func (m *Model) keepTargets() {
 	m.closePick()
 	m.fields[m.focus].entries = append([]string(nil), m.targetList.all...)
 	m.fields[m.focus].labels = maps.Clone(m.targetLabels)
+	m.fields[m.focus].excluded = cloneExcluded(m.targetExcluded)
+	m.targetAsExclusion = false
 	m.screen = screenForm
 	m.clearMessages()
 }
@@ -210,7 +221,8 @@ func (m *Model) targetsPending() bool {
 // targetsChanged reports whether the list or its labels differ from what the row holds.
 func (m *Model) targetsChanged() bool {
 	row := m.fields[m.focus]
-	return !slices.Equal(m.targetList.all, row.entries) || !maps.Equal(m.targetLabels, row.labels)
+	return !slices.Equal(m.targetList.all, row.entries) || !maps.Equal(m.targetLabels, row.labels) ||
+		!sameExcluded(m.targetExcluded, row.excluded)
 }
 
 // editLabel starts typing the label of target.
@@ -293,8 +305,30 @@ func (m *Model) takeTarget() {
 	}
 	entries := append([]string(nil), m.targetList.all...)
 	if m.targetEdit >= len(entries) {
+		if m.targetAsExclusion {
+			if !m.canExclude(value) {
+				m.fail = tr(tTargetCannotBeExcluded, m.targetMetadata().Label)
+				return
+			}
+			if m.targetExcluded == nil {
+				m.targetExcluded = map[string]bool{}
+			}
+			m.targetExcluded[value] = true
+		} else if m.tooManyTargets(1) {
+			m.fail = tr(tTargetThisProviderTakesOneOnly, m.targetMetadata().Label)
+			return
+		}
 		entries = append(entries, value)
 	} else {
+		// An edited entry stays what it was, a target or an exclusion, and an exclusion must still be one.
+		if old := entries[m.targetEdit]; m.targetExcluded[old] {
+			if old != value && !m.canExclude(value) {
+				m.fail = tr(tTargetCannotBeExcluded, m.targetMetadata().Label)
+				return
+			}
+			delete(m.targetExcluded, old)
+			m.targetExcluded[value] = true
+		}
 		entries[m.targetEdit] = value
 	}
 	m.targetList.setItems(entries)
@@ -313,6 +347,7 @@ func (m *Model) removeTarget() {
 	}
 	i := m.targetList.cursor
 	entries := append(append([]string(nil), m.targetList.all[:i]...), m.targetList.all[i+1:]...)
+	delete(m.targetExcluded, target)
 	m.targetList.setItems(entries)
 	m.status = tr(tPathRemoved, target)
 }
@@ -362,10 +397,14 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "{save} next step"
 	}
-	keys := "n new · enter/e edit · r rename · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
+	rename, exclude := "r rename · ", ""
 	if m.wizard != nil {
-		keys = "n new · enter/e edit · {delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
+		rename = ""
 	}
+	if metadata.Excludes() {
+		exclude = "space switch · "
+	}
+	keys := "n new · enter/e edit · " + rename + exclude + "{delete} remove · up/down move · " + save + " · {back} close · {command} cmds · {help} help"
 	switch {
 	case m.labelEdit:
 		target, _ := m.targetList.selected()
@@ -376,6 +415,8 @@ func (m *Model) targetFrame() (string, string) {
 		label := tr(tTargetNew2)
 		if m.targetEdit < total {
 			label = tr(tTargetEdit)
+		} else if m.targetAsExclusion {
+			label = tr(tTargetNewExclusion)
 		}
 		foot.WriteString(p.blank() + p.styled(m.inputLineIn(p.room, label, m.targetInput)))
 		keys = "enter take · " + save + " · {back} cancel entry"
@@ -391,7 +432,7 @@ func (m *Model) targetFrame() (string, string) {
 
 // targetRow draws the target at index i of the list.
 func (m *Model) targetRow(i int) string {
-	return m.dialogPanelOf().row(i == m.targetList.cursor, m.labelled(m.targetList.matches[i], m.targetLabels))
+	return m.dialogPanelOf().row(i == m.targetList.cursor, m.targetLine(m.targetList.matches[i], m.targetLabels, m.targetExcluded))
 }
 
 func (m *Model) targetWindow() (int, int) {

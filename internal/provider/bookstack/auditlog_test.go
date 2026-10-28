@@ -2,10 +2,12 @@ package bookstack
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -112,5 +114,62 @@ func TestAuditLogIsOfferedOnlyWithAToolsListEntry(t *testing.T) {
 	}
 	if !cfg.ConnectionAllows("open", usersList.Tool(), time.Time{}) {
 		t.Error("users.list must be offered without a tools list")
+	}
+}
+
+func TestAuditLogHonorsExclusions(t *testing.T) {
+	s := newAreaServer(t)
+	inner := s.Config.Handler
+	entry := func(id int, kind string, object any) map[string]any {
+		return map[string]any{"id": id, "type": "x", "detail": "d", "loggable_type": kind, "loggable_id": object,
+			"ip": "10.0.0.1", "created_at": "2026-10-01T10:00:00.000000Z"}
+	}
+	entries := []map[string]any{
+		entry(1, "page", 111),         // in the excluded chapter 1001
+		entry(2, "page", 333),         // a loose page of book 701
+		entry(3, "chapter", 2001),     // in the excluded book 901
+		entry(4, "book", 901),         // excluded
+		entry(5, "bookshelf", 302),    // excluded
+		entry(6, "bookshelf", 301),    // not excluded
+		entry(7, "page", 9999),        // cannot be read, so its container is unknown
+		entry(8, "attachment", 81),    // no object the exclusions name
+		entry(9, "", nil),             // no loggable fields
+		entry(10, "chapter", 1001),    // excluded
+		entry(11, "page", 555),        // excluded
+		entry(12, "book", 701),        // on shelf 301 only
+		entry(13, "page", 444),        // in the excluded book 901
+		entry(14, "chapter", 3001),    // cannot be read
+		entry(15, "bookshelf", 99999), // another shelf
+	}
+	s.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/audit-log" {
+			inner.ServeHTTP(w, r)
+			return
+		}
+		s.rec.record(r)
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": entries, "total": len(entries)})
+	})
+	got, err := s.callExcluding(t, auditLogList.ID, `{}`, nil, []string{"chapter/1001", "book/901", "shelf/302", "page/555"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Entries naming an excluded object leave, so do those whose page or chapter cannot be placed outside one;
+	// entries without a loggable stay.
+	if want := []int64{2, 6, 8, 9, 12, 15}; !reflect.DeepEqual(resultIDs(t, got), want) {
+		t.Errorf("ids = %v, want %v", resultIDs(t, got), want)
+	}
+	// Only a page exclusion reads nothing about containers.
+	s.requests()
+	got, err = s.callExcluding(t, auditLogList.ID, `{}`, nil, []string{"page/555"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids := resultIDs(t, got); len(ids) != 14 || slices.Contains(ids, 11) {
+		t.Errorf("ids = %v", ids)
+	}
+	for _, r := range s.requests() {
+		if r != "GET /api/audit-log" {
+			t.Errorf("request %s", r)
+		}
 	}
 }

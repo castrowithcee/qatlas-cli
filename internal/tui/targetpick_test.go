@@ -4,6 +4,7 @@ import (
 	"context"
 	"maps"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -886,5 +887,95 @@ func TestAnUnlistedKindOffersNoListButResolvesAnAddress(t *testing.T) {
 	deliver(m, cmd)
 	if got := m.targetList.all; len(got) != 1 || got[0] != "g/a" || len(src.reqs) != 0 {
 		t.Fatalf("list %v, list reads %d, want the address taken without a list read", got, len(src.reqs))
+	}
+}
+
+// excludableListerRegistry is the lister whose groups and items can be excluded.
+func excludableListerRegistry(t *testing.T) *capability.Registry {
+	t.Helper()
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Wildcard: "*", Kinds: []config.TargetKind{
+			{Name: "group", Forms: []string{"g/NAME"}, Excludable: true},
+			{Name: "item", Forms: []string{"g/NAME/i/ID"}, Parents: []string{"group"}, Excludable: true},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+func TestThePickerTakesListEntriesAsExclusions(t *testing.T) {
+	src := &listSource{list: pickPage(group("a"), group("b"), group("c"))}
+	m := pickerModelOn(t, excludableListerRegistry(t), src, "g/z")
+	pickRow(t, m, "Add as exclusion")
+	press(t, m, "enter")
+	if !m.targetAsExclusion {
+		t.Fatal("the menu row did not switch to exclusions")
+	}
+	openPicker(t, m)
+	if view := screenOf(m); !strings.Contains(view, "as exclusions") {
+		t.Fatalf("the picker does not say it takes exclusions:\n%s", view)
+	}
+	pump(t, m, "tab", "down", "tab", "enter")
+	if reach, out := exclusionState(m); !reflect.DeepEqual(reach, []string{"g/z"}) || !reflect.DeepEqual(out, []string{"g/a", "g/b"}) {
+		t.Fatalf("list %v / %v, error %q", reach, out, m.fail)
+	}
+	if m.targetLabels["g/a"] != "Group a" {
+		t.Errorf("labels %v, want the provider's name for an exclusion too", m.targetLabels)
+	}
+	// The menu row switches back: the entries are then targets again.
+	press(t, m, "n")
+	pickRow(t, m, "Add as exclusion")
+	press(t, m, "enter")
+	pickRow(t, m, "Add as target again")
+	press(t, m, "enter")
+	if m.targetAsExclusion {
+		t.Fatal("the second choice left the exclusion mode on")
+	}
+}
+
+func TestAnAddressIsTakenAsAnExclusion(t *testing.T) {
+	src := &listSource{list: pickPage(), resolve: func(string) ([]config.TargetEntry, error) {
+		return []config.TargetEntry{group("a")}, nil
+	}}
+	m := pickerModelOn(t, excludableListerRegistry(t), src, "g/z")
+	pickRow(t, m, "Add as exclusion")
+	press(t, m, "enter")
+	typeText(t, m, wikiURL)
+	_, cmd := m.Update(keyMsg("enter"))
+	deliver(m, cmd)
+	if reach, out := exclusionState(m); !reflect.DeepEqual(reach, []string{"g/z"}) || !reflect.DeepEqual(out, []string{"g/a"}) {
+		t.Fatalf("list %v / %v, error %q", reach, out, m.fail)
+	}
+}
+
+func TestATypedIDAndTheBuilderTakeExclusions(t *testing.T) {
+	m := pickerModelOn(t, excludableListerRegistry(t), &listSource{list: pickPage()}, "g/a")
+	pickRow(t, m, "Add as exclusion")
+	press(t, m, "enter")
+	typeText(t, m, "g/a/i/7")
+	press(t, m, "enter")
+	if reach, out := exclusionState(m); !reflect.DeepEqual(out, []string{"g/a/i/7"}) || !reflect.DeepEqual(reach, []string{"g/a"}) {
+		t.Fatalf("typed: list %v / %v, error %q", reach, out, m.fail)
+	}
+	press(t, m, "n")
+	pickRow(t, m, "Add as exclusion")
+	press(t, m, "enter")
+	pickRow(t, m, "new group")
+	press(t, m, "enter")
+	typeText(t, m, "b")
+	press(t, m, "enter")
+	if reach, out := exclusionState(m); !reflect.DeepEqual(out, []string{"g/a/i/7", "g/b"}) || len(reach) != 1 {
+		t.Fatalf("built: list %v / %v, error %q", reach, out, m.fail)
+	}
+	// A new target afterwards is a target again.
+	press(t, m, "n")
+	typeText(t, m, "g/c")
+	press(t, m, "enter")
+	if reach, _ := exclusionState(m); !slices.Contains(reach, "g/c") {
+		t.Fatalf("the mode stayed on: %v", m.targetExcluded)
 	}
 }
