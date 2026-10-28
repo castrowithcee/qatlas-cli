@@ -623,7 +623,7 @@ var workflowJobsGet = &tool{
 				return nil, provider.InvalidResponse(op, c.product.name+" returned a job without the requested ID")
 			}
 			if name, ok := jobRepository(c.origin, row); ok && !allowed.allowsFullName(name) {
-				return nil, provider.InvalidResponse(op, c.product.name+" returned a job of a repository outside the targets")
+				return nil, allowed.outsideAnswer(op, c.product, name, "a job")
 			}
 			return projectJob(p, row), nil
 		}, nil
