@@ -45,7 +45,7 @@ func rowChangeRisk(effect capability.Effect, idempotency capability.Idempotency)
 
 const changeNote = "Field names come from baserow.fields.list; read-only fields (formulas, lookups, counts, " +
 	"timestamps, autonumbers, and fields the instance marks read-only) are refused. A link field takes an array of " +
-	"row ids of its other table and only when that table is inside the connection's targets"
+	"row ids of its other table and only when that table is inside the connection's targets and not excluded"
 
 const mutationOutputRow = rowSchema
 
@@ -204,7 +204,7 @@ func (c *Client) checkFields(fields []fieldJSON, values map[string]json.RawMessa
 		if field.Type != "link_row" {
 			continue
 		}
-		if field.LinkRowTableID == nil || !c.inScope(*field.LinkRowTableID) {
+		if field.LinkRowTableID == nil || !c.reaches(*field.LinkRowTableID) {
 			return invalidRequest("a named link field leads to a table outside this connection's targets")
 		}
 		if !validLinkValue(value) {
