@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Twenty CRM: notes, tasks, and attachments
@@ -19,7 +19,9 @@ from an argument. An object that the schema gives no single link relation cannot
 - The note or task and the object must both be reachable through the connection, so with targets both
   `object/note` (or `object/task`) and the object are bound. A refusal comes before any secret is resolved
   and names neither object nor identifier.
-- `list` names only links whose two sides are reachable and counts the others in `omitted`.
+- `list` names only links whose two sides are reachable and counts the others in `omitted`. Links to records
+  of excluded objects count as unreachable; `create` and `delete` on them are refused. If `note` or `task` is
+  excluded, the link tools refuse.
 - Repeating `create` adds a duplicate link; the answer must name the requested link.
 - `delete` removes only the link, never the note, task, or record. It reads the link first and removes it only
   when both sides are reachable. A connection offers it only when its `tools` list names it. Links are
@@ -32,7 +34,8 @@ from an argument. An object that the schema gives no single link relation cannot
 workspace schema, never from an argument. `list` counts attachments without a file or without exactly one
 reachable target in `omitted`. Labels and content are untrusted.
 
-- `get` needs exactly one target on a reachable object, else it answers as if the attachment did not exist.
+- `get` needs exactly one target on a reachable, not excluded object, else it answers as if the attachment did
+  not exist.
 - Deprecated attachment fields (`name`, `fullPath`, `type`, `fileCategory`, `author`) are not read, and the file
   address (`file[].url`) carries a token and is never reported.
 - `upload` takes `local_path` in a directory released for reading, or inline content up to 4 MiB; 1 byte to 100

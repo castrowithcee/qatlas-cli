@@ -39,17 +39,34 @@ var systemObjects = map[string]bool{
 }
 
 // scope is the object boundary of one connection: no objects means every non-system object the API key
-// reaches, otherwise exactly the listed ones.
+// reaches, otherwise exactly the listed ones. Excluded objects are never reached, whatever the targets say;
+// they narrow the boundary and neither make a connection bound nor widen anything.
 type scope struct {
-	objects []string
+	objects  []string
+	excluded []string
 }
 
 func (s scope) bound() bool { return len(s.objects) > 0 }
+
+// excludes reports whether the connection excludes an object by name.
+func (s scope) excludes(name string) bool {
+	for _, excluded := range s.excluded {
+		if excluded == name {
+			return true
+		}
+	}
+	return false
+}
 
 // allows reports whether the connection may reach an object by name, without looking at the workspace.
 func (s scope) allows(name string) bool {
 	if !objectNamePattern.MatchString(name) || systemObjects[name] {
 		return false
+	}
+	for _, excluded := range s.excluded {
+		if excluded == name {
+			return false
+		}
 	}
 	if !s.bound() {
 		return true
@@ -100,6 +117,28 @@ func parseScope(values []string) (scope, error) {
 	return bound, nil
 }
 
+// parseExcludes reads the configured exclusions: object/NAME entries like targets, none named twice. The
+// core already checks emptiness, duplicates, wildcards, and overlap with the targets; an exclusion that
+// matches no target is valid and has no effect on them. No error quotes the value.
+func parseExcludes(values []string) ([]string, error) {
+	var names []string
+	seen := map[string]bool{}
+	for _, raw := range values {
+		name, err := parseTarget(raw)
+		if err != nil {
+			return nil, errors.New("a Twenty exclusion must be object/NAME with the camelCase singular name of " +
+				"a non-system object, for example object/person")
+		}
+		if seen[name] {
+			return nil, errors.New("the Twenty object exclusions name an object more than once")
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 func validateTarget(raw string) error {
 	_, err := parseTarget(raw)
 	return err
@@ -116,6 +155,10 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 		return scope{}, providerError("open", "no connection was selected")
 	}
 	bound, err := parseScope(provider.TargetsOf(resolved))
+	if err != nil {
+		return scope{}, providerError("open", err.Error())
+	}
+	bound.excluded, err = parseExcludes(provider.ExcludesOf(resolved))
 	if err != nil {
 		return scope{}, providerError("open", err.Error())
 	}

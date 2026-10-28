@@ -189,7 +189,15 @@ func newSearchAllQuery(resolved *config.Resolved, raw json.RawMessage) (*searchA
 	}
 	sort.Strings(query.Objects)
 	if bound.bound() {
-		query.Included = bound.objects
+		// allows drops a target that is also excluded, even though the configuration refuses one.
+		for _, name := range bound.objects {
+			if bound.allows(name) {
+				query.Included = append(query.Included, name)
+			}
+		}
+		if len(query.Included) == 0 {
+			return nil, invalidRequest(errObjectUnavailable)
+		}
 		if args.Objects != nil {
 			query.Included = query.Objects
 		}
@@ -204,6 +212,10 @@ func newSearchAllQuery(resolved *config.Resolved, raw json.RawMessage) (*searchA
 	}
 	query.excludeRequested = excluded
 	parts := []any{"records.search-all", resolved.Name, bound.objects, query.Text, query.Objects}
+	if len(bound.excluded) > 0 {
+		// A cursor never continues across another set of connection exclusions.
+		parts = append(parts, bound.excluded)
+	}
 	if filter != nil || len(excluded) > 0 {
 		parts = append(parts, searchAllFilterKey(conditions, link, excluded))
 	}
