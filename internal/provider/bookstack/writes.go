@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -21,6 +23,9 @@ const (
 )
 
 const outsideTemplate = "default_template_id"
+
+// outsideBelow is the subject of a delete refused for something excluded below the object.
+const outsideBelow = "something below the object"
 
 // chapterChanges names the change of a chapter itself in a refusal by needsBook.
 const chapterChanges = "chapter changes"
@@ -281,6 +286,9 @@ func invokeBooksCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	if bound.bound() {
 		return nil, bookCreateRefusal(bound)
 	}
+	if err := bound.checkTemplate(input); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -306,6 +314,12 @@ func invokeBooksUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	if err := bound.checkBook(id); err != nil {
+		return nil, err
+	}
+	if err := bound.checkExcluded(bookPrefix, id); err != nil {
+		return nil, err
+	}
+	if err := bound.checkTemplate(change); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -338,6 +352,9 @@ func invokeBooksDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := bound.checkBook(id); err != nil {
 		return nil, err
 	}
+	if err := bound.checkExcluded(bookPrefix, id); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -363,6 +380,9 @@ func invokeChaptersDelete(ctx context.Context, resolved *config.Resolved, secret
 	}
 	if bound.bound() && !bound.bookWide() {
 		return nil, needsBook(chapterChanges)
+	}
+	if err := bound.checkExcluded(chapterPrefix, id); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -391,6 +411,12 @@ func invokeChaptersCreate(ctx context.Context, resolved *config.Resolved, secret
 		return nil, err
 	}
 	if err := bound.checkBook(input.BookID); err != nil {
+		return nil, err
+	}
+	if err := bound.checkExcluded(bookPrefix, input.BookID); err != nil {
+		return nil, err
+	}
+	if err := bound.checkTemplate(input); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -426,6 +452,15 @@ func invokeChaptersUpdate(ctx context.Context, resolved *config.Resolved, secret
 		if err := bound.checkBook(change.BookID); err != nil {
 			return nil, err
 		}
+		if err := bound.checkExcluded(bookPrefix, change.BookID); err != nil {
+			return nil, err
+		}
+	}
+	if err := bound.checkExcluded(chapterPrefix, id); err != nil {
+		return nil, err
+	}
+	if err := bound.checkTemplate(change); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -434,11 +469,20 @@ func invokeChaptersUpdate(ctx context.Context, resolved *config.Resolved, secret
 	return client.UpdateChapter(ctx, id, change)
 }
 
-// requireTemplateBound reads the template page once as evidence of its book; an unbound connection reads
-// nothing, and so does a change that names no template.
+// checkTemplate refuses a template page that is excluded by its own identifier, before any secret.
+func (s scope) checkTemplate(input containerMutation) error {
+	id, err := input.templateID()
+	if err != nil || id == 0 || !s.excludesPage(id) {
+		return err
+	}
+	return s.outside(outsideTemplate)
+}
+
+// requireTemplateBound reads the template page once as evidence of its book and chapter; a connection without
+// targets and exclusions reads nothing, and so does a change that names no template.
 func (c *Client) requireTemplateBound(ctx context.Context, input containerMutation) error {
 	id, err := input.templateID()
-	if err != nil || id == 0 || !c.scope.bound() {
+	if err != nil || id == 0 || !c.scope.limited() {
 		return err
 	}
 	allowed, err := c.pageInScope(ctx, id)
@@ -461,6 +505,9 @@ func (c *Client) CreateBook(ctx context.Context, input containerMutation) (outpu
 		return output.Object{}, bookCreateRefusal(c.scope)
 	}
 	if err := input.validate(); err != nil {
+		return output.Object{}, err
+	}
+	if err := c.requireTemplateBound(ctx, input); err != nil {
 		return output.Object{}, err
 	}
 	var book bookJSON
@@ -518,7 +565,7 @@ func (c *Client) UpdateChapter(ctx context.Context, id int64, input containerMut
 	if err := c.requireChapterBookWide(ctx, id, chapterChanges); err != nil {
 		return output.Object{}, err
 	}
-	if c.scope.bound() && input.BookID != 0 {
+	if input.BookID != 0 {
 		if err := c.requireBook(ctx, input.BookID); err != nil {
 			return output.Object{}, err
 		}
@@ -533,19 +580,60 @@ func (c *Client) UpdateChapter(ctx context.Context, id int64, input containerMut
 	return chapterWriteObject(chapter), nil
 }
 
-// DeleteBook proves the book first and sends one delete request.
+// DeleteBook proves the book first and sends one delete request. A delete takes everything below the book
+// with it, so a book with an excluded chapter or page is refused. The book's tree is read for that: one read
+// shows every chapter and page below the book, where reading the excluded objects would need one read each.
 func (c *Client) DeleteBook(ctx context.Context, id int64) error {
 	if err := c.requireBook(ctx, id); err != nil {
 		return err
 	}
+	if len(c.scope.exChapters)+len(c.scope.exPages) > 0 {
+		var book bookJSON
+		if err := c.get(ctx, "get book", "/api/books/"+strconv.FormatInt(id, 10), nil, &book, nil, provider.ClassPermission); err != nil {
+			return err
+		}
+		if c.entriesExcluded(book.Contents) {
+			return c.scope.outside(outsideBelow)
+		}
+	}
 	return c.mutate(ctx, "delete book", http.MethodDelete, "/api/books/"+strconv.FormatInt(id, 10), nil, nil, argNames(booksDelete))
 }
 
-// DeleteChapter proves the chapter's book first on a bound connection; a foreign chapter ends the call
-// without a delete.
+// entriesExcluded reports whether a tree holds an excluded chapter or page, at any depth.
+func (c *Client) entriesExcluded(entries []entryJSON) bool {
+	return slices.ContainsFunc(entries, func(e entryJSON) bool {
+		if e.Type == "chapter" {
+			return c.scope.excludesChapter(e.ID) || c.entriesExcluded(e.Pages)
+		}
+		return c.scope.excludesPage(e.ID)
+	})
+}
+
+// DeleteChapter proves the chapter's book first; a foreign chapter ends the call without a delete. A chapter
+// with an excluded page is refused, as the delete would take the page with it; the read that proves the book
+// shows the pages.
 func (c *Client) DeleteChapter(ctx context.Context, id int64) error {
-	if err := c.requireChapterBookWide(ctx, id, chapterChanges); err != nil {
-		return err
+	if c.scope.limited() {
+		if c.scope.bound() && !c.scope.bookWide() {
+			return needsBook(chapterChanges)
+		}
+		if c.scope.excludesChapter(id) {
+			return c.scope.outside(outsideChapter)
+		}
+		var chapter chapterJSON
+		if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &chapter, nil, provider.ClassPermission); err != nil {
+			return err
+		}
+		ok, err := c.bookAllowed(ctx, chapter.BookID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return c.scope.outside(outsideChapter)
+		}
+		if c.entriesExcluded(chapter.Pages) {
+			return c.scope.outside(outsideBelow)
+		}
 	}
 	return c.mutate(ctx, "delete chapter", http.MethodDelete, "/api/chapters/"+strconv.FormatInt(id, 10), nil, nil, argNames(chaptersDelete))
 }
