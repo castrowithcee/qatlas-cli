@@ -128,6 +128,8 @@ func TestSettingsRefusesKeysWithReason(t *testing.T) {
 		{"command key", "5", "digits choose an area"},
 		{"lock key", "f1", "terminals take"},
 		{"lock key", "!", "acts on text lines"},
+		{"save key", "space", "space and control characters"},
+		{"info key", "space", "space and control characters"},
 	}
 	for _, c := range cases {
 		m, _ := lockedVaultModel(t)
@@ -263,5 +265,21 @@ func TestKeyCaptureEndsWhenTheResizeNoticeLeavesTheForm(t *testing.T) {
 	press(t, m, "esc")
 	if m.screen != screenForm {
 		t.Errorf("the next key did not answer the question: screen %v", m.screen)
+	}
+}
+
+func TestSpaceKeepsInfoExtraKeyAndDeleteRemovesIt(t *testing.T) {
+	keepKeys(t)
+	m, _ := lockedVaultModel(t)
+	openSectionByName(t, m, sectionGeneral)
+	bindKey(t, m, "info key", "f3")
+	bindKey(t, m, "info key", "space")
+	if m.fieldValue("info key") != "f3" || !strings.Contains(m.fail, "space and control characters") {
+		t.Fatalf("space: value %q fail %q, want f3 kept and a refusal", m.fieldValue("info key"), m.fail)
+	}
+	focusKeyRow(t, m, "info key")
+	press(t, m, "d")
+	if m.fieldValue("info key") != "" {
+		t.Errorf("d left info key %q, want it removed", m.fieldValue("info key"))
 	}
 }
