@@ -98,12 +98,14 @@ func Register(reg *capability.Registry) error {
 			Multiple: true,
 			Description: "websites the token reaches, as all of them or as single websites by ID; the instance " +
 				"itself only when bound explicitly. Without targets a connection reaches every website of the " +
-				"token and no instance-wide tool",
+				"token and no instance-wide tool. An exclusion site/ID takes one website out of what the targets " +
+				"reach, as if the token held no view right on it; it never changes the tools offered",
 			Kinds: []config.TargetKind{{
 				Name: "site",
 				Description: "site binds every website of the token and cannot be combined with site/ID; " +
 					"site/ID binds exactly that website",
-				Forms: []string{formSites, formSite},
+				Forms:      []string{formSites, formSite},
+				Excludable: true,
 			}, {
 				Name:        "instance",
 				Description: "the Matomo instance itself, for tools that need Super User rights",
