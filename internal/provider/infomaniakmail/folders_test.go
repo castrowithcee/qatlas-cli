@@ -43,8 +43,8 @@ func TestFoldersListIsFilteredToTheAllowlist(t *testing.T) {
 		t.Fatalf("folders: %v", err)
 	}
 	page := decodeFolders(t, result)
-	if got := strings.Join(folderNames(page), ","); got != "Allowed,INBOX" || page.Count != 2 || page.Truncated {
-		t.Errorf("restricted connection folders = %s (%+v), want only the allow-list without subfolders", got, page)
+	if got := strings.Join(folderNames(page), ","); got != "Allowed,Allowed/Child,INBOX" || page.Count != 3 || page.Truncated {
+		t.Errorf("restricted connection folders = %s (%+v), want only the allow-list with subfolders", got, page)
 	}
 	if strings.Contains(result, "Secret") {
 		t.Errorf("result %q names a folder outside the allow-list", result)
