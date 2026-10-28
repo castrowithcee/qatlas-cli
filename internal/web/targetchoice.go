@@ -26,6 +26,8 @@ type targetEntryJSON struct {
 	Kind        string `json:"kind"`
 	Path        string `json:"path,omitempty"`
 	HasChildren bool   `json:"has_children,omitempty"`
+	// Excludable says the core accepts the entry as an exclusion of the connection's provider.
+	Excludable bool `json:"excludable,omitempty"`
 }
 
 type targetListResponse struct {
@@ -89,9 +91,9 @@ func writeTargetError(w http.ResponseWriter, err error) {
 }
 
 // targetDraft reads the connection in setup from the request's non-secret form fields.
-func (s *Server) targetDraft(r *http.Request) (manage.ConnectionDraft, error) {
+func (s *Server) targetDraft(r *http.Request) (manage.ConnectionDraft, config.TargetMetadata, error) {
 	if s.svc == nil {
-		return manage.ConnectionDraft{}, errors.New("no configuration store is configured for this run")
+		return manage.ConnectionDraft{}, config.TargetMetadata{}, errors.New("no configuration store is configured for this run")
 	}
 	cfg, _, err := s.svc.Load()
 	var notFound *config.NotFoundError
@@ -99,15 +101,18 @@ func (s *Server) targetDraft(r *http.Request) (manage.ConnectionDraft, error) {
 		cfg, err = s.svc.NewConfig(), nil
 	}
 	if err != nil {
-		return manage.ConnectionDraft{}, err
+		return manage.ConnectionDraft{}, config.TargetMetadata{}, err
 	}
-	return connectionDraft(cfg, parseConnectionForm(r.PostForm)), nil
+	f := parseConnectionForm(r.PostForm)
+	metadata, _ := cfg.ProviderMetadata(f.Provider)
+	return connectionDraft(cfg, f), metadata.Target, nil
 }
 
-func targetEntries(entries []config.TargetEntry) []targetEntryJSON {
+func targetEntries(entries []config.TargetEntry, metadata config.TargetMetadata) []targetEntryJSON {
 	out := make([]targetEntryJSON, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, targetEntryJSON{Target: e.Target, Name: e.Name, Kind: e.Kind, Path: e.Path, HasChildren: e.HasChildren})
+		out = append(out, targetEntryJSON{Target: e.Target, Name: e.Name, Kind: e.Kind, Path: e.Path,
+			HasChildren: e.HasChildren, Excludable: canExclude(metadata, e.Target)})
 	}
 	return out
 }
@@ -115,7 +120,7 @@ func targetEntries(entries []config.TargetEntry) []targetEntryJSON {
 // handleTargetList answers one page of one level of the targets the draft's provider offers. The form
 // fields kind, parent, query and cursor are the config.TargetListRequest.
 func (s *Server) handleTargetList(w http.ResponseWriter, r *http.Request, proof manage.AdminProof) {
-	draft, err := s.targetDraft(r)
+	draft, metadata, err := s.targetDraft(r)
 	if err != nil {
 		writeTargetError(w, err)
 		return
@@ -130,13 +135,13 @@ func (s *Server) handleTargetList(w http.ResponseWriter, r *http.Request, proof 
 		return
 	}
 	writeTargetJSON(w, http.StatusOK, targetListResponse{
-		Entries: targetEntries(page.Entries), Next: page.Next, ServerSearch: page.ServerSearch, Warning: warning,
+		Entries: targetEntries(page.Entries, metadata), Next: page.Next, ServerSearch: page.ServerSearch, Warning: warning,
 	})
 }
 
 // handleTargetResolve turns the form field url, a web URL of the service, into targets.
 func (s *Server) handleTargetResolve(w http.ResponseWriter, r *http.Request, proof manage.AdminProof) {
-	draft, err := s.targetDraft(r)
+	draft, metadata, err := s.targetDraft(r)
 	if err != nil {
 		writeTargetError(w, err)
 		return
@@ -146,7 +151,7 @@ func (s *Server) handleTargetResolve(w http.ResponseWriter, r *http.Request, pro
 		writeTargetError(w, err)
 		return
 	}
-	writeTargetJSON(w, http.StatusOK, targetResolveResponse{Entries: targetEntries(entries), Warning: warning})
+	writeTargetJSON(w, http.StatusOK, targetResolveResponse{Entries: targetEntries(entries, metadata), Warning: warning})
 }
 
 // targetDialogData is what the build page hands the script's chooser: routes, the kinds and their parent

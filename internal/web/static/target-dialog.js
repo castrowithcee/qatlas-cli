@@ -8,6 +8,8 @@
   }
   var form = root.closest("form");
   var targetsInput = document.getElementById("targets");
+  // The exclusions field exists only for a provider that declares exclusions.
+  var excludeInput = root.dataset.excludes === "true" ? document.getElementById("exclude") : null;
   if (!form || !targetsInput) {
     return;
   }
@@ -110,11 +112,15 @@
   var takeButton = button("Add selected", function () {
     take(Array.from(marks.values()));
   });
+  var takeExcludeButton = button("Add selected as exclusions", function () {
+    take(Array.from(marks.values()), true);
+  });
+  takeExcludeButton.hidden = !excludeInput;
   var closeButton = button("Close", function () {
     panel.hidden = true;
   });
   var actions = el("p", { class: "actions" });
-  [moreButton, takeButton, closeButton].forEach(function (b) {
+  [moreButton, takeButton, takeExcludeButton, closeButton].forEach(function (b) {
     actions.appendChild(b);
   });
   [urlLabel, urlInput, urlButton, backButton, pathLine, kindSelect, searchInput, message, wrap, actions].forEach(function (n) {
@@ -319,11 +325,12 @@
     searchInput.hidden = lv.fixed;
     moreButton.hidden = !lv.next;
     takeButton.hidden = !multiple;
+    takeExcludeButton.hidden = !excludeInput;
     body.replaceChildren();
     visible(lv).forEach(function (e) {
       var row = el("tr");
       var pick = el("td");
-      if (multiple) {
+      if (multiple || (excludeInput && e.excludable)) {
         var box = el("input", { type: "checkbox", "aria-label": "Select " + e.name });
         box.checked = marks.has(e.target);
         box.addEventListener("change", function () {
@@ -341,6 +348,9 @@
       });
       var act = el("td");
       act.appendChild(button("Add", function () { take([e]); }));
+      if (excludeInput && e.excludable) {
+        act.appendChild(button("Add as exclusion", function () { take([e], true); }));
+      }
       if (e.has_children) {
         act.appendChild(button("Open", function () { open(e); }));
       }
@@ -354,8 +364,8 @@
     return Array.from(s).slice(0, maxLabelChars).join("").trim();
   }
 
-  function listed() {
-    return targetsInput.value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
+  function listed(input) {
+    return input.value.split(",").map(function (t) { return t.trim(); }).filter(Boolean);
   }
 
   function labelField(target) {
@@ -388,22 +398,35 @@
     }
   }
 
-  function take(entries) {
-    if (!entries.length) {
+  // take adds the entries to the targets, or, with asExclusion, to the exclusions. An entry moves out of the
+  // other list, so it is never both. The server's checks decide what is valid; the script only offers the
+  // exclusion where the server marked the entry excludable.
+  function take(entries, asExclusion) {
+    var into = asExclusion ? excludeInput : targetsInput;
+    var other = asExclusion ? targetsInput : excludeInput;
+    if (asExclusion) {
+      entries = entries.filter(function (e) { return e.excludable; });
+    }
+    if (!entries.length || !into) {
       return;
     }
-    if (!multiple) {
+    if (!multiple && !asExclusion) {
       entries = entries.slice(0, 1);
-      targetsInput.value = "";
+      into.value = "";
     }
-    var current = listed();
+    var current = listed(into);
+    var moved = other ? listed(other) : [];
     entries.forEach(function (e) {
       if (current.indexOf(e.target) < 0) {
         current.push(e.target);
       }
+      moved = moved.filter(function (t) { return t !== e.target; });
       ensureLabel(e.target, e.name);
     });
-    targetsInput.value = current.join(", ");
+    into.value = current.join(", ");
+    if (other) {
+      other.value = moved.join(", ");
+    }
     marks.clear();
     panel.hidden = true;
     message.textContent = "";

@@ -671,12 +671,18 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <label for="targets">Targets</label>
 <input id="targets" type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off">
 <p class="hint">{{.TargetHint}}</p>
-{{with .Dialog}}<div id="target-dialog" class="target-dialog" hidden data-csrf="{{.CSRF}}" data-list-url="{{.ListURL}}" data-resolve-url="{{.ResolveURL}}" data-kinds="{{.Kinds}}" data-multiple="{{.Multiple}}" data-noun="{{.Noun}}"></div>
+{{with .Dialog}}<div id="target-dialog" class="target-dialog" hidden data-csrf="{{.CSRF}}" data-list-url="{{.ListURL}}" data-resolve-url="{{.ResolveURL}}" data-kinds="{{.Kinds}}" data-multiple="{{.Multiple}}" data-noun="{{.Noun}}" data-excludes="{{$.Excludes}}"></div>
 <script src="{{.Script}}"></script>{{end}}
 </div>
-{{range $i, $l := .Labels}}<div class="field">
-<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+{{if .Excludes}}<div class="field">
+<label for="exclude">Exclusions</label>
+<input id="exclude" type="text" name="exclude" value="{{.Form.Exclude}}" autocomplete="off">
+<p class="hint">Objects the connection never reaches, though its targets would; separate more than one with a comma. An exclusion is not a target, and a wildcard target stays the way to reach everything else.</p>
+</div>
+{{end}}{{range $i, $l := .Labels}}<div class="field">
+<label for="label-{{$i}}">Label for {{$l.Target}}{{if $l.Excluded}} (excluded){{end}}</label>
 <input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
+{{if $l.CanSwitch}}<div class="choice"><input id="switch-{{$i}}" type="checkbox" name="switch_{{$l.Target}}" value="1"> <label for="switch-{{$i}}">{{if $l.Excluded}}Make reachable{{else}}Exclude{{end}}: {{$l.Target}} (applied when you continue)</label></div>{{end}}
 </div>
 {{end}}{{if not .Labels}}<p class="hint">Labels can be set for each target once the targets are entered and reviewed; the review page keeps them editable.</p>{{end}}
 <div class="field">
@@ -774,11 +780,13 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <legend>Target labels</legend>
 <p class="hint">A label names a target for people; leave it empty for none.</p>
 {{range $i, $l := .Labels}}<div class="field">
-<label for="label-{{$i}}">Label for {{$l.Target}}</label>
+<label for="label-{{$i}}">Label for {{$l.Target}}{{if $l.Excluded}} (excluded){{end}}</label>
 <input id="label-{{$i}}" type="text" name="label_{{$l.Target}}" value="{{$l.Label}}" autocomplete="off">
 </div>
 {{end}}</fieldset>{{end}}
 <input type="hidden" name="targets" value="{{.Form.Targets}}">
+{{if .Form.Exclude}}<input type="hidden" name="exclude" value="{{.Form.Exclude}}">
+{{end}}
 <input type="hidden" name="description" value="{{.Form.Description}}">
 <input type="hidden" name="filesread" value="{{.Form.FilesRead}}">
 <input type="hidden" name="fileswrite" value="{{.Form.FilesWrite}}">
@@ -845,7 +853,8 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th scope="row">Service</th><td>{{.Service}}</td></tr>
 <tr><th scope="row">Credential</th><td>{{.Credential}}</td></tr>
 <tr><th scope="row">Targets</th><td>{{.Targets}}</td></tr>
-<tr><th scope="row">Files</th><td>{{.Files}}</td></tr>
+{{if .Exclude}}<tr><th scope="row">Exclusions</th><td>{{.Exclude}}</td></tr>
+{{end}}<tr><th scope="row">Files</th><td>{{.Files}}</td></tr>
 <tr><th scope="row">Description</th><td>{{.Description}}</td></tr>
 <tr><th scope="row">Effects</th><td>{{.Effects}}</td></tr>
 <tr><th scope="row">Tools</th><td>{{.Tools}}</td></tr>
