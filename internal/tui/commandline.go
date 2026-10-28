@@ -125,6 +125,18 @@ func (m *Model) commands() []command {
 			run: func(m *Model) tea.Cmd { m.askUpdate(); return nil },
 		},
 		command{
+			name:    "version",
+			desc:    tr(tCmdVersion),
+			aliases: []string{"versions", "rollback", "downgrade", "prerelease"},
+			unavailable: func(m *Model) string {
+				if r := onScreens("choose a version", screenNav, screenList)(m); r != "" {
+					return r
+				}
+				return m.versionsUnavailable()
+			},
+			run: func(m *Model) tea.Cmd { return m.openVersions() },
+		},
+		command{
 			name:        "export",
 			desc:        tr(tCmdExport),
 			aliases:     []string{"export config", "backup"},

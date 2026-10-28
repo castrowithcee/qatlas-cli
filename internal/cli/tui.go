@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -348,7 +350,16 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"cannot restart itself, on Windows or when the new program cannot be run, it keeps running the\n" +
 			"old version until it is restarted by hand. On Windows u also locks a vault process before the\n" +
 			"program is replaced, since Windows has no handover; 'qatlas vault unlock' unlocks it again. A failed check stays silent. A dev build never\n" +
-			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.",
+			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.\n\n" +
+			"The command version, also the row choose version in Settings, Update, lists the versions\n" +
+			"'qatlas update --list' shows, newest first, with the running one marked and prerelease and older\n" +
+			"versions named. enter on one asks first, with the\n" +
+			"direction (newer, prerelease, or older) and what the installation does, and installs it like\n" +
+			"'qatlas update --to' with the same restart. An older version is a rollback: the question says its\n" +
+			"fixes of later versions are missing and that the vault is locked first; the older program is then\n" +
+			"checked against a copy of the configuration. If it does not read it, the editor asks separately\n" +
+			"whether to restore the newest backup it reads, with the date of the backup; only y does, and n or\n" +
+			"esc ends the rollback without a change. Without a readable backup nothing is changed.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			secret.SetLongRunning("tui")
@@ -372,9 +383,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			// damaged file never stops the editor; it opens with the defaults and says why.
 			prefsPath := tuiPrefsPath(path)
 			prefs, prefsWarnings := uiprefs.Load(prefsPath)
+			updater := tuiUpdater(opts, buildVersion)
+			if locking, ok := updater.(*lockingUpdater); ok {
+				locking.svc = svc
+			}
 			return classifyUserError(tui.Run(tui.Options{
 				Service: svc, Store: store, Tester: connectionTester(store, opts, reg), Secrets: secrets,
-				Redactor: opts.Redactor, Version: buildVersion, Updater: tuiUpdater(opts, buildVersion), Restart: tuiRestart(),
+				Redactor: opts.Redactor, Version: buildVersion, Updater: updater, Restart: tuiRestart(),
 				SelfTest: tuiSelfTest(buildVersion), Prefs: prefs, PrefsWarnings: prefsWarnings,
 				SavePrefs: func(p uiprefs.Prefs) error { return uiprefs.Save(prefsPath, p) },
 				In:        os.Stdin, Out: os.Stdout,
@@ -492,6 +507,8 @@ type lockingUpdater struct {
 	opts   *Options
 	client *selfupdate.Client
 	note   string
+	// svc checks an older version against the configuration and restores a backup (see PrepareRollback).
+	svc *manage.Service
 }
 
 func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
@@ -516,3 +533,80 @@ func (u *lockingUpdater) UpdateProgress(ctx context.Context, progress func(done,
 
 // Note is what handing over or locking the vault process said during the last installation.
 func (u *lockingUpdater) Note() string { return u.note }
+
+// Versions lists the releases that can be chosen, the list 'qatlas update --list' shows.
+func (u *lockingUpdater) Versions(ctx context.Context) ([]selfupdate.Entry, error) {
+	return u.client.List(ctx)
+}
+
+// InstallVersion installs a newer release or a prerelease like 'qatlas update --to', with the vault handover
+// or lock of an update.
+func (u *lockingUpdater) InstallVersion(ctx context.Context, tag string, progress func(done, total int64)) (selfupdate.Result, error) {
+	target, err := u.client.Target(ctx, tag)
+	if err != nil {
+		return selfupdate.Result{}, err
+	}
+	replacement := &vaultReplacement{opts: u.opts}
+	client := replacement.hooked(u.client)
+	if progress != nil {
+		client.Progress = progress
+	}
+	result, err := client.UpdateTo(ctx, target)
+	u.note = replacement.finish()
+	return result, err
+}
+
+// PrepareRollback downloads the older version tag and runs it against the configuration, as 'qatlas update
+// --to' does. Its vault process is locked whatever the update behaviour says, because an older program cannot
+// take an unlocked vault over.
+func (u *lockingUpdater) PrepareRollback(ctx context.Context, tag string, progress func(done, total int64)) (tui.Rollback, error) {
+	if u.svc == nil {
+		return nil, errors.New("the configuration is not available to check the older version against")
+	}
+	target, err := u.client.Target(ctx, tag)
+	if err != nil {
+		return nil, err
+	}
+	if !target.Older {
+		return nil, &selfupdate.TargetError{Reason: tag + " is not older than the running version"}
+	}
+	replacement := &vaultReplacement{opts: u.opts, lock: true}
+	client := replacement.hooked(u.client)
+	if progress != nil {
+		client.Progress = progress
+	}
+	prepared, err := client.Prepare(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	check, err := u.svc.CheckRollback(ctx, prepared)
+	if err != nil {
+		return nil, fmt.Errorf("could not check whether %s reads the configuration, nothing was changed: %w", tag, err)
+	}
+	return &rollbackPlan{updater: u, replacement: replacement, client: client, prepared: prepared, check: check}, nil
+}
+
+// rollbackPlan is an older version that was checked against the configuration.
+type rollbackPlan struct {
+	updater     *lockingUpdater
+	replacement *vaultReplacement
+	client      *selfupdate.Client
+	prepared    *selfupdate.Prepared
+	check       *manage.RollbackCheck
+}
+
+func (p *rollbackPlan) Reads() bool { return p.check.Reads }
+
+func (p *rollbackPlan) Backup() (string, time.Time, bool) {
+	if p.check.Reads || p.check.Offer == nil {
+		return "", time.Time{}, false
+	}
+	return p.check.Offer.Name, p.check.Offer.Time, true
+}
+
+// Install installs the older version, restoring the offered backup first when restore is true.
+func (p *rollbackPlan) Install(ctx context.Context, restore bool) (selfupdate.Result, error) {
+	result, err := p.updater.svc.Rollback(ctx, p.client, p.prepared, p.check, restore)
+	p.updater.note = p.replacement.finish()
+	return result, err
+}
