@@ -250,7 +250,7 @@ func invokeUsersList(ctx context.Context, resolved *config.Resolved, secrets *se
 		}
 		binding = []any{"instance", args.OnlyLogins, args.Logins}
 	}
-	parts := append([]any{usersList.ID, bound.allSites, sortedSites(bound)}, binding...)
+	parts := append([]any{usersList.ID, bound.binding()}, binding...)
 	paging, err := startPage(provider.CursorBinding(parts...), args.Limit, args.Cursor)
 	if err != nil {
 		return nil, err

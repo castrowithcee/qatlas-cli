@@ -344,9 +344,7 @@ func invokeReferenceDataList(ctx context.Context, resolved *config.Resolved, sec
 	if !bound.reachesSites() {
 		return nil, invalidArgument("this connection is bound to no website")
 	}
-	sites := slices.Clone(bound.sites)
-	slices.Sort(sites)
-	paging, err := startPage(provider.CursorBinding(referenceDataList.ID, bound.allSites, sites, args.Kind), args.Limit, args.Cursor)
+	paging, err := startPage(provider.CursorBinding(referenceDataList.ID, bound.binding(), args.Kind), args.Limit, args.Cursor)
 	if err != nil {
 		return nil, err
 	}

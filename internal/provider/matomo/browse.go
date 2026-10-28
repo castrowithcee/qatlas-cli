@@ -56,7 +56,7 @@ func listTargets(ctx context.Context, resolved *config.Resolved, secrets *secret
 	if err != nil {
 		return config.TargetPage{}, err
 	}
-	client, err := build(ctx, resolved, secrets, red, scope{allSites: true})
+	client, err := build(ctx, resolved, secrets, red, wholeToken())
 	if err != nil {
 		return config.TargetPage{}, err
 	}

@@ -48,16 +48,16 @@ func (s scope) readsSegment(site int) bool {
 }
 
 // writesSegment reports whether a segment bound to the website may be changed: a segment of all websites (0)
-// needs a binding to all websites, as Matomo allows it only to a Super User.
+// needs every website in scope, as Matomo allows it only to a Super User.
 func (s scope) writesSegment(site int) bool {
 	if site == 0 {
-		return s.allSites
+		return s.everySite()
 	}
 	return s.allows(site)
 }
 
 // segmentSite settles the website a segment is written for, before any secret is read. 0 stands for all
-// websites, which only a connection bound to site without an ID may write; an omitted idSite then means all
+// websites, which only a connection that reaches every website may write; an omitted idSite then means all
 // websites, or the one website a connection binds.
 func segmentSite(resolved *config.Resolved, given *int) (int, error) {
 	bound, err := boundScope(resolved)
@@ -76,12 +76,12 @@ func segmentSite(resolved *config.Resolved, given *int) (int, error) {
 			return 0, invalidArgument(outsideTargets)
 		}
 		return *given, nil
-	case bound.allSites:
+	case bound.everySite():
 		return 0, nil
 	case given == nil && len(bound.sites) == 1:
 		return bound.sites[0], nil
 	}
-	return 0, invalidArgument("a segment for all websites needs a connection bound to site without an ID; " +
+	return 0, invalidArgument("a segment for all websites needs a connection bound to site without an ID or exclusions; " +
 		"name the website with idSite")
 }
 
@@ -246,7 +246,7 @@ var segmentsAdd = capability.Descriptor{
 		`"idSite":{"type":"integer"},"created":{"type":"boolean"}},"required":["idSegment","idSite","created"],` +
 		`"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{{Name: "idSite", Target: "site", Description: "Website the segment " +
-		"belongs to; 0 for all websites, which needs a connection bound to site without an ID and the Super User " +
+		"belongs to; 0 for all websites, which needs a connection bound to site without an ID or exclusions and the Super User " +
 		"right; omitted, it is the one website of a connection that binds exactly one, else all websites"}},
 		segmentWriteArguments(false)...),
 	Fields: []capability.Field{
@@ -277,7 +277,7 @@ var segmentsUpdate = capability.Descriptor{
 	Arguments: append([]capability.Argument{
 		{Name: "idSegment", Required: true, Description: "ID of the segment to replace, from matomo.segments.list"},
 		{Name: "idSite", Target: "site", Description: "Website the segment belongs to afterwards; 0 for all " +
-			"websites, which needs a connection bound to site without an ID and the Super User right; the " +
+			"websites, which needs a connection bound to site without an ID or exclusions and the Super User right; the " +
 			"current website of the segment when omitted"},
 	}, segmentWriteArguments(true)...),
 	Fields: []capability.Field{

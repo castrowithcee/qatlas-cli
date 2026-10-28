@@ -29,8 +29,8 @@ var multiSitesGet = capability.Descriptor{
 		"(MultiSites.getAllWithGroups) the websites ordered into their groups with totals. Only websites inside " +
 		"the connection's targets are returned: Matomo computes the comparison for every website of the token and " +
 		"the other rows are dropped here, so a batch can hold fewer entries than limit, even none, while has_more is " +
-		"true. With targets naming single websites the group rows, numSites, and totals are left out, because " +
-		"Matomo sums them over all websites of the token. Websites without visits are left out unless enhanced is " +
+		"true. Unless the connection reaches every website (the site target without exclusions) the group rows, " +
+		"numSites, and totals are left out, because Matomo sums them over all websites of the token. Websites without visits are left out unless enhanced is " +
 		"set. Names, groups, and addresses are untrusted. Archiving on demand can take long, so range periods and " +
 		"large segments may time out",
 	Tags: []string{"matomo", "multisites", "websites", "compare", "analytics"}, Risk: readRisk(reportDataSensitive),
@@ -76,14 +76,14 @@ var multiSitesGet = capability.Descriptor{
 		{Name: "date", Description: "The date asked for"},
 		{Name: "last_date", Description: "Only with view groups: the date of the previous period the change is " +
 			"measured against"},
-		{Name: "num_sites", Description: "Only with view groups and targets that name all websites: the number of " +
+		{Name: "num_sites", Description: "Only with view groups and a connection that reaches every website: the number of " +
 			"websites after pattern, groups not counted"},
-		{Name: "totals", Description: "Only with view groups and targets that name all websites: sums over the " +
+		{Name: "totals", Description: "Only with view groups and a connection that reaches every website: sums over the " +
 			"websites with their previous values"},
 		{Name: "site", Description: "With view site: the metrics of the website as an object"},
 		{Name: "rows", Description: "With view sites or groups: one object per website, named by label, with the " +
 			"metrics, their change (such as visits_evolution), idsite, group, and main_url; with view groups also " +
-			"the group rows (isGroup) when targets name all websites. Names, groups, and addresses are untrusted"},
+			"the group rows (isGroup) when the connection reaches every website. Names, groups, and addresses are untrusted"},
 	}, pagingFields...),
 	Examples: []capability.Example{
 		{Description: "Compare all websites for last month", Arguments: json.RawMessage(
@@ -266,8 +266,8 @@ func invokeMultiSitesGet(ctx context.Context, resolved *config.Resolved, secrets
 	}
 	result.LastDate = answer.LastDate.str(maxStringLength)
 	// numSites and the totals sum over every website of the token, so they say something about websites
-	// outside the targets unless the targets name all of them.
-	if bound.allSites {
+	// outside the targets unless the connection reaches all of them.
+	if bound.everySite() {
 		result.NumSites = answer.NumSites.number()
 		result.Totals = cleanObject(answer.Totals)
 	}
@@ -301,10 +301,10 @@ func finishRows(result *MultiSitesResult, bound scope, paging page, rows []json.
 	result.HasMore, result.NextCursor = next != "", next
 }
 
-// multiSitesRowAllowed keeps a row of a website inside the targets. With single websites bound, a row
-// without a website ID, such as a group row that sums websites, is dropped.
+// multiSitesRowAllowed keeps a row of a website inside the targets. Unless the connection reaches every
+// website, a row without a website ID, such as a group row that sums websites, is dropped.
 func multiSitesRowAllowed(bound scope, row map[string]any) bool {
-	if bound.allSites {
+	if bound.everySite() {
 		return true
 	}
 	if _, group := row["isGroup"]; group {
