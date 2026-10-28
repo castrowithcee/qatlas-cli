@@ -19,7 +19,7 @@ func seatableConfig(t *testing.T) string {
 	t.Helper()
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	return writeConfig(t, `version: 3
+	return writeConfig(t, `version: 4
 services:
   tables-cloud:
     provider: seatable.base

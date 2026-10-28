@@ -200,7 +200,33 @@ func (c *Client) absolute(rel []string) string {
 // normalise decides whether a share belongs to this connection and builds its view. An own share is bound by
 // its path, an incoming one by its target in the tree of the identity. A share of another owner that the
 // identity itself passed on is neither: its target lies in the tree of a recipient.
-func (c *Client) normalise(raw rawShare) (Share, bool) {
+func (c *Client) normalise(raw rawShare) (Share, bool) { return c.normaliseKeeping(raw, false) }
+
+// shareReach says how the nodes a share names relate to the exclusions: hidden when one lies on or below an
+// excluded folder, holds when one is a strict ancestor of an excluded folder. Both of its paths are judged,
+// each as far as it lies below the connection root.
+func (c *Client) shareReach(raw rawShare) (hidden, holds bool) {
+	for _, location := range []string{raw.Path, raw.FileTarget} {
+		rel, ok := c.below(location)
+		if !ok {
+			continue
+		}
+		var segments []string
+		if rel != "" {
+			segments = strings.Split(rel, "/")
+		}
+		hidden = hidden || c.scope.relHidden(segments)
+		holds = holds || c.scope.relHolds(segments)
+	}
+	return hidden, holds
+}
+
+// normaliseKeeping is normalise that can keep a share on an ancestor of an excluded folder, so that it can
+// still be revoked. Every other share the exclusions reach is treated as one outside the connection.
+func (c *Client) normaliseKeeping(raw rawShare, keepAncestors bool) (Share, bool) {
+	if hidden, holds := c.shareReach(raw); hidden || holds && !keepAncestors {
+		return Share{}, false
+	}
 	var direction, location string
 	switch {
 	case raw.UIDOwner == "":
@@ -285,6 +311,9 @@ func (c *Client) ListShares(ctx context.Context, path string, subfiles, incoming
 		if err != nil {
 			return nil, providerError(op, err.Error())
 		}
+		if err := c.scope.gateRead(op, rel); err != nil {
+			return nil, err
+		}
 		query.Set("path", c.absolute(rel))
 	}
 	if subfiles {
@@ -327,6 +356,10 @@ func (c *Client) ListShares(ctx context.Context, path string, subfiles, incoming
 // GetShare reads one share by its ID. A share outside the connection root is answered exactly like one that
 // does not exist.
 func (c *Client) GetShare(ctx context.Context, id string) (*Share, error) {
+	return c.getShare(ctx, id, false)
+}
+
+func (c *Client) getShare(ctx context.Context, id string, keepAncestors bool) (*Share, error) {
 	const op = "get share"
 	if err := checkShareID(id); err != nil {
 		return nil, err
@@ -346,7 +379,7 @@ func (c *Client) GetShare(ctx context.Context, id string) (*Share, error) {
 	if len(items) == 0 {
 		return nil, shareNotFound(op)
 	}
-	share, ok := c.normalise(items[0])
+	share, ok := c.normaliseKeeping(items[0], keepAncestors)
 	if !ok {
 		return nil, shareNotFound(op)
 	}
@@ -573,6 +606,9 @@ func invokeSharesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	}
 	if input.Subfiles && (input.Path == "" || input.SharedWithMe) {
 		return nil, providerError("list shares", "subfiles needs a path and cannot be combined with shared_with_me")
+	}
+	if err := preflight(resolved, "list shares", input.Path, scope.gateRead); err != nil {
+		return nil, err
 	}
 	if _, err := splitRelative(input.Path); err != nil {
 		return nil, providerError("list shares", err.Error())

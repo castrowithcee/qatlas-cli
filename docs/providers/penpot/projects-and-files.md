@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # Penpot: projects and files
@@ -48,17 +48,26 @@ IDs.
 - `projects.rename` and `projects.delete`: the project must pass the allow-list and lie in a bound team (proved with
   `get-projects`). Penpot marks a deleted project and removes it and its files after its deletion delay, and refuses
   the default project of a team. A project that is in the allow-list may be deleted; the boundary is not widened by
-  that.
+  that. **A project that holds an excluded file is not deleted** ([Exclusions](README.md#exclusions)): on a
+  connection that excludes files, the files of the project (`get-project-files`) and the deleted files of its team
+  (`get-team-deleted-files`, which Penpot still lets a person restore) must hold none. Where a deleted file reports
+  no project, it counts as being in the project. A request that fails, an answer that is no list, or an entry
+  without an ID leaves the proof incomplete and refuses the delete as well. The refusal reads like a project outside
+  the targets.
 - `files.create`: the project is bound as above.
 - `files.rename`: the file is bound through its project (project located, file found in its file list) before
   anything is sent.
 - `files.move`: `project_id` is where the file is now. Both projects must pass the allow-list and lie in bound teams,
   and they must differ; the file is bound through the source project. A move between two bound teams is allowed when
-  Penpot allows it. Penpot drops library links of the moved file that would cross teams.
+  Penpot allows it. Penpot drops library links of the moved file that would cross teams. Neither the file nor
+  either project may be excluded.
 
 For a creation, an answer without the new ID also counts as unreadable ([Changes](README.md#changes)).
 
 ## Snapshots and deleted files
+
+An excluded file, or a file in an excluded project, is refused by all of them; `files.restore` and `files.purge`
+refuse an excluded deleted file the same way.
 
 The five tools use the read commands `get-file-snapshots` and `get-team-deleted-files` for their checks; none of them
 is offered as a tool, so the IDs of older snapshots and deleted files come from the Penpot UI or from the answers of

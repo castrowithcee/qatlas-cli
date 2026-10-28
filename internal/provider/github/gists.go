@@ -403,26 +403,26 @@ func (g gistJSON) view(op string, content bool) (Gist, error) {
 // not a set of users: it names a repository or a project, or no user at all.
 func requireGistTargets(resolved *config.Resolved) (allowlist, error) {
 	if resolved == nil {
-		return nil, providerError("open", "no connection was selected")
+		return allowlist{}, providerError("open", "no connection was selected")
 	}
 	allowed, err := allowlistOf(resolved)
 	if err != nil {
-		return nil, providerError("open", err.Error())
+		return allowlist{}, providerError("open", err.Error())
 	}
 	if err := accountWideAllowed(allowed); err != nil {
-		return nil, invalidRequest("this connection's targets name a repository or a project, and gists belong " +
-			"to a user; use a connection without such targets, or one whose targets name users as users/LOGIN")
+		return allowlist{}, invalidRequest("this connection's targets name a repository or a project, and gists " +
+			"belong to a user; use a connection without such targets, or one whose targets name users as users/LOGIN")
 	}
-	if len(allowed) > 0 && !allowed.namesUser("") {
-		return nil, invalidRequest("the targets of this connection name no user; gists belong to a user, so add " +
-			"users/LOGIN to its targets or use another connection")
+	if allowed.bound() && !allowed.namesUser("") {
+		return allowlist{}, invalidRequest("the targets of this connection name no user; gists belong to a user, " +
+			"so add users/LOGIN to its targets or use another connection")
 	}
 	return allowed, nil
 }
 
 // namesUser reports whether the list names the user as an owner target; an empty login asks for any user.
 func (a allowlist) namesUser(login string) bool {
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == "users" && (login == "" || strings.EqualFold(entry.owner, login)) {
 			return true
 		}
@@ -433,7 +433,7 @@ func (a allowlist) namesUser(login string) bool {
 // admitsGistOwner reports whether the list lets a tool touch a gist of the user: it has no targets, or names
 // the user.
 func (a allowlist) admitsGistOwner(login string) bool {
-	return len(a) == 0 || (login != "" && a.namesUser(login))
+	return a.open() || (login != "" && a.namesUser(login))
 }
 
 func checkGistID(id string) error {
@@ -528,7 +528,7 @@ func (c *Client) listGists(ctx context.Context, o *gistListOptions) (*GistList, 
 // requireOwnAccount lets a connection with targets act for the account behind its token only when a user
 // target names that account.
 func (c *Client) requireOwnAccount(ctx context.Context, op string) error {
-	if len(c.allowed) == 0 {
+	if !c.allowed.bound() {
 		return nil
 	}
 	account, err := c.getAccount(ctx)
@@ -716,7 +716,7 @@ func invokeGistsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	const op = "update gist"
-	if len(client.allowed) > 0 {
+	if !client.allowed.open() {
 		if _, err := client.gist(ctx, op, a.GistID); err != nil {
 			return nil, err
 		}
@@ -755,7 +755,7 @@ func invokeGistsDelete(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	const op = "delete gist"
-	if len(client.allowed) > 0 {
+	if !client.allowed.open() {
 		if _, err := client.gist(ctx, op, a.GistID); err != nil {
 			return nil, err
 		}

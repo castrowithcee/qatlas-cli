@@ -79,7 +79,7 @@ var topicsSearch = &tool{
 		}
 	},
 	prepare: func(p *product, allowed allowlist, raw json.RawMessage) (run, error) {
-		if len(allowed) != 0 {
+		if !allowed.open() {
 			return nil, invalidArgument("topics are instance-wide, so this connection's targets do not allow " +
 				"searching them; use a connection without targets")
 		}

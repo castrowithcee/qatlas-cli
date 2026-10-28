@@ -413,7 +413,7 @@ func (n notificationJSON) view(op string, allowed allowlist) (Notification, erro
 // admitsRepository reports whether the list lets a tool touch data of one repository: the list is empty, or
 // names the repository, or names its owner.
 func (a allowlist) admitsRepository(t target) bool {
-	return a.allows(t) || (len(a) > 0 && a.ownerNames(t.owner))
+	return a.allows(t) || (a.bound() && a.ownerNames(t.owner))
 }
 
 // selectNotificationScope resolves the optional repository argument of the list and the mark-all tool against
@@ -454,7 +454,7 @@ func selectNotificationScope(resolved *config.Resolved, raw json.RawMessage, who
 		chosen, err := allowed.choose(kindRepository, "")
 		return chosen, err == nil, err
 	}
-	if wholeAccountNeedsNoTargets && len(allowed) > 0 {
+	if wholeAccountNeedsNoTargets && !allowed.open() {
 		return target{}, false, invalidRequest("repository is required because the connection has targets; " +
 			"GitHub marks the whole account read, which the targets cannot narrow, so pass a repository they allow")
 	}
@@ -471,7 +471,7 @@ func requireThreadTargets(resolved *config.Resolved) error {
 	if err != nil {
 		return providerError("open", err.Error())
 	}
-	if len(allowed) > 0 && !allowed.names(kindRepository) && !allowed.names(kindOwner) {
+	if allowed.bound() && !allowed.names(kindRepository) && !allowed.names(kindOwner) {
 		return invalidRequest("the targets of this connection allow no repository; add one or an owner to its " +
 			"targets or use another connection")
 	}

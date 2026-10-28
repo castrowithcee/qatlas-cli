@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # Nextcloud shares
@@ -59,3 +59,13 @@ one request. After an unclear outcome (timeout, aborted connection, a 5xx or unr
 the change may have been applied and to check the share (`shares.shares.get`, `shares.incoming-shares.pending`, or
 `shares.remote-shares.get`) before repeating; Qatlas never repeats. A refusal by the instance (for example a required
 expiry or disabled sharing) is a clear error without the text of the instance.
+
+## Exclusions
+
+The rules are in [Exclusions](README.md#exclusions). Every answered share is checked against them by its `path` and
+its `file_target`, incoming shares included. A share on or below an excluded folder is not listed, `get` answers
+it like a missing share, and `update` and `delete` refuse it like one outside the root. A share on a folder above
+an excluded one, the root included, is also hidden in `list` and `get`, and `update` treats it as missing, but
+`delete` still revokes it, so access is never left that cannot be taken back. `create` refuses a path on or below
+an excluded folder like a missing item, and a path above one with `permission`, before any credential access;
+the refusal names no path.

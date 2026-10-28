@@ -62,6 +62,9 @@ func (r *recordReader) Read(p []byte) (int, error) {
 // The remaining gap: the manual documents no condition for the MOVE, so a file created or changed between
 // the final stat and the MOVE is overwritten (create) or replaced regardless of its version (update).
 func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upload *localfile.Upload, create bool, match string) (string, error) {
+	if err := uploadGate(create)(c.scope, op, rel); err != nil {
+		return "", err
+	}
 	id, err := uploadID()
 	if err != nil {
 		return "", providerError(op, "no upload ID could be generated")
@@ -140,6 +143,9 @@ func (c *Client) uploadURL(id string) string {
 // chunkRequest sends one request of the chunked upload. The Destination is always a path below the Files
 // root, built from checked segments; total, when not empty, is the length of the whole file.
 func (c *Client) chunkRequest(ctx context.Context, method, target, destination, total string, body io.Reader, length int64) (*http.Response, error) {
+	if err := c.guardURLs("upload file", target, destination); err != nil {
+		return nil, err
+	}
 	if body == nil {
 		body = http.NoBody
 	}

@@ -72,8 +72,9 @@ var targetKinds = []config.TargetKind{{
 	Name: kindFolder,
 	Description: "the Files folder this connection may access; optional, at most one; the kind alone binds the " +
 		"whole Files root of the identity, and PATH may have several segments such as Team/Reports",
-	Forms:  []string{kindFolder, kindFolder + "/PATH"},
-	Nested: true,
+	Forms:      []string{kindFolder, kindFolder + "/PATH"},
+	Nested:     true,
+	Excludable: true,
 }, {
 	Name:        kindCalendar,
 	Description: "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
@@ -95,8 +96,9 @@ var targetKinds = []config.TargetKind{{
 	Name: kindNotes,
 	Description: "all notes of the identity, or the notes of one category, which may be a sub-folder such as " +
 		"Work/Plans; optional, and may be listed more than once",
-	Forms:  []string{kindNotes, kindNotes + "/PATH"},
-	Nested: true,
+	Forms:      []string{kindNotes, kindNotes + "/PATH"},
+	Nested:     true,
+	Excludable: true,
 }, {
 	Name: kindAccount,
 	Description: "the account-wide and instance-wide reach of the identity: notifications, activity, search, " +
@@ -139,6 +141,8 @@ type scope struct {
 	notes        selection
 	account      bool
 	admin        bool
+	excludes     exclusions
+	cross        crossExcludes
 }
 
 // scopeOf reads the targets of a resolved connection. The single target field keeps its old meaning, the
@@ -155,9 +159,9 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 		if err != nil {
 			return scope{}, err
 		}
-		return scope{hasFolder: true, folder: root}, nil
+		return scope{hasFolder: true, folder: root}.withExcludes(provider.ExcludesOf(resolved))
 	}
-	return parseScope(resolved.Targets)
+	return parseScopeExcluding(resolved.Targets, provider.ExcludesOf(resolved))
 }
 
 // parseLegacyRoot reads the single target field: a root folder as before. A first segment that equals a
@@ -175,8 +179,11 @@ func parseLegacyRoot(raw string) ([]string, error) {
 	return parseRoot(trimmed)
 }
 
-// parseScope reads a typed target list.
-func parseScope(values []string) (scope, error) {
+// parseScope reads a typed target list without exclusions.
+func parseScope(values []string) (scope, error) { return parseScopeExcluding(values, nil) }
+
+// parseScopeExcluding reads a typed target list and the exclusions of the connection.
+func parseScopeExcluding(values, excludes []string) (scope, error) {
 	var s scope
 	seen := map[string]bool{}
 	for _, raw := range values {
@@ -204,7 +211,7 @@ func parseScope(values []string) (scope, error) {
 			return scope{}, errors.New("a Nextcloud connection may list at most 100 targets per kind")
 		}
 	}
-	return s, nil
+	return s.withExcludes(excludes)
 }
 
 func (s *scope) add(value string) error {
