@@ -130,7 +130,7 @@ func invokeTablesChange(op, kind string, change func(*Client, context.Context, s
 // wildcard, and a rename cannot give an allowed table a name that an allow-list entry already claims.
 func checkTableRequest(op, kind string, bound scope, input TableInput) error {
 	if kind == "create" || kind == "duplicate" {
-		if !bound.wildcard {
+		if !bound.wholeBase() {
 			return providerError(op, "this change needs a connection that exposes the whole base with *, "+
 				"because the new table cannot be part of an allow-list")
 		}
@@ -150,7 +150,7 @@ func checkTableRequest(op, kind string, bound scope, input TableInput) error {
 	if selected.view != "" {
 		return providerError(op, "a table selection narrowed to one view cannot be changed")
 	}
-	if kind != "rename" || bound.wildcard {
+	if kind != "rename" || bound.wholeBase() {
 		return nil
 	}
 	if selected.tableParam == "table_name" {
@@ -206,12 +206,8 @@ func (c *Client) RenameTable(ctx context.Context, op string, input TableInput) e
 	if scoped.table.Name == input.Name {
 		return providerError(op, "the table already has this name")
 	}
-	if !c.scope.wildcard {
-		for _, configured := range c.scope.targets {
-			if configured.tableParam == "table_name" && matchesTable(configured, scoped.table) {
-				return providerError(op, "a table that is configured as a connection target by name cannot be renamed")
-			}
-		}
+	if c.scope.namedTarget(scoped.table) {
+		return providerError(op, "a table that is configured as a connection target by name cannot be renamed")
 	}
 	return c.changeTable(ctx, op, http.MethodPut, tablesURL(scoped.access, tablesPath), scoped.access,
 		map[string]any{"table_name": scoped.table.Name, "new_table_name": input.Name})

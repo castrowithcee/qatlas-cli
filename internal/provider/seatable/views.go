@@ -295,16 +295,15 @@ func (c *Client) resolveViewTable(ctx context.Context, op, table string) (*viewS
 	if err != nil {
 		return nil, err
 	}
-	for _, candidate := range document.Metadata.Tables {
-		if matchesTable(selected, candidate) {
-			if !validName(candidate.Name) {
-				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-					Message: "SeaTable returned a table without a usable name"}
-			}
-			return &viewScope{selected: selected, table: candidate, access: access}, nil
-		}
+	candidate := findTable(document, selected)
+	if candidate == nil {
+		return nil, providerError(op, "the selected SeaTable table no longer exists")
 	}
-	return nil, providerError(op, "the selected SeaTable table no longer exists")
+	if !validName(candidate.Name) {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "SeaTable returned a table without a usable name"}
+	}
+	return &viewScope{selected: selected, table: *candidate, access: access}, nil
 }
 
 // find returns the identifier and name of the view a reference names in this table.
@@ -329,16 +328,7 @@ func (s *viewScope) inBinding(id, name string) bool {
 
 // isTarget reports whether a view is configured as a connection target of this table.
 func (c *Client) isTarget(s *viewScope, id, name string) bool {
-	for _, configured := range c.scope.targets {
-		if configured.view == "" || !matchesTable(configured, s.table) {
-			continue
-		}
-		if (configured.viewParam == "view_id" && configured.view == id) ||
-			(configured.viewParam == "view_name" && configured.view == name) {
-			return true
-		}
-	}
-	return false
+	return c.scope.namedViewTarget(s.table, id, name)
 }
 
 func (s *viewScope) viewPath(name string) string {
@@ -539,7 +529,7 @@ func (c *Client) ListViews(ctx context.Context, input ViewInput) (*ViewsResult, 
 			result.Truncated = true
 			break
 		}
-		view, err := normalizeView(op, wire, c.scope.wildcard)
+		view, err := normalizeView(op, wire, c.scope.wholeBase())
 		if err != nil {
 			return nil, err
 		}
@@ -582,7 +572,7 @@ func (c *Client) GetView(ctx context.Context, input ViewInput) (*ViewResult, err
 	if wire.ID == "" {
 		wire.ID = id
 	}
-	view, err := normalizeView(op, wire, c.scope.wildcard)
+	view, err := normalizeView(op, wire, c.scope.wholeBase())
 	if err != nil {
 		return nil, err
 	}

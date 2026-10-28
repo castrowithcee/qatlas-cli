@@ -465,3 +465,12 @@ func TestPendingMasksTheOriginOfAChange(t *testing.T) {
 		t.Errorf("Pending() fields after a host change = %+v, want %+v", got, want)
 	}
 }
+
+func TestDirectApprovableAcceptsAnExclusionChange(t *testing.T) {
+	if !DirectApprovable(Change{Fields: []FieldChange{{Field: FieldExclude}, {Field: FieldTargets}}}) {
+		t.Error("DirectApprovable() = false for a changed exclusion list")
+	}
+	if DirectApprovable(Change{Fields: []FieldChange{{Field: FieldExclude}, {Field: FieldFiles}}}) {
+		t.Error("DirectApprovable() = true for an exclusion change next to a files change")
+	}
+}
