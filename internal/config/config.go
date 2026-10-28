@@ -734,77 +734,7 @@ func (c *Config) Validate() error {
 		}
 		if ok {
 			metadata, known := providers.ProviderMetadata(service.Provider)
-			targets := conn.TargetValues()
-			if metadata.Target.Required && len(targets) == 0 {
-				report(problem(SectionConnections, name, "target", CodeTargetRequired,
-					"provider %q requires %s", service.Provider, metadata.Target.Label).
-					with("provider", service.Provider))
-			}
-			if strings.TrimSpace(conn.Target) != "" && len(conn.Targets) > 0 {
-				report(problem(SectionConnections, name, "", CodeTargetAndTargets,
-					"target and targets cannot both be set"))
-			}
-			if len(conn.Targets) > 0 && !metadata.Target.Multiple {
-				report(problem(SectionConnections, name, "targets", CodeTargetsSingleOnly,
-					"provider %q accepts only one %s", service.Provider, metadata.Target.Label).
-					with("provider", service.Provider))
-			}
-			seenTargets := map[string]bool{}
-			formsValid := true
-			// A connection using the targets list gets one path per entry, so several bad entries are all
-			// visible at once and each points at the entry that caused it; a single target keeps the plain
-			// target path, since there is only ever one entry to point at.
-			usesTargetList := len(conn.Targets) > 0
-			for i, target := range targets {
-				target = strings.TrimSpace(target)
-				// at places the problem on the entry of a targets list, or on the plain target key.
-				at := func(p Problem) Problem {
-					if usesTargetList {
-						p.Field = "targets"
-						return p.at(i)
-					}
-					return p
-				}
-				if target == "" {
-					report(at(problem(SectionConnections, name, "target", CodeEmptyTarget, "targets must not be empty")))
-					formsValid = false
-					continue
-				}
-				if seenTargets[target] {
-					report(at(problem(SectionConnections, name, "target", CodeDuplicateTarget,
-						"a target is listed more than once")))
-				}
-				validate := metadata.Target.Validate
-				if !usesTargetList && metadata.Target.ValidateSingle != nil {
-					validate = metadata.Target.ValidateSingle
-				}
-				if validate != nil {
-					if err := validate(target); err != nil {
-						report(at(problem(SectionConnections, name, "target", CodeInvalidTarget, "%v", err).because(err)))
-						formsValid = false
-					}
-				}
-				seenTargets[target] = true
-			}
-			if metadata.Target.ValidateSet != nil && formsValid && len(targets) > 0 {
-				if err := metadata.Target.ValidateSet(targets); err != nil {
-					report(problem(SectionConnections, name, "targets", CodeInvalidTargetSet, "%v", err).because(err))
-				}
-			}
-			if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {
-				report(problem(SectionConnections, name, "targets", CodeWildcardNotAlone,
-					"wildcard %q must be the only target", metadata.Target.Wildcard))
-			}
-			if len(conn.Exclude) > 0 {
-				if !metadata.Target.Excludes() {
-					report(problem(SectionConnections, name, "exclude", CodeExcludeUnsupported,
-						"provider %q does not support exclusions", service.Provider).with("provider", service.Provider))
-				} else {
-					for _, finding := range metadata.Target.CheckExcludes(conn.Exclude, targets) {
-						report(excludeProblem(name, finding))
-					}
-				}
-			}
+			validateTargets(name, conn, service.Provider, metadata, report)
 			if known && conn.Tools != nil {
 				c.validateTools(name, service.Provider, metadata, report)
 			}
@@ -851,6 +781,81 @@ func (c *Config) Validate() error {
 	c.validateIDs(report)
 
 	return errors.Join(problems...)
+}
+
+// validateTargets checks the targets and exclusions of one connection of a known service against its provider.
+func validateTargets(name string, conn Connection, provider string, metadata ProviderMetadata, report func(Problem)) {
+	targets := conn.TargetValues()
+	if metadata.Target.Required && len(targets) == 0 {
+		report(problem(SectionConnections, name, "target", CodeTargetRequired,
+			"provider %q requires %s", provider, metadata.Target.Label).
+			with("provider", provider))
+	}
+	if strings.TrimSpace(conn.Target) != "" && len(conn.Targets) > 0 {
+		report(problem(SectionConnections, name, "", CodeTargetAndTargets,
+			"target and targets cannot both be set"))
+	}
+	if len(conn.Targets) > 0 && !metadata.Target.Multiple {
+		report(problem(SectionConnections, name, "targets", CodeTargetsSingleOnly,
+			"provider %q accepts only one %s", provider, metadata.Target.Label).
+			with("provider", provider))
+	}
+	seenTargets := map[string]bool{}
+	formsValid := true
+	// A connection using the targets list gets one path per entry, so several bad entries are all
+	// visible at once and each points at the entry that caused it; a single target keeps the plain
+	// target path, since there is only ever one entry to point at.
+	usesTargetList := len(conn.Targets) > 0
+	for i, target := range targets {
+		target = strings.TrimSpace(target)
+		// at places the problem on the entry of a targets list, or on the plain target key.
+		at := func(p Problem) Problem {
+			if usesTargetList {
+				p.Field = "targets"
+				return p.at(i)
+			}
+			return p
+		}
+		if target == "" {
+			report(at(problem(SectionConnections, name, "target", CodeEmptyTarget, "targets must not be empty")))
+			formsValid = false
+			continue
+		}
+		if seenTargets[target] {
+			report(at(problem(SectionConnections, name, "target", CodeDuplicateTarget,
+				"a target is listed more than once")))
+		}
+		validate := metadata.Target.Validate
+		if !usesTargetList && metadata.Target.ValidateSingle != nil {
+			validate = metadata.Target.ValidateSingle
+		}
+		if validate != nil {
+			if err := validate(target); err != nil {
+				report(at(problem(SectionConnections, name, "target", CodeInvalidTarget, "%v", err).because(err)))
+				formsValid = false
+			}
+		}
+		seenTargets[target] = true
+	}
+	if metadata.Target.ValidateSet != nil && formsValid && len(targets) > 0 {
+		if err := metadata.Target.ValidateSet(targets); err != nil {
+			report(problem(SectionConnections, name, "targets", CodeInvalidTargetSet, "%v", err).because(err))
+		}
+	}
+	if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {
+		report(problem(SectionConnections, name, "targets", CodeWildcardNotAlone,
+			"wildcard %q must be the only target", metadata.Target.Wildcard))
+	}
+	if len(conn.Exclude) > 0 {
+		if !metadata.Target.Excludes() {
+			report(problem(SectionConnections, name, "exclude", CodeExcludeUnsupported,
+				"provider %q does not support exclusions", provider).with("provider", provider))
+		} else {
+			for _, finding := range metadata.Target.CheckExcludes(conn.Exclude, targets) {
+				report(excludeProblem(name, finding))
+			}
+		}
+	}
 }
 
 // MinForwardValueLength is the shortest value a field of a forward credential may hold. A shorter value would
