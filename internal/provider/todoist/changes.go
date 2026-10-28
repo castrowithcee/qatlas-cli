@@ -403,11 +403,12 @@ func (c *Client) changedTask(ctx context.Context, op string, raw rawTask) (*Task
 }
 
 // placement returns the project a task created in or moved to a section or below a parent belongs to. On
-// a project connection the section or the parent is read first and must lie in the connection; a project
-// that is named as well must be the same, and one named alone must belong to the connection. An account
-// connection holds every project, so Todoist alone checks the combination.
+// a project connection, and on an account connection with exclusions, the section or the parent is read
+// first and must lie in the connection; a project that is named as well must be the same, and one named
+// alone must belong to the connection. An account connection without exclusions holds every project, so
+// Todoist alone checks the combination.
 func (c *Client) placement(ctx context.Context, op, projectID, sectionID, parentID string) (string, error) {
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return projectID, nil
 	}
 	switch {
@@ -433,9 +434,10 @@ func (c *Client) placement(ctx context.Context, op, projectID, sectionID, parent
 	return projectID, c.requireProject(ctx, op, projectID)
 }
 
-// taskInScope reads the task a change concerns on a project connection and refuses one outside it.
+// taskInScope reads the task a change concerns and refuses one outside the connection. Only an account
+// connection without exclusions reads nothing first.
 func (c *Client) taskInScope(ctx context.Context, op, id string) error {
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return nil
 	}
 	_, err := c.readTask(ctx, op, id)
@@ -466,7 +468,9 @@ func prepareTasksCreate(bound scope, arguments struct {
 		return nil, invalidRequest("name section_id or parent_id, not both; a subtask stays in the section of its parent")
 	}
 	project, section := arguments.ProjectID, arguments.SectionID
-	if project == "" && section == "" && arguments.ParentID == "" && !bound.all {
+	// Without a place a task lands in the inbox, which an exclusion could name, so only an unrestricted
+	// connection may omit it.
+	if project == "" && section == "" && arguments.ParentID == "" && !bound.unrestricted() {
 		var ok bool
 		if project, section, ok = bound.defaultPlacement(); !ok {
 			return nil, invalidRequest("name project_id, section_id, or parent_id; a connection with several " +
@@ -718,10 +722,10 @@ func checkComment(content string) error {
 	return nil
 }
 
-// commentInScope reads the comment a change concerns on a project connection and refuses one of a task or
-// project outside it. A task comment is held to the project of its task, which is read as well.
+// commentInScope reads the comment a change concerns and refuses one of a task or project outside the
+// connection. A task comment is held to the project of its task, which is read as well.
 func (c *Client) commentInScope(ctx context.Context, op, id string) error {
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return nil
 	}
 	var raw rawComment
