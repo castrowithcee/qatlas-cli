@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Set up Nextcloud
@@ -235,6 +235,8 @@ instance (as its administrator) for Nextcloud's own reason.
 | `provider-error`: Nextcloud refused the visibility or assignability; only an administrator may create invisible or unassignable system tags | HTTP 400 on a tag change | Create the tag as visible and assignable, or use an administrator. |
 | `provider-error`: Nextcloud refused this share; an instance policy (for example a required or too late expiry date) or the arguments do not allow it | HTTP 400 on a share | Give the expiry date the instance requires, or check the arguments. |
 | `provider-error`: this Nextcloud connection does not hold this path | HTTP 404. The path does not exist, or the account cannot see it | Check the path, then the account's access to it. If every path answers this, check the installation path in the address. |
+| Connection with `exclude` invalid: "an exclusion is not in a form the provider accepts", "a Nextcloud exclusion must be folder/PATH, notes/PATH, ...", or "... exclusion is not supported yet" | An entry is not written as `folder/PATH` or `notes/PATH`, repeats, lies inside another entry, is the target itself or outside every target of its kind, or names a calendar, address book, board, or conversation; a connection with an `account` target takes none | Not a token problem. Write each entry as a folder or notes category strictly below a `folder` or `notes` target, once, and remove entries of other kinds; see [Exclusions](README.md#exclusions). |
+| `permission`: this connection does not allow this operation on the path | The folder lies above an excluded folder, so deleting, moving, copying, or sharing it would take the excluded content along | Not a token problem. Act on a folder beside the excluded one, or remove the exclusion. |
 | `not-found`: the Nextcloud Deck app is not available, or the board, stack, or card does not exist | The Deck app is off, or the object is missing or not visible | Ask the administrator to enable Deck, or check the IDs and the board's sharing with the account. |
 | The Talk app (spreed) is not available on this Nextcloud instance (`provider-error` or `not-found`) | The Talk app is off | Ask the administrator to enable Talk. |
 | `not-found`: the Notifications, Activity, or User status app is off or not reachable for this identity | The app is off, or does not answer for the account | Ask the administrator to enable the app. |
