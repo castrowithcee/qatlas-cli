@@ -33,7 +33,7 @@ var siteGroupsList = capability.Descriptor{
 		pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "groups", Description: "Distinct group names, untrusted; an empty name stands for websites without a " +
-			"group; present without group. The names come from the whole instance, not only from the targets"},
+			"group; present without group. The names come from the whole instance, not only from the targets, and also name groups of excluded websites"},
 		{Name: "sites", Description: "With group: the websites of the group inside the website targets, ordered by id"},
 	}, siteFields("sites[].", false)...), pagingFields...),
 	Examples: []capability.Example{
@@ -78,9 +78,7 @@ func invokeSiteGroupsList(ctx context.Context, resolved *config.Resolved, secret
 		}
 		binding = "group:" + group
 	}
-	sites := slices.Clone(bound.sites)
-	slices.Sort(sites)
-	paging, err := startPage(provider.CursorBinding(siteGroupsList.ID, bound.allSites, sites, binding), args.Limit, args.Cursor)
+	paging, err := startPage(provider.CursorBinding(siteGroupsList.ID, bound.binding(), binding), args.Limit, args.Cursor)
 	if err != nil {
 		return nil, err
 	}

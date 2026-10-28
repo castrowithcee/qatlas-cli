@@ -399,7 +399,7 @@ func latestSites(resolved *config.Resolved, given []int) ([]int, error) {
 		return nil, invalidArgument("this connection is bound to no website")
 	}
 	if len(given) == 0 {
-		if bound.allSites || len(bound.sites) > maxLatestSites {
+		if !bound.singles() || len(bound.sites) > maxLatestSites {
 			return nil, invalidArgument("idSites is required unless the connection binds at most 20 single websites")
 		}
 		given = bound.sites

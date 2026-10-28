@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Matomo sites and version
@@ -103,7 +103,8 @@ connection is offered the tool, and the call checks the target again before a se
 `read` profile, which holds no instance-wide tool. Without `group` it pages the group names
 (`SitesManager.getSitesGroups`; an empty name stands for websites without a group). With `group` it pages the
 websites of that group (`SitesManager.getSitesFromGroup`) and keeps only those inside the website targets, so an
-instance-only binding sees no website. The group names come from the whole instance and are not cut to the targets.
+instance-only binding sees no website. The group names come from the whole instance and are not cut to the targets
+or by exclusions, so a name can belong to an excluded website only.
 
 ## Managing websites
 

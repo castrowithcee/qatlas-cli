@@ -215,7 +215,7 @@ func invokeUsersGetAccess(ctx context.Context, resolved *config.Resolved, secret
 		}
 		mode = "access"
 	}
-	binding := provider.CursorBinding(usersGetAccess.ID, bound.allSites, sortedSites(bound), mode, login, id, access, role, search)
+	binding := provider.CursorBinding(usersGetAccess.ID, bound.binding(), mode, login, id, access, role, search)
 	paging, err := startPage(binding, args.Limit, args.Cursor)
 	if err != nil {
 		return nil, err
@@ -316,7 +316,8 @@ func pageAccessUsers(paging page, users []AccessUser) *UsersGetAccessResult {
 	return &UsersGetAccessResult{Users: batch, HasMore: next != "", NextCursor: next}
 }
 
-// userSitesAccess reads getSitesAccessForUser. With every website in scope Matomo pages the list; with
+// userSitesAccess reads getSitesAccessForUser. With all websites in scope Matomo pages the list and the
+// excluded websites are dropped from the rows of the window, so a page can be short while more follow; with
 // single websites the rows are checked against the targets here, so a bounded number of rows is read.
 func userSitesAccess(ctx context.Context, client *Client, op string, req requirement, bound scope, paging page,
 	login, role, search string) (any, error) {
@@ -327,7 +328,8 @@ func userSitesAccess(ctx context.Context, client *Client, op string, req require
 	if search != "" {
 		params.Set("filter_search", search)
 	}
-	if bound.allSites {
+	serverPaged := !bound.singles()
+	if serverPaged {
 		params.Set("limit", strconv.Itoa(paging.limit+1))
 		params.Set("offset", strconv.Itoa(paging.offset))
 	} else {
@@ -342,8 +344,13 @@ func userSitesAccess(ctx context.Context, client *Client, op string, req require
 	if err := client.call(ctx, op, req, "UsersManager.getSitesAccessForUser", params, &rows); err != nil {
 		return nil, err
 	}
-	if !bound.allSites && len(rows) >= scanLimit {
+	if !serverPaged && len(rows) >= scanLimit {
 		return nil, invalidArgument("the user has too many websites to check against the targets; narrow role or search")
+	}
+	// The window is cut on the rows of Matomo first; the cursor follows those rows, not the kept ones.
+	more := false
+	if serverPaged && len(rows) > paging.limit {
+		rows, more = rows[:paging.limit], true
 	}
 	var kept []SiteAccess
 	for _, row := range rows {
@@ -359,10 +366,11 @@ func userSitesAccess(ctx context.Context, client *Client, op string, req require
 		}
 		kept = append(kept, entry)
 	}
-	var batch []SiteAccess
-	var next string
-	if bound.allSites {
-		batch, next = sliceWindow(paging, kept)
+	batch, next := kept, ""
+	if serverPaged {
+		if more {
+			next = paging.cursor(paging.offset + paging.limit)
+		}
 	} else {
 		batch, next = slice(paging, kept)
 	}

@@ -253,9 +253,8 @@ func invokeSitesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if args.Pattern != "" && (pattern == "" || len(pattern) > maxPatternLength) {
 		return nil, invalidArgument("pattern must hold 1 to 100 characters")
 	}
-	sites := slices.Clone(bound.sites)
-	slices.Sort(sites)
-	binding := provider.CursorBinding(sitesList.ID, bound.allSites, sites, pattern)
+	sites := sortedSites(bound)
+	binding := provider.CursorBinding(sitesList.ID, bound.binding(), pattern)
 	paging, err := startPage(binding, args.Limit, args.Cursor)
 	if err != nil {
 		return nil, err
@@ -268,7 +267,7 @@ func invokeSitesList(ctx context.Context, resolved *config.Resolved, secrets *se
 
 	// Single websites without a pattern: the bound IDs are the list, paged here, and only the websites of the
 	// batch are read. Nothing is scanned, so no bound website can fall outside the answer.
-	if !bound.allSites && pattern == "" {
+	if bound.singles() && pattern == "" {
 		batch, next := slice(paging, sites)
 		result := &SitesResult{Sites: []Site{}, HasMore: next != "", NextCursor: next}
 		for _, id := range batch {
@@ -287,10 +286,11 @@ func invokeSitesList(ctx context.Context, resolved *config.Resolved, secrets *se
 		method = "SitesManager.getPatternMatchSites"
 		params.Set("pattern", pattern)
 	}
-	// Both methods return the first rows of the list, ordered by ID. With every website in scope the batch plus
-	// one row is enough; with single websites and a pattern the rows are filtered here, so more are read.
-	rows := paging.want()
-	if !bound.allSites {
+	// Both methods return the first rows of the list, ordered by ID. With all websites in scope the batch plus
+	// one row is enough, widened by the excluded websites that may sit among them; with single websites and a
+	// pattern the rows are filtered here, so more are read.
+	rows := paging.want() + len(bound.excluded)
+	if bound.singles() {
 		rows = scanLimit
 	}
 	params.Set("limit", strconv.Itoa(rows))
@@ -298,7 +298,7 @@ func invokeSitesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := client.call(ctx, op, req, method, params, &listed); err != nil {
 		return nil, err
 	}
-	if !bound.allSites && len(listed) >= scanLimit {
+	if bound.singles() && len(listed) >= scanLimit {
 		// The pattern matches more websites than are read, so a bound website might be missing.
 		return nil, invalidArgument("pattern matches too many websites to check against the targets; narrow the pattern")
 	}

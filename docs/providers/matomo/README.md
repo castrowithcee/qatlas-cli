@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Matomo
@@ -80,6 +80,27 @@ A binding to `instance` alone reaches no website tool.
 An `idSite` argument must lie inside the targets and is refused before a secret is read or Matomo is contacted,
 without naming the website or a target. With `site` the website is proven by Matomo itself, which answers a
 website the token cannot view as a permission error. Rows of a list outside the targets are dropped.
+
+### Exclusions
+
+A connection can exclude single websites as `exclude: [site/ID]`; no other form is valid, and an exclusion is
+named once and never equals a target. An exclusion that no target reaches is valid and does nothing. An
+excluded website behaves like a website the token holds no view right on, and an exclusion always wins over the
+targets:
+
+- an `idSite` argument for it is refused like one outside the targets, and a list of `idSites` that holds it is
+  refused as a whole;
+- its rows leave every list, and sums over several websites are left out unless the connection reaches every
+  website, that is `site` or no targets, without exclusions;
+- a cursor is bound to the exclusions, so it ends with a change of them;
+- a segment, annotation, or other object for all websites (`idSite` 0) stays readable; changing it needs a
+  connection that reaches every website.
+
+Exclusions never change which tools a connection is offered, and the instance tools still need `instance`.
+Instance-wide changes (global settings, `matomo.site-groups.rename`, `matomo.tracking-failures.delete-all`,
+`matomo.data-purge.run`, `matomo.users.delete`, and `matomo.compliance.*` for all websites) also act on excluded
+websites. Instance sums that cannot be split by website (`matomo.database-statistics.get`, the group names of
+`matomo.site-groups.list`) are returned whole.
 
 ## Choosing targets
 

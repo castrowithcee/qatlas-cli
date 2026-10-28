@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Set up Matomo
@@ -300,7 +300,7 @@ provider answer (untrusted, not written by qatlas), HTTP 200:
 | `unsupported-capability`: the instance does not provide the method this tool calls | The plugin or feature behind the method is missing or switched off, for example visitor profiles or the visits log of a website | Enable the plugin or the setting in Matomo; see the group in [Rights per tool group](#rights-per-tool-group). |
 | `unsupported-capability`: Matomo's granular compliance feature is not enabled; ... | The feature flag is off | Switch it on as described in [Changing compliance policies](privacy.md#changing-compliance-policies). |
 | `not-found`: Matomo does not hold this resource or does not show it to this token | The ID is wrong, **or** the user cannot see the website or object. Matomo answers both the same | Check the ID. Then give the user a view right on that website. |
-| `invalid-request` naming the targets | The website or the instance is outside the connection's targets | Not a Matomo problem. Pass a website the connection allows, or add it or `instance`; see [Scope](README.md#scope). |
+| `invalid-request` naming the targets | The website or the instance is outside the connection's targets, or the website is excluded | Not a Matomo problem. Pass a website the connection allows, or add it or `instance`; see [Scope](README.md#scope). |
 | `invalid-request`: a Matomo connection needs a base URL of the form https://HOST[/PATH], without user, query, or fragment | The service address is wrong | Use `https://HOST[/PATH]`; see [Configuration](README.md#configuration). |
 | `rate-limited` | Matomo Cloud limits requests per IP address | Wait and retry. Do not let several programs use one IP address at once. |
 | `unreachable` or `timeout` | Matomo or the network is down or slow | Retry a read. For a change, read the resource first, or a create makes a second one. |
