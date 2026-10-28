@@ -121,10 +121,20 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	return d
 }
 
-// allowlist is the targets of one connection. Empty, it allows every repository, project, and owner the token
-// reaches; otherwise only the listed ones. The token stays an independent upper bound, so the effective
-// scope is what both allow.
-type allowlist []target
+// allowlist is the targets of one connection, plus the targets it excludes. Without targets it is unbound
+// and allows every repository, project, and owner the token reaches; otherwise only the listed ones. Without
+// targets and without excludes it is open: nothing narrows the token. The token stays an independent upper
+// bound, so the effective scope is what both allow.
+type allowlist struct {
+	targets  []target
+	excludes []target
+}
+
+// bound reports whether the list names targets, as opposed to leaving the choice of targets to the token.
+func (a allowlist) bound() bool { return len(a.targets) > 0 }
+
+// open reports whether nothing narrows the token: no targets and no excludes.
+func (a allowlist) open() bool { return len(a.targets) == 0 && len(a.excludes) == 0 }
 
 func allowlistOf(resolved *config.Resolved) (allowlist, error) {
 	values := provider.TargetsOf(resolved)
@@ -134,30 +144,30 @@ func allowlistOf(resolved *config.Resolved) (allowlist, error) {
 // parseAllowlist reads the targets of one connection in any mix of projects, repositories, owners, and
 // patterns.
 func parseAllowlist(values []string) (allowlist, error) {
-	list := make(allowlist, 0, len(values))
+	list := make([]target, 0, len(values))
 	seen := map[string]bool{}
 	for _, value := range values {
 		parsed, err := parseTarget(value)
 		if err != nil {
-			return nil, err
+			return allowlist{}, err
 		}
 		key := strings.ToLower(parsed.String())
 		if seen[key] {
-			return nil, errors.New("the GitHub target list names a target more than once")
+			return allowlist{}, errors.New("the GitHub target list names a target more than once")
 		}
 		seen[key] = true
 		list = append(list, parsed)
 	}
-	return list, nil
+	return allowlist{targets: list}, nil
 }
 
 // allows reports whether the list admits one project, repository, or owner. GitHub compares owner and
 // repository names without case.
 func (a allowlist) allows(t target) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind != t.kind || !strings.EqualFold(entry.owner, t.owner) {
 			continue
 		}
@@ -181,7 +191,7 @@ func (a allowlist) lists(owner target, kind targetKind) bool {
 	if a.allows(owner) {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kind && strings.EqualFold(entry.owner, owner.owner) &&
 			(kind == kindRepository || entry.scope == owner.scope) {
 			return true
@@ -199,7 +209,7 @@ func (a allowlist) shows(owner, listed target) bool {
 // only returns the one target of a kind the list allows: it names exactly one of that kind, and no pattern.
 func (a allowlist) only(kind targetKind) (target, bool) {
 	var found []target
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kind {
 			found = append(found, entry)
 		}
@@ -211,7 +221,7 @@ func (a allowlist) only(kind targetKind) (target, bool) {
 }
 
 func (a allowlist) names(kind targetKind) bool {
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kind {
 			return true
 		}
@@ -223,10 +233,10 @@ func (a allowlist) names(kind targetKind) bool {
 // or project it may also name: used to filter an account-wide result, such as the starred repositories, down
 // to what an owner target of the list allows, rather than down to a repository or a project of it.
 func (a allowlist) ownerNames(login string) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && strings.EqualFold(entry.owner, login) {
 			return true
 		}
@@ -262,7 +272,7 @@ func (a allowlist) chooseOwner(kind targetKind, value string) (target, error) {
 			return target{}, invalidRequest("owner must be " + form)
 		}
 		chosen = parsed
-		for _, entry := range a {
+		for _, entry := range a.targets {
 			if entry.kind == kindOwner && strings.EqualFold(entry.String(), chosen.String()) {
 				chosen = entry
 			}
@@ -308,7 +318,7 @@ func (a allowlist) choose(kind targetKind, value string) (target, error) {
 				"allow, or add it to the connection's targets")
 		}
 		// A target the list names exactly keeps its configured spelling, and with it its cursors.
-		for _, entry := range a {
+		for _, entry := range a.targets {
 			if !entry.pattern() && strings.EqualFold(entry.String(), chosen.String()) {
 				return entry, nil
 			}
@@ -318,7 +328,7 @@ func (a allowlist) choose(kind targetKind, value string) (target, error) {
 	if only, ok := a.only(kind); ok {
 		return only, nil
 	}
-	if len(a) > 0 && !a.names(kind) {
+	if a.bound() && !a.names(kind) {
 		return target{}, invalidRequest("the targets of this connection allow no " + name + "; add one to its " +
 			"targets or use another connection")
 	}
