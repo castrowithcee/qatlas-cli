@@ -90,6 +90,7 @@ var targetKinds = []config.TargetKind{{
 	Name:        kindTalk,
 	Description: "all Talk conversations of the identity, or one by its token; optional, and may be listed more than once",
 	Forms:       []string{kindTalk, kindTalk + "/TOKEN"},
+	Excludable:  true,
 }, {
 	Name:        kindDeck,
 	Description: "all Deck boards of the identity, or one by its numeric board ID; optional, and may be listed more than once",

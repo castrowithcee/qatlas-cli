@@ -269,6 +269,9 @@ func (c *Client) GetPoll(ctx context.Context, token, id string) (*Poll, error) {
 	if !validTalkToken(token) || !validPollID(id) {
 		return nil, providerError(op, "the poll arguments are unusable")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoPoll); err != nil {
+		return nil, err
+	}
 	if err := c.talkFeature(ctx, op, featurePolls); err != nil {
 		return nil, err
 	}
@@ -281,6 +284,9 @@ func (c *Client) CreatePoll(ctx context.Context, token, question string, options
 	resultMode, votes, ok := validPoll(question, options, mode, maxVotes)
 	if !validTalkToken(token) || !ok {
 		return nil, providerError(op, "the poll arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoPoll); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featurePolls); err != nil {
 		return nil, err
@@ -302,6 +308,9 @@ func (c *Client) VotePoll(ctx context.Context, token, id string, optionIDs []int
 	const op = "vote on talk poll"
 	if !validTalkToken(token) || !validPollID(id) || !validOptionIDs(optionIDs) {
 		return nil, providerError(op, "the poll arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoPoll); err != nil {
+		return nil, err
 	}
 	current, err := c.fetchPoll(ctx, op, token, id)
 	if err != nil {
@@ -334,6 +343,9 @@ func (c *Client) ClosePoll(ctx context.Context, token, id string) (*Poll, error)
 	const op = "close talk poll"
 	if !validTalkToken(token) || !validPollID(id) {
 		return nil, providerError(op, "the poll arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoPoll); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featurePolls); err != nil {
 		return nil, err
@@ -442,7 +454,7 @@ var talkPollsClose = capability.Descriptor{
 func invokeTalkPollsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "get talk poll"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoPoll, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +471,7 @@ func invokeTalkPollsGet(ctx context.Context, resolved *config.Resolved, secrets 
 func invokeTalkPollsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "create talk poll"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoPoll, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +488,7 @@ func invokeTalkPollsCreate(ctx context.Context, resolved *config.Resolved, secre
 func invokeTalkPollsVote(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "vote on talk poll"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoPoll, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +505,7 @@ func invokeTalkPollsVote(ctx context.Context, resolved *config.Resolved, secrets
 func invokeTalkPollsClose(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "close talk poll"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoPoll, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
