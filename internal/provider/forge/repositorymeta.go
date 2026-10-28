@@ -282,7 +282,7 @@ var repositoryActivitiesList = &tool{
 				if inner, ok := row.child("repo"); ok {
 					if fullName, _ := inner.text("full_name"); allowed.allowsFullName(fullName) &&
 						strings.EqualFold(fullName, repo.owner+"/"+repo.repo) {
-						activities = append(activities, project(p, activityMembers, row))
+						activities = append(activities, project(p, activityMembers, allowed.hideExcludedParentIn(row, "repo")))
 					}
 				}
 			}
