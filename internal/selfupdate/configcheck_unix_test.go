@@ -50,7 +50,7 @@ func TestReadsConfigRunsOnACopyInAPrivateEmptyEnvironment(t *testing.T) {
 	t.Setenv("QATLAS_CLI_HOME", "/real/home")
 	t.Setenv("GITHUB_TOKEN", "canary-token")
 	record := filepath.Join(t.TempDir(), "record")
-	script := `{ echo "args=$*"; echo "cwd=$(pwd)"; echo "mode=$(stat -c %a "$(pwd)")"; echo "copy=$(cat "$2")"; env; } > ` + record + "\nexit 0\n"
+	script := `{ echo "args=$*"; echo "cwd=$(pwd)"; echo "mode=$(stat -c %a . 2>/dev/null || stat -f %Lp .)"; echo "copy=$(cat "$2")"; env; } > ` + record + "\nexit 0\n"
 	secretConfig := "version: 4\n# canary-config-value\n"
 	if ok, err := scriptRelease(script, 0).ReadsConfig(context.Background(), []byte(secretConfig)); !ok || err != nil {
 		t.Fatalf("ReadsConfig() = %v, %v", ok, err)
@@ -65,11 +65,19 @@ func TestReadsConfigRunsOnACopyInAPrivateEmptyEnvironment(t *testing.T) {
 			t.Errorf("the program saw %q:\n%s", bad, out)
 		}
 	}
-	var dir string
+	var dir, cwd string
 	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "cwd=") {
-			dir = strings.TrimPrefix(line, "cwd=")
+		switch {
+		case strings.HasPrefix(line, "args=--config "):
+			dir = filepath.Dir(strings.TrimSuffix(strings.TrimPrefix(line, "args=--config "), " config validate"))
+		case strings.HasPrefix(line, "cwd="):
+			cwd = strings.TrimPrefix(line, "cwd=")
 		}
+	}
+	// On macOS the temporary directory lies behind the /var symlink, so pwd names it by another path. The
+	// directory itself is gone by now, so only its parent can be resolved.
+	if parent, err := filepath.EvalSymlinks(filepath.Dir(dir)); err != nil || filepath.Join(parent, filepath.Base(dir)) != cwd {
+		t.Errorf("the copy lies in %s (%v), the program ran in %s", dir, err, cwd)
 	}
 	for _, want := range []string{"args=--config " + dir + "/config.yaml config validate", "mode=700", "canary-config-value", "HOME=" + dir} {
 		if !strings.Contains(out, want) {
