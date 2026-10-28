@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Matomo instance settings and reference data
@@ -44,7 +44,7 @@ rights and plugins are listed in [rights per tool group](setup.md#rights-per-too
 after another, which is the bound of the call. Every result member is present only for a section that was read.
 
 `idSite` filters `excluded-query-parameters` and `query-parameter-exclusion-type` for one website and must lie
-inside the connection's targets; for other sections it is refused. Lists are comma-separated untrusted text, cut at 8192
+inside the connection's targets and not be excluded; for other sections it is refused. Lists are comma-separated untrusted text, cut at 8192
 bytes.
 Matomo answers `false` for a list that was never set; the tool returns an empty text.
 
@@ -124,5 +124,6 @@ whose targets name `instance`, is in no profile, and is offered only where the `
 it. The eleven Matomo methods are `section` values and one section is one request, because the individual summaries
 group every archive table by name and are slow on a large database; `force_cache` recalculates them and applies
 only to `individual-reports` and `individual-metrics`. The result is only sizes and counts of tables and report
-names, with the status of the database server; it holds no table content. Table sections are cut at `limit`
+names, with the status of the database server; it holds no table content. The figures count the whole instance,
+including websites outside the targets and excluded ones. Table sections are cut at `limit`
 (1 to 1000, 100 when omitted) and continued with `next_cursor`; `general-information` and `status` take neither.

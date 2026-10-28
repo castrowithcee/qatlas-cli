@@ -410,11 +410,10 @@ func alertSites(bound scope, site int) string {
 	switch {
 	case site > 0:
 		return strconv.Itoa(site)
-	case bound.allSites:
+	case !bound.singles():
 		return "all"
 	}
-	ids := slices.Clone(bound.sites)
-	slices.Sort(ids)
+	ids := sortedSites(bound)
 	parts := make([]string, len(ids))
 	for i, id := range ids {
 		parts[i] = strconv.Itoa(id)
