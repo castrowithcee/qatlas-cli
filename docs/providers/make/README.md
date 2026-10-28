@@ -155,9 +155,9 @@ folder; a folder the tree does not show counts as excluded. Hooks of excluded sc
 [Hooks](hooks.md#hooks), excluded teams under [Teams of an organization](organization.md#teams-of-an-organization).
 
 Tools of objects without a scenario reference (connections, access lists, credential requests, data stores, their
-records, data structures, team variables) are unchanged, as is what they report about scenarios that use them, such
-as the scenarios a refused connection deletion lists. A blueprint is the scenario's own content: a reachable
-scenario's blueprint may still name an excluded sub-scenario, and Qatlas does not remove it.
+records, data structures, team variables) are unchanged, except that a refused connection or data store deletion
+lists only reachable scenarios. A blueprint is the scenario's own content: a reachable scenario's blueprint may
+still name an excluded sub-scenario, and Qatlas does not remove it.
 
 ## Choosing targets
 
