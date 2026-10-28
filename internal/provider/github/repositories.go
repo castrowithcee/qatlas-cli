@@ -271,7 +271,7 @@ func parseAllowedOrganization(allowed allowlist, name, value string) (target, bo
 		return target{}, false, invalidRequest(name + " is outside the targets of this connection; pass one " +
 			"they allow, or add it to the connection's targets")
 	}
-	for _, entry := range allowed {
+	for _, entry := range allowed.targets {
 		if entry.kind == kindOwner && strings.EqualFold(entry.String(), parsed.String()) {
 			parsed = entry
 		}

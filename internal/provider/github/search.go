@@ -112,12 +112,12 @@ func checkForeignQualifiers(terms string, scoped bool) error {
 // all, for example one naming only a project, is refused as well, so a targeted connection never sends an
 // unscoped search.
 func searchScope(allowed allowlist) (string, error) {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return "", nil
 	}
 	var parts []string
 	seenOwner := map[string]bool{}
-	for _, entry := range allowed {
+	for _, entry := range allowed.targets {
 		switch entry.kind {
 		case kindRepository:
 			if entry.pattern() {
@@ -173,7 +173,7 @@ func pullRequestsSearchScope(allowed allowlist) (string, error) {
 // qualifier that narrows a user search by ownership. Any other target combination, including a personal
 // owner target, gives it nothing to narrow a user search by and is refused.
 func userSearchScope(allowed allowlist) (string, error) {
-	if len(allowed) == 0 {
+	if !allowed.bound() {
 		return "type:user", nil
 	}
 	owner, ok := allowed.only(kindOwner)
@@ -192,7 +192,7 @@ func userSearchScope(allowed allowlist) (string, error) {
 // narrow every other search tool could not have that narrowing enforced here, so it is refused instead of
 // left unscoped.
 func organizationSearchScope(allowed allowlist) (string, error) {
-	if len(allowed) > 0 {
+	if allowed.bound() {
 		return "", invalidRequest("this connection's targets narrow other tools, but no GitHub qualifier " +
 			"restricts which organizations a search may return to a target, so github.organizations.search is " +
 			"offered only by a connection without targets")
@@ -742,7 +742,7 @@ func searchHandler(tool string, scopeOf func(allowlist) (string, error),
 		if err != nil {
 			return nil, err
 		}
-		if err := checkSearchArguments(tool, forced, len(allowed) > 0, &arguments); err != nil {
+		if err := checkSearchArguments(tool, forced, !allowed.open(), &arguments); err != nil {
 			return nil, err
 		}
 		arguments.allowed = allowed
@@ -1109,7 +1109,7 @@ func (c *Client) searchIssues(ctx context.Context, a *searchArguments) (*IssueSe
 		// query, so with either set every match is checked against the targets as well, and an answer
 		// outside them is refused rather than shown.
 		owner, name, _ := strings.Cut(repository, "/")
-		if (a.advancedSearch != "" || a.searchType != "") && len(a.allowed) > 0 &&
+		if (a.advancedSearch != "" || a.searchType != "") && !a.allowed.open() &&
 			!a.allowed.admitsRepository(target{kind: kindRepository, owner: owner, repo: name}) {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub answered with an issue outside the connection's targets"}
@@ -1193,7 +1193,7 @@ func (c *Client) searchPullRequests(ctx context.Context, a *searchArguments) (*P
 		// query, so with either set every match is checked against the targets as well, and an answer
 		// outside them is refused rather than shown.
 		owner, name, _ := strings.Cut(repository, "/")
-		if (a.advancedSearch != "" || a.searchType != "") && len(a.allowed) > 0 &&
+		if (a.advancedSearch != "" || a.searchType != "") && !a.allowed.open() &&
 			!a.allowed.admitsRepository(target{kind: kindRepository, owner: owner, repo: name}) {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub answered with a pull request outside the connection's targets"}
