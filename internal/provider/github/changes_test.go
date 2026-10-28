@@ -434,7 +434,7 @@ func TestTargetListsAreAllowListsOfAnyMix(t *testing.T) {
 		{projectTarget, "orgs/octo-org/projects/8", "users/octocat/projects/*", "repos/octo-org/*"},
 	}
 	for _, values := range valid {
-		if list, err := parseAllowlist(values); err != nil || len(list) != len(values) {
+		if list, err := parseAllowlist(values); err != nil || len(list.targets) != len(values) {
 			t.Errorf("parseAllowlist(%v) = %+v, %v", values, list, err)
 		}
 	}
@@ -470,7 +470,7 @@ func TestTargetListsAreAllowListsOfAnyMix(t *testing.T) {
 			t.Errorf("allows(%s) = %v, want %v", raw, !want, want)
 		}
 	}
-	if !(allowlist(nil)).allows(target{kind: kindRepository, owner: "any", repo: "thing"}) {
+	if !(allowlist{}).allows(target{kind: kindRepository, owner: "any", repo: "thing"}) {
 		t.Error("an empty allow-list refused a repository; without targets the token decides")
 	}
 
