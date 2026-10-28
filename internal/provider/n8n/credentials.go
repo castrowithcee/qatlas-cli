@@ -329,28 +329,30 @@ func selectCredentials(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// ownsCredential: without a project allow-list every credential; with one only a credential whose owning
-// project (entry with the owner role) is in it. A missing role or owner entry never matches.
+// ownsCredential: without a project allow-list and without a project exclusion every credential; otherwise
+// only a credential whose owning project (entry with the owner role) is reachable. A missing role or owner
+// entry never matches.
 func (s scope) ownsCredential(shared []credentialShareJSON) bool {
-	if len(s.projects) == 0 {
+	if !s.restrictsProjects() {
 		return true
 	}
 	for _, entry := range shared {
-		if entry.Role == ownerRole && entry.ID != "" && contains(s.projects, entry.ID) {
+		if entry.Role == ownerRole && entry.ID != "" && s.reachesProject(entry.ID) {
 			return true
 		}
 	}
 	return false
 }
 
-// allowsCredential: without a project allow-list every credential; with one only a credential shared into
-// at least one of its projects. A credential that reports no project is outside the scope.
+// allowsCredential: without a project allow-list and without a project exclusion every credential;
+// otherwise only a credential shared into at least one reachable project. A credential that reports no
+// project is outside the scope.
 func (s scope) allowsCredential(shared []credentialShareJSON) bool {
-	if len(s.projects) == 0 {
+	if !s.restrictsProjects() {
 		return true
 	}
 	for _, entry := range shared {
-		if id := entry.projectID(); id != "" && contains(s.projects, id) {
+		if id := entry.projectID(); id != "" && s.reachesProject(id) {
 			return true
 		}
 	}
@@ -385,9 +387,9 @@ func summarizeCredential(c credentialJSON) CredentialSummary {
 		CreatedAt: bounded(c.CreatedAt), UpdatedAt: bounded(c.UpdatedAt)}
 }
 
-// listItemOf maps a listed credential. A sharing entry for a project outside the connection's project
-// allow-list keeps only its id and role, so no foreign project's name or times leave through a credential
-// that is also shared into an allowed project.
+// listItemOf maps a listed credential. A sharing entry for a project that is not reachable (outside the
+// connection's project allow-list, or excluded) keeps only its id and role, so no foreign project's name or
+// times leave through a credential that is also shared into a reachable project.
 func (s scope) listItemOf(c credentialJSON) CredentialListItem {
 	item := CredentialListItem{CredentialSummary: summarizeCredential(c)}
 	for _, entry := range c.Shared {
@@ -399,7 +401,7 @@ func (s scope) listItemOf(c credentialJSON) CredentialListItem {
 			break
 		}
 		share := CredentialShare{ID: bounded(entry.ID), Role: cappedText(entry.Role)}
-		if len(s.projects) == 0 || contains(s.projects, entry.ID) {
+		if s.reachesProject(entry.ID) {
 			share.Name, share.CreatedAt, share.UpdatedAt = cappedText(entry.Name), bounded(entry.CreatedAt),
 				bounded(entry.UpdatedAt)
 		}
@@ -594,7 +596,7 @@ func (c *Client) ListCredentials(ctx context.Context, cursor string, limit int) 
 // project suffices. Without an allow-list it sends nothing. A credential that is absent, outside the
 // binding, or whose search could not finish is refused alike, without naming any project.
 func (c *Client) verifyCredentialBinding(ctx context.Context, op, id string, owned bool) error {
-	if len(c.scope.projects) == 0 {
+	if !c.scope.restrictsProjects() {
 		return nil
 	}
 	cursor := ""
