@@ -1350,11 +1350,13 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 	connections := c.connectionRefs(descriptor)
 	switch len(connections) {
 	case 0:
-		// A provider whose only connection is switched off is refused for that reason, not as if it had none.
-		if only := c.connectionNames(descriptor.Provider); len(only) == 1 &&
-			c.config.ConnectionRefusal(only[0], descriptor.Tool(), c.now()) == config.RefusalDisabled {
-			return nil, &capability.UnsupportedError{Connection: only[0], Capability: descriptor.ID,
-				Reason: config.RefusalDisabled}
+		// A provider whose only connection is switched off or has outdated targets is refused for that
+		// reason, not as if it had none.
+		if only := c.connectionNames(descriptor.Provider); len(only) == 1 {
+			reason := c.config.ConnectionRefusal(only[0], descriptor.Tool(), c.now())
+			if reason == config.RefusalDisabled || reason == config.RefusalTargetsOutdated {
+				return nil, &capability.UnsupportedError{Connection: only[0], Capability: descriptor.ID, Reason: reason}
+			}
 		}
 		return nil, &ConnectionSelectionError{Operation: descriptor.ID}
 	case 1:
@@ -1387,7 +1389,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		}
 	}
 	service := c.config.Services[connection.Service]
-	return &config.Resolved{
+	resolved := &config.Resolved{
 		Name: name, ID: connection.ID, Provider: service.Provider, BaseURL: c.config.ServiceBaseURL(service), Options: service.Options,
 		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
 		Exclude: connection.ExcludeValues(),
@@ -1401,7 +1403,9 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Forward:        c.config.ForwardCredentials(connection),
 		Disabled:       connection.Disabled,
 		ActiveUntil:    connection.ActiveUntilCanonical(),
-	}, nil
+	}
+	resolved.HoldOutdatedTargets(connection)
+	return resolved, nil
 }
 
 // connectionRefs is the described form of connectionNames: the same routes in the same order, each with
@@ -1471,8 +1475,8 @@ func (c *Core) connectionRefusal(resolved *config.Resolved, descriptor capabilit
 // connection it is that connection's refusal. Otherwise a tool is offered when any connection of its
 // provider offers it; when none does, the refusal of the connection that comes closest wins, in the order
 // not-in-tools-list, requires-tool-allow-list, no-local-files, effect-not-permitted, outside-targets, with
-// connection-disabled ahead of all of them, and a provider without any connection is refused as no-connection.
-// The choice is deterministic and names the smallest change that would offer the tool.
+// connection-targets-outdated and connection-disabled ahead of all of them, and a provider without any
+// connection is refused as no-connection. The choice is deterministic and names the smallest change that would offer the tool.
 func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) config.Refusal {
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)
@@ -1501,8 +1505,8 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 // refusalRank orders the refusals of one tool across connections: the lower, the closer the connection is
 // to offering the tool, and the one that wins.
 func refusalRank(reason config.Refusal) int {
-	order := []config.Refusal{config.RefusalDisabled, config.RefusalToolsList, config.RefusalToolAllowList,
-		config.RefusalNoLocalFiles, config.RefusalEffect, config.RefusalOutsideTargets}
+	order := []config.Refusal{config.RefusalTargetsOutdated, config.RefusalDisabled, config.RefusalToolsList,
+		config.RefusalToolAllowList, config.RefusalNoLocalFiles, config.RefusalEffect, config.RefusalOutsideTargets}
 	if i := slices.Index(order, reason); i >= 0 {
 		return i
 	}

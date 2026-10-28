@@ -125,10 +125,11 @@ the draft tools refuse, since the mailbox is the only sender they use.
 A configuration file of schema 3 or older reads `folder/PATH` as exactly that folder and `folder/PATH/*` as the folder
 with its subfolders. Loading it rewrites every Infomaniak Mail connection with the same reach: `folder/PATH/*`
 becomes `folder/PATH`, and `folder/PATH` stays and gains the exclusion `folder/PATH/*`, which has no label. A
-connection keeps its targets unchanged, is marked `targets_outdated`, and stays invalid until its folders are
+connection keeps its targets unchanged, is marked `targets_outdated`, and offers no tool until its folders are
 chosen again when that exclusion could take a folder from another of its targets (another folder target whose name
 begins with the name of a former exact one, or a former exact one whose name begins with or equals the name of a
-former `folder/PATH/*`), or when it has a folder exclusion, whose former meaning the current forms do not keep.
+former `folder/PATH/*`), or when it has a folder exclusion, whose former meaning the current forms do not keep. The
+rest of the configuration stays usable.
 [Set up Infomaniak Mail](setup.md#connection-invalid-after-an-update-choose-the-folders-again) says how to choose them again.
 
 ## Choosing targets

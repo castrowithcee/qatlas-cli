@@ -27,7 +27,7 @@ import (
 // whether it was approved is unknown. Retargeted names in the same way the connections whose targets or
 // exclusions the migration rewrote into their current form (see config.Config.RetargetedConnections).
 // OutdatedTargets names the connections whose targets their provider could not carry over: they are written as
-// they were, marked, and invalid until a person chooses their targets again. All three hold names only, never
+// they were, marked, and offering no tool until a person chooses their targets again. All three hold names only, never
 // a target. Warning is the redacted failure to log the migration, which never undoes it, and "" otherwise.
 type Migration struct {
 	Path            string
@@ -76,8 +76,8 @@ var saveMigration = func(save func(*config.Config) error, cfg *config.Config) er
 // second process sees once another one migrated. A file that does not load is left as it is, without a
 // backup. Any failure before the file is written leaves file and vault unchanged and removes the backups it
 // made; the error is then a *MigrationError without Backup. A connection whose targets cannot be carried over
-// does not stop the migration: it is written as it was with its mark (see config.Store.ForMigration), and the
-// file then fails to load until a person chooses its targets again.
+// does not stop the migration: it is written as it was with its mark, and it offers no tool until a person
+// chooses its targets again.
 //
 // A vault that is encrypted and locked takes the ids as pending writes, merged on its next unlock; until then
 // entries are matched by name, as they always were. No vault is created, and a vault other than the one
@@ -89,7 +89,7 @@ func (s *Service) MigrateSchema() (*Migration, error) {
 		return nil, nil
 	}
 	for attempt := 0; attempt < migrationAttempts; attempt++ {
-		cfg, rev, err := s.store.ForMigration().LoadVersioned()
+		cfg, rev, err := s.store.LoadVersioned()
 		var notFound *config.NotFoundError
 		switch {
 		case errors.As(err, &notFound):
@@ -121,7 +121,7 @@ func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, 
 	if v != nil && v.Dir() != vault.New(filepath.Dir(s.store.Path())).Dir() {
 		v = nil
 	}
-	err := s.store.ForMigration().Transact(rev, func(save func(*config.Config) error) error {
+	err := s.store.Transact(rev, func(save func(*config.Config) error) error {
 		var copies []string
 		discard := func() {
 			for _, path := range copies {
@@ -241,7 +241,7 @@ func vaultCredentialIDs(cfg *config.Config) map[string]string {
 // readBack loads the file just written and checks that it is in the current schema with the ids, targets and
 // exclusions of cfg.
 func (s *Service) readBack(cfg *config.Config) error {
-	loaded, err := s.store.ForMigration().Load()
+	loaded, err := s.store.Load()
 	if err != nil {
 		return err
 	}
