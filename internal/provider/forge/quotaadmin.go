@@ -84,7 +84,7 @@ type quotaAdminCall struct {
 
 // instanceWideOnly refuses a connection with targets: the tools reach every user of the instance.
 func (a allowlist) instanceWideOnly() error {
-	if len(a) != 0 {
+	if a.bound() {
 		return invalidArgument("quota administration reaches the whole instance, so this connection's targets do " +
 			"not allow it; use a connection without targets")
 	}

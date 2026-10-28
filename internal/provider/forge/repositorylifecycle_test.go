@@ -237,7 +237,8 @@ func TestRepositoryUpdateRefusesTheOtherProductsFields(t *testing.T) {
 			_, err := e.invoke(t, repositoriesUpdate, "repo", `{`+field+`}`)
 			refused(t, e, field, err)
 			// The handler refuses it as well when the schema was not applied.
-			if _, err := repositoriesUpdate.prepare(p, nil, json.RawMessage(`{"repository":"acme/widget",`+field+`}`)); !isInvalidRequest(err) {
+			arguments := json.RawMessage(`{"repository":"acme/widget",` + field + `}`)
+			if _, err := repositoriesUpdate.prepare(p, allowlist{}, arguments); !isInvalidRequest(err) {
 				t.Errorf("%s: handler accepted %s: %v", p.id, field, err)
 			}
 		}
