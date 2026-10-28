@@ -61,7 +61,18 @@ case, since GitHub unions a repeated qualifier of the same name with the one Qat
 the search back open; the `OR` operator; and parentheses, since either could change which terms a forced
 qualifier binds to. A negated qualifier, such as `-repo:`, only narrows further and stays allowed everywhere,
 and `in:`, `fork:`, `is:`, and every other qualifier that does not pick an owner or a repository stay
-unrestricted. None of this applies to a connection without targets, which has no boundary to protect.
+unrestricted. A connection with neither targets nor [exclusions](README.md#targets) has no boundary to protect and
+is not restricted.
+
+## Exclusions
+
+A connection with exclusions filters every returned row against them, whatever the terms. The search also adds
+negated `-repo:`, `-org:`, and `-user:` qualifiers for the exclusions, owners first, up to a fixed limit; they only
+spare GitHub from returning rows that the filter would drop, so the filter alone is the guarantee. A project
+exclusion has no qualifier. A positive qualifier that names an excluded owner or repository is refused with
+`invalid-request`. A connection with only exclusions forces no positive qualifier, so a search without targets
+reaches everything not excluded, and `OR` and parentheses stay allowed. `total_count` is GitHub's own sum and still
+counts excluded rows.
 
 ## Errors and rate limits
 
