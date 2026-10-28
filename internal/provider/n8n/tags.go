@@ -57,7 +57,8 @@ var tagFields = []capability.Field{
 	{Name: "updated_at", Description: "Last update time, as n8n reports it"},
 }
 
-const tagInstanceNote = "Tags are instance-wide: refused on a connection with project or workflow targets"
+const tagInstanceNote = "Tags are instance-wide: refused on a connection with project or workflow targets. " +
+	"Exclusions do not apply: tag names and counts can come from workflows the connection excludes"
 
 var tagsList = capability.Descriptor{
 	ID: Provider + ".tags.list", Version: 1, Title: "List n8n tags",

@@ -530,6 +530,9 @@ func (c *Client) UpdateMetaObject(ctx context.Context, change *metaWriteChange) 
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different object than the requested one")
 	}
+	if c.metaObjectExcluded(&current) {
+		return nil, invalidRequest(errObjectUnavailable)
+	}
 	entity, err := c.metaChange(ctx, op, metaObjectUncertain, http.MethodPatch, path, "updateOneObject", change.payload)
 	if err != nil {
 		return nil, err
@@ -537,10 +540,20 @@ func (c *Client) UpdateMetaObject(ctx context.Context, change *metaWriteChange) 
 	return projectMetaObject(op, entity, change.id, "")
 }
 
-// CreateMetaField sends exactly one POST. It does not read the owning object: Twenty decides which objects
-// accept a field, standard and system objects included, and rejects an unknown object itself.
+// CreateMetaField sends exactly one POST. It does not read the owning object, except on a connection with
+// exclusions, which must know that neither side of the field is excluded: Twenty decides which objects accept
+// a field, standard and system objects included, and rejects an unknown object itself.
 func (c *Client) CreateMetaField(ctx context.Context, change *metaWriteChange) (*MetaField, error) {
 	const op = "create field"
+	ids := []string{change.owner}
+	if target, ok := change.payload["relationCreationPayload"].(map[string]any); ok {
+		if id, ok := target["targetObjectMetadataId"].(string); ok {
+			ids = append(ids, id)
+		}
+	}
+	if err := c.refuseExcludedObjects(ctx, op, ids...); err != nil {
+		return nil, err
+	}
 	entity, err := c.metaChange(ctx, op, metaFieldUncertain, http.MethodPost, metadataFieldsPath, "createOneField",
 		change.payload)
 	if err != nil {
@@ -576,6 +589,9 @@ func (c *Client) UpdateMetaField(ctx context.Context, change *metaWriteChange) (
 	}
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different field than the requested one")
+	}
+	if err := c.refuseExcludedField(ctx, op, &current); err != nil {
+		return nil, err
 	}
 	if current.Type == "MORPH_RELATION" {
 		return nil, invalidRequest("morph relation fields cannot be changed through Qatlas")

@@ -35,6 +35,9 @@ A variable is a key with a plain-text value, either bound to a project or global
   `create` then requires a `project_id` from the allow-list. A global variable can only be created, read,
   changed, or deleted on a connection without project and workflow targets; both are checked locally before
   a secret is read where possible.
+- **Exclusions.** Variables of an excluded project drop out of `list` (a `project_id` filter on it gives an
+  empty page) and are refused by `create`, `update` and `delete`. Global variables stay reachable, see
+  [Exclusions](README.md#exclusions).
 - **Update and delete** find the variable first by paging `GET /variables` (the Public API has no
   `GET /variables/{id}`; at most 20 pages of 250) and refuse one that is global or of a foreign project on a
   bound connection, or that is not found, before any change request; the refusal names neither the variable
@@ -63,5 +66,7 @@ A tag is an instance-wide label.
   for any further instance-wide tool.
 - **Fields.** `name` is 1 to 24 characters without control characters; `tag_id` is validated as a single path
   segment. Names are returned capped, as untrusted data. Tags on workflows are not managed here.
+- **Exclusions do not apply.** A connection that only excludes projects or workflows still offers the tag
+  tools; tag names and counts can come from excluded workflows. The tool descriptions say so.
 - **Delete** cannot be undone and removes the tag from every workflow that carries it.
 - **403.** Reported as `permission`; the rights are in [rights per tool group](setup.md#rights-per-tool-group).

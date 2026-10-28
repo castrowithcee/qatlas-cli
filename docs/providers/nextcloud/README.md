@@ -68,18 +68,25 @@ selection, not a role: only the ticked `tools` are saved, and a saved connection
 ### Exclusions
 
 `exclude` takes `folder/PATH` and `notes/PATH` entries that take a folder, or a notes category, with everything
-below it out of what the targets reach. An entry must lie strictly below a `folder` or `notes` target of its own
-kind, must not repeat or nest in another, and at most 100 are allowed per kind; Qatlas reads them like targets
-and refuses a connection whose entry it cannot enforce. Other kinds, such as `calendar/ID`, `deck/ID`, or
-`talk/ID`, and any exclusion on a connection with an `account` target, or a folder exclusion next to a `talk`
-target, are refused as not supported. An exclusion beats a target and removes no tool from the offer.
+below it out of what the targets reach, and `calendar/URI`, `addressbook/URI`, and `deck/BOARD_ID` entries that take
+one calendar, address book, or board out of the kind alone. A path entry must lie strictly below a `folder` or `notes`
+target of its own kind; an ID entry needs the kind alone as target, never an ID target. Entries must not repeat or
+nest in another, and at most 100 are allowed per kind; Qatlas reads them like targets and refuses a connection whose
+entry it cannot enforce. The scheduling and trash collections of the calendar home and the system address book are
+outside the reach of the kind alone, so an entry naming one is invalid. `talk/ID`, any exclusion on a connection with
+an `account` target, and a folder exclusion next to a `talk` target are refused as not supported. An exclusion beats a
+target and removes no tool from the offer; the tools that create a calendar, address book, or board stay available,
+as their IDs are generated.
 
 - Entries are compared after Unicode normalisation and case folding, so `ü`, `u` plus a combining mark, and `Ü`
-  name one folder, and `ß` meets `SS`. An exclusion may hide more than it names, never less. Targets stay exact.
+  name one folder, and `ß` meets `SS`; calendar and address book URIs compare the same way. A board ID compares as a
+  number, so `07` names board 7. An exclusion may hide more than it names, never less. Targets stay exact.
 - A category is first normalised as the Notes app does before it names a folder (it drops `* | / \ : " < > ?`,
   leading dots, and surrounding white space), so a category that only matches after that is excluded too.
 - A refused call answers as the server answers for something that does not exist, or with `permission`; no
   answer names the object or the exclusion. A refusal that needs no read is raised before any credential access.
+  An excluded calendar or address book answers as one that does not exist, an excluded board as a board the
+  connection is not bound to. Lists leave excluded objects out and do not count them.
 - Notes live as files below the notes path of the identity. A connection that binds both a folder and notes
   therefore carries each kind of exclusion over to the other: a folder exclusion below the notes path hides the
   notes of that category, one on or above the notes path hides every note, and a notes exclusion hides the folder `NOTES_PATH/CATEGORY`
