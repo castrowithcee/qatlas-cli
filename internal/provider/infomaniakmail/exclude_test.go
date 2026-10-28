@@ -47,7 +47,7 @@ func excludeEnvironment(t *testing.T, targets, excludes []string) *environment {
 func TestExcludeConfigurationThroughDecode(t *testing.T) {
 	reg := registry(t)
 	document := func(targets, exclude string) string {
-		return `version: 1
+		return `version: 4
 services:
   mail:
     provider: infomaniak.mail
@@ -136,8 +136,9 @@ func TestExcludeScopeRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Before login only the names an exclusion itself carries are known; a longer name begins with a tree.
-	for name, want := range map[string]bool{"INBOX": false, "Inbox": false, "Kunde": true, "Kunde/A": false,
+	// Before login only the names a folder/PATH exclusion itself carries are known; a longer name is decided
+	// with the delimiter.
+	for name, want := range map[string]bool{"INBOX": false, "Inbox": false, "Kunde": true, "Kunde/A": true,
 		"Plain": false, "Plain/Sub": true, "Other": true} {
 		if got := bound.allowsFolder(name); got != want {
 			t.Errorf("allowsFolder(%q) = %t, want %t", name, got, want)
@@ -147,9 +148,10 @@ func TestExcludeScopeRules(t *testing.T) {
 		name, delim string
 		want        bool
 	}{
-		{"Kunde", "/", true}, {"Kunde/A", "/", false}, {"Kunde/A/B", "/", false}, {"Kunde/AB", "/", true},
+		{"Kunde", "/", true}, {"Kunde/A", "/", true}, {"Kunde/A/B", "/", false}, {"Kunde/AB", "/", true},
 		{"Kunde/A/B", "", true}, {"Kunde.A.B", ".", true}, {"Kunde/A/B", ".", true}, {"Kunde.A.B", "/", true},
-		{"Plain", "/", false}, {"Plain/Sub", "/", true}, {"INBOX", "/", false}, {"Inbox/Sub", "/", true},
+		{"Plain", "/", false}, {"Plain/Sub", "/", false}, {"Plain/Sub", "", true}, {"Plainer", "/", true},
+		{"INBOX", "/", false}, {"Inbox/Sub", "/", false},
 	} {
 		if got := bound.allowsFolderDelim(tc.name, tc.delim); got != tc.want {
 			t.Errorf("allowsFolderDelim(%q, %q) = %t, want %t", tc.name, tc.delim, got, tc.want)
@@ -162,8 +164,8 @@ func TestExcludeScopeRules(t *testing.T) {
 		}
 	}
 	// An exclusion narrows a target list too, and the mailbox itself can be excluded as a sender.
-	narrow, _ := parseScopeExcluding([]string{"mailbox/box@example.com", "folder/Kunde/*", "sender/a@example.net"},
-		[]string{"folder/Kunde/A/*", "sender/box@example.com"})
+	narrow, _ := parseScopeExcluding([]string{"mailbox/box@example.com", "folder/Kunde", "sender/a@example.net"},
+		[]string{"folder/Kunde/A", "sender/box@example.com"})
 	if !narrow.allowsFolderDelim("Kunde", "/") || !narrow.allowsFolderDelim("Kunde/B", "/") ||
 		narrow.allowsFolderDelim("Kunde/A", "/") || narrow.allowsFolderDelim("Kunde/A/B", "/") ||
 		!narrow.allowsSender("a@example.net") || narrow.allowsSender("box@example.com") {
@@ -177,16 +179,16 @@ func TestExcludeFoldersListHidesFoldersAndSubtrees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Drafts,INBOX,Kunde,Kunden,Sent" {
+	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Drafts,INBOX,Kunde,Kunde/A,Kunden,Sent" {
 		t.Errorf("folders = %s", got)
 	}
-	// An exact exclusion leaves the subfolders in the listing.
+	// A folder/PATH exclusion takes the subfolders out with the folder.
 	e = excludeEnvironment(t, nil, []string{"folder/Kunde", "folder/Kunden"})
 	result, err = e.invoke("infomaniak.mail.folders.list", "ex", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Drafts,INBOX,Kunde/A,Kunde/A/B,Sent,Trash" {
+	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Drafts,INBOX,Sent,Trash" {
 		t.Errorf("folders = %s", got)
 	}
 }
@@ -217,19 +219,19 @@ func TestRefreshChildrenUsesOnlyVisibleFolders(t *testing.T) {
 }
 
 func TestExcludeFoldersListWithTargets(t *testing.T) {
-	e := excludeEnvironment(t, []string{"folder/Kunde/*", "folder/Archive"}, []string{"folder/Kunde/A/*"})
+	e := excludeEnvironment(t, []string{"folder/Kunde", "folder/Archive"}, []string{"folder/Kunde/A/*"})
 	result, err := e.invoke("infomaniak.mail.folders.list", "ex", `{}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Kunde" {
+	if got := strings.Join(folderNames(decodeFolders(t, result)), ","); got != "Archive,Kunde,Kunde/A" {
 		t.Errorf("folders = %s", got)
 	}
 }
 
 // An exact excluded folder is refused before the secret and before any connection, by every tool.
 func TestExcludeExactFolderIsRefusedBeforeSecretAndNetwork(t *testing.T) {
-	e := excludeEnvironment(t, nil, []string{"folder/Archive", "folder/Kunde/*"})
+	e := excludeEnvironment(t, nil, []string{"folder/Archive", "folder/Kunde"})
 	dials, reads := e.f.dials.Load(), e.f.reads.Load()
 	for tool, args := range map[string]string{
 		"messages.list":    `{"folder":"Archive"}`,
@@ -258,7 +260,7 @@ func TestExcludeExactFolderIsRefusedBeforeSecretAndNetwork(t *testing.T) {
 	}
 }
 
-// A name that begins with an excluded tree is decided with the delimiter after the login, and never opened.
+// A name that begins with an excluded folder is decided with the delimiter after the login, and never opened.
 func TestExcludeTreePrefixAsksForTheDelimiterAndRefuses(t *testing.T) {
 	e := excludeEnvironment(t, nil, []string{"folder/Kunde/*"})
 	uid := e.f.add(t, "Kunde/A", "alice@example.net", "x", base)
@@ -290,23 +292,26 @@ func TestExcludeTreePrefixAsksForTheDelimiterAndRefuses(t *testing.T) {
 		commands(e, moveCommand) != 0 {
 		t.Errorf("an excluded folder was opened or changed:\n%s", wire)
 	}
-	// A sibling with the same prefix and the tree itself behave as the delimiter says.
+	// A sibling with the same prefix is decided by the delimiter, and folder/PATH/* keeps the folder itself.
 	if _, err := e.invoke("infomaniak.mail.messages.list", "ex", `{"folder":"Kunden"}`); err != nil {
-		t.Errorf("sibling of an excluded tree: %v", err)
+		t.Errorf("sibling of excluded subfolders: %v", err)
 	}
-	if _, err := e.invoke("infomaniak.mail.messages.list", "ex", `{"folder":"Kunde"}`); !isInvalidRequest(err) {
-		t.Errorf("the tree folder itself: err = %v, want an invalid request", err)
+	if _, err := e.invoke("infomaniak.mail.messages.list", "ex", `{"folder":"Kunde"}`); err != nil {
+		t.Errorf("the folder of a folder/PATH/* exclusion: %v", err)
 	}
 }
 
-func TestExcludeExactFolderKeepsSubfoldersReachable(t *testing.T) {
+func TestExcludeFolderTakesItsSubfolders(t *testing.T) {
 	e := excludeEnvironment(t, nil, []string{"folder/Kunde"})
 	e.f.add(t, "Kunde/A", "alice@example.net", "x", base)
-	if page := list(t, e, "ex", `{"folder":"Kunde/A"}`); len(page.Messages) != 1 {
-		t.Errorf("page = %+v", page)
+	e.f.add(t, "Kunden", "alice@example.net", "y", base)
+	for _, folder := range []string{"Kunde", "Kunde/A", "Kunde/A/B"} {
+		if _, err := e.invoke("infomaniak.mail.messages.list", "ex", `{"folder":"`+folder+`"}`); !isInvalidRequest(err) {
+			t.Errorf("%s: err = %v, want an invalid request", folder, err)
+		}
 	}
-	if _, err := e.invoke("infomaniak.mail.messages.list", "ex", `{"folder":"Kunde"}`); !isInvalidRequest(err) {
-		t.Errorf("excluded folder: err = %v", err)
+	if page := list(t, e, "ex", `{"folder":"Kunden"}`); len(page.Messages) != 1 {
+		t.Errorf("sibling: page = %+v", page)
 	}
 }
 
@@ -329,8 +334,8 @@ func TestExcludeFolderOKFailsClosed(t *testing.T) {
 	if err := flat.folderOK("op", "Kunde/A"); err != nil {
 		t.Errorf("flat hierarchy: %v, want admitted (no subfolders)", err)
 	}
-	if err := flat.folderOK("op", "Kunde"); !isInvalidRequest(err) {
-		t.Errorf("tree folder: %v, want a refusal", err)
+	if err := (&session{scope: bound}).folderOK("op", "Kunde"); err != nil {
+		t.Errorf("the folder itself: %v, want admitted without a question", err)
 	}
 	if err := (&session{scope: bound, delimKnown: true, delim: "/"}).folderOK("op", "Kunde/A"); !isInvalidRequest(err) {
 		t.Errorf("subfolder: %v, want a refusal", err)

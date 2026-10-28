@@ -32,7 +32,7 @@ const (
 )
 
 const commentNote = "Comment HTML and the people behind it are personal data and untrusted provider content. " +
-	"On a connection with targets the page is proven to lie in them first"
+	"On a connection with targets or exclusions the page is proven to lie in the targets and outside the exclusions first"
 
 const (
 	commentListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"page_id":{"type":"integer"},"parent_id":{"type":"integer"},"local_id":{"type":"integer"},"content_ref":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","page_id","parent_id","local_id","created_at","updated_at"]}}`
@@ -241,6 +241,11 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if bound.bound() && pageID == 0 {
 		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
+	if pageID != 0 {
+		if err := bound.checkExcluded(pagePrefix, pageID); err != nil {
+			return nil, err
+		}
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -278,6 +283,9 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 		return nil, invalidRequest("html is required")
 	}
 	if err := input.validate(); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, pagePrefix, input.PageID); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -332,9 +340,9 @@ func invokeCommentsDelete(ctx context.Context, resolved *config.Resolved, secret
 	return map[string]bool{"deleted": true}, nil
 }
 
-// ListComments returns the comments of one page, or of every page for an unbound connection without page_id.
-// BookStack ignores a filter it does not know, so each row is checked here against type and page; limit and
-// offset count the rows that remain. The filters of q work the same way and come in addition to type and page.
+// ListComments returns the comments of one page, or of every page for a connection without targets without
+// page_id; with exclusions, the comments of every page the connection reaches. BookStack ignores a filter it
+// does not know, so each row is checked here against type and page; limit and offset count the rows that remain. The filters of q work the same way and come in addition to type and page.
 func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
 		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
@@ -353,7 +361,19 @@ func (c *Client) ListComments(ctx context.Context, pageID int64, limit, offset i
 		op: "list comments", path: "/api/comments", query: query, filtered: true, limit: limit, offset: offset,
 		narrow: "page_id", arguments: argNames(commentsList),
 		id:   func(m commentJSON) int64 { return m.ID },
-		keep: func(m commentJSON) bool { return onPage(m, pageID) },
+		keep: func(m commentJSON) bool { return onPage(m, pageID) && (pageID != 0 || c.rowPageIn(m.CommentableID)) },
+		prepare: func(ctx context.Context, rows []commentJSON) error {
+			if pageID != 0 {
+				return nil
+			}
+			var ids []int64
+			for _, m := range rows {
+				if m.CommentableType == commentType {
+					ids = append(ids, m.CommentableID)
+				}
+			}
+			return c.provePages(ctx, ids)
+		},
 		row: func(m commentJSON) output.Row {
 			return output.Row{
 				"id": m.ID, "page_id": m.CommentableID, "parent_id": m.parent(), "local_id": m.LocalID,
@@ -376,13 +396,13 @@ func onPage(m commentJSON, pageID int64) bool {
 	return m.CommentableType == commentType && (pageID == 0 || m.CommentableID == pageID)
 }
 
-// bindComment proves that a comment read lies on a page of the connection. An unbound connection reads no
-// further, but still accepts page comments only.
+// bindComment proves that a comment read lies on a page of the connection. A connection without targets and
+// exclusions reads no further, but still accepts page comments only.
 func (c *Client) bindComment(ctx context.Context, m commentJSON) error {
 	if m.CommentableType != commentType {
 		return invalidRequest(notPageComment)
 	}
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
 	if err := c.requirePageBound(ctx, strconv.FormatInt(m.CommentableID, 10)); err != nil {
@@ -394,10 +414,10 @@ func (c *Client) bindComment(ctx context.Context, m commentJSON) error {
 	return nil
 }
 
-// requireCommentBound reads a comment once as evidence of its page before a change; an unbound connection
-// reads nothing.
+// requireCommentBound reads a comment once as evidence of its page before a change; a connection without
+// targets and exclusions reads nothing.
 func (c *Client) requireCommentBound(ctx context.Context, id int64) error {
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
 	var m commentJSON

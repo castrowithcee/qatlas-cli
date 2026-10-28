@@ -649,3 +649,48 @@ func TestWorkflowRunDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestExclusionsKeepExcludedRunsAndOwnersOut(t *testing.T) {
+	foreignOrg := `{"total_count":2,"workflow_runs":[` + giteaRun + `,` + giteaForeign + `]}`
+	e, _ := newActionsEnvironment(t, gitea, "28.2.0", func(c call) *http.Response {
+		switch c.path {
+		case "/api/v1/orgs/acme/actions/runs":
+			return jsonResponse(200, foreignOrg)
+		case actionsBase + "/runs/42":
+			return jsonResponse(200, giteaRun)
+		case actionsBase + "/runs/44":
+			return jsonResponse(200, strings.Replace(strings.ReplaceAll(giteaRun, "acme/widget", "Other/foo"), `{"id":42,`, `{"id":44,`, 1))
+		}
+		return notFoundResponse()
+	})
+	// The owner level drops the run of the excluded owner and a row that names no repository.
+	result, err := e.invoke(t, workflowRunsList, "exclude", `{"owner":"orgs/acme"}`)
+	if runs := rowsOf(t, result, "workflow_runs"); err != nil || len(runs) != 1 || runs[0]["id"] != float64(42) {
+		t.Fatalf("owner level: %v, %v", result, err)
+	}
+	// An excluded owner or repository is refused before any secret or request.
+	reads := *e.reads
+	for _, tc := range []struct {
+		tl                    *tool
+		connection, arguments string
+	}{
+		{workflowRunsList, "exclude", `{"owner":"orgs/other"}`},
+		{workflowRunsList, "exclude", `{"owner":"users/OTHER"}`},
+		{workflowRunsList, "owner-exclude", `{"repository":"acme/gadget"}`},
+		{workflowRunsGet, "exclude", `{"repository":"acme/gadget","run_id":42}`},
+	} {
+		*e.calls = (*e.calls)[:0]
+		if _, err := e.invoke(t, tc.tl, tc.connection, tc.arguments); !isInvalidRequest(err) || len(*e.calls) != 0 ||
+			*e.reads != reads || strings.Contains(err.Error(), "gadget") {
+			t.Errorf("%s %s: %v, calls %v", tc.tl.action, tc.arguments, err, e.paths())
+		}
+	}
+	// A run whose canonical repository lies in an exclusion reads as not found, whatever the path said.
+	if _, err := e.invoke(t, workflowRunsGet, "exclude", `{"repository":"acme/widget","run_id":42}`); err != nil {
+		t.Errorf("reachable run: %v", err)
+	}
+	_, err = e.invoke(t, workflowRunsGet, "exclude", `{"repository":"acme/widget","run_id":44}`)
+	if classOfError(err) != "not-found" || strings.Contains(err.Error(), "foo") {
+		t.Errorf("run of an excluded repository: %v", err)
+	}
+}

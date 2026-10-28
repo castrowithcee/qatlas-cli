@@ -262,7 +262,10 @@ func repoLevel(repo target) actionsLevel {
 
 // namesActionsOwner reports whether the list admits the owner by an owner target of the same kind.
 func (a allowlist) namesActionsOwner(owner target) bool {
-	if a.open() {
+	if a.excludedOwner(owner.owner) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -298,7 +301,7 @@ func actionsLevelOf(allowed allowlist, repository, owner string) (actionsLevel, 
 		return actionsLevel{}, err
 	}
 	if !allowed.namesActionsOwner(parsed) {
-		return actionsLevel{}, outsideTargets("owner")
+		return actionsLevel{}, allowed.outsideOwner("owner", parsed.owner)
 	}
 	if parsed.scope == "orgs" {
 		return actionsLevel{base: "/orgs/" + escape(parsed.owner) + "/actions", name: parsed.String(), owner: parsed.owner}, nil
@@ -458,7 +461,7 @@ func listFields(key, what string) []capability.Field {
 	return append([]capability.Field{
 		{Name: key, Description: what},
 		{Name: "total_count", Description: "Number of entries the instance counts for the filters, where it " +
-			"reports one"},
+			"reports one; it also counts rows of excluded repositories"},
 		{Name: "repository", Description: "Repository the tool listed, as OWNER/REPO"},
 		{Name: "owner", Description: "Owner the tool listed, on the owner level"},
 	}, pagingFields...)
@@ -489,7 +492,7 @@ func runAnswer(c *Client, allowed allowlist, op string, row object, id int64) er
 		return provider.InvalidResponse(op, c.product.name+" returned a run without the requested ID")
 	}
 	if name, ok := runRepository(row); ok && !allowed.allowsFullName(name) {
-		return provider.InvalidResponse(op, c.product.name+" returned a run of a repository outside the targets")
+		return allowed.outsideAnswer(op, c.product, name, "a run")
 	}
 	return nil
 }

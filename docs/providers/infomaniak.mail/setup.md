@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Set up Infomaniak Mail
@@ -146,3 +146,26 @@ provider answer (untrusted, not written by qatlas):
 | `rate-limited` | A limit asks to wait | Wait and retry. |
 | `invalid-request` naming the folder or sender targets | The folder or sender is outside the connection's targets or excluded | Not an Infomaniak problem. Pass a target the connection allows, or add it; see [Scope](README.md#scope). |
 | `invalid-provider-response` | An answer broke the expected structure | Retry; see [Errors](README.md#errors). |
+
+### Connection invalid after an update: choose the folders again
+
+**You see:** Qatlas no longer loads its configuration. Every command that reads it fails, `qatlas tui` does not open
+either, and `qatlas config validate` names one of your mail connections and says that its targets keep a former
+meaning.
+
+**Why:** the two folder forms now mean something different from when this connection was written (see
+[Configurations of an older schema](README.md#configurations-of-an-older-schema)). Qatlas carried your other
+connections over on its own. For this one it could not keep exactly the same folders, so it left the connection as
+it was and marked it, rather than guess and give it more or fewer folders.
+
+**What to do:** correct the connection by hand in the configuration file, `config.yaml`, with a text editor:
+
+1. Find the connection the message names.
+2. Delete its line `targets_outdated: true`.
+3. Choose its folders again in `targets`, and where needed in `exclude`: `folder/NAME` for a folder with its
+   subfolders, `folder/NAME/*` for its subfolders only, and for exactly one folder the target `folder/NAME` together
+   with the exclusion `folder/NAME/*`. Check the folder entries already in `exclude` as well: they mean the same as
+   in `targets`. See [Scope](README.md#scope).
+4. Run `qatlas config validate`. It says the configuration is valid once the connection is correct.
+5. If your vault is encrypted, the changed connection needs its approval again: run `qatlas vault approve`, or open
+   Access > Approvals in `qatlas tui`.

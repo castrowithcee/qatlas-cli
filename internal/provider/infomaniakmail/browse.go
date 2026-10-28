@@ -22,7 +22,8 @@ const (
 	maxChoiceName = 200
 	maxChoicePath = 250
 
-	treeLabel = " (with subfolders)"
+	withSubfoldersLabel = " (with subfolders)"
+	onlySubfoldersLabel = " (subfolders only)"
 )
 
 // ListTargets reads one page of choices. The mailbox is the credential's own and cannot be listed: its level
@@ -110,8 +111,9 @@ func boundMailbox(resolved *config.Resolved) (string, bool) {
 	return found, found != ""
 }
 
-// folderEntries turns the sorted folder list into choices: the exact folder/PATH of every folder, directly
-// followed by folder/PATH/* for a folder with subfolders. A folder has subfolders when its LIST answer says
+// folderEntries turns the sorted folder list into choices: folder/PATH of every folder, which reaches the
+// folder and its subfolders, directly followed by folder/PATH/*, its subfolders only, for a folder with
+// subfolders; the names of both say so. A folder has subfolders when its LIST answer says
 // \HasChildren or another listed folder begins with its name and the hierarchy delimiter; a flat hierarchy
 // (no delimiter) has none. The name is the last element below the delimiter and the path the elements above
 // it, as /A/B, or / at the top.
@@ -129,12 +131,15 @@ func folderEntries(folders []Folder) []config.TargetEntry {
 			}
 		}
 		name, path = cutBytes(name, maxChoiceName), cutBytes(path, maxChoicePath)
-		entries = append(entries, config.TargetEntry{Target: folderPrefix + f.Name, Name: name, Kind: "folder", Path: path})
-		if hasSubfolders(f, folders) {
-			entries = append(entries, config.TargetEntry{
-				Target: folderPrefix + f.Name + treeSuffix, Name: name + treeLabel, Kind: "folder", Path: path,
-			})
+		if !hasSubfolders(f, folders) {
+			entries = append(entries, config.TargetEntry{Target: folderPrefix + f.Name, Name: name, Kind: "folder", Path: path})
+			continue
 		}
+		entries = append(entries, config.TargetEntry{
+			Target: folderPrefix + f.Name, Name: name + withSubfoldersLabel, Kind: "folder", Path: path,
+		}, config.TargetEntry{
+			Target: folderPrefix + f.Name + childSuffix, Name: name + onlySubfoldersLabel, Kind: "folder", Path: path,
+		})
 	}
 	return entries
 }
