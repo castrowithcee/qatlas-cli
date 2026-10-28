@@ -19,7 +19,8 @@ an update never moves or completes a task, and a close never reopens one.
 `todoist.tasks.create` takes `content` (one line, at most 500 characters) and places the task by
 `project_id`, `section_id`, or `parent_id`; `section_id` and `parent_id` exclude each other, and a named
 project must be the one of the section or parent. Without any of them the task goes to the connection's only
-target, to the Inbox on a `*` connection, and is refused on a connection with several targets.
+target, to the Inbox on a `*` connection without exclusions, and is refused on any other connection
+with several targets.
 `todoist.tasks.update` changes only the values it names, and removes a due date, a duration, or the assignee
 only through its own `clear_due`, `clear_duration`, or `unassign`. Qatlas interprets no natural language
 itself: `due_string` is passed to Todoist unchanged.
@@ -41,6 +42,20 @@ nothing else.
 `todoist.sections.move` is the one change API v1 offers only through its Sync endpoint. Qatlas sends exactly
 one `section_move` command with the section and the destination project and reads that command's own result;
 no other command, no command a caller names, and no Sync passthrough exist.
+
+## Exclusions
+
+A change whose object, target, or destination lies in an excluded project, tree, or section is refused before
+anything is sent, as for a project outside the targets: tasks, comments, and reminders, a project created below
+an excluded parent, a section created in or moved into an excluded project, and `todoist.sections.reorder`.
+`todoist.projects.archive` and `todoist.projects.delete` are refused when an excluded project or section lies
+below the project at any depth. A task closed, moved, or deleted with its subtasks is checked on the task itself.
+
+A new name for a label and a label delete reach every task that carries the label. On a connection with
+exclusions, `todoist.labels.update` with `name` and `todoist.labels.delete` first read the label and its active
+tasks (at most 25 pages of 200) and are refused when one lies in an excluded part or the list cannot be read
+to its end. Completed tasks are not checked. A color or favorite change and `todoist.labels.create` and
+`todoist.labels.reorder` are unchanged.
 
 Each change is one request that Qatlas never repeats on its own. It carries a fresh `X-Request-Id`, which
 Todoist uses to recognise a duplicate delivery. When the outcome is unclear, because the connection broke,

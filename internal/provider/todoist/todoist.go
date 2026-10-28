@@ -103,11 +103,35 @@ type scope struct {
 	projects []string
 	trees    []string
 	sections []string
+	// Exclusions take parts out of what the targets reach and win over every target: a project with its
+	// sections, tasks and comments but not its subprojects, a project tree, or a section.
+	exProjects []string
+	exTrees    []string
+	exSections []string
 }
 
 // exact reports whether a project is one of the connection's projects without looking at subprojects.
 func (s scope) exact(projectID string) bool {
 	return s.all || slices.Contains(s.projects, projectID)
+}
+
+// hasExcludes reports whether the connection excludes anything.
+func (s scope) hasExcludes() bool {
+	return len(s.exProjects)+len(s.exTrees)+len(s.exSections) > 0
+}
+
+// unrestricted reports whether every object of the account belongs to the connection without a check: the
+// wildcard without exclusions. Every shortcut that skips the membership check asks this and not all, so an
+// exclusion can never be skipped. The wildcard itself still decides which tools are offered.
+func (s scope) unrestricted() bool { return s.all && !s.hasExcludes() }
+
+// excludesProject reports whether a project is excluded by its own ID or as the root of an excluded tree.
+func (s scope) excludesProject(projectID string) bool {
+	return slices.Contains(s.exProjects, projectID) || slices.Contains(s.exTrees, projectID)
+}
+
+func (s scope) excludesSection(sectionID string) bool {
+	return slices.Contains(s.exSections, sectionID)
 }
 
 func (s scope) root(projectID string) bool { return slices.Contains(s.trees, projectID) }
@@ -152,10 +176,10 @@ func (s scope) defaultPlacement() (projectID, sectionID string, ok bool) {
 }
 
 func (s scope) String() string {
-	if s.all {
-		return wildcard
-	}
 	values := append([]string(nil), s.projects...)
+	if s.all {
+		values = []string{wildcard}
+	}
 	for _, id := range s.trees {
 		values = append(values, treePrefix+id)
 	}
@@ -163,7 +187,20 @@ func (s scope) String() string {
 		values = append(values, sectionPrefix+id)
 	}
 	sort.Strings(values)
-	return strings.Join(values, ",")
+	text := strings.Join(values, ",")
+	if !s.hasExcludes() {
+		return text
+	}
+	// The binding of a cursor covers the exclusions, so a cursor never crosses a changed exclusion.
+	excluded := append([]string(nil), s.exProjects...)
+	for _, id := range s.exTrees {
+		excluded = append(excluded, treePrefix+id)
+	}
+	for _, id := range s.exSections {
+		excluded = append(excluded, sectionPrefix+id)
+	}
+	sort.Strings(excluded)
+	return text + "!" + strings.Join(excluded, ",")
 }
 
 // errNeedsProject refuses a tool that acts on projects on a connection bound to sections only.
@@ -184,20 +221,67 @@ func (s scope) requireProjectLevel() error {
 // selects nothing, and a project no target can reach is refused. A project below a project tree is only
 // known once the tree is read, so the call checks it again with requireProject.
 func (s scope) selectProject(projectID string) error {
-	if projectID != "" && !s.exact(projectID) && len(s.trees) == 0 {
+	if projectID != "" && (s.excludesProject(projectID) || (!s.exact(projectID) && len(s.trees) == 0)) {
 		return outsideScope("project")
 	}
 	return nil
 }
 
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseScope(values)
+	return parseScopeExcluding(provider.TargetsOf(resolved), provider.ExcludesOf(resolved))
 }
 
 // parseScope reads the target list of one connection: the * wildcard alone, or one or more entries, each
 // a project ID, project/PROJECT_ID, or section/SECTION_ID. No error quotes a value.
-func parseScope(values []string) (scope, error) {
+func parseScope(values []string) (scope, error) { return parseScopeExcluding(values, nil) }
+
+// parseScopeExcluding reads the targets and the exclusions of one connection. An exclusion is spelled like a
+// target but is never the wildcard, never repeated and never equal to a target. No error quotes a value.
+func parseScopeExcluding(values, excludes []string) (scope, error) {
+	bound, err := parseTargets(values)
+	if err != nil {
+		return scope{}, err
+	}
+	seen := map[string]bool{}
+	for _, value := range excludes {
+		trimmed := strings.TrimSpace(value)
+		id, list, err := parseTarget(trimmed)
+		if trimmed == wildcard || err != nil {
+			return scope{}, errors.New("a Todoist exclusion must be a project ID, project/PROJECT_ID, or " +
+				"section/SECTION_ID")
+		}
+		if seen[trimmed] || bound.targets(trimmed) {
+			return scope{}, errors.New("the Todoist exclusion list repeats an entry or names a target")
+		}
+		seen[trimmed] = true
+		switch list {
+		case treePrefix:
+			bound.exTrees = append(bound.exTrees, id)
+		case sectionPrefix:
+			bound.exSections = append(bound.exSections, id)
+		default:
+			bound.exProjects = append(bound.exProjects, id)
+		}
+	}
+	return bound, nil
+}
+
+// targets reports whether a spelled entry is one of the scope's targets.
+func (s scope) targets(entry string) bool {
+	id, list, err := parseTarget(entry)
+	if err != nil {
+		return false
+	}
+	switch list {
+	case treePrefix:
+		return slices.Contains(s.trees, id)
+	case sectionPrefix:
+		return slices.Contains(s.sections, id)
+	}
+	return slices.Contains(s.projects, id)
+}
+
+func parseTargets(values []string) (scope, error) {
 	if len(values) == 0 {
 		return scope{}, errors.New("a Todoist connection needs one or more targets or the * wildcard")
 	}
