@@ -44,7 +44,7 @@ func ownLogin(ctx context.Context, c *Client, op string, allowed allowlist) (str
 	if !ok || !validName(login) {
 		return "", provider.InvalidResponse(op, c.product.name+" returned an account without a usable login")
 	}
-	if len(allowed) != 0 && !allowed.namesOwnerOfScope("users", login) {
+	if allowed.bound() && !allowed.namesOwnerOfScope("users", login) {
 		return "", outsideTargets("account behind the token")
 	}
 	return login, nil
