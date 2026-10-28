@@ -30,9 +30,11 @@ type crossExcludes struct {
 }
 
 // crossNeeded reports whether the exclusions reach the other kind: a folder exclusion reaches the notes
-// of a connection that binds notes, a notes exclusion the folders of a connection that binds a folder.
+// of a connection that binds notes, a notes exclusion the folders of a connection that binds a folder. The
+// account target reaches both through its account-wide tools.
 func (s scope) crossNeeded() bool {
-	return len(s.excludes.folders) > 0 && s.notes.bound() || len(s.excludes.notes) > 0 && s.hasFolder
+	return len(s.excludes.folders) > 0 && (s.notes.bound() || s.account) ||
+		len(s.excludes.notes) > 0 && (s.hasFolder || s.account)
 }
 
 // derive turns the exclusions into their counterpart of the other kind for a notes path relative to the
@@ -58,8 +60,7 @@ var (
 	errExcludeInvalid = errors.New("a Nextcloud exclusion must be folder/PATH, notes/PATH, calendar/ID, " +
 		"addressbook/ID, deck/ID, or talk/ID, below a target of the same kind, named once, and not nested " +
 		"in another exclusion")
-	errExcludeTooMany    = errors.New("a Nextcloud connection may list at most 100 exclusions per kind")
-	errExcludeBesideKind = errors.New("a Nextcloud exclusion is not supported next to the account target yet")
+	errExcludeTooMany = errors.New("a Nextcloud connection may list at most 100 exclusions per kind")
 )
 
 // comparisonForm brings a segment into the form exclusions are compared in: canonical composition, then
@@ -204,8 +205,9 @@ func (ex *exclusions) add(kind, rest string) error {
 }
 
 // check validates the parsed exclusions against the targets: each lies strictly below a target of its
-// kind, none repeats or nests, and no kind exceeds its bound. The account target takes none, because its
-// tools are not enforced yet.
+// kind, none repeats or nests, and no kind exceeds its bound. The account target reaches every kind through
+// its account-wide tools, so with it an exclusion needs no target of its kind; where there is one, it still
+// lies strictly below it.
 func (ex exclusions) check(s scope) error {
 	for _, n := range []int{len(ex.folders), len(ex.notes), len(ex.calendars), len(ex.addressbooks),
 		len(ex.talks), len(ex.decks)} {
@@ -229,7 +231,7 @@ func (ex exclusions) check(s scope) error {
 		ids []string
 		sel selection
 	}{{ex.calendars, s.calendars}, {ex.addressbooks, s.addressbooks}, {ex.talks, s.talks}, {ex.decks, s.decks}} {
-		if len(pair.ids) > 0 && !pair.sel.all {
+		if len(pair.ids) > 0 && !pair.sel.all && !(s.account && !pair.sel.bound()) {
 			return errExcludeInvalid
 		}
 		for i, id := range pair.ids {
@@ -237,9 +239,6 @@ func (ex exclusions) check(s scope) error {
 				return errExcludeInvalid
 			}
 		}
-	}
-	if s.account {
-		return errExcludeBesideKind
 	}
 	return nil
 }
@@ -251,7 +250,7 @@ func (s scope) folderTargetsAllow(folders [][]string) bool {
 		return true
 	}
 	if !s.hasFolder {
-		return false
+		return s.account
 	}
 	root := comparisonSegments(s.folder)
 	return !slices.ContainsFunc(folders, func(f []string) bool { return len(f) <= len(root) || !hasPrefix(f, root) })
@@ -264,7 +263,7 @@ func (s scope) categoryTargetsAllow(categories [][]string) bool {
 		return true
 	}
 	if !s.notes.bound() {
-		return false
+		return s.account
 	}
 	targets := [][]string{nil}
 	if !s.notes.all {
