@@ -110,6 +110,9 @@ func (c *Client) DeleteMetaObject(ctx context.Context, change *metaWriteChange) 
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different object than the requested one")
 	}
+	if c.metaObjectExcluded(&current) {
+		return nil, invalidRequest(errObjectUnavailable)
+	}
 	if !isTrue(current.IsCustom) || isTrue(current.IsSystem) {
 		return nil, invalidRequest("only custom objects can be deleted through Qatlas")
 	}
@@ -129,6 +132,9 @@ func (c *Client) DeleteMetaField(ctx context.Context, change *metaWriteChange) (
 	}
 	if !equalUUID(current.ID, change.id) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different field than the requested one")
+	}
+	if err := c.refuseExcludedField(ctx, op, &current); err != nil {
+		return nil, err
 	}
 	if !isTrue(current.IsCustom) || isTrue(current.IsSystem) || !contains(metaFieldTypes, current.Type) ||
 		current.Type == "MORPH_RELATION" {
