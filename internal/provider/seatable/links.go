@@ -208,13 +208,7 @@ func (c *Client) resolveLink(ctx context.Context, op string, selected target, co
 	if err != nil {
 		return nil, nil, err
 	}
-	var current *tableJSON
-	for i := range document.Metadata.Tables {
-		if matchesTable(selected, document.Metadata.Tables[i]) {
-			current = &document.Metadata.Tables[i]
-			break
-		}
-	}
+	current := findTable(document, selected)
 	if current == nil {
 		return nil, nil, providerError(op, "the selected SeaTable table no longer exists")
 	}
@@ -253,24 +247,6 @@ func (c *Client) resolveLink(ctx context.Context, op string, selected target, co
 	}
 	return &linkRef{table: current.ID, other: other, linkID: found.Data.LinkID,
 		columnKey: found.Key, columnName: found.Name}, access, nil
-}
-
-// tableAllowed reports whether the table with this identifier is inside the connection's allow-list.
-func (c *Client) tableAllowed(document metadataJSON, id string) bool {
-	for _, table := range document.Metadata.Tables {
-		if table.ID != id {
-			continue
-		}
-		if c.scope.wildcard {
-			return true
-		}
-		for _, allowed := range c.scope.targets {
-			if matchesTable(allowed, table) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func checkRowIDs(op string, ids []string, fewest, most int) error {

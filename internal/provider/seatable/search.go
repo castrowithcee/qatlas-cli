@@ -310,13 +310,7 @@ func (c *Client) SearchRows(ctx context.Context, options SearchOptions) (*ListRe
 	if err != nil {
 		return nil, err
 	}
-	var current *tableJSON
-	for i := range document.Metadata.Tables {
-		if matchesTable(selected, document.Metadata.Tables[i]) {
-			current = &document.Metadata.Tables[i]
-			break
-		}
-	}
+	current := findTable(document, selected)
 	if current == nil {
 		return nil, providerError(op, "the selected SeaTable table no longer exists")
 	}
@@ -403,7 +397,7 @@ func checkSearchColumns(options SearchOptions, table *tableJSON) error {
 // row identifiers of its entries; a value that is not the expected array of entries with a row_id is
 // left out of the row, never passed on.
 func (c *Client) maskSearchLinks(op string, document metadataJSON, current *tableJSON, rows []Row) error {
-	if c.scope.wildcard {
+	if c.scope.wholeBase() {
 		return nil
 	}
 	for _, column := range current.Columns {
