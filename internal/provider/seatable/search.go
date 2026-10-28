@@ -298,9 +298,9 @@ func (c *Client) SearchRows(ctx context.Context, options SearchOptions) (*ListRe
 	if err := options.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	selected, err := c.scope.selectTarget(options.Table)
+	selected, err := c.selectTable(ctx, op, options.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
