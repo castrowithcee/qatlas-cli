@@ -2,12 +2,13 @@
 description: >
   Describes the Infomaniak Mail provider: IMAP access to exactly one mailbox with a mailbox password, the
   fixed endpoints, the required mailbox target, the optional folder and sender allow-lists and exclusions, the
-  target picker, the tool overview with its profiles and tools list requirements, the read-only access, the error
-  classes, the handling of untrusted message data, and the boundaries of what this provider does.
+  rewriting of folder targets from an older schema, the target picker, the tool overview with its profiles and
+  tools list requirements, the read-only access, the error classes, the handling of untrusted message data, and
+  the boundaries of what this provider does.
 type: knowledge
 edit: shared
 created: 2026-10-01
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Infomaniak Mail
@@ -48,11 +49,12 @@ credentials:
 | Target | Binds |
 | --- | --- |
 | `mailbox/ADDRESS` | the one mailbox this connection logs in to, also the IMAP login name; required, exactly one |
-| `folder/PATH` | one folder by its exact name, without subfolders; optional, repeatable |
-| `folder/PATH/*` | the folder `PATH` itself and every folder whose name begins with `PATH` plus the server's hierarchy delimiter; optional, repeatable |
+| `folder/PATH` | the folder `PATH` and its subfolders; optional, repeatable |
+| `folder/PATH/*` | the subfolders of `PATH`, without `PATH` itself; optional, repeatable |
 | `sender/ADDRESS` | one sender address; optional, repeatable, at most 50 |
 
-Folder targets of both forms together are at most 50.
+Folder targets of both forms together are at most 50. Exactly one folder, without its subfolders now or later, is
+the target `folder/PATH` with the exclusion `folder/PATH/*`, as for `Invoices` here:
 
 ```yaml
 connections:
@@ -60,29 +62,33 @@ connections:
     service: infomaniak-mail
     credential: customer-a-mail
     targets: [mailbox/office@example.com, folder/INBOX, folder/Invoices, sender/billing@example.net]
+    exclude: [folder/Invoices/*]
 ```
 
 Addresses are plain ASCII addresses: no display name, no quoting, no internationalised domain, at most 254 bytes.
 A folder name is at most 255 bytes, valid UTF-8, without control characters, and without the IMAP wildcards `*`
-and `%`, so a name can never widen into a pattern. `INBOX` is case-insensitive; every other folder name is
-compared exactly. `folder/PATH` names that folder only. In `folder/PATH/*`, `PATH` is one literal name and the
-trailing `/*` is the only wildcard; `folder/*` (all folders) is not a form, since a connection without a folder
-target already reaches every folder. `/*` includes the folder `PATH` itself. A name that merely begins with `PATH`
-without the delimiter (`Kunden` or `Kunde2` for `Kunde/*`) is not in the scope. A server without a hierarchy
-delimiter (flat hierarchy) leaves only `PATH` itself. No error quotes a configured value.
+and `%`, so a name can never widen into a pattern. In `folder/PATH/*`, `PATH` is one literal name and the trailing
+`/*` is the only wildcard; `folder/*` (all folders) is not a form, since a connection without a folder target
+already reaches every folder. A subfolder of `PATH` is a folder whose name begins with `PATH` plus the server's
+hierarchy delimiter; a name that merely begins with `PATH` (`Kunden` or `Kunde2` for `Kunde`) is none. A server
+without a hierarchy delimiter (flat hierarchy) has no subfolders, so there `folder/PATH` is exactly that folder and
+`folder/PATH/*` reaches nothing. `INBOX` is case-insensitive as a name; every other name is compared exactly, and
+below `INBOX` a target compares exactly while an exclusion matches `INBOX` in any case. No error quotes a
+configured value.
 
 Without a folder target, every folder of the mailbox is reachable. With one, `infomaniak.mail.messages.list`,
-`infomaniak.mail.messages.get`, and `infomaniak.mail.attachments.get` refuse any other folder as an invalid
-request **before** a secret is read and before any connection is opened, and the refusal never names an allowed
-folder. `infomaniak.mail.folders.list` then asks the server only for the allow-listed names (and, for
-`folder/PATH/*`, the subfolders of `PATH`) and filters every answer again locally.
+`infomaniak.mail.messages.get`, and `infomaniak.mail.attachments.get` refuse a folder that neither is a
+`folder/PATH` target nor begins with the name of a folder target as an invalid request **before** a secret is read
+and before any connection is opened, and the refusal never names an allowed folder. `infomaniak.mail.folders.list`
+then asks the server only for the target names and their subfolders and filters every answer again locally.
 
-A `folder/PATH/*` target needs the delimiter of the server. A folder that is exactly a target is accepted without
-it. For any other folder that begins with `PATH`, a call sends one extra `LIST "" ""` on its IMAP connection after
-login and before the folder is opened or a message is moved there; where a LIST answer is read anyway
-(`folders.list`, the trash, drafts, and sent folder lookup) its delimiter is used instead. Every folder of a call,
-including a move destination, is checked against it; a failed question refuses the call without naming a folder. A
-connection without a `folder/PATH/*` target or exclusion never sends it.
+A folder that is exactly a `folder/PATH` target, or any folder without a folder target, is decided without the
+delimiter unless its name begins with the name of a folder exclusion. Every other folder whose name begins with
+the name of a folder target or exclusion needs the delimiter: a call sends one extra `LIST "" ""` on its IMAP
+connection after login and before the folder is opened or a message is moved there; where a LIST answer is read
+anyway (`folders.list`, the trash, drafts, and sent folder lookup) its delimiter is used instead. Every folder of a
+call, including a move destination, is checked against it; a failed question refuses the call without naming a
+folder. A connection without a folder target and without a folder exclusion never sends it.
 
 Without a sender target, every sender is listed. With one, only messages whose parsed From address is on the list are
 returned or read; `messages.get` and `attachments.get` answer `not-found`, with no detail, for a message from another
@@ -94,15 +100,15 @@ allowed address would match).
 ### Exclusions
 
 `exclude` takes folders and senders out of what the targets reach, and an exclusion always wins. It takes
-`folder/PATH` (exactly that folder; its subfolders stay reachable), `folder/PATH/*` (the folder and its subfolders,
-with the delimiter rule above), and `sender/ADDRESS`. The mailbox cannot be excluded. An entry is invalid, without
-quoting it, when it has another form, is empty, is named twice, or equals a target; the provider checks this again
-when it reads the configuration. Exclusions never remove a tool from the offer.
+`folder/PATH` (the folder and its subfolders), `folder/PATH/*` (only its subfolders), both with the subfolder and
+delimiter rules above, and `sender/ADDRESS`. The mailbox cannot be excluded. An entry is invalid, without quoting
+it, when it has another form, is empty, is named twice, or equals a target; the provider checks this again when it
+reads the configuration. Exclusions never remove a tool from the offer.
 
 An excluded folder behaves like a folder without IMAP rights ([RFC 4314](https://www.rfc-editor.org/rfc/rfc4314)):
 every tool that takes a folder, and `messages.move` for its destination, refuses it as an invalid request without
-naming a folder or an exclusion. An exact name is refused before a secret is read and before any connection; a
-name that begins with the `PATH` of an excluded `folder/PATH/*` is decided with the delimiter, as for a target.
+naming a folder or an exclusion. A name a `folder/PATH` exclusion carries itself is refused before a secret is read
+and before any connection; a name that begins with the name of a folder exclusion is decided with the delimiter.
 `folders.list` leaves excluded folders out and decides `\HasChildren` and `\HasNoChildren` again from the folders it
 shows ([RFC 9051 section 7.3.1](https://www.rfc-editor.org/rfc/rfc9051#section-7.3.1)); the name of a shown
 subfolder can still contain the name of an excluded parent. The trash, drafts, and Sent folder lookups treat an
@@ -114,6 +120,17 @@ not exist. This is decided locally; a server-side `NOT FROM` is never sent, and 
 address is refused before any connection. Excluding the mailbox's own address as a sender makes `messages.send` and
 the draft tools refuse, since the mailbox is the only sender they use.
 
+### Configurations of an older schema
+
+A configuration file of schema 3 or older reads `folder/PATH` as exactly that folder and `folder/PATH/*` as the folder
+with its subfolders. Loading it rewrites every Infomaniak Mail connection with the same reach: `folder/PATH/*`
+becomes `folder/PATH`, and `folder/PATH` stays and gains the exclusion `folder/PATH/*`, which has no label. A
+connection keeps its targets unchanged, is marked `targets_outdated`, and stays invalid until its folders are
+chosen again when that exclusion could take a folder from another of its targets (another folder target whose name
+begins with the name of a former exact one, or a former exact one whose name begins with or equals the name of a
+former `folder/PATH/*`), or when it has a folder exclusion, whose former meaning the current forms do not keep.
+[Set up Infomaniak Mail](setup.md#connection-invalid-after-an-update-choose-the-folders-again) says how to choose them again.
+
 ## Choosing targets
 
 The target picker offers `mailbox`, then `folder` below it. The service lists no mailboxes: the `mailbox` level shows
@@ -122,7 +139,8 @@ with that address only; any other parent address is an invalid request before a 
 folder list, unfiltered by folder and sender targets, 50 entries a page (at most 500 folders). Each folder is
 `folder/PATH`, named by its last element with the ones above it as path (`Kunden.A` under `.` gives `A` at `/Kunden`;
 `/` at the top or without a delimiter). A folder with subfolders (by `\HasChildren` or another listed name below it)
-also gets `folder/PATH/*`, named "… (with subfolders)". It works on a draft connection and resolves no URL.
+also gets `folder/PATH/*` right after it, and the names of both say whether the subfolders come with the folder or
+alone. It works on a draft connection and resolves no URL.
 
 ## Tools
 

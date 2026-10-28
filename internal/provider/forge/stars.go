@@ -30,7 +30,7 @@ func repositoryPageResult(p *product, page paging, header http.Header, allowed a
 	for _, row := range rows {
 		// A row outside the targets is dropped; the count that decides has_more is the unfiltered one.
 		if fullName, _ := row.text("full_name"); allowed.allowsFullName(fullName) {
-			repositories = append(repositories, project(p, repositoryMembers, row))
+			repositories = append(repositories, project(p, repositoryMembers, allowed.hideExcludedParent(row)))
 		}
 	}
 	result := pageResult(page, header, len(rows), "repositories", repositories)
@@ -84,7 +84,7 @@ func newRepositoryList(s repositoryListSpec) *tool {
 					return nil, invalidArgument("username must be a user name")
 				}
 				if !allowed.listsOwner(a.Username) {
-					return nil, outsideTargets("username")
+					return nil, allowed.outsideOwner("username", a.Username)
 				}
 				path = "/users/" + escape(a.Username) + s.other
 			}

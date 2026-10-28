@@ -74,8 +74,8 @@ func invokeFoldersList(ctx context.Context, resolved *config.Resolved, secrets *
 }
 
 // ListFolders runs IMAP LIST and keeps only folders the connection's scope allows. With a folder allow-list
-// each listed name is asked for by itself, so no other folder name is requested from the server; every
-// answer is filtered locally again.
+// each listed name is asked for by itself and then its subfolders, so no other folder name is requested from
+// the server; every answer is filtered locally again.
 func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 	const op = "list folders"
 	conn, err := c.connect(ctx, op)
@@ -86,7 +86,7 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 
 	patterns := []string{"*"}
 	if !c.scope.unrestricted() {
-		patterns = append(append([]string{}, c.scope.folders...), c.scope.trees...)
+		patterns = append(slices.Clone(c.scope.folders), c.scope.children...)
 	}
 	byName := map[string]Folder{}
 	collect := func(pattern string) ([]*imap.ListData, error) {
@@ -103,20 +103,18 @@ func (c *Client) ListFolders(ctx context.Context) (*FoldersPage, error) {
 			return nil, err
 		}
 		all = append(all, listed...)
-		// A folder/PATH/* target also asks for the subfolders of NAME, with the delimiter NAME itself reports.
-		// A folder without one (flat hierarchy) has no subfolders to ask for.
-		for _, tree := range c.scope.trees {
-			if pattern != tree {
-				continue
-			}
-			for _, data := range listed {
-				if normalizeFolder(data.Mailbox) == tree && data.Delim != 0 {
-					sub, err := collect(tree + string(data.Delim) + "*")
-					if err != nil {
-						return nil, err
-					}
-					all = append(all, sub...)
+		if pattern == "*" {
+			continue
+		}
+		// Both folder forms reach the subfolders of PATH, asked for with the delimiter PATH itself reports. A
+		// folder without one (flat hierarchy) has no subfolders to ask for.
+		for _, data := range listed {
+			if normalizeFolder(data.Mailbox) == pattern && data.Delim != 0 {
+				sub, err := collect(pattern + string(data.Delim) + "*")
+				if err != nil {
+					return nil, err
 				}
+				all = append(all, sub...)
 			}
 		}
 	}

@@ -265,7 +265,7 @@ func (c *Client) joinedTableReadable(document metadataJSON, current tableJSON, c
 	if column.Type != "link" && column.Type != "link-formula" {
 		return true
 	}
-	if c.scope.wildcard {
+	if c.scope.wholeBase() {
 		return true
 	}
 	link, found := joinLinkColumn(current, column, data)
@@ -298,7 +298,7 @@ func joinLinkColumn(current tableJSON, column columnJSON, data map[string]any) (
 // (formula lookup, findmin, findmax) of a table the connection may not read, or of a table that cannot be
 // determined. Rollups, counts and other formulas aggregate and stay. A wildcard connection hides nothing.
 func (c *Client) hiddenLookups(document metadataJSON, current *tableJSON) []columnJSON {
-	if c.scope.wildcard || current == nil {
+	if c.scope.wholeBase() || current == nil {
 		return nil
 	}
 	var hidden []columnJSON

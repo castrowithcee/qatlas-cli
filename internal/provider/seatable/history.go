@@ -42,7 +42,8 @@ var seatableHistoryRisk = capability.Risk{
 }
 
 const historyOutputSchema = `{"type":"object","properties":{"items":{"type":"array","items":{"type":"object"}},` +
-	`"page":{"type":"integer"},"per_page":{"type":"integer"},"has_more":{"type":"boolean"}},` +
+	`"page":{"type":"integer"},"per_page":{"type":"integer"},"has_more":{"type":"boolean"},` +
+	`"warnings":{"type":"array","items":{"type":"string"}}},` +
 	`"required":["items","page","has_more"],"additionalProperties":false}`
 
 const activitiesOutputSchema = `{"type":"object","properties":{"items":{"type":"array","items":{"type":"object"}},` +
@@ -101,6 +102,7 @@ var baseOperations = capability.Descriptor{
 		{Name: "items", Description: "Logged operations as SeaTable reports them, with old and new values and people, untrusted data; at most 100 per call"},
 		{Name: "page", Description: "Page number the request applied"},
 		{Name: "has_more", Description: "True when this call left reported entries out because of its size limit"},
+		{Name: "warnings", Description: "Present when entries without a table reference are reported unfiltered because the connection excludes tables"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read the newest operations of the base",
@@ -128,6 +130,7 @@ type HistoryResult struct {
 	PerPage    int               `json:"per_page,omitempty"`
 	TotalCount *int64            `json:"total_count,omitempty"`
 	HasMore    bool              `json:"has_more"`
+	Warnings   []string          `json:"warnings,omitempty"`
 }
 
 func normalizePage(page int) (int, error) {
@@ -224,9 +227,9 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 	if err := options.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	selected, err := c.scope.selectTarget(options.Table)
+	selected, err := c.selectTable(ctx, op, options.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	if _, err := c.GetRowFrom(ctx, options.Table, options.RowID); err != nil {
 		return nil, err
@@ -266,12 +269,7 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 		if document, err = c.metadata(ctx, op); err != nil {
 			return err
 		}
-		for i := range document.Metadata.Tables {
-			if matchesTable(selected, document.Metadata.Tables[i]) {
-				current = &document.Metadata.Tables[i]
-				break
-			}
-		}
+		current = findTable(document, selected)
 		loaded = true
 		return nil
 	}
@@ -293,7 +291,7 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 	}
 	items = kept
 	var mask *linkMask
-	if !c.scope.wildcard && len(items) > 0 {
+	if !c.scope.wholeBase() && len(items) > 0 {
 		if err := load(); err != nil {
 			return nil, err
 		}
@@ -346,11 +344,22 @@ func (c *Client) BaseOperations(ctx context.Context, options OperationsOptions) 
 	if more {
 		items = items[:maxPageSize]
 	}
+	var warnings []string
+	if c.scope.excludes() {
+		document, err := c.metadata(ctx, op)
+		if err != nil {
+			return nil, err
+		}
+		var unrelated bool
+		if items, unrelated = c.reachableOperations(document, items); unrelated {
+			warnings = []string{unfilteredOperations}
+		}
+	}
 	result, err := encodeItems(op, items, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &HistoryResult{Items: result, Page: page, HasMore: more}, nil
+	return &HistoryResult{Items: result, Page: page, HasMore: more, Warnings: warnings}, nil
 }
 
 // historyItems decodes the entry list of an answer; every entry has to be an object.
@@ -531,6 +540,97 @@ func entryTableMatches(item map[string]any, current *tableJSON) bool {
 	}
 	if raw, ok := item["table_name"]; ok {
 		if name, ok := raw.(string); !ok || name != current.Name {
+			return false
+		}
+	}
+	return true
+}
+
+// unfilteredOperations is the warning that accompanies entries the table filter cannot judge.
+const unfilteredOperations = "Entries without a table reference cannot be filtered by table and may concern " +
+	"tables this connection excludes."
+
+// operationTableKeys are the members of a logged operation that name a table, at any depth.
+var operationTableKeys = map[string]bool{
+	"table_id": true, "table_name": true, "table1_id": true, "table2_id": true,
+	"table1_name": true, "table2_name": true, "other_table_id": true,
+}
+
+// reachableOperations drops every entry that names a table the connection does not reach or one the base does
+// not hold, wherever in the entry the reference sits. An entry that names no table stays and is reported as
+// unfiltered through the second result.
+func (c *Client) reachableOperations(document metadataJSON, items []map[string]any) ([]map[string]any, bool) {
+	kept := items[:0:0]
+	unrelated := false
+	for _, item := range items {
+		refs, ok := tableReferences(item, 0, nil)
+		switch {
+		case !ok:
+			continue
+		case len(refs) == 0:
+			unrelated = true
+		case !c.reachesAll(document, refs):
+			continue
+		}
+		kept = append(kept, item)
+	}
+	return kept, unrelated
+}
+
+// tableRef is one table reference of a logged operation.
+type tableRef struct {
+	key   string
+	value string
+}
+
+// tableReferences collects the table references of a value. It reports false when a reference is not a
+// string, which counts as unknown. Nesting beyond the depth that is reported is not read, because it is
+// never reported.
+func tableReferences(value any, depth int, refs []tableRef) ([]tableRef, bool) {
+	if depth > maxHistoryDepth {
+		return refs, true
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, item := range typed {
+			if operationTableKeys[key] {
+				text, isText := item.(string)
+				if !isText || text == "" {
+					return nil, false
+				}
+				refs = append(refs, tableRef{key: key, value: text})
+				continue
+			}
+			var ok bool
+			if refs, ok = tableReferences(item, depth+1, refs); !ok {
+				return nil, false
+			}
+		}
+	case []any:
+		for _, item := range typed {
+			var ok bool
+			if refs, ok = tableReferences(item, depth+1, refs); !ok {
+				return nil, false
+			}
+		}
+	}
+	return refs, true
+}
+
+// reachesAll reports whether every referenced table exists in the base and is reachable.
+func (c *Client) reachesAll(document metadataJSON, refs []tableRef) bool {
+	for _, ref := range refs {
+		byName := strings.HasSuffix(ref.key, "_name")
+		found := false
+		for _, table := range document.Metadata.Tables {
+			if (byName && table.Name == ref.value) || (!byName && table.ID == ref.value) {
+				found = true
+				if !c.scope.reaches(table) {
+					return false
+				}
+			}
+		}
+		if !found {
 			return false
 		}
 	}

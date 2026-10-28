@@ -208,13 +208,7 @@ func (c *Client) resolveLink(ctx context.Context, op string, selected target, co
 	if err != nil {
 		return nil, nil, err
 	}
-	var current *tableJSON
-	for i := range document.Metadata.Tables {
-		if matchesTable(selected, document.Metadata.Tables[i]) {
-			current = &document.Metadata.Tables[i]
-			break
-		}
-	}
+	current := findTable(document, selected)
 	if current == nil {
 		return nil, nil, providerError(op, "the selected SeaTable table no longer exists")
 	}
@@ -253,24 +247,6 @@ func (c *Client) resolveLink(ctx context.Context, op string, selected target, co
 	}
 	return &linkRef{table: current.ID, other: other, linkID: found.Data.LinkID,
 		columnKey: found.Key, columnName: found.Name}, access, nil
-}
-
-// tableAllowed reports whether the table with this identifier is inside the connection's allow-list.
-func (c *Client) tableAllowed(document metadataJSON, id string) bool {
-	for _, table := range document.Metadata.Tables {
-		if table.ID != id {
-			continue
-		}
-		if c.scope.wildcard {
-			return true
-		}
-		for _, allowed := range c.scope.targets {
-			if matchesTable(allowed, table) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func checkRowIDs(op string, ids []string, fewest, most int) error {
@@ -322,9 +298,9 @@ func (c *Client) ListLinks(ctx context.Context, input linkInput) (*LinksResult, 
 	if err := checkRowIDs(op, input.RowIDs, 1, maxLinkSourceRows); err != nil {
 		return nil, err
 	}
-	selected, err := c.scope.selectTarget(input.Table)
+	selected, err := c.selectTable(ctx, op, input.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	ref, access, err := c.resolveLink(ctx, op, selected, input.Column)
 	if err != nil {
@@ -377,9 +353,9 @@ func (c *Client) ChangeLinks(ctx context.Context, op, method string, input linkI
 	if err := checkLinkMutationShape(op, input); err != nil {
 		return err
 	}
-	selected, err := c.scope.selectTarget(input.Table)
+	selected, err := c.selectTable(ctx, op, input.Table)
 	if err != nil {
-		return providerError(op, err.Error())
+		return err
 	}
 	ref, access, err := c.resolveLink(ctx, op, selected, input.Column)
 	if err != nil {

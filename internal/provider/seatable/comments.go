@@ -297,8 +297,8 @@ func (c *Client) ListComments(ctx context.Context, input CommentInput) (*Comment
 	if err := input.check(op, "list"); err != nil {
 		return nil, err
 	}
-	if _, err := c.scope.selectTarget(input.Table); err != nil {
-		return nil, providerError(op, err.Error())
+	if _, err := c.selectTable(ctx, op, input.Table); err != nil {
+		return nil, err
 	}
 	comments, more, err := c.rowComments(ctx, op, input)
 	if err != nil {
@@ -313,8 +313,8 @@ func (c *Client) CreateComment(ctx context.Context, input CommentInput) error {
 	if err := input.check(op, "create"); err != nil {
 		return err
 	}
-	if _, err := c.scope.selectTarget(input.Table); err != nil {
-		return providerError(op, err.Error())
+	if _, err := c.selectTable(ctx, op, input.Table); err != nil {
+		return err
 	}
 	if _, err := c.GetRowFrom(ctx, input.Table, input.RowID); err != nil {
 		return err
@@ -345,8 +345,8 @@ func (c *Client) DeleteComment(ctx context.Context, input CommentInput) error {
 	if err := input.check(op, "delete"); err != nil {
 		return err
 	}
-	if _, err := c.scope.selectTarget(input.Table); err != nil {
-		return providerError(op, err.Error())
+	if _, err := c.selectTable(ctx, op, input.Table); err != nil {
+		return err
 	}
 	comments, _, err := c.rowComments(ctx, op, input)
 	if err != nil {

@@ -488,7 +488,7 @@ func TestAccountsMeIsRefusedForRepositoryTargets(t *testing.T) {
 }
 
 func TestTargetsParseTheThreeForms(t *testing.T) {
-	list, err := parseAllowlist([]string{"users/alice", "orgs/acme", "repos/acme/widget", "repos/bob/my.repo-1"})
+	list, err := parseAllowlist([]string{"users/alice", "orgs/acme", "repos/acme/widget", "repos/bob/my.repo-1"}, nil)
 	if err != nil || len(list.targets) != 4 {
 		t.Fatalf("parseAllowlist = %v, %v", list, err)
 	}
@@ -500,10 +500,10 @@ func TestTargetsParseTheThreeForms(t *testing.T) {
 			t.Errorf("parseTarget(%q) = %v, want the fixed form message", raw, err)
 		}
 	}
-	if _, err := parseAllowlist([]string{"users/acme", "orgs/ACME"}); err == nil {
+	if _, err := parseAllowlist([]string{"users/acme", "orgs/ACME"}, nil); err == nil {
 		t.Error("users/NAME and orgs/NAME of one name count twice")
 	}
-	if _, err := parseAllowlist([]string{"repos/acme/widget", "repos/Acme/Widget"}); err == nil {
+	if _, err := parseAllowlist([]string{"repos/acme/widget", "repos/Acme/Widget"}, nil); err == nil {
 		t.Error("a repository named twice in another case is accepted")
 	}
 	if !list.allowsRepository("ACME", "anything") || !list.allowsRepository("Bob", "MY.repo-1") ||

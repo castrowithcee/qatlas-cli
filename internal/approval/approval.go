@@ -580,7 +580,7 @@ func tools(values []string) string {
 // DirectApprovable reports whether change - a connection's own open change, found right after some action
 // that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
 // browser, that just created it) - is made entirely of fields that action's own form shows: effects,
-// targets, tools, its state, its active-until limit, or a plain rename of its credential, never one "stored
+// targets, exclusions, tools, its state, its active-until limit, or a plain rename of its credential, never one "stored
 // anew" (the vault holds a different entry under the same credential name), which a form cannot tell apart
 // from an ordinary rename. A connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
 // either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
@@ -595,7 +595,7 @@ func DirectApprovable(change Change) bool {
 	}
 	for _, f := range change.Fields {
 		switch f.Field {
-		case FieldEffects, FieldTargets, FieldTools, FieldState, FieldActiveUntil:
+		case FieldEffects, FieldTargets, FieldExclude, FieldTools, FieldState, FieldActiveUntil:
 		case FieldCredential:
 			if strings.HasSuffix(f.After, " (stored anew)") {
 				return false

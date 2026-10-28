@@ -120,17 +120,17 @@ func metadata(p *product) config.ProviderMetadata {
 				"whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "owner", Description: "a user or an organization and everything it owns",
-				Forms: []string{"users/NAME", "orgs/NAME"},
+				Forms: []string{"users/NAME", "orgs/NAME"}, Excludable: true,
 			}, {
 				Name: "repository", Description: "one repository",
-				Forms: []string{"repos/OWNER/REPO"}, Parents: []string{"owner"}, Top: true,
+				Forms: []string{"repos/OWNER/REPO"}, Parents: []string{"owner"}, Top: true, Excludable: true,
 			}},
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)
 				return err
 			},
 			ValidateSet: func(values []string) error {
-				_, err := parseAllowlist(values)
+				_, err := parseAllowlist(values, nil)
 				return err
 			},
 			Reaches: reaches(p),

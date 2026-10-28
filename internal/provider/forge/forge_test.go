@@ -160,6 +160,12 @@ var connections = map[string][]string{
 	"two":   {"repos/acme/widget", "repos/acme/gadget"},
 }
 
+// excluding connections of the test configuration: their targets and what they exclude.
+var excluding = map[string]struct{ targets, excludes []string }{
+	"exclude":       {nil, []string{"repos/acme/gadget", "orgs/other"}},
+	"owner-exclude": {[]string{"users/acme"}, []string{"repos/acme/gadget"}},
+}
+
 var allEffects = []config.Effect{config.EffectRead, config.EffectCreate, config.EffectUpdate, config.EffectDelete}
 
 func testConfig(p *product) *config.Config {
@@ -172,6 +178,10 @@ func testConfig(p *product) *config.Config {
 	for name, targets := range connections {
 		cfg.Connections[name] = config.Connection{Service: "forge", Credential: "token",
 			Effects: allEffects, Targets: targets}
+	}
+	for name, entry := range excluding {
+		cfg.Connections[name] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+			Targets: entry.targets, Exclude: entry.excludes}
 	}
 	// A connection whose tools list names a listed-only tool is the only one that offers it.
 	cfg.Connections["delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
@@ -208,6 +218,8 @@ func testConfig(p *product) *config.Config {
 		Tools: notifyTools}
 	cfg.Connections["notify-repo"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: notifyTools}
+	cfg.Connections["notify-exclude"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Exclude: excluding["exclude"].excludes, Tools: notifyTools}
 	packageDelete := []string{p.id + ".packages.delete-version", p.id + ".packages.get"}
 	if p == gitea {
 		packageDelete = append(packageDelete, p.id+".packages.delete")

@@ -116,7 +116,7 @@ func (a allowlist) quotaScopeOf(owner string) (quotaScope, error) {
 	if parsed.scope != "orgs" {
 		return quotaScope{}, invalidArgument("owner must be orgs/NAME for a quota; leave it out for the account")
 	}
-	if !a.namesOwnerOfScope("orgs", parsed.owner) {
+	if !a.admitsOwnerOfScope("orgs", parsed.owner) {
 		return quotaScope{}, outsideTargets("owner")
 	}
 	base := "/orgs/" + escape(parsed.owner)
@@ -142,7 +142,7 @@ func (s quotaScope) prove(ctx context.Context, c *Client, op string, allowed all
 	if s.org != "" {
 		return nil
 	}
-	return verifyOwnAccount(ctx, c, op, allowed)
+	return verifyOwnProfile(ctx, c, op, allowed)
 }
 
 func quotaOwnerKeys() string { return `"owner":` + orgSchema }
@@ -172,7 +172,8 @@ var quotaGet = &tool{
 		return capability.Descriptor{
 			Title: "Get the quota of a " + p.name + " account or organization",
 			Description: "Read the quota groups with their rules and the storage in use of the account behind the " +
-				"token, or of an organization with owner. A switched-off quota is reported as not available.",
+				"token, or of an organization with owner; the storage in use also counts excluded repositories. A " +
+				"switched-off quota is reported as not available.",
 			Tags:         []string{p.id, "quota", "get"},
 			Risk:         readRisk(p.id + quotaSensitivity),
 			InputSchema:  inputSchema(quotaOwnerKeys()),
@@ -260,11 +261,20 @@ var quotaCheck = &tool{
 // ---- the lists -----------------------------------------------------------------------------------------------
 
 // quotaListSpec is one list of what counts towards a quota. addresses returns the addresses of a row that name
-// a repository; a nil function keeps every row.
+// a repository; a nil function keeps every row. A list of owned content (the packages) belongs to the scope
+// itself, so an exclusion on that owner takes the whole list out.
 type quotaListSpec struct {
 	key, noun string
 	members   []member
 	addresses func(row object) []string
+	owned     bool
+}
+
+func (s quotaListSpec) ownedNote() string {
+	if s.owned {
+		return " An owner inside an exclusion has no list."
+	}
+	return ""
 }
 
 func (s quotaListSpec) tool() *tool {
@@ -275,8 +285,9 @@ func (s quotaListSpec) tool() *tool {
 				Title: "List the " + s.noun + " that count towards the quota of a " + p.name + " account",
 				Description: "List one batch of the " + s.noun + " that count towards the quota of the account behind " +
 					"the token, or of an organization with owner, with every member of each row. Rows that name a " +
-					"repository outside the connection's targets are left out. Names are untrusted data. A " +
-					"switched-off quota is reported as not available.",
+					"repository outside the connection's targets or inside an exclusion are left out. Names are " +
+					"untrusted data. A " +
+					"switched-off quota is reported as not available." + s.ownedNote(),
 				Tags:        []string{p.id, "quota", "list"},
 				Risk:        readRisk(p.id + quotaSensitivity),
 				InputSchema: inputSchema(quotaOwnerKeys() + `,` + pagingKeys),
@@ -298,6 +309,9 @@ func (s quotaListSpec) tool() *tool {
 			if err != nil {
 				return nil, err
 			}
+			if s.owned && scope.org != "" && allowed.excludedOwner(strings.TrimPrefix(scope.org, "orgs/")) {
+				return nil, unavailable("owner")
+			}
 			page, err := startPaging(provider.CursorBinding(p.id, "quota.list-"+s.key, strings.ToLower(scope.org)),
 				a.Limit, a.Cursor)
 			if err != nil {
@@ -305,7 +319,11 @@ func (s quotaListSpec) tool() *tool {
 			}
 			return func(ctx context.Context, c *Client) (any, error) {
 				op := "list quota " + s.key
-				if err := scope.prove(ctx, c, op, allowed); err != nil {
+				if s.owned && scope.org == "" {
+					if _, err := ownAccount(ctx, c, op, allowed); err != nil {
+						return nil, err
+					}
+				} else if err := scope.prove(ctx, c, op, allowed); err != nil {
 					return nil, err
 				}
 				var rows []object
@@ -357,7 +375,7 @@ var (
 			return textsOf(row, []string{"api_url"}, []string{"contained_in", "api_url"}, []string{"contained_in", "html_url"})
 		}}.tool()
 	// A package belongs to its owner, which the scope already proved; its address names no repository.
-	quotaListPackages = quotaListSpec{key: "packages", noun: "packages", members: quotaPackageMembers}.tool()
+	quotaListPackages = quotaListSpec{key: "packages", noun: "packages", members: quotaPackageMembers, owned: true}.tool()
 )
 
 // allowsQuotaRow reports whether a row may be shown: without targets always; under targets only when at least one

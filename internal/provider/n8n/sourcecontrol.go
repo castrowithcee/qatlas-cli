@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -97,7 +96,8 @@ var sourceControlStatus = capability.Descriptor{
 	ID: Provider + ".source-control.status", Version: 1, Title: "Preview n8n source control changes",
 	Description: "Preview the pending changes between the bound n8n instance and its connected Git branch in " +
 		"one direction: push (local changes not yet in Git) or pull (remote changes not yet imported). It " +
-		"changes nothing. " + sourceControlInstanceNote,
+		"changes nothing. Where the connection excludes projects or workflows, files of excluded objects " +
+		"are left out, and so are files whose owning project cannot be placed. " + sourceControlInstanceNote,
 	Tags: []string{"n8n", "sourcecontrol", "status", "automation"}, Risk: sourceControlStatusRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"direction":{"type":"string",` +
@@ -148,7 +148,10 @@ var sourceControlPull = capability.Descriptor{
 		"every imported workflow and published publishes those that were published locally before the import; " +
 		"none (the default) publishes nothing by itself. When n8n refuses with a conflict, the result has " +
 		"outcome conflict and lists the conflicting files; nothing was imported and Qatlas does not retry. " +
-		"The request is sent once and never repeated after an unclear result. " + sourceControlInstanceNote,
+		"The request is sent once and never repeated after an unclear result. Where the connection excludes " +
+		"projects or workflows, the pull is refused when a preview of it, read just before, touches an " +
+		"excluded object or one that cannot be placed; changes made between that preview and the pull are " +
+		"not covered. " + sourceControlInstanceNote,
 	Tags: []string{"n8n", "sourcecontrol", "pull", "automation"}, Risk: sourceControlChangeRisk,
 	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"force":{"type":"boolean"},` +
@@ -171,7 +174,9 @@ var sourceControlPush = capability.Descriptor{
 		"project, datatable). force: true pushes even objects with unresolved conflicts. When n8n refuses " +
 		"with a conflict, the result has outcome conflict and lists the conflicting files; nothing was " +
 		"pushed and Qatlas does not retry. The request is sent once and never repeated after an unclear " +
-		"result. " + sourceControlInstanceNote,
+		"result. Where the connection excludes projects or workflows, naming an excluded object, or one " +
+		"whose owning project cannot be placed, is refused, and so is folders where a project is excluded. " +
+		sourceControlInstanceNote,
 	Tags: []string{"n8n", "sourcecontrol", "push", "automation"}, Risk: sourceControlChangeRisk,
 	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"commit_message":{"type":"string",` +
@@ -447,15 +452,18 @@ func invokeSourceControlStatus(ctx context.Context, resolved *config.Resolved, s
 	if err != nil {
 		return nil, err
 	}
-	var page struct {
-		Data []sourceControlFileJSON `json:"data"`
+	all, err := client.sourceControlFiles(ctx, op, input.Direction)
+	if err != nil {
+		return nil, err
 	}
-	if err := client.get(ctx, op, "/source-control/status", url.Values{"direction": {input.Direction}}, &page,
-		maxResponseBytes); err != nil {
-		return nil, permissionNeutral(err)
+	files := all[:0:0]
+	for _, f := range all {
+		if !client.scope.excludesSourceFile(f) {
+			files = append(files, f)
+		}
 	}
-	return &SourceControlStatus{Direction: input.Direction, Files: summarizeStatusFiles(page.Data),
-		Count: len(page.Data), Truncated: len(page.Data) > maxSourceControlFiles}, nil
+	return &SourceControlStatus{Direction: input.Direction, Files: summarizeStatusFiles(files),
+		Count: len(files), Truncated: len(files) > maxSourceControlFiles}, nil
 }
 
 func invokeSourceControlPull(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -476,6 +484,9 @@ func invokeSourceControlPull(ctx context.Context, resolved *config.Resolved, sec
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
+		return nil, err
+	}
+	if err := client.refuseExcludedPull(ctx, op); err != nil {
 		return nil, err
 	}
 	var files, conflicts []sourceControlFileJSON
@@ -531,6 +542,9 @@ func invokeSourceControlPush(ctx context.Context, resolved *config.Resolved, sec
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
+		return nil, err
+	}
+	if err := client.refuseExcludedPush(ctx, op, input.Files); err != nil {
 		return nil, err
 	}
 	var pushed struct {

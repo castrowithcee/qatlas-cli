@@ -234,30 +234,38 @@ func Register(reg *capability.Registry) error {
 			Label:    "shelves, books, chapters, and pages",
 			Multiple: true,
 			Description: "optional shelves, books, chapters, or pages this connection is bound to, at most 100; several " +
-				"targets reach their union; without a target the whole token scope is reachable",
+				"targets reach their union; without a target the whole token scope is reachable. A shelf, book, chapter, or " +
+				"page can be excluded: it takes itself and what lies below it out of that reach, and an exclusion wins " +
+				"over every target. Excluded content leaves lists, searches, and exports, and reads, changes, deletes, and " +
+				"imports into it are refused, as are deletes and permission changes above it; no tool is blocked, and " +
+				"tag catalogs, the audit log's entries without an object, users, and roles stay as they are",
 			Kinds: []config.TargetKind{{
 				Name: "shelf",
 				Description: "a shelf: the books on it when a tool is called, each as if it were bound, and the shelf " +
 					"itself to read; each call reads the shelf once",
-				Forms: []string{"shelf/SHELF_ID"},
+				Forms:      []string{"shelf/SHELF_ID"},
+				Excludable: true,
 			}, {
 				Name:        "book",
 				Description: "a book whose chapters and pages this connection may list, read, create, update, and delete",
 				Forms:       []string{"book/BOOK_ID"},
 				Parents:     []string{"shelf"},
 				Top:         true,
+				Excludable:  true,
 			}, {
 				Name: "chapter",
 				Description: "a chapter whose pages this connection may list, read, create, update, and delete, with " +
 					"their attachments, images, and comments; the chapter itself is only read",
-				Forms:   []string{"chapter/CHAPTER_ID"},
-				Parents: []string{"book"},
+				Forms:      []string{"chapter/CHAPTER_ID"},
+				Parents:    []string{"book"},
+				Excludable: true,
 			}, {
 				Name: "page",
 				Description: "a single page this connection may read, update, and delete, with its attachments, " +
 					"images, and comments",
-				Forms:   []string{"page/PAGE_ID"},
-				Parents: []string{"book", "chapter"},
+				Forms:      []string{"page/PAGE_ID"},
+				Parents:    []string{"book", "chapter"},
+				Excludable: true,
 			}},
 			Reaches:     reaches,
 			Validate:    validateTarget,
@@ -595,6 +603,10 @@ type Client struct {
 	shelvesRead   map[int64]bool
 	exShelfBooks  map[int64]bool
 	exShelvesRead map[int64]bool
+	// pagesIn holds, per page a listed row points to, whether the connection reaches it in this call.
+	pagesIn map[int64]bool
+	// booksLive holds, per book read to tell a live book from a deleted one, whether it answered.
+	booksLive map[int64]bool
 	// included holds the pages included by a page of this call, includeReads and includedBytes what was read
 	// for them.
 	included      map[int64]*includedPage
@@ -781,6 +793,9 @@ type scanSpec[T any] struct {
 	id                     func(T) int64
 	keep                   func(T) bool
 	row                    func(T) output.Row
+	// prepare, when set, runs on each received record before its rows are checked, for evidence keep needs
+	// but cannot read itself.
+	prepare func(context.Context, []T) error
 }
 
 // scanList pages through a list endpoint in records of at most 500. In filtered mode every row is checked
@@ -824,6 +839,12 @@ func scanList[T any](ctx context.Context, c *Client, spec scanSpec[T]) ([]output
 		}
 		if err := c.get(ctx, spec.op, spec.path, query, &page, spec.arguments, provider.ClassPermission); err != nil {
 			return nil, err
+		}
+
+		if spec.prepare != nil {
+			if err := spec.prepare(ctx, page.Data); err != nil {
+				return nil, err
+			}
 		}
 
 		added := 0

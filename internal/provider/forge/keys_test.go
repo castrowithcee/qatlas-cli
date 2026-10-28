@@ -596,3 +596,42 @@ func TestKeyTokenAndApplicationToolsSendOnlyTheListedRequests(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountSettingsStayReachableWhenAnExclusionTakesTheAccountOut(t *testing.T) {
+	for _, p := range products {
+		// The account behind the token is the excluded owner "other"; its keys, tokens, and webhooks are settings of
+		// the account and are neither proven against the exclusions nor refused by them.
+		e := newAccessEnvironment(t, p, accountServer("Other", func(c call) *http.Response {
+			if c.method == http.MethodGet && strings.Contains(c.path, "/hooks") {
+				return jsonResponse(200, `[`+hookFixture(3, "")+`]`)
+			}
+			if c.method == http.MethodGet {
+				return jsonResponse(200, `[`+publicKeyFixture(5)+`]`)
+			}
+			return jsonResponse(204, ``)
+		}))
+		for _, c := range []struct {
+			tl        *tool
+			arguments string
+			want      string
+		}{
+			{userKeysList, `{}`, "GET /api/v1/user/keys"},
+			{userKeysDelete, `{"id":5}`, "DELETE /api/v1/user/keys/5"},
+			{userGPGKeysDelete, `{"id":5}`, "DELETE /api/v1/user/gpg_keys/5"},
+			{webhooksList, `{"account":true}`, "GET /api/v1/user/hooks"},
+			{webhooksList, `{"organization":"other"}`, "GET /api/v1/orgs/other/hooks"},
+		} {
+			*e.calls = nil
+			if _, err := e.invoke(t, c.tl, "access-exclude", c.arguments); err != nil ||
+				!reflect.DeepEqual(methods(e), []string{c.want}) {
+				t.Errorf("%s %s.%s: %v, %v", p.id, c.tl.group, c.tl.action, err, methods(e))
+			}
+		}
+		// A repository inside an exclusion stays refused before any request.
+		*e.calls = nil
+		if _, err := e.invoke(t, webhooksList, "access-exclude", `{"repository":"acme/gadget"}`); !isInvalidRequest(err) ||
+			len(*e.calls) != 0 {
+			t.Errorf("%s: webhooks of an excluded repository: %v", p.id, err)
+		}
+	}
+}

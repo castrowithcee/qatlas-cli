@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Instance administration
@@ -47,6 +47,12 @@ rules; see [Quota administration](../forgejo/README.md#quota-administration).
 | `admin-webhooks.delete` | delete, listed only | both |
 
 ## Binding
+
+[Exclusions](README.md#exclusions) bind no connection, so a connection with exclusions only still reaches these
+tools. The lists of packages, workflow runs and jobs, runner jobs, and unadopted repositories drop rows inside an
+exclusion, and `admin-unadopted.adopt` and `.delete` refuse an excluded name. `admin-users.delete` and `.rename`
+refuse an excluded account or one holding an exclusion; `admin-orgs.create` and `admin-repositories.create` refuse
+an excluded name or owner.
 
 Every tool is instance-wide and therefore reachable only by a connection without targets. A connection with
 targets refuses the call as `invalid-request` before the credential is resolved and before any request; the

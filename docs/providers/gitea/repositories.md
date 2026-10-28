@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Repository lifecycle
@@ -27,6 +27,8 @@ described on the [provider page](README.md). [Forgejo](../forgejo/README.md) nam
   the token. A connection with targets then needs a `users/NAME` target, and the account is proven before the change
   by `GET /user`, like the user level of the project and Actions administration tools; another account is refused.
   A connection without targets needs no proof.
+- Exclusions ([Targets](README.md#exclusions)) refuse an excluded source or a new owner or name that is excluded for
+  transfer, fork, generate, create, and rename; a fork hides an excluded `parent`.
 - `repositories.generate` also needs the template inside the targets. `repositories.list-forks` drops rows outside
   the targets.
 

@@ -2,6 +2,7 @@ package bookstack
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -162,5 +163,124 @@ func TestRecycleBinMutationsReportUncertaintyWithoutRetry(t *testing.T) {
 				t.Errorf("requests = %d, want 2 (no retry)", n)
 			}
 		})
+	}
+}
+
+// binAreaServer adds a recycle bin to the area server. Entry 1 is a page of the chapter 1001, 2 a loose page of
+// book 701, 3 a page of book 901, 4 the deleted book 801, 5 the deleted chapter 3001 of book 701, 6 the deleted
+// shelf 302. Book 801 and chapter 3001 no longer answer a read; chapter 2001 and page 555 still do.
+func binAreaServer(t *testing.T) *areaServer {
+	t.Helper()
+	s := newAreaServer(t)
+	inner := s.Config.Handler
+	page := func(id, book, chapter int, parent map[string]any) map[string]any {
+		return map[string]any{"deletable_type": "page", "deletable_id": id, "deletable": map[string]any{
+			"name": "N", "book_id": book, "chapter_id": chapter, "parent": parent}}
+	}
+	entries := []map[string]any{
+		page(111, 701, 1001, map[string]any{"id": 1001, "type": "chapter", "name": "P"}),
+		page(333, 701, 0, map[string]any{"id": 701, "type": "book", "name": "P"}),
+		page(444, 901, 0, map[string]any{"id": 901, "type": "book", "name": "P"}),
+		{"deletable_type": "book", "deletable_id": 801, "deletable": map[string]any{"name": "B"}},
+		{"deletable_type": "chapter", "deletable_id": 3001, "deletable": map[string]any{"name": "C", "book_id": 701}},
+		{"deletable_type": "bookshelf", "deletable_id": 302, "deletable": map[string]any{"name": "S"}},
+	}
+	for i, e := range entries {
+		e["id"], e["deleted_by"], e["created_at"] = i+1, 2, "2026-10-01T10:00:00Z"
+	}
+	s.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/recycle-bin":
+			s.rec.record(r)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": entries, "total": len(entries)})
+		case strings.HasPrefix(r.URL.Path, "/api/recycle-bin/"):
+			s.rec.record(r)
+			_, _ = w.Write([]byte(`{"restore_count":1,"delete_count":1}`))
+		default:
+			inner.ServeHTTP(w, r)
+		}
+	})
+	return s
+}
+
+func TestRecycleBinHonorsExclusions(t *testing.T) {
+	s := binAreaServer(t)
+	call := func(tool, args string, excludes ...string) (any, error) {
+		t.Helper()
+		s.requests()
+		return s.callExcluding(t, tool, args, nil, excludes)
+	}
+	mutated := func() bool {
+		for _, r := range s.requests() {
+			if strings.HasPrefix(r, "PUT ") || strings.HasPrefix(r, "DELETE ") {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Entries of an excluded chapter, book, page, or shelf leave the list, whatever names them. With an excluded
+	// shelf the deleted book 4 goes too: it no longer shows on the shelf and cannot be proven off it.
+	got, err := call(recycleBinList.ID, `{}`, "chapter/1001", "book/901", "shelf/302")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{2, 5}; !reflect.DeepEqual(resultIDs(t, got), want) {
+		t.Errorf("ids = %v, want %v", resultIDs(t, got), want)
+	}
+	got, err = call(recycleBinList.ID, `{"limit":2}`, "page/333", "shelf/301")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{3, 6}; !reflect.DeepEqual(resultIDs(t, got), want) {
+		t.Errorf("ids = %v, want %v", resultIDs(t, got), want)
+	}
+
+	for _, tool := range []string{recycleBinRestore.ID, recycleBinDestroy.ID} {
+		for id, exclude := range map[string]string{"1": "chapter/1001", "3": "book/901", "6": "shelf/302", "2": "page/333"} {
+			_, err := call(tool, `{"deletion_id":`+id+`}`, exclude)
+			refused(t, tool+" "+id, err)
+			noExclusionWord(t, tool+" "+id, err)
+			if mutated() {
+				t.Errorf("%s %s: a change was sent", tool, id)
+			}
+		}
+		// An entry that belongs to nothing excluded still goes through.
+		if _, err := call(tool, `{"deletion_id":2}`, "chapter/1001"); err != nil || !mutated() {
+			t.Errorf("%s: err = %v", tool, err)
+		}
+	}
+
+	// The deleted book may hold the excluded chapter or page, unless that still answers elsewhere: chapter 2001
+	// lies in book 901 and page 555 in book 701, so neither is below book 801; chapter 8001 does not answer.
+	if _, err := call(recycleBinDestroy.ID, `{"deletion_id":4}`, "chapter/2001", "page/555"); err != nil || !mutated() {
+		t.Errorf("destroy of a book whose excluded objects live elsewhere: err = %v", err)
+	}
+	for _, exclude := range []string{"chapter/8001", "page/9999"} {
+		_, err := call(recycleBinDestroy.ID, `{"deletion_id":4}`, exclude)
+		refused(t, "destroy of a book with "+exclude, err)
+		if mutated() {
+			t.Errorf("%s: a destroy was sent", exclude)
+		}
+	}
+	// A deleted chapter holds pages only; page 555 sits in chapter 1001, not in the deleted chapter 3001.
+	if _, err := call(recycleBinDestroy.ID, `{"deletion_id":5}`, "page/555", "chapter/8001"); err != nil || !mutated() {
+		t.Errorf("destroy of a chapter: err = %v", err)
+	}
+	_, err = call(recycleBinDestroy.ID, `{"deletion_id":5}`, "page/9999")
+	refused(t, "destroy of a chapter with an unanswered page", err)
+
+	// An entry the list does not show cannot be proven and is refused.
+	_, err = call(recycleBinDestroy.ID, `{"deletion_id":77}`, "page/555")
+	refused(t, "unknown entry", err)
+	if mutated() {
+		t.Error("a destroy was sent for an unknown entry")
+	}
+	// Without exclusions nothing is read first.
+	if _, err := call(recycleBinDestroy.ID, `{"deletion_id":4}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.requests(); !reflect.DeepEqual(got, []string{"DELETE /api/recycle-bin/4"}) {
+		t.Errorf("requests = %v", got)
 	}
 }

@@ -18,6 +18,11 @@ listings drop unbound and deleted boards. A stack, card, label, sharing entry, o
 bound board shows it. Provider text is untrusted, capped, and marked `truncated` when cut. Only `deck_file` attachments
 are downloaded or deleted; uploads take a `local_path` file up to 64 MiB.
 
+An excluded board is handled like an unbound one in every tool, with `07` naming board 7, and is left out of the board
+list, also with `details`; see [Exclusions](README.md#exclusions). The entity tag and the `304` of the board list
+cover every board of the identity, so a connection with a Deck exclusion lists unconditionally, applies
+`modified_since` to the boards it keeps, and reports no `etag`.
+
 `modified_since` and `etag` of the board and stack lists become `If-Modified-Since` and `If-None-Match`; Deck's
 answer `304` is reported as an empty list with `unchanged`, and every board of any other answer, also with `details`,
 is checked against the targets again. Deleted boards, stacks, and cards are never listed, so their deletion time is

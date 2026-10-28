@@ -75,9 +75,10 @@ func parseTarget(raw string) (target, error) {
 	return target{}, errors.New("a Forgejo or Gitea target must be users/NAME, orgs/NAME, or repos/OWNER/REPO")
 }
 
-// allowlist is the targets of one connection, plus the targets it excludes. Without targets, it allows whatever
+// allowlist is the targets of one connection, plus the entries it excludes. Without targets, it allows whatever
 // the token reaches; otherwise the owners it names with everything they own, and the repositories it names.
-// Names compare without case.
+// An exclusion takes an owner with everything it owns, or one repository, out of that; it wins over every
+// target. Names compare without case.
 type allowlist struct {
 	targets  []target
 	excludes []target
@@ -90,15 +91,19 @@ func (a allowlist) bound() bool { return len(a.targets) > 0 }
 func (a allowlist) open() bool { return len(a.targets) == 0 && len(a.excludes) == 0 }
 
 func allowlistOf(resolved *config.Resolved) (allowlist, error) {
-	list, err := parseAllowlist(provider.TargetsOf(resolved))
+	list, err := parseAllowlist(provider.TargetsOf(resolved), provider.ExcludesOf(resolved))
 	if err != nil {
 		return allowlist{}, provider.Fail("open", err.Error())
 	}
 	return list, nil
 }
 
-func parseAllowlist(values []string) (allowlist, error) {
-	if len(values) > maxTargets {
+// targetKey names an entry for the comparison of duplicates: users/NAME and orgs/NAME name the same owner,
+// since users and organizations share their names.
+func targetKey(t target) string { return strings.ToLower(t.kind + "/" + t.owner + "/" + t.repo) }
+
+func parseAllowlist(values, excludes []string) (allowlist, error) {
+	if len(values) > maxTargets || len(excludes) > maxTargets {
 		return allowlist{}, errors.New("the Forgejo or Gitea target list names too many targets")
 	}
 	list := allowlist{targets: make([]target, 0, len(values))}
@@ -108,20 +113,62 @@ func parseAllowlist(values []string) (allowlist, error) {
 		if err != nil {
 			return allowlist{}, err
 		}
-		// users/NAME and orgs/NAME name the same owner, since users and organizations share their names.
-		key := strings.ToLower(parsed.kind + "/" + parsed.owner + "/" + parsed.repo)
+		key := targetKey(parsed)
 		if seen[key] {
 			return allowlist{}, errors.New("the Forgejo or Gitea target list names a target more than once")
 		}
 		seen[key] = true
 		list.targets = append(list.targets, parsed)
 	}
+	named := map[string]bool{}
+	for _, value := range excludes {
+		parsed, err := parseTarget(value)
+		if err != nil {
+			return allowlist{}, errors.New("a Forgejo or Gitea exclusion must be users/NAME, orgs/NAME, or " +
+				"repos/OWNER/REPO, without a wildcard")
+		}
+		key := targetKey(parsed)
+		if named[key] || seen[key] {
+			return allowlist{}, errors.New("a Forgejo or Gitea exclusion must be named once and may not be a target")
+		}
+		named[key] = true
+		list.excludes = append(list.excludes, parsed)
+	}
 	return list, nil
+}
+
+// excluded reports whether an exclusion takes the repository OWNER/REPO out: its owner or the repository itself.
+func (a allowlist) excluded(owner, repo string) bool {
+	for _, entry := range a.excludes {
+		if strings.EqualFold(entry.owner, owner) && (entry.kind == kindOwner || strings.EqualFold(entry.repo, repo)) {
+			return true
+		}
+	}
+	return false
+}
+
+// excludedOwner reports whether an exclusion takes the owner out as a whole.
+func (a allowlist) excludedOwner(name string) bool {
+	for _, entry := range a.excludes {
+		if entry.kind == kindOwner && strings.EqualFold(entry.owner, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// keepsRepositoryRow reports whether a row of an instance-wide list may be shown by the canonical OWNER/REPO it
+// names: without exclusions every row; otherwise only one whose repository is known and not excluded.
+func (a allowlist) keepsRepositoryRow(fullName string, named bool) bool {
+	return len(a.excludes) == 0 || (named && !a.excludedFullName(fullName))
 }
 
 // allowsRepository reports whether the list admits the repository OWNER/REPO.
 func (a allowlist) allowsRepository(owner, repo string) bool {
-	if a.open() {
+	if a.excluded(owner, repo) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -135,9 +182,13 @@ func (a allowlist) allowsRepository(owner, repo string) bool {
 	return false
 }
 
-// allowsOwner reports whether the list admits an owner as a whole.
+// allowsOwner reports whether the list admits an owner as a whole. An owner with an excluded repository is
+// still admitted; its rows are filtered one by one.
 func (a allowlist) allowsOwner(name string) bool {
-	if a.open() {
+	if a.excludedOwner(name) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -153,6 +204,9 @@ func (a allowlist) allowsOwner(name string) bool {
 func (a allowlist) listsOwner(name string) bool {
 	if a.allowsOwner(name) {
 		return true
+	}
+	if a.excludedOwner(name) {
+		return false
 	}
 	for _, entry := range a.targets {
 		if entry.kind == kindRepository && strings.EqualFold(entry.owner, name) {
@@ -192,7 +246,7 @@ func (a allowlist) allowsFullName(fullName string) bool {
 	if !ok || owner == "" || repo == "" {
 		return false
 	}
-	return a.open() || a.allowsRepository(owner, repo)
+	return a.allowsRepository(owner, repo)
 }
 
 // parseOwnerArgument reads users/NAME or orgs/NAME.
@@ -209,6 +263,9 @@ func parseOwnerArgument(value string) (target, error) {
 func (a allowlist) chooseRepository(value string) (target, error) {
 	if value == "" {
 		if only, ok := a.onlyRepository(); ok {
+			if a.excluded(only.owner, only.repo) {
+				return target{}, unavailable("repository")
+			}
 			return only, nil
 		}
 		return target{}, invalidArgument("repository is required because the connection's targets do not name " +
@@ -217,6 +274,9 @@ func (a allowlist) chooseRepository(value string) (target, error) {
 	owner, repo, ok := strings.Cut(value, "/")
 	if !ok || !validName(owner) || !validRepoName(repo) {
 		return target{}, invalidArgument("repository must be OWNER/REPO")
+	}
+	if a.excluded(owner, repo) {
+		return target{}, unavailable("repository")
 	}
 	if !a.allowsRepository(owner, repo) {
 		return target{}, outsideTargets("repository")
@@ -227,6 +287,40 @@ func (a allowlist) chooseRepository(value string) (target, error) {
 func outsideTargets(what string) error {
 	return invalidArgument(what + " is outside the targets of this connection; pass one they allow, or add it " +
 		"to the connection's targets")
+}
+
+// unavailable refuses an argument that an exclusion takes out. It names neither the object nor the exclusion,
+// and reads like a refusal for a repository the token cannot see.
+func unavailable(what string) error {
+	return invalidArgument(what + " is not available on this connection; pass another one")
+}
+
+// outsideOwner is the refusal of an owner argument the list does not admit: one that an exclusion takes out is
+// not available, any other lies outside the targets.
+func (a allowlist) outsideOwner(what, name string) error {
+	if a.excludedOwner(name) {
+		return unavailable(what)
+	}
+	return outsideTargets(what)
+}
+
+// outsideAnswer is the refusal of an answer object (run, job, artifact) that names a repository the connection
+// does not admit: an excluded one reads as not found, any other is an invalid response.
+func (a allowlist) outsideAnswer(op string, p *product, fullName, object string) error {
+	if owner, repo, ok := strings.Cut(fullName, "/"); ok && a.excluded(owner, repo) {
+		return notShown(op, p)
+	}
+	return provider.InvalidResponse(op, p.name+" returned "+object+" of a repository outside the targets")
+}
+
+// outside is the refusal of an answer whose canonical repository the connection does not admit: one that an
+// exclusion takes out reads as not found, as for a token without the right to read it; any other lies outside
+// the targets.
+func (a allowlist) outside(op string, p *product, fullName, what string) error {
+	if owner, repo, ok := strings.Cut(fullName, "/"); ok && a.excluded(owner, repo) {
+		return notShown(op, p)
+	}
+	return outsideTargets(what)
 }
 
 // accountWide refuses a read of the account behind the token as a whole on a connection whose targets name a
@@ -243,7 +337,7 @@ func (a allowlist) accountWide() error {
 // reaches hides the account read from a connection whose targets name a repository.
 func reaches(p *product) func(string, []string) (bool, []string) {
 	return func(tool string, targets []string) (bool, []string) {
-		list, err := parseAllowlist(targets)
+		list, err := parseAllowlist(targets, nil)
 		if err != nil || tool != p.toolID(accountsMe) || !list.namesRepository() {
 			return true, nil
 		}

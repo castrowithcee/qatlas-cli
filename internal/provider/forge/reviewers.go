@@ -26,7 +26,7 @@ func reviewersPath(repo target) string {
 // teamsAllowed reports whether teams may be named: they belong to the organization that owns the repository,
 // which the targets must then cover as a whole (or not restrict at all).
 func (a allowlist) teamsAllowed(owner string) bool {
-	if a.open() {
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {

@@ -95,7 +95,7 @@ func readAdmin(p *product, allowed allowlist, raw json.RawMessage, named bool) (
 	if err := decodeArguments(raw, &a); err != nil {
 		return a, actionsLevel{}, err
 	}
-	level, err := actionsLevelOf(allowed, a.Repository, a.Owner)
+	level, err := actionsLevelOf(allowed, a.Repository, a.Owner, true)
 	if err != nil {
 		return a, actionsLevel{}, err
 	}

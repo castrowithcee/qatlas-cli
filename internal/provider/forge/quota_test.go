@@ -342,3 +342,70 @@ func TestQuotaToolsAreOnlyAdvertisedByForgejoAndRead(t *testing.T) {
 		}
 	}
 }
+
+func TestExclusionsKeepExcludedRowsAndScopesOutOfTheQuota(t *testing.T) {
+	// Rows of excluded repositories are dropped, and a row that names none is, since the connection restricts.
+	for _, c := range []struct {
+		tl         *tool
+		key        string
+		connection string
+		want       []string
+	}{
+		{quotaListArtifacts, "artifacts", "exclude", []string{"a1"}},
+		{quotaListArtifacts, "artifacts", "owner-exclude", []string{"a1"}},
+		{quotaListAttachments, "attachments", "exclude", []string{"f1"}},
+		{quotaListPackages, "packages", "exclude", []string{"p1"}},
+	} {
+		state := upQuota()
+		state.login = "acme"
+		e := newEnvironment(t, forgejo, quotaServer(state))
+		args := `{"owner":"orgs/acme"}`
+		if c.connection == "owner-exclude" {
+			args = `{}`
+		}
+		result, err := e.invoke(t, c.tl, c.connection, args)
+		if err != nil {
+			t.Fatalf("%s %s on %s: %v", c.tl.action, args, c.connection, err)
+		}
+		var got []string
+		for _, row := range rowsOf(t, result, c.key) {
+			got = append(got, row["name"].(string))
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s on %s = %v, want %v", c.tl.action, c.connection, got, c.want)
+		}
+	}
+	// The quota of an account or organization that an exclusion takes out stays readable, since it is a setting
+	// of the owner; exclusions alone prove nothing about the account.
+	e := newEnvironment(t, forgejo, quotaServer(upQuota()))
+	if _, err := e.invoke(t, quotaGet, "exclude", `{}`); err != nil ||
+		!slices.Equal(methods(e), []string{"GET /api/v1/user/quota"}) {
+		t.Errorf("account: %v, %v", err, methods(e))
+	}
+	excluded := upQuota()
+	excluded.login = "Other"
+	e = newEnvironment(t, forgejo, quotaServer(excluded))
+	if _, err := e.invoke(t, quotaGet, "exclude", `{}`); err != nil {
+		t.Errorf("quota of an excluded account: %v", err)
+	}
+	for _, tl := range []*tool{quotaGet, quotaListArtifacts, quotaListAttachments, quotaCheck} {
+		e := newEnvironment(t, forgejo, quotaServer(upQuota()))
+		if _, err := e.invoke(t, tl, "exclude", argumentsFor(tl, `{"owner":"orgs/OTHER","subject":"size:all"}`)); err != nil {
+			t.Errorf("%s of an excluded organization: %v", tl.action, err)
+		}
+	}
+	// What an owner holds, its packages, is out with the owner; the refusal comes before any request for an
+	// organization and after the proof for the account.
+	e = newEnvironment(t, forgejo, quotaServer(upQuota()))
+	_, err := e.invoke(t, quotaListPackages, "exclude", `{"owner":"orgs/OTHER"}`)
+	refused(t, e, "list-packages", err)
+	e = newEnvironment(t, forgejo, quotaServer(excluded))
+	if _, err := e.invoke(t, quotaListPackages, "exclude", `{}`); !isInvalidRequest(err) || len(*e.calls) != 1 ||
+		strings.Contains(err.Error(), "Other") {
+		t.Errorf("packages of an excluded account: %v, %v", err, methods(e))
+	}
+	e = newEnvironment(t, forgejo, quotaServer(upQuota()))
+	if _, err := e.invoke(t, quotaGet, "exclude", `{"owner":"orgs/acme"}`); err != nil {
+		t.Errorf("organization that no exclusion names: %v", err)
+	}
+}

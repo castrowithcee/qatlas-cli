@@ -63,12 +63,16 @@ func invokeTalkFilesShare(ctx context.Context, resolved *config.Resolved, secret
 	if _, err := requireFolder(resolved); err != nil {
 		return nil, err
 	}
-	if err := requireTalkToken(resolved, input.Token); err != nil {
+	if err := requireTalkToken(resolved, op, messageTalkNoRoom, input.Token); err != nil {
 		return nil, err
 	}
 	rel, err := splitRelative(input.Path)
 	if err != nil || len(rel) == 0 {
 		return nil, providerError(op, "the path must name a file or folder below the root folder of this connection")
+	}
+	// The path side follows the Files tools: below an excluded folder it is missing, above one it is refused.
+	if err := preflightRel(resolved, op, rel, scope.gateSource); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -80,14 +84,13 @@ func invokeTalkFilesShare(ctx context.Context, resolved *config.Resolved, secret
 // shareInRoom reads the conversation once, refuses anything but a private ordinary one, and sends exactly
 // one POST.
 func (c *Client) shareInRoom(ctx context.Context, op, token string, rel []string) (any, error) {
-	data, err := c.ocsGet(ctx, op, ocsRequest{app: ocsTalkRooms, suffix: []string{token},
-		query: url.Values{"noStatusUpdate": {"1"}}})
+	room, err := c.readRoomState(ctx, op, token, messageTalkNoRoom)
 	if err != nil {
-		return nil, talkNotFound(op, err, messageTalkNoRoom)
+		return nil, err
 	}
-	var room rawRoomState
-	if err := json.Unmarshal(data, &room); err != nil || room.Token != token {
-		return nil, invalidResponse(op, "the Nextcloud conversation could not be read")
+	// Excluded is checked before the type, so that no refusal tells it from a missing conversation.
+	if err := c.roomGate(ctx, op, messageTalkNoRoom, room.ObjectType, string(room.ObjectID)); err != nil {
+		return nil, err
 	}
 	if kind, _ := room.Type.Int64(); kind != roomTypeOneToOne && kind != roomTypeGroup || room.ObjectType != "" {
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageTalkFilesPublic}
