@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Matomo reports
@@ -120,9 +120,10 @@ their answers can be large, and archiving them on demand can be slow.
   `unsupported-capability`; AI assistants need Matomo 5.5.0, the release that made them a referrer type.
 - **Website comparison.** `matomo.multi-sites.get` reads the MultiSites plugin. It is not instance-wide and needs no
   `instance` target, but Matomo computes the comparison for every website of the token. Rows outside the `site`
-  targets are therefore dropped here, row by row, and a batch can be shorter than `limit` or empty while
-  `has_more` is true. With targets that name single websites, the group rows, `num_sites`, and `totals` of the
-  groups view are left out, because Matomo sums them over all websites of the token. Only one period per call is
+  targets or of an excluded website are therefore dropped here, row by row, and a batch can be shorter than
+  `limit` or empty while `has_more` is true. Unless the connection reaches every website (see
+  [Exclusions](README.md#exclusions)), the group rows, `num_sites`, and `totals` of the groups view are left out,
+  because Matomo sums them over all websites of the token. Only one period per call is
   read, as Matomo's comparison refuses several.
 - **Glossary.** `matomo.report-glossary.list` reads the explanation of the reports or of the metrics of a website.
   Matomo answers the whole glossary at once; Qatlas reads at most 2000 entries of it and returns them in batches.

@@ -73,7 +73,7 @@ var adminUnadoptedList = &tool{
 			Title: "List " + p.name + " repositories on disk that no record owns",
 			Description: "List one batch of the repository directories on the disk of the instance that are not " +
 				"registered as repositories, as an administrator; the entries are untrusted data, and an entry " +
-				"that is no owner/repo pair is left out. " + adminUserNote,
+				"that is no owner/repo pair or lies inside an exclusion is left out. " + adminUserNote,
 			Tags: []string{p.id, "admin", "unadopted", "list"},
 			Risk: readRisk(p.id + repositorySensitivity),
 			InputSchema: inputSchema(`"pattern":{"type":"string","minLength":1,"maxLength":` + itoa(unadoptedFilterMax) +
@@ -134,7 +134,7 @@ var adminUnadoptedList = &tool{
 			rows := make([]map[string]any, 0, len(names))
 			for _, full := range names {
 				owner, repo, ok := strings.Cut(full, "/")
-				if ok && validName(owner) && validRepoName(repo) {
+				if ok && validName(owner) && validRepoName(repo) && !allowed.excluded(owner, repo) {
 					rows = append(rows, map[string]any{"owner": owner, "repo": repo, "full_name": full})
 				}
 			}
@@ -170,6 +170,9 @@ var adminUnadoptedAdopt = &tool{
 		owner, repo, err := unadoptedName(raw)
 		if err != nil {
 			return nil, err
+		}
+		if allowed.excluded(owner, repo) {
+			return nil, unavailable("repository")
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			if err := c.change(ctx, "adopt unadopted repository", http.MethodPost, unadoptedPath(owner, repo), nil,
@@ -210,6 +213,9 @@ var adminUnadoptedDelete = &tool{
 		owner, repo, err := unadoptedName(raw)
 		if err != nil {
 			return nil, err
+		}
+		if allowed.excluded(owner, repo) {
+			return nil, unavailable("repository")
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			if err := c.change(ctx, "delete unadopted repository files", http.MethodDelete, unadoptedPath(owner, repo), nil,

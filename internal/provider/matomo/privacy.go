@@ -288,7 +288,7 @@ func invokeDataSubjectsExport(ctx context.Context, resolved *config.Resolved, se
 	if limit > maxExportBatch {
 		return nil, invalidArgument("limit must be between 1 and " + strconv.Itoa(maxExportBatch))
 	}
-	binding := provider.CursorBinding(dataSubjectsExport.ID, bound.allSites, sortedSites(bound), visits)
+	binding := provider.CursorBinding(dataSubjectsExport.ID, bound.binding(), visits)
 	paging, err := startPage(binding, limit, args.Cursor)
 	if err != nil {
 		return nil, err

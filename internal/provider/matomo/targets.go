@@ -23,32 +23,71 @@ const (
 
 const targetForm = "a Matomo target must be site, site/ID with a positive integer, or instance"
 
-const outsideTargets = "idSite is outside the targets of this connection"
+const excludeForm = "a Matomo exclusion must be site/ID with a positive integer, named once and not equal to a target"
+
+const outsideTargets = "idSite is not available to this connection"
 
 // scope is the boundary of one connection. Without targets every website of the token is reachable and no
 // instance-wide tool. Otherwise it is the union of the listed targets: all websites (site), single websites
-// (site/ID), and the instance itself.
+// (site/ID), and the instance itself. An exclusion site/ID takes one website out of what the targets reach: the
+// website behaves like one the user holds no view right on.
+//
+// Rules every module follows:
+//  1. Every website argument goes through selectSite, every row that carries an idSite through allows.
+//  2. Code outside this file never reads allSites. A sum that is not filtered by allows needs the predicate
+//     everySite (all websites, none excluded); a test enforces this.
+//  3. A server window is cut on the server rows first and filtered afterwards; the cursor follows the server rows.
+//  4. A sum over several websites (totals, a website count, group rows) is dropped unless everySite holds. An
+//     instance sum that cannot be attributed to websites stays and says so in the tool description.
+//  5. Objects of all websites (idSite 0) are readable; writing, deleting and marking them needs everySite.
 type scope struct {
 	allSites bool
 	sites    []int
 	instance bool
+	// excluded are the websites taken out of the targets, never targets themselves.
+	excluded []int
 }
+
+// wholeToken is the scope of a call that is no connection call: every website the token can view.
+func wholeToken() scope { return scope{allSites: true} }
 
 // reachesSites reports whether any website can be reached at all.
 func (s scope) reachesSites() bool { return s.allSites || len(s.sites) > 0 }
 
-// allows reports whether the website is inside the scope. A general site binding allows every ID; Matomo
-// then proves that the token may view it.
-func (s scope) allows(id int) bool { return s.allSites || slices.Contains(s.sites, id) }
+// allows reports whether the website is inside the scope. A general site binding allows every ID but the
+// excluded ones; Matomo then proves that the token may view it.
+func (s scope) allows(id int) bool {
+	return !slices.Contains(s.excluded, id) && (s.allSites || slices.Contains(s.sites, id))
+}
+
+// everySite reports whether every website of the token is inside the scope: the general site binding without
+// any exclusion.
+func (s scope) everySite() bool { return s.allSites && len(s.excluded) == 0 }
+
+// singles reports whether the targets name single websites, so a list of the token's websites is filtered by
+// them.
+func (s scope) singles() bool { return !s.allSites }
+
+// binding is the part of a cursor binding that ties it to the targets and exclusions of the connection.
+func (s scope) binding() []any {
+	return []any{s.allSites, sortedCopy(s.sites), sortedCopy(s.excluded)}
+}
+
+func sortedCopy(ids []int) []int {
+	out := slices.Clone(ids)
+	slices.Sort(out)
+	return out
+}
 
 // parseScope reads the configured targets: site alone or site/ID entries, never both, plus instance, none
-// named twice. No error quotes a configured value.
-func parseScope(values []string) (scope, error) {
-	if len(values) == 0 {
+// named twice. An exclusion is a site/ID, named once and never equal to a target. It does not rely on the core
+// validation, so an invalid exclusion fails closed here too. No error quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
+	if len(values) == 0 && len(excludes) == 0 {
 		return scope{allSites: true}, nil
 	}
-	if len(values) > maxTargets {
-		return scope{}, errors.New("a Matomo connection may be bound to at most 100 targets")
+	if len(values) > maxTargets || len(excludes) > maxTargets {
+		return scope{}, errors.New("a Matomo connection may be bound to at most 100 targets and exclusions")
 	}
 	var bound scope
 	var general, instance bool
@@ -81,6 +120,17 @@ func parseScope(values []string) (scope, error) {
 		return scope{}, errors.New("the Matomo targets cannot combine site with site/ID")
 	}
 	bound.allSites, bound.instance = general, instance
+	if len(values) == 0 {
+		bound.allSites = true
+	}
+	for _, raw := range excludes {
+		rest, ok := strings.CutPrefix(raw, sitePrefix)
+		id, valid := parseID(rest)
+		if !ok || !valid || slices.Contains(bound.excluded, id) || slices.Contains(bound.sites, id) {
+			return scope{}, errors.New(excludeForm)
+		}
+		bound.excluded = append(bound.excluded, id)
+	}
 	return bound, nil
 }
 
@@ -110,7 +160,7 @@ func validateSet(values []string) error {
 
 // boundScope reads the connection's scope before any secret is resolved.
 func boundScope(resolved *config.Resolved) (scope, error) {
-	bound, err := parseScope(provider.TargetsOf(resolved))
+	bound, err := parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved)...)
 	if err != nil {
 		return scope{}, provider.Fail("open", err.Error())
 	}

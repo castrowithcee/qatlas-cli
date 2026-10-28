@@ -577,7 +577,5 @@ func scopeBinding(resolved *config.Resolved) []any {
 	if err != nil {
 		return nil
 	}
-	sites := slices.Clone(bound.sites)
-	slices.Sort(sites)
-	return []any{bound.allSites, sites}
+	return bound.binding()
 }

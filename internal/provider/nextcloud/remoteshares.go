@@ -91,6 +91,20 @@ func mountpointOf(raw string) string {
 	return relative
 }
 
+// remoteShareHidden reports whether the mount point lies on or below an excluded folder, or above one. A
+// mount point that cannot be placed counts as hidden once a folder is excluded. Removing is the revocation
+// and stays possible for a mount above an exclusion, so a caller that removes passes revoke.
+func (c *Client) remoteShareHidden(raw rawRemoteShare, revoke bool) bool {
+	if !c.scope.folderExcludesAny() {
+		return false
+	}
+	segments, err := splitRelative(strings.Trim(raw.Mountpoint, "/"))
+	if err != nil || len(segments) == 0 || c.scope.folderExcluded(segments) {
+		return true
+	}
+	return !revoke && c.scope.folderHoldsExcluded(segments)
+}
+
 func normaliseRemote(raw rawRemoteShare) (RemoteShare, bool) {
 	id := string(raw.ID)
 	if checkShareIDFor("remote share", id) != nil {
@@ -129,7 +143,7 @@ func (c *Client) ListRemoteShares(ctx context.Context) (*RemoteSharesResult, err
 	result := &RemoteSharesResult{Shares: []RemoteShare{}}
 	for _, item := range items {
 		share, ok := normaliseRemote(item)
-		if !ok {
+		if !ok || c.remoteShareHidden(item, false) {
 			continue
 		}
 		if len(result.Shares) == maxShareEntries {
@@ -149,6 +163,10 @@ func remoteShareNotFound(op string) error {
 // GetRemoteShare reads one accepted federated share. A 404 is reported as not found without saying whether
 // the share or federation is missing.
 func (c *Client) GetRemoteShare(ctx context.Context, op, id string) (*RemoteShare, error) {
+	return c.readRemoteShare(ctx, op, id, false)
+}
+
+func (c *Client) readRemoteShare(ctx context.Context, op, id string, revoke bool) (*RemoteShare, error) {
 	data, err := c.ocsGet(ctx, op, remoteShareEndpoint(id))
 	if err != nil {
 		if isNotFound(err) {
@@ -168,6 +186,9 @@ func (c *Client) GetRemoteShare(ctx context.Context, op, id string) (*RemoteShar
 	if !ok || share.ID != id {
 		return nil, remoteShareNotFound(op)
 	}
+	if c.remoteShareHidden(single, revoke) {
+		return nil, withOriginalValue(remoteShareNotFound(op), &provider.Original{Status: http.StatusNotFound})
+	}
 	return &share, nil
 }
 
@@ -175,7 +196,7 @@ func (c *Client) GetRemoteShare(ctx context.Context, op, id string) (*RemoteShar
 // sent and not clearly refused is open and is never retried.
 func (c *Client) RemoveRemoteShare(ctx context.Context, id string) (any, error) {
 	const op = "remove remote share"
-	current, err := c.GetRemoteShare(ctx, op, id)
+	current, err := c.readRemoteShare(ctx, op, id, true)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +228,8 @@ var remoteShareIDArgument = capability.Argument{Name: "share_id", Required: true
 var remoteSharesList = capability.Descriptor{
 	ID: Provider + ".shares.remote-shares.list", Version: 1, Title: "List accepted Nextcloud federated shares",
 	Description: "List the federated shares the identity accepted from other servers; the other server is " +
-		"reported as a host only, and no token, password, or remote URL is reported. Needs an account target",
+		"reported as a host only, and no token, password, or remote URL is reported. Shares mounted in or above an " +
+		"excluded folder are left out. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "list", "ocs"},
 	Provider: Provider, Group: groupShares, Risk: sharesRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -225,7 +247,7 @@ var remoteSharesList = capability.Descriptor{
 var remoteSharesGet = capability.Descriptor{
 	ID: Provider + ".shares.remote-shares.get", Version: 1, Title: "Get an accepted Nextcloud federated share",
 	Description: "Read one accepted federated share of the identity by its ID; the other server is reported as " +
-		"a host only. Needs an account target",
+		"a host only. A share mounted in or above an excluded folder is reported as missing. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "get", "ocs"},
 	Provider: Provider, Group: groupShares, Risk: sharesRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"share_id":` + shareIDSchema + `},` +
@@ -240,7 +262,8 @@ var remoteSharesGet = capability.Descriptor{
 var remoteSharesRemove = capability.Descriptor{
 	ID: Provider + ".shares.remote-shares.remove", Version: 1, Title: "Remove an accepted Nextcloud federated share",
 	Description: "Remove exactly one accepted federated share from the identity, which unmounts it; the share " +
-		"on the other server stays. One read-only pre-check precedes exactly one request. Needs an account target",
+		"on the other server stays. One read-only pre-check precedes exactly one request; a share mounted in an " +
+		"excluded folder is reported as missing. Needs an account target",
 	Tags:     []string{"nextcloud", "shares", "sharing", "remoteshares", remoteShareTags, "remove", "delete", "ocs"},
 	Provider: Provider, Group: groupShares,
 	Risk: shareManageRisk(capability.EffectDelete, capability.IdempotencyIdempotent),

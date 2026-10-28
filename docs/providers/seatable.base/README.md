@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # SeaTable Base
@@ -49,22 +49,41 @@ Tools that change a table's structure (rename, delete, columns, options, create 
 table target or `*`; a connection with view targets only does not reach them. The operation log and creating or
 duplicating a table need `*`.
 
+### Exclusions
+
+`exclude` takes tables (`TABLE`, `id:TABLEID`) and views (`TABLE/VIEW`, `id:TABLEID/id:VIEWID`) out of what the
+targets reach; `*` plus `exclude` means the whole base except these. An exclusion wins over every target and
+the wildcard. A table exclusion removes the table with its views; a view exclusion removes only the view, and
+the rows stay reachable through the table. An excluded table or view behaves in every tool like one outside
+the allow-list: lists omit it, `views.get`, `views.update` and `views.delete` answer as for a view the table
+does not hold, and every other use is refused. No tool is withdrawn from the connection, and `*` with
+exclusions still allows the tools that need `*`; the [operation log](history.md) is then filtered.
+
+`*` is not valid in `exclude`, and an exclusion may not be spelled like a target. An exclusion by name must
+find its table or view in the base whenever a call reads the base metadata; otherwise the call fails without
+naming it, because a renamed table would no longer be excluded. An exclusion by identifier that finds nothing
+is valid and has no effect. Use the `id:` form so a rename cannot break it. The connection test fails when an
+exclusion by name finds nothing, or when an exclusion takes a target out again in the other spelling.
+
 ## Shared boundaries
 
 These rules hold for every tool; the area pages refer here.
 
 - Every tool that takes `table` accepts a name or `id:TABLEID` exactly as the connection allows it. A table
-  outside the allow-list, a selection narrowed to one view where the tool does not accept it, or a malformed
-  request is refused before the credential is read and before SeaTable is contacted. The refusal never names
-  the rejected table, row, or view. Where a tool must resolve the table, a view, a column, or a row first,
-  the token exchange and that one read are the only provider access that can precede a further refusal.
+  outside the allow-list, one that an exclusion names in the same spelling, a selection narrowed to one view
+  where the tool does not accept it, or a malformed request is refused before the credential is read and
+  before SeaTable is contacted. The refusal never names the rejected table, row, or view. Where a tool must
+  resolve the table, a view, a column, or a row first, the token exchange and that one read are the only
+  provider access that can precede a further refusal; an exclusion spelled in the other form (name against
+  `id:`) is decided there.
 - Link columns in row output follow the table boundary. A link entry into a table outside the connection
-  allow-list, or into a table that cannot be determined from the base metadata, is reduced to its `row_id`
-  and carries no `display_value`. A wildcard connection keeps the values. This applies to
+  allow-list or excluded, or into a table that cannot be determined from the base metadata, is reduced to its
+  `row_id` and carries no `display_value`. A wildcard connection without exclusions keeps the values. This applies to
   `seatable.base.rows.list`, `seatable.base.rows.get`, `seatable.base.rows.search` and
   `seatable.base.rows.activities`, whichever way the table is addressed. The value of a lookup, findmin or
   findmax column is removed from the row, and the column is named in `omitted_fields`, when its linked table
-  is outside the allow-list or cannot be determined; the table follows from the column's link column.
+  is outside the allow-list, excluded, or cannot be determined; the table follows from the column's link
+  column.
   Rollup, count and formula values are returned as the provider computes them: they cannot be assigned to a
   table and may reflect data of linked tables outside the allow-list. The base metadata is read once and
   reused. The area pages state their own forms of this rule.

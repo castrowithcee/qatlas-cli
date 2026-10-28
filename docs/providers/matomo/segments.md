@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Matomo saved segments
@@ -37,8 +37,9 @@ Reading and writing are separate rules.
   targets.
 - A segment for all websites (`enable_only_idsite` 0) can be read on every connection that reaches a website, as
   Matomo shows it for any website the token views. Changing it (add, update, delete, star, unstar) needs a
-  connection bound to `site` without an ID, or without targets; Matomo allows it to a Super User only. A
-  `site/ID` connection never writes for all websites: without `idSite` it uses its only website or is refused.
+  connection that reaches every website: `site` or no targets, without exclusions; Matomo allows it to a Super
+  User only. A `site/ID` connection or one with exclusions never writes for all websites: without `idSite` it uses
+  its only website or is refused. A segment of an excluded website is outside the targets for both rules.
 - `matomo.segments.list` checks every row against the read rule. `matomo.segments.get` and every change read the
   segment once with `SegmentEditor.get` before anything else; a segment outside the targets, a change of a segment
   for all websites on a `site/ID` connection, a missing one, and a deleted one all end as `not-found`, before any

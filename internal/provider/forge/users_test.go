@@ -231,3 +231,50 @@ func TestFollowChangesNeedConfirmAndSendOneRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludedAccountsStayVisibleAndOnlyTheirActivitiesAreFiltered(t *testing.T) {
+	for _, p := range products {
+		e := newEnvironment(t, p, userServer(func(c call) *http.Response {
+			switch c.path {
+			case "/api/v1/user":
+				return jsonResponse(200, `{"id":1,"login":"other"}`)
+			case "/api/v1/user/emails":
+				return jsonResponse(200, `[{"email":"other@example.invalid","primary":true,"verified":true}]`)
+			case "/api/v1/users/other/followers":
+				return jsonResponse(200, `[`+userFixture+`]`)
+			case "/api/v1/users/other", "/api/v1/user/settings":
+				return jsonResponse(200, strings.NewReplacer(`"octo"`, `"other"`).Replace(userFixture))
+			case "/api/v1/users/other/heatmap":
+				return jsonResponse(200, `[{"timestamp":1893456000,"contributions":3}]`)
+			case "/api/v1/users/other/activities/feeds":
+				return jsonResponse(200, `[{"id":1,"op_type":"commit_repo","repo":`+metaRepo("acme/widget")+`},`+
+					`{"id":2,"op_type":"commit_repo","repo":`+metaRepo("acme/GADGET")+`},`+
+					`{"id":3,"op_type":"commit_repo","repo":`+metaRepo("other/place")+`},`+
+					`{"id":4,"op_type":"star_repo"},{"id":5,"op_type":"star_repo","repo":{"id":9}}]`)
+			}
+			return nil
+		}))
+		// Profiles of excluded accounts, and the own account when it is one, are shown as they are.
+		for _, c := range []struct {
+			tool *tool
+			args string
+		}{{usersSearch, `{"q":"other"}`}, {usersGet, `{"username":"other"}`}, {userFollowersList, `{"username":"other"}`},
+			{userFollowingList, `{}`}, {userHeatmapGet, `{"username":"other"}`}, {accountsMe, `{}`},
+			{userSettingsGet, `{}`}, {userEmailsList, `{}`}} {
+			if _, err := e.invoke(t, c.tool, "exclude", c.args); err != nil {
+				t.Errorf("%s %s.%s: %v", p.id, c.tool.group, c.tool.action, err)
+			}
+		}
+		// Activities keep rows of reachable repositories and drop excluded and undeterminable ones.
+		feed, err := e.invoke(t, userActivitiesList, "exclude", `{"username":"other"}`)
+		rows, _ := feed["activities"].([]any)
+		if err != nil || len(rows) != 1 || strings.Contains(jsonOf(feed), "gadget") || strings.Contains(jsonOf(feed), "place") {
+			t.Errorf("%s activities: %v, %v", p.id, feed, err)
+		}
+		// Without exclusions the feed is unchanged.
+		open, err := e.invoke(t, userActivitiesList, "open", `{"username":"other"}`)
+		if rows, _ := open["activities"].([]any); err != nil || len(rows) != 5 {
+			t.Errorf("%s open activities: %v, %v", p.id, open, err)
+		}
+	}
+}

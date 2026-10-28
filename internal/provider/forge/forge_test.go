@@ -160,8 +160,7 @@ var connections = map[string][]string{
 	"two":   {"repos/acme/widget", "repos/acme/gadget"},
 }
 
-// excluding connections of the test configuration: their targets and what they exclude. The core does not yet
-// accept exclusions of this provider, so a test that goes through the core reads them from this table.
+// excluding connections of the test configuration: their targets and what they exclude.
 var excluding = map[string]struct{ targets, excludes []string }{
 	"exclude":       {nil, []string{"repos/acme/gadget", "orgs/other"}},
 	"owner-exclude": {[]string{"users/acme"}, []string{"repos/acme/gadget"}},

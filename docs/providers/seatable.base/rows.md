@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # Rows
@@ -34,6 +34,9 @@ SELECT * FROM `Table` WHERE `col` = ? AND `col2` IN (?, ?) ORDER BY `col` DESC L
 - Link columns are recognised by their type in the base metadata. A link value that does not have the
   expected form of entries with a `row_id` is left out of the row; the general masking of the README then
   applies in addition.
+- A search, a batch change, or a single-row change on an excluded table, or on an excluded view addressed as
+  the target, is refused like one outside the allow-list; the rows of a table stay reachable when only one
+  of its views is excluded.
 - The search covers the whole table. A view on the connection target, such as `Kunden/Aktive`, narrows
   `seatable.base.rows.list` but is not applied to a search.
 
@@ -58,7 +61,7 @@ names it.
   gives one, `reported` (rows it reported as created or deleted). An update has no reported count. Compare
   the counts and read the rows when they differ.
 - `snapshots.create` asks SeaTable for a snapshot of the whole base of the credential, not of one table, and
-  needs `create` and `confirm`. SeaTable creates a snapshot only when the base changed since the last one
+  needs `create` and `confirm`; it is not tied to a table and stays allowed with exclusions. SeaTable creates a snapshot only when the base changed since the last one
   and at least 10 minutes have passed; otherwise Qatlas reports that rule in its own words, and SeaTable's
   answer goes along as the original statement. A 5xx answer or a timeout is reported as uncertain: check
   the snapshots of the base before repeating it.

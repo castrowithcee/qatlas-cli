@@ -94,7 +94,7 @@ func (l hookLevel) result(extra map[string]any) map[string]any {
 // their owner in the path.
 func (l hookLevel) prove(ctx context.Context, c *Client, op string, allowed allowlist) error {
 	if l.kind == hookOfAccount {
-		return verifyOwnAccount(ctx, c, op, allowed)
+		return verifyOwnProfile(ctx, c, op, allowed)
 	}
 	return nil
 }
