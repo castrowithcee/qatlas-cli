@@ -327,7 +327,7 @@ var userActivitiesList = &tool{
 			activities := make([]map[string]any, 0, len(rows))
 			for _, row := range rows {
 				if row != nil && allowed.keepsActivity(row) {
-					activities = append(activities, project(p, activityMembers, row))
+					activities = append(activities, project(p, activityMembers, allowed.hideExcludedParentIn(row, "repo")))
 				}
 			}
 			result := pageResult(page, header, len(rows), "activities", activities)

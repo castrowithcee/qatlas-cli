@@ -713,7 +713,7 @@ var teamActivitiesList = &tool{
 						continue
 					}
 				}
-				activities = append(activities, project(p, activityMembers, row))
+				activities = append(activities, project(p, activityMembers, allowed.hideExcludedParentIn(row, "repo")))
 			}
 			next := page.next(header, len(rows))
 			result := map[string]any{"activities": activities, "has_more": next != "", "id": a.ID}
