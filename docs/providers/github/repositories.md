@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # GitHub repositories
@@ -220,8 +220,8 @@ which stays `read`, unchanged. The profile `discovery` is described under [accou
 | --- | --- |
 | `github.repositories.search` | repositories, optionally sorted by `sort` and `order`, with `text_matches` on request |
 
-It reads GitHub's own search index with `terms`, under the rules described in [Search](README.md#search), and
-forces the [target qualifiers](README.md#target-scoping). `sort` and `order` are arguments of their own, never
+It reads GitHub's own search index with `terms`, under the rules described in [Search](search.md), and
+forces the [target qualifiers](search.md#target-scoping). `sort` and `order` are arguments of their own, never
 part of `terms`, and GitHub's best match order stays when they are omitted. A match carries the repository
 under the [result object rules](README.md#result-objects), beside its compact members. The code and commit
 search are described with the [code](code.md#search), the user and organization search with the
