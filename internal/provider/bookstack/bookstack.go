@@ -407,6 +407,13 @@ func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, err
 	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if err := bound.checkExcluded(pagePrefix, arguments.ID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -562,9 +569,12 @@ type Client struct {
 	base  *url.URL
 	auth  string
 	http  *http.Client
-	// shelfBooks holds the books on the bound shelves read in this call, shelvesRead those shelves.
-	shelfBooks  map[int64]bool
-	shelvesRead map[int64]bool
+	// shelfBooks holds the books on the bound shelves read in this call, shelvesRead those shelves;
+	// exShelfBooks and exShelvesRead are the same for the excluded shelves.
+	shelfBooks    map[int64]bool
+	shelvesRead   map[int64]bool
+	exShelfBooks  map[int64]bool
+	exShelvesRead map[int64]bool
 	// included holds the pages included by a page of this call, includeReads and includedBytes what was read
 	// for them.
 	included      map[int64]*includedPage
@@ -683,10 +693,10 @@ type errorJSON struct {
 const maxScanRequests = 200
 
 // ListPages returns pages, honouring limit and offset. A limit of zero or less returns every page the
-// instance reports, fetched in pages of at most 500 records. With a book or chapter, or a bound connection,
-// every row is checked here against its book and chapter and foreign rows are dropped, because BookStack
-// silently ignores a filter it does not know; limit and offset then count the rows that remain. The filters of q
-// work the same way and come in addition to the book and chapter.
+// instance reports, fetched in pages of at most 500 records. With a book or chapter, a bound connection, or
+// exclusions, every row is checked here against its book and chapter and foreign or excluded rows are dropped,
+// because BookStack silently ignores a filter it does not know; limit and offset then count the rows that
+// remain. The filters of q work the same way and come in addition to the book and chapter.
 func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset int, q listQuery) (output.Collection, error) {
 	target, err := c.scope.listIn(target)
 	if err != nil {
@@ -704,7 +714,10 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 		}
 		target.BookID = book
 	}
-	filtered := target.BookID != 0 || target.ChapterID != 0 || target.pagesOnly
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Collection{}, err
+	}
+	filtered := target.BookID != 0 || target.ChapterID != 0 || c.scope.limited()
 
 	query := url.Values{}
 	if target.BookID != 0 {
@@ -723,7 +736,8 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 		keep: func(p pageJSON) bool {
 			return !(target.BookID != 0 && p.BookID != target.BookID) &&
 				!(target.ChapterID != 0 && p.ChapterID != target.ChapterID) &&
-				!(target.pagesOnly && !c.scope.hasPage(p.ID))
+				!(target.pagesOnly && !c.scope.hasPage(p.ID)) &&
+				!c.pageOut(p.ID, p.ChapterID, p.BookID)
 		},
 		row: c.listRow,
 	}
@@ -825,17 +839,19 @@ func scanList[T any](ctx context.Context, c *Client, spec scanSpec[T]) ([]output
 	return rows, nil
 }
 
-// GetPage returns one page including its untrusted content. On a bound connection this read is also the
-// evidence of the page's chapter and book; a page that no read could prove is refused before it.
+// GetPage returns one page including its untrusted content. On a bound connection or one with exclusions this
+// read is also the evidence of the page's chapter and book; a page that no read could prove, or that is
+// excluded by its identifier, is refused before it.
 func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) {
-	if n, ok := parseID(id); c.scope.bound() && (!ok || !c.scope.mayReachPage(n)) {
+	n, ok := parseID(id)
+	if (ok && c.scope.excludesPage(n)) || (c.scope.bound() && (!ok || !c.scope.mayReachPage(n))) {
 		return output.Object{}, c.scope.outside(outsidePage)
 	}
 	var page pageJSON
 	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &page, argNames(pagesGet), provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
-	if c.scope.bound() {
+	if c.scope.limited() {
 		requested, _ := parseID(id)
 		allowed, err := c.pageAllowed(ctx, requested, bookRef{ID: page.ID, BookID: page.BookID, ChapterID: page.ChapterID})
 		if err != nil {
