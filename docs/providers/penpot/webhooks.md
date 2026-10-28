@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # Penpot: webhooks
@@ -24,6 +24,9 @@ remain, so no tool creates a webhook, changes a webhook's target URL, or invites
 A webhook ID is bound before an update or delete: it must appear in `get-webhooks` of the given bound team, else it is
 refused without naming it. **Webhooks belong to the whole team, so a connection with a project or file allow-list
 refuses update and delete**; listing is still allowed.
+
+Webhooks report the events of the whole team, so an event of an [excluded](README.md#exclusions) project or file
+still reaches the webhook's target: the exclusion does not filter what Penpot sends there.
 
 Changes follow [Changes](README.md#changes), except that an unreadable answer does not make the outcome uncertain
 here; list the webhooks before trying again.

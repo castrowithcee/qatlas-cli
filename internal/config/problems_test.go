@@ -69,7 +69,7 @@ func TestProblemsAreStructured(t *testing.T) {
 		field string
 		index int // -1 for none
 	}{
-		{"version", func(c *Config) { c.Version = 9 }, "version", CodeUnsupportedVersion, "version: got 9, want 1, 2 or 3", "", -1},
+		{"version", func(c *Config) { c.Version = 9 }, "version", CodeUnsupportedVersion, "version: got 9, want 1, 2, 3 or 4", "", -1},
 		{"service name", func(c *Config) { c.Services["bad name"] = c.Services["gh"] }, "services.bad name",
 			CodeInvalidName, "services.bad name: a service name must consist", "", -1},
 		{"defaults name", func(c *Config) { c.Defaults.Connections = map[string]string{"bad domain": "gh"} },
@@ -190,6 +190,10 @@ func TestProblemsAreStructured(t *testing.T) {
 		}, "connections.gh.targets", CodeInvalidTargetSet, "connections.gh.targets: several GitHub targets", "targets", -1},
 		{"wildcard", func(c *Config) { conn(c, "seat", func(v *Connection) { v.Targets = []string{"*", "t1"} }) },
 			"connections.seat.targets", CodeWildcardNotAlone, "connections.seat.targets: wildcard \"*\" must be", "targets", -1},
+		{"targets outdated", func(c *Config) {
+			conn(c, "seat", func(v *Connection) { v.Targets = []string{"t1"}; v.TargetsOutdated = true })
+		}, "connections.seat.targets", CodeTargetsOutdated, "connections.seat.targets: the targets keep a former meaning",
+			"targets", -1},
 		{"exclude unsupported", func(c *Config) { conn(c, "gh", func(v *Connection) { v.Exclude = []string{"repos/a/c"} }) },
 			"connections.gh.exclude", CodeExcludeUnsupported, "connections.gh.exclude: provider \"github\" does not support", "exclude", -1},
 		{"empty exclude", func(c *Config) { withExcluder(c, "repos/a/b", " ") },

@@ -29,7 +29,7 @@ func TestInvokeLogEndToEnd(t *testing.T) {
 		[]map[string]any{page(1, "Runbook")}, "<p>content</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 3
+	config := fmt.Sprintf(`version: 4
 services:
   wiki:
     provider: bookstack
