@@ -636,13 +636,8 @@ func (s scope) selectTarget(raw string) (target, error) {
 	if err != nil {
 		return target{}, fmt.Errorf("the selected SeaTable table is unusable: %w", err)
 	}
-	if s.wildcard {
+	if s.admits(selected) {
 		return selected, nil
-	}
-	for _, allowed := range s.targets {
-		if selected == allowed {
-			return selected, nil
-		}
 	}
 	return target{}, errors.New("the selected SeaTable table is outside this connection's allow-list")
 }
@@ -802,7 +797,7 @@ func (c *Client) checkTarget(ctx context.Context, op string) error {
 		return err
 	}
 
-	if c.scope.wildcard {
+	if c.scope.wholeBase() {
 		return nil
 	}
 	for _, wanted := range c.scope.targets {
@@ -1017,20 +1012,12 @@ func (c *Client) ListTables(ctx context.Context, options PageOptions) (*TablesRe
 
 	allowed := make([]TableSummary, 0, len(document.Metadata.Tables))
 	for _, table := range document.Metadata.Tables {
-		if c.scope.wildcard {
-			if !validID(table.ID) || !validName(table.Name) {
-				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-					Message: "SeaTable returned a table without a usable identifier or name"}
-			}
-			allowed = append(allowed, TableSummary{ID: table.ID, Name: table.Name, Reference: idPrefix + table.ID})
-			continue
+		if c.scope.wholeBase() && (!validID(table.ID) || !validName(table.Name)) {
+			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "SeaTable returned a table without a usable identifier or name"}
 		}
-		for _, wanted := range c.scope.targets {
-			if matchesTable(wanted, table) {
-				allowed = append(allowed, TableSummary{ID: table.ID, Name: table.Name,
-					Reference: formatTarget(wanted)})
-				break
-			}
+		if reference, ok := c.scope.reference(table); ok {
+			allowed = append(allowed, TableSummary{ID: table.ID, Name: table.Name, Reference: reference})
 		}
 	}
 	return tablesPage(allowed, options), nil
@@ -1065,33 +1052,32 @@ func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*Colu
 	if err != nil {
 		return nil, err
 	}
-	for _, table := range document.Metadata.Tables {
-		if !matchesTable(selected, table) {
-			continue
+	found := findTable(document, selected)
+	if found == nil {
+		return nil, providerError(op, "the selected SeaTable table no longer exists")
+	}
+	table := *found
+	columns := make([]Column, len(table.Columns))
+	for i, column := range table.Columns {
+		if !validID(column.Key) || !validName(column.Name) || !validName(column.Type) {
+			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "SeaTable returned a column without a usable key, name, or type"}
 		}
-		columns := make([]Column, len(table.Columns))
-		for i, column := range table.Columns {
-			if !validID(column.Key) || !validName(column.Name) || !validName(column.Type) {
-				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-					Message: "SeaTable returned a column without a usable key, name, or type"}
-			}
-			columns[i] = Column{Key: column.Key, Name: column.Name, Type: column.Type,
-				columnExtras: c.columnExtrasOf(document, table, column)}
-		}
-		result := &ColumnsResult{Table: formatTarget(selected), Columns: []Column{},
-			Start: page.Start, Limit: page.Limit}
-		if page.Start >= len(columns) {
-			return result, nil
-		}
-		end := min(page.Start+page.Limit, len(columns))
-		result.Columns = append(result.Columns, columns[page.Start:end]...)
-		result.HasMore = end < len(columns)
-		if result.HasMore {
-			result.NextStart = end
-		}
+		columns[i] = Column{Key: column.Key, Name: column.Name, Type: column.Type,
+			columnExtras: c.columnExtrasOf(document, table, column)}
+	}
+	result := &ColumnsResult{Table: formatTarget(selected), Columns: []Column{},
+		Start: page.Start, Limit: page.Limit}
+	if page.Start >= len(columns) {
 		return result, nil
 	}
-	return nil, providerError(op, "the selected SeaTable table no longer exists")
+	end := min(page.Start+page.Limit, len(columns))
+	result.Columns = append(result.Columns, columns[page.Start:end]...)
+	result.HasMore = end < len(columns)
+	if result.HasMore {
+		result.NextStart = end
+	}
+	return result, nil
 }
 
 // metadata returns the base metadata, reading it once per client. Schema checks, link masking and row
@@ -1240,20 +1226,14 @@ func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, err
 // A wildcard connection reads every table and keeps all values. The metadata is the one cached read of the
 // client. A counter table that cannot be determined counts as not allowed.
 func (c *Client) maskLinks(ctx context.Context, op string, selected target, rows []Row) error {
-	if c.scope.wildcard || len(rows) == 0 {
+	if c.scope.wholeBase() || len(rows) == 0 {
 		return nil
 	}
 	document, err := c.metadata(ctx, op)
 	if err != nil {
 		return err
 	}
-	var current *tableJSON
-	for i := range document.Metadata.Tables {
-		if matchesTable(selected, document.Metadata.Tables[i]) {
-			current = &document.Metadata.Tables[i]
-			break
-		}
-	}
+	current := findTable(document, selected)
 	hidden := c.hiddenLookups(document, current)
 	for i := range rows {
 		row := &rows[i]
@@ -1332,17 +1312,7 @@ func (c *Client) linkAllowed(document metadataJSON, current *tableJSON, column s
 		default:
 			return false
 		}
-		for _, table := range document.Metadata.Tables {
-			if table.ID != other {
-				continue
-			}
-			for _, allowed := range c.scope.targets {
-				if matchesTable(allowed, table) {
-					return true
-				}
-			}
-		}
-		return false
+		return c.tableAllowed(document, other)
 	}
 	return false
 }
@@ -1436,28 +1406,27 @@ func (c *Client) checkColumns(ctx context.Context, op string, selected target,
 	if err != nil {
 		return err
 	}
-	for _, table := range document.Metadata.Tables {
-		if !matchesTable(selected, table) {
-			continue
-		}
-		columns := make(map[string]columnJSON, len(table.Columns))
-		for _, column := range table.Columns {
-			columns[column.Name] = column
-		}
-		for _, values := range sets {
-			for name := range values {
-				column, ok := columns[name]
-				if !ok {
-					return providerError(op, "the selected SeaTable table does not define every requested column")
-				}
-				if column.Type == "link" {
-					return providerError(op, "link columns cannot be written here, use the link tools")
-				}
+	found := findTable(document, selected)
+	if found == nil {
+		return providerError(op, "the selected SeaTable table no longer exists")
+	}
+	table := *found
+	columns := make(map[string]columnJSON, len(table.Columns))
+	for _, column := range table.Columns {
+		columns[column.Name] = column
+	}
+	for _, values := range sets {
+		for name := range values {
+			column, ok := columns[name]
+			if !ok {
+				return providerError(op, "the selected SeaTable table does not define every requested column")
+			}
+			if column.Type == "link" {
+				return providerError(op, "link columns cannot be written here, use the link tools")
 			}
 		}
-		return nil
 	}
-	return providerError(op, "the selected SeaTable table no longer exists")
+	return nil
 }
 
 // The system keys SeaTable adds to every row. They become the stable envelope; every other key is a
