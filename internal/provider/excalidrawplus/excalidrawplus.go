@@ -373,17 +373,20 @@ func Register(reg *capability.Registry) error {
 			WildcardWarning: "All collections and scenes the API key may read are exposed to the agent. " +
 				"Use a collection allow-list when not all of them are required.",
 			Description: "one or more collections and single scenes as an allow-list, or * for every collection the key " +
-				"reads; a scene is only reachable when it is listed or its own collection is allowed",
+				"reads; a scene is only reachable when it is listed or its own collection is allowed. An exclusion " +
+				"(collection/COLLECTION_ID or scene/SCENE_ID) takes a collection or scene out again and always wins",
 			Kinds: []config.TargetKind{{
 				Name:        "collection",
 				Description: "a collection whose scenes and scene content this connection may read",
 				Forms:       []string{"collection/COLLECTION_ID", "*"},
+				Excludable:  true,
 			}, {
 				Name: "scene",
 				Description: "a single scene of the workspace that narrows the connection to it; optional, repeatable, " +
 					"and it does not open its collection",
-				Forms:   []string{"scene/SCENE_ID"},
-				Parents: []string{"collection"},
+				Forms:      []string{"scene/SCENE_ID"},
+				Parents:    []string{"collection"},
+				Excludable: true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

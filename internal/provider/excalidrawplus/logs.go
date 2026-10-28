@@ -73,7 +73,8 @@ var logsList = capability.Descriptor{
 	Title:   "List Excalidraw+ activity log",
 	Description: "Read the workspace activity log, optionally of one user or action and of a time range of at " +
 		"most 366 days; only for a connection with the * wildcard target. Entries are personal data, including IP " +
-		"addresses; pictures are not returned; page by page with a numeric offset",
+		"addresses; pictures are not returned; page by page with a numeric offset. Exclusions of this connection " +
+		"do not apply: entries cannot be attributed to a collection or scene and may contain names of excluded scenes",
 	Tags:     []string{"excalidrawplus", "logs", "activity", "audit", "list"},
 	Risk:     logsRisk,
 	Provider: Provider,

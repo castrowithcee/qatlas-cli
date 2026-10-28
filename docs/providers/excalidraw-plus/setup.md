@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Set up Excalidraw+
@@ -41,8 +41,8 @@ look for the name API keys.
 4. Create the key and copy it at once. Excalidraw+ shows it only once.
 
 Give a key only what a connection needs. A connection that only reads should have a key that only reads. The
-connection's targets limit only what Qatlas shows; they do not narrow what the key itself may reach. Excalidraw+ lets
-you rotate or soft-delete a key in the workspace settings.
+connection's targets and exclusions limit only what Qatlas shows; they do not narrow what the key itself may
+reach. Excalidraw+ lets you rotate or soft-delete a key in the workspace settings.
 
 ## Add it to Qatlas
 
@@ -50,7 +50,7 @@ The guided setup does all of this for you:
 
 1. Run `qatlas tui`.
 2. In the Connections area, press `n` and follow the steps: provider `excalidraw-plus`, the service, a credential,
-   the scope (targets), and the access (by effect or by tools).
+   the scope (targets and, if needed, exclusions), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the key as its `api-key` secret.
 
 Without the guided setup, store the key on the command line. It is read from standard input, so it does not
@@ -133,7 +133,7 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 | `permission`: this Excalidraw+ API key may not perform this operation ... | The key lacks the right or the route for this tool, or is expired | Find the tool group in [Rights per tool group](#rights-per-tool-group) and create a key with that right. Check the expiry date in the workspace settings. |
 | `permission` only for changes, the log, or users | The key can read but not do this | Create a key with a right that allows changes, or the route for this endpoint. |
 | `not-found`: Excalidraw+ does not hold this resource or does not show it to this key | The collection or scene does not exist, is in the trash, or the key's workspace or routes do not cover it. Excalidraw+ answers all of these the same | Check the identifier. Then check that the key belongs to the workspace of that collection and that its routes cover it. |
-| `invalid-request`: ... is outside the targets of this connection | The collection or scene is outside the connection's targets | Not a key problem. Pass a target the connection allows, or add it; see [Scope](README.md#scope). |
+| `invalid-request`: ... is outside the targets of this connection | The collection or scene is outside the connection's targets, or the connection excludes it | Not a key problem. Pass a target the connection allows, add it, or remove the exclusion; see [Scope](README.md#scope). |
 | `invalid-request`: this tool needs a connection with the * target | The tool is workspace-wide | Not a key problem. Use a connection with the `*` target; see [Scope](README.md#scope). |
 | `provider-error`: an Excalidraw+ service needs the plain https URL ... | The service address is not the fixed API address | Remove `base_url` or correct it; see [Credential and base URL](README.md#credential-and-base-url). |
 | `provider-error`: Excalidraw+ rejected the operation (HTTP ...) | Excalidraw+ refused the request for a reason Qatlas does not classify | Read the provider answer below the message for the reason. |
