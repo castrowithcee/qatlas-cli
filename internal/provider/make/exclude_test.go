@@ -419,3 +419,94 @@ func TestExcludedScenariosAreNotListedByARefusedHookDeletion(t *testing.T) {
 		t.Fatalf("result = %+v", result)
 	}
 }
+
+// A refused connection or data store deletion lists only reachable scenarios, fails when none is left and
+// fails closed when membership cannot be checked.
+func TestExcludedScenariosAreNotListedByARefusedDeletion(t *testing.T) {
+	connID, storeNo := strconv.FormatInt(connectionID, 10), storeID
+	deletions := []struct {
+		name, args string
+		op         string
+	}{
+		{"connection", `{"connection_id":` + connID + `}`, connectionsDelete.ID},
+		{"data store", `{"datastore_id":` + storeNo + `}`, dataStoresDelete.ID},
+	}
+	cases := []struct {
+		name     string
+		listed   string
+		excludes []string
+		failRead bool
+		wantIDs  []int64
+		wantErr  bool
+	}{
+		{"direct", `[{"id":10,"name":"Hidden"},{"id":12,"name":"Open"}]`, []string{"scenario/10"}, false, []int64{12}, false},
+		{"folder", `[{"id":13,"name":"Hidden"},{"id":12,"name":"Open"}]`, []string{"folder/" + itoa64(ownFolder)}, false,
+			[]int64{12}, false},
+		{"only excluded", `[{"id":10,"name":"HiddenName"},{"id":13,"name":"HiddenName"}]`,
+			[]string{"scenario/10", "folder/" + itoa64(ownFolder)}, false, nil, true},
+		{"check fails", `[{"id":12,"name":"Open"}]`, []string{"folder/" + itoa64(ownFolder)}, true, nil, true},
+	}
+	for _, d := range deletions {
+		for _, c := range cases {
+			t.Run(d.name+" "+c.name, func(t *testing.T) {
+				var calls []call
+				serve(t, &calls, func(r *http.Request) (*http.Response, error) {
+					path := strings.TrimPrefix(r.URL.Path, apiPath)
+					parts := strings.Split(strings.Trim(path, "/"), "/")
+					switch {
+					case r.Method == http.MethodDelete:
+						return jsonResponse(400, `{"message":"`+foreignCanary+`","detail":{"scenarios":`+c.listed+`}}`), nil
+					case path == "/scenarios-folders":
+						return jsonResponse(200, folderTreeJSON), nil
+					case len(parts) == 2 && parts[0] == "scenarios":
+						if c.failRead {
+							return jsonResponse(500, `{"message":"`+foreignCanary+`"}`), nil
+						}
+						id, _ := strconv.ParseInt(parts[1], 10, 64)
+						return jsonResponse(200, `{"scenario":`+scenarioInFolder(id, ownTeam, excludeFolders[id])+`}`), nil
+					case path == "/data-stores/"+storeNo:
+						return jsonResponse(200, `{"dataStore":`+dataStoreJSONOf(storeNo, ownTeam, "Own")+`}`), nil
+					case len(parts) == 2 && parts[0] == "connections":
+						return jsonResponse(200, `{"connection":`+connectionJSONOf(connectionID, ownTeam, "C")+`}`), nil
+					}
+					return jsonResponse(200, `{}`), nil
+				})
+				red := &redact.Redactor{}
+				reads := 0
+				resolved := excluding(resolvedConnection("team/"+itoa64(ownTeam)), c.excludes...)
+				_, handler, _ := registry(t).Lookup(d.op)
+				result, err := handler(context.Background(), resolved, resolver(red, &reads), red, json.RawMessage(d.args))
+				if c.wantErr {
+					if err == nil || strings.Contains(err.Error(), "Hidden") || strings.Contains(err.Error(), foreignCanary) ||
+						strings.Contains(err.Error(), "10") && strings.Contains(err.Error(), "scenario") {
+						t.Fatalf("result = %+v, err = %v", result, err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("err = %v", err)
+				}
+				var ids []int64
+				switch got := result.(type) {
+				case *ConnectionDeletion:
+					for _, s := range got.Scenarios {
+						ids = append(ids, s.ID)
+					}
+					if !got.ConfirmationRequired {
+						t.Fatalf("result = %+v", got)
+					}
+				case *DataStoreDeletion:
+					for _, s := range got.Scenarios {
+						ids = append(ids, s.ID)
+					}
+					if !got.ConfirmationRequired {
+						t.Fatalf("result = %+v", got)
+					}
+				}
+				if fmt.Sprint(ids) != fmt.Sprint(c.wantIDs) {
+					t.Fatalf("ids = %v, want %v", ids, c.wantIDs)
+				}
+			})
+		}
+	}
+}
