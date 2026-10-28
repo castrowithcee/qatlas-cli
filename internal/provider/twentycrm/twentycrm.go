@@ -269,6 +269,7 @@ func Register(reg *capability.Registry) error {
 				Name:        "object",
 				Description: "an object of the workspace whose records this connection may reach",
 				Forms:       []string{"object/NAME"},
+				Excludable:  true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
@@ -595,7 +596,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 	const op = "test connection"
 
-	if !c.scope.bound() {
+	if !c.scope.bound() && c.scope.allows(companyObject) {
 		// The smallest authenticated read comes first, because the workspace document is a public route
 		// that answers an unusable key with an empty base schema instead of an authentication failure.
 		if class, failed := classOfFailure(c.readOne(ctx, op, companiesPath)); failed {
@@ -615,6 +616,9 @@ func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 	}
 	if c.scope.bound() {
 		for _, name := range c.scope.objects {
+			if !c.scope.allows(name) {
+				continue
+			}
 			object, ok := cat.object(name)
 			if !ok {
 				return "", &provider.Error{Class: provider.ClassInvalidResponse, Op: op,

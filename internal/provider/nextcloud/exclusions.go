@@ -23,7 +23,9 @@ type exclusions struct {
 
 // excludeKindEnforced reports whether the provider enforces exclusions of the kind. A kind that is parsed
 // and checked but not listed here is refused as a whole, so no exclusion is accepted that nothing enforces.
-func excludeKindEnforced(kind string) bool { return kind == kindFolder || kind == kindNotes }
+func excludeKindEnforced(kind string) bool {
+	return kind == kindFolder || kind == kindNotes || kind == kindCalendar || kind == kindAddressbook || kind == kindDeck
+}
 
 // crossExcludes are the exclusions of one kind seen from the other: the Notes app keeps its notes as files
 // below the notes path, so a folder exclusion hides notes and a notes exclusion hides folders. They are
@@ -189,13 +191,19 @@ func (ex *exclusions) add(kind, rest string) error {
 		if checkSegment(rest) != nil {
 			return errExcludeInvalid
 		}
+		// The scheduling and trash collections and the system address book are never in reach of a whole-kind
+		// target, so an exclusion naming one is invalid.
+		if kind == kindCalendar && reservedCalendar(rest) ||
+			kind == kindAddressbook && comparisonForm(rest) == comparisonForm(systemAddressbook) {
+			return errExcludeInvalid
+		}
 		list := map[string]*[]string{kindCalendar: &ex.calendars, kindAddressbook: &ex.addressbooks, kindTalk: &ex.talks}[kind]
 		*list = append(*list, comparisonForm(rest))
 	case kindDeck:
 		if checkBoardID(rest) != nil {
 			return errExcludeInvalid
 		}
-		ex.decks = append(ex.decks, rest)
+		ex.decks = append(ex.decks, canonicalNumber(rest))
 	default:
 		return errExcludeInvalid
 	}
@@ -285,4 +293,29 @@ func (s scope) categoryTargetsAllow(categories [][]string) bool {
 		}
 	}
 	return true
+}
+
+// canonicalNumber drops the leading zeros of a decimal number, so that 07 and 7 name the same ID.
+func canonicalNumber(id string) string {
+	if trimmed := strings.TrimLeft(id, "0"); trimmed != "" {
+		return trimmed
+	}
+	return "0"
+}
+
+// excluding returns the selection with the exclusions of its kind; ids are in the form add stores them in.
+func (s selection) excluding(ids []string, numeric bool) selection {
+	s.excluded, s.numeric = ids, numeric
+	return s
+}
+
+// hides reports whether the ID is excluded: URIs compare in comparison form, board IDs as numbers.
+func (s selection) hides(id string) bool {
+	if len(s.excluded) == 0 {
+		return false
+	}
+	if s.numeric {
+		return slices.Contains(s.excluded, canonicalNumber(id))
+	}
+	return slices.Contains(s.excluded, comparisonForm(id))
 }

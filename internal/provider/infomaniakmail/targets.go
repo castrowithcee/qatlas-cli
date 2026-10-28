@@ -17,7 +17,7 @@ const (
 	mailboxPrefix = "mailbox/"
 	folderPrefix  = "folder/"
 	senderPrefix  = "sender/"
-	treeSuffix    = "/*"
+	childSuffix   = "/*"
 
 	maxAddressLength    = 254
 	maxLocalPartLength  = 64
@@ -30,47 +30,33 @@ const (
 
 // scope is the mailbox, folder, and sender boundary of one connection. The mailbox address is the IMAP
 // login name. An empty folder list admits every folder of the mailbox; an empty sender list admits every
-// sender.
+// sender. A subfolder is a folder whose name begins with the parent's name and the server's hierarchy
+// delimiter.
 type scope struct {
-	mailbox string
-	folders []string // exact names: folder/PATH
-	trees   []string // folder/PATH/*: the folder NAME and its subfolders
-	senders []string // lower case
+	mailbox  string
+	folders  []string // folder/PATH: the folder PATH and its subfolders
+	children []string // folder/PATH/*: the subfolders of PATH, not PATH itself
+	senders  []string // lower case
 
-	// Exclusions of the connection. They are never targets: they only take folders and senders out of what the
-	// targets reach, and an exclusion always wins.
-	exFolders []string // folder/PATH: exactly this folder, its subfolders stay reachable
-	exTrees   []string // folder/PATH/*: the folder NAME and its subfolders
-	exSenders []string // lower case
+	// Exclusions of the connection, in the same forms. They are never targets: they only take folders and
+	// senders out of what the targets reach, and an exclusion always wins.
+	exFolders  []string
+	exChildren []string
+	exSenders  []string // lower case
 }
 
 // unrestricted reports whether no folder target is configured, so every folder of the mailbox is reachable.
-func (s scope) unrestricted() bool { return len(s.folders) == 0 && len(s.trees) == 0 }
+func (s scope) unrestricted() bool { return len(s.folders) == 0 && len(s.children) == 0 }
 
-// allowsExact reports whether name is the folder of a folder/PATH or folder/PATH/* target itself. It needs no
-// hierarchy delimiter.
+// allowsExact reports whether name is the folder of a folder/PATH target itself. It needs no hierarchy
+// delimiter.
 func (s scope) allowsExact(name string) bool {
-	if s.unrestricted() {
-		return true
-	}
-	name = normalizeFolder(name)
-	for _, allowed := range s.folders {
-		if allowed == name {
-			return true
-		}
-	}
-	for _, allowed := range s.trees {
-		if allowed == name {
-			return true
-		}
-	}
-	return false
+	return s.unrestricted() || slices.Contains(s.folders, normalizeFolder(name))
 }
 
-// allowsFolder is the check that needs no network access. It admits a folder that is exactly a target and,
-// provisionally, one that begins with the name of a folder/PATH/* target and is longer: whether that is a
-// subfolder depends on the server's hierarchy delimiter, so session.folderOK decides it after login. Without a
-// folder/PATH/* target it is exact.
+// allowsFolder is the check that needs no network access. It admits a folder that is exactly a folder/PATH
+// target and, provisionally, one that begins with the name of a folder target and is longer: whether that is
+// a subfolder depends on the server's hierarchy delimiter, so session.folderOK decides it after login.
 func (s scope) allowsFolder(name string) bool {
 	if s.excludesFolder(name, "") {
 		return false
@@ -79,17 +65,12 @@ func (s scope) allowsFolder(name string) bool {
 		return true
 	}
 	name = normalizeFolder(name)
-	for _, tree := range s.trees {
-		if len(name) > len(tree) && strings.HasPrefix(name, tree) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s.folders, longerPrefix(name)) || slices.ContainsFunc(s.children, longerPrefix(name))
 }
 
-// allowsFolderDelim is the final check: the folder is a target itself, or it begins with the name of a
-// folder/PATH/* target followed by the hierarchy delimiter. An empty delimiter (a flat hierarchy) admits only
-// the targets themselves.
+// allowsFolderDelim is the final check: the folder is a folder/PATH target itself, or a subfolder of a
+// folder/PATH or folder/PATH/* target. An empty delimiter (a flat hierarchy) has no subfolders, so it admits
+// only the folder/PATH targets themselves.
 func (s scope) allowsFolderDelim(name, delim string) bool {
 	if s.excludesFolder(name, delim) {
 		return false
@@ -97,48 +78,54 @@ func (s scope) allowsFolderDelim(name, delim string) bool {
 	if s.allowsExact(name) {
 		return true
 	}
-	if delim == "" {
-		return false
-	}
 	name = normalizeFolder(name)
-	for _, tree := range s.trees {
-		if strings.HasPrefix(name, tree+delim) && len(name) > len(tree)+len(delim) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(s.folders, parentOf(name, delim)) || slices.ContainsFunc(s.children, parentOf(name, delim))
 }
 
-// excludesFolder reports whether an exclusion covers the folder: a folder/PATH or folder/PATH/* naming it, or,
-// with the hierarchy delimiter, a folder/PATH/* naming one of its parents. Without a delimiter only the
-// exclusions that name the folder itself apply.
+// excludesFolder reports whether an exclusion covers the folder: a folder/PATH naming it, or, with the
+// hierarchy delimiter, a folder/PATH or folder/PATH/* naming one of its parents. Without a delimiter only the
+// folder/PATH exclusions that name the folder itself apply. An exclusion matches a leading INBOX in any case,
+// so it fails closed on a server that treats the parent INBOX case-insensitively.
 func (s scope) excludesFolder(name, delim string) bool {
-	name = normalizeFolder(name)
-	if slices.Contains(s.exFolders, name) || slices.Contains(s.exTrees, name) {
+	name = inboxFolded(name)
+	if slices.ContainsFunc(s.exFolders, func(ex string) bool { return inboxFolded(ex) == name }) {
 		return true
 	}
-	if delim == "" {
-		return false
-	}
-	for _, tree := range s.exTrees {
-		if strings.HasPrefix(name, tree+delim) && len(name) > len(tree)+len(delim) {
-			return true
-		}
-	}
-	return false
+	under := func(ex string) bool { return parentOf(name, delim)(inboxFolded(ex)) }
+	return slices.ContainsFunc(s.exFolders, under) || slices.ContainsFunc(s.exChildren, under)
 }
 
-// mayBeExcluded reports whether the folder is longer than and begins with the name of an excluded
-// folder/PATH/* tree, which is a subfolder of it depending on the server's delimiter.
+// mayBeExcluded reports whether the folder is longer than and begins with the name of a folder exclusion,
+// which makes it a subfolder of it depending on the server's delimiter.
 func (s scope) mayBeExcluded(name string) bool {
-	name = normalizeFolder(name)
-	return slices.ContainsFunc(s.exTrees, func(tree string) bool {
-		return len(name) > len(tree) && strings.HasPrefix(name, tree)
-	})
+	name = inboxFolded(name)
+	under := func(ex string) bool { return longerPrefix(name)(inboxFolded(ex)) }
+	return slices.ContainsFunc(s.exFolders, under) || slices.ContainsFunc(s.exChildren, under)
 }
 
 // hasFolderExcludes reports whether any folder exclusion is configured.
-func (s scope) hasFolderExcludes() bool { return len(s.exFolders)+len(s.exTrees) > 0 }
+func (s scope) hasFolderExcludes() bool { return len(s.exFolders)+len(s.exChildren) > 0 }
+
+// longerPrefix returns a test whether name is longer than and begins with a given folder name.
+func longerPrefix(name string) func(string) bool {
+	return func(parent string) bool { return len(name) > len(parent) && strings.HasPrefix(name, parent) }
+}
+
+// parentOf returns a test whether a given folder name is a parent of name under the hierarchy delimiter
+// delim. An empty delimiter has no parents.
+func parentOf(name, delim string) func(string) bool {
+	return func(parent string) bool {
+		return delim != "" && len(name) > len(parent)+len(delim) && strings.HasPrefix(name, parent+delim)
+	}
+}
+
+// inboxFolded spells a leading INBOX in upper case, whatever follows it.
+func inboxFolded(name string) string {
+	if len(name) >= len("INBOX") && strings.EqualFold(name[:len("INBOX")], "INBOX") {
+		return "INBOX" + name[len("INBOX"):]
+	}
+	return name
+}
 
 // allowsSender reports whether an address is admitted: not excluded, and on the sender list when there is one.
 func (s scope) allowsSender(address string) bool {
@@ -180,7 +167,7 @@ func parseScope(values []string) (scope, error) { return parseScopeExcluding(val
 // validation, so an invalid exclusion fails closed here too. No error ever quotes a configured value.
 func parseScopeExcluding(values, excludes []string) (scope, error) {
 	var bound scope
-	seenFolders, seenTrees, seenSenders := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	seenFolders, seenChildren, seenSenders := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, raw := range values {
 		kind, value, err := parseTarget(strings.TrimSpace(raw))
 		if err != nil {
@@ -198,12 +185,12 @@ func parseScopeExcluding(values, excludes []string) (scope, error) {
 			}
 			seenFolders[value] = true
 			bound.folders = append(bound.folders, value)
-		case "tree":
-			if seenTrees[value] {
-				return scope{}, errors.New("the folder target list names a folder tree more than once")
+		case "children":
+			if seenChildren[value] {
+				return scope{}, errors.New("the folder target list names the subfolders of a folder more than once")
 			}
-			seenTrees[value] = true
-			bound.trees = append(bound.trees, value)
+			seenChildren[value] = true
+			bound.children = append(bound.children, value)
 		case "sender":
 			if seenSenders[value] {
 				return scope{}, errors.New("the sender target list names an address more than once")
@@ -215,7 +202,7 @@ func parseScopeExcluding(values, excludes []string) (scope, error) {
 	if bound.mailbox == "" {
 		return scope{}, errors.New("an Infomaniak Mail connection needs exactly one mailbox/ADDRESS target")
 	}
-	if len(bound.folders)+len(bound.trees) > maxFolderTargets {
+	if len(bound.folders)+len(bound.children) > maxFolderTargets {
 		return scope{}, errors.New("an Infomaniak Mail connection may list at most 50 folder targets")
 	}
 	if len(bound.senders) > maxSenderTargets {
@@ -240,11 +227,11 @@ func (s scope) withExcludes(excludes []string) (scope, error) {
 				return scope{}, errInvalid
 			}
 			s.exFolders = append(s.exFolders, value)
-		case "tree":
-			if named(s.exTrees, value) || named(s.trees, value) {
+		case "children":
+			if named(s.exChildren, value) || named(s.children, value) {
 				return scope{}, errInvalid
 			}
-			s.exTrees = append(s.exTrees, value)
+			s.exChildren = append(s.exChildren, value)
 		case "sender":
 			if named(s.exSenders, value) || named(s.senders, value) {
 				return scope{}, errInvalid
@@ -263,9 +250,9 @@ func validateTarget(raw string) error {
 	return err
 }
 
-// parseTarget reads one target as mailbox/ADDRESS, folder/PATH, folder/PATH/* (kind tree), or sender/ADDRESS. The mailbox keeps the
-// spelling it was configured with, since it is the login name; a sender address is lower-cased for
-// comparison; a folder name is normalised only for INBOX.
+// parseTarget reads one target as mailbox/ADDRESS, folder/PATH, folder/PATH/* (kind children), or
+// sender/ADDRESS. The mailbox keeps the spelling it was configured with, since it is the login name; a sender
+// address is lower-cased for comparison; a folder name is normalised only for INBOX.
 func parseTarget(raw string) (kind, value string, err error) {
 	switch {
 	case strings.HasPrefix(raw, mailboxPrefix):
@@ -280,8 +267,8 @@ func parseTarget(raw string) (kind, value string, err error) {
 			return "", "", errors.New("an Infomaniak Mail sender target must be a plain email address")
 		}
 		return kind, strings.ToLower(raw), nil
-	case strings.HasPrefix(raw, folderPrefix) && strings.HasSuffix(raw, treeSuffix):
-		kind, raw = "tree", strings.TrimSuffix(strings.TrimPrefix(raw, folderPrefix), treeSuffix)
+	case strings.HasPrefix(raw, folderPrefix) && strings.HasSuffix(raw, childSuffix):
+		kind, raw = "children", strings.TrimSuffix(strings.TrimPrefix(raw, folderPrefix), childSuffix)
 		if !validFolderName(raw) {
 			return "", "", errors.New("an Infomaniak Mail folder/PATH/* target must name one folder without " +
 				"control characters or the IMAP wildcards * and %")

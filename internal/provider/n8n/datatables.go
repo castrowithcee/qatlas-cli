@@ -164,7 +164,8 @@ var dataTablesCreate = capability.Descriptor{
 		`"id":{"type":"string"},"name":{"type":"string"},"project_id":{"type":"string"}},` +
 		`"required":["id","name","project_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{dataTableNameArgument,
-		{Name: "project_id", Description: "Project to create the table in; required with a project allow-list"}},
+		{Name: "project_id", Description: "Project to create the table in; required with a project allow-list " +
+			"and on a connection that excludes projects"}},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the created table"},
 		{Name: "name", Description: "Name as n8n reports it, untrusted data"},
@@ -387,6 +388,7 @@ func invokeDataTablesList(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
+	excludedFilter := false
 	if input.ProjectID != "" {
 		if !validTargetID(input.ProjectID) {
 			return nil, invalidRequest("project_id must be a usable n8n identifier")
@@ -394,6 +396,7 @@ func invokeDataTablesList(ctx context.Context, resolved *config.Resolved, secret
 		if !bound.allowsProject(input.ProjectID) {
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
+		excludedFilter = bound.excludesProject(input.ProjectID)
 	}
 	if input.Name != "" {
 		if err := validDataTableName(input.Name); err != nil {
@@ -405,6 +408,9 @@ func invokeDataTablesList(ctx context.Context, resolved *config.Resolved, secret
 	}
 	if input.SortBy != "" && !slices.Contains(dataTableSorts, input.SortBy) {
 		return nil, invalidRequest("sort_by must be one of " + strings.Join(dataTableSorts, ", "))
+	}
+	if excludedFilter {
+		return &DataTablesPage{DataTables: []DataTableSummary{}}, nil
 	}
 	limit := input.Limit
 	if limit == 0 {
@@ -481,7 +487,7 @@ func (c *Client) ListDataTables(ctx context.Context, options DataTableListOption
 	}
 	tables := make([]DataTableSummary, 0, len(page.Data))
 	for _, t := range page.Data {
-		if len(c.scope.projects) > 0 && !c.scope.allowsProject(t.ProjectID) {
+		if c.scope.restrictsProjects() && (t.ProjectID == "" || !c.scope.reachesProject(t.ProjectID)) {
 			continue
 		}
 		tables = append(tables, summarizeDataTable(t))
@@ -500,7 +506,7 @@ func (c *Client) readDataTable(ctx context.Context, op, id string) (*dataTableJS
 	if err := c.get(ctx, op, "/data-tables/"+url.PathEscape(id), nil, &table, maxResponseBytes); err != nil {
 		return nil, err
 	}
-	if len(c.scope.projects) > 0 && (table.ProjectID == "" || !c.scope.allowsProject(table.ProjectID)) {
+	if c.scope.restrictsProjects() && (table.ProjectID == "" || !c.scope.reachesProject(table.ProjectID)) {
 		return nil, invalidRequest("the data table is outside the targets of this connection")
 	}
 	return &table, nil
@@ -556,6 +562,12 @@ func invokeDataTablesCreate(ctx context.Context, resolved *config.Resolved, secr
 		if !bound.allowsProject(input.ProjectID) {
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
+	}
+	if bound.excludesProject(input.ProjectID) {
+		return nil, invalidRequest("project_id is outside the targets of this connection")
+	}
+	if err := bound.requireProjectID(input.ProjectID); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
