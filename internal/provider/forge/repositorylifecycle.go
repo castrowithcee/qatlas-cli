@@ -166,6 +166,18 @@ func (a allowlist) hideExcludedParent(row object) object {
 	return row
 }
 
+// hideExcludedParentIn applies hideExcludedParent to the repository object under KEY of a larger answer.
+func (a allowlist) hideExcludedParentIn(row object, key string) object {
+	if inner, ok := row.child(key); ok {
+		if _, had := inner["parent"]; had {
+			if _, kept := a.hideExcludedParent(inner)["parent"]; !kept {
+				row[key], _ = json.Marshal(inner)
+			}
+		}
+	}
+	return row
+}
+
 // excludedFullName reports whether an exclusion takes out the canonical OWNER/REPO.
 func (a allowlist) excludedFullName(fullName string) bool {
 	owner, repo, ok := strings.Cut(fullName, "/")
