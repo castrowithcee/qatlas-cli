@@ -109,6 +109,9 @@ func (m *Model) updateBlocker() string {
 }
 
 func (m *Model) updateUpdateConfirm(key tea.KeyPressMsg) tea.Cmd {
+	if m.versionPending != nil {
+		return m.updateVersionConfirm(key)
+	}
 	switch {
 	case keyIs(key, actYes):
 		m.screen = m.updateFrom
@@ -126,24 +129,35 @@ func (m *Model) updateUpdateConfirm(key tea.KeyPressMsg) tea.Cmd {
 
 // startUpdate installs the release in the background. The editor keeps working on the version it runs.
 func (m *Model) startUpdate() tea.Cmd {
+	updater := m.updater
+	progressing, ok := updater.(progressUpdater)
+	return m.runInstall("", func(progress func(done, total int64)) tea.Msg {
+		var result selfupdate.Result
+		var err error
+		if ok {
+			result, err = progressing.UpdateProgress(context.Background(), progress)
+		} else {
+			result, err = updater.Update(context.Background())
+		}
+		return updateDoneMsg{result: result, err: err}
+	})
+}
+
+// runInstall runs work in the background while the banner shows an installation. target names the version
+// being installed, or is empty for the newest stable release. work reports the download of the archive to
+// progress and returns the message that ends it.
+func (m *Model) runInstall(target string, work func(progress func(done, total int64)) tea.Msg) tea.Cmd {
 	m.updating = true
+	m.updateTarget = target
 	m.updateUnlocked = m.vaultOpen()
 	m.clearMessages()
 	m.updatePercent = -1
-	updater := m.updater
-	progressing, ok := updater.(progressUpdater)
-	if !ok {
-		return func() tea.Msg {
-			result, err := updater.Update(context.Background())
-			return updateDoneMsg{result: result, err: err}
-		}
-	}
-	// The installation runs on its own and reports through events; each message the editor gets waits for
-	// the next one, so the banner follows the download without a timer.
+	// The work runs on its own and reports through events; each message the editor gets waits for the next
+	// one, so the banner follows the download without a timer.
 	events := make(chan tea.Msg, 1)
 	go func() {
 		last := -1
-		result, err := progressing.UpdateProgress(context.Background(), func(done, total int64) {
+		events <- work(func(done, total int64) {
 			if total <= 0 {
 				return
 			}
@@ -156,7 +170,6 @@ func (m *Model) startUpdate() tea.Cmd {
 				}
 			}
 		})
-		events <- updateDoneMsg{result: result, err: err}
 	}()
 	var wait tea.Cmd
 	wait = func() tea.Msg {
@@ -185,6 +198,7 @@ func (m *Model) vaultOpen() bool {
 // elsewhere a successful update asks for a restart instead of pretending to be the new version.
 func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 	m.updating = false
+	restored := m.versionRestoredNote()
 	var unsupported *selfupdate.UnsupportedInstallationError
 	switch {
 	case errors.As(msg.err, &unsupported):
@@ -200,6 +214,9 @@ func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 		m.updated = msg.result.Latest
 		m.fail = ""
 		m.status = m.restartHint()
+		if restored != "" {
+			m.status += " " + restored
+		}
 		return m.restartAfterUpdate(msg.result.Current, msg.result.Latest)
 	default:
 		// Nothing newer was there by the time of the installation.
@@ -217,10 +234,10 @@ func (m *Model) updateBanners() []string {
 	case m.updated != "":
 		return []string{tr(tBannerUpdated, m.updated), tr(tBannerUpdatedShort)}
 	case m.updating && m.updatePercent >= 0:
-		return []string{tr(tBannerUpdatingPercent, m.release.Latest, m.updatePercent),
+		return []string{tr(tBannerUpdatingPercent, m.installing(), m.updatePercent),
 			tr(tBannerUpdatingPercentShort, m.updatePercent)}
 	case m.updating:
-		return []string{tr(tBannerUpdating, m.release.Latest), tr(tBannerUpdatingShort)}
+		return []string{tr(tBannerUpdating, m.installing()), tr(tBannerUpdatingShort)}
 	case m.updateOffered():
 		current, latest := m.release.Current, m.release.Latest
 		return []string{
@@ -231,6 +248,14 @@ func (m *Model) updateBanners() []string {
 		}
 	}
 	return nil
+}
+
+// installing is the version the running installation puts in place.
+func (m *Model) installing() string {
+	if m.updateTarget != "" {
+		return m.updateTarget
+	}
+	return m.release.Latest
 }
 
 // updateBanner is the longest banner that fits room cells, or nothing.
@@ -245,6 +270,9 @@ func (m *Model) updateBanner(room int) string {
 
 // updateView asks before the installation.
 func (m *Model) updateView() string {
+	if m.versionPending != nil {
+		return m.versionQuestionView()
+	}
 	after := tr(tUpdateAfterManual)
 	if m.restart != nil {
 		after = tr(tUpdateAfterRestart)

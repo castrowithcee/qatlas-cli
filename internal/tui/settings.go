@@ -37,9 +37,10 @@ const (
 
 // Actions of the Transfer, Update and Self-test pages, run by a fieldVaultAction row.
 const (
-	pageActionExport = "export"
-	pageActionImport = "import"
-	pageActionUpdate = "update"
+	pageActionExport  = "export"
+	pageActionImport  = "import"
+	pageActionUpdate  = "update"
+	pageActionVersion = "version"
 	// pageActionSelftest is followed by the scenario name.
 	pageActionSelftest = "selftest:"
 )
@@ -199,6 +200,7 @@ func (m *Model) updateFields() []field {
 		textField("version", "qatlas "+m.runningVersion(), true),
 		textField("release", status, true),
 		pageAction(pageActionUpdate, "install update", tr(tUpdateInstallHint), tr(tUpdateInstallDetail)),
+		pageAction(pageActionVersion, "choose version", tr(tVersionChooseHint), tr(tVersionChooseDetail)),
 	}
 }
 
@@ -229,6 +231,8 @@ func (m *Model) runPageAction(action string) (tea.Cmd, bool) {
 		}
 		m.askUpdate()
 		return nil, true
+	case action == pageActionVersion:
+		return m.openVersions(), true
 	case strings.HasPrefix(action, pageActionSelftest):
 		return m.startSelftest(strings.TrimPrefix(action, pageActionSelftest)), true
 	}

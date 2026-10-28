@@ -128,6 +128,8 @@ const (
 	screenHelp
 	// screenUpdate asks before a newer release of qatlas is installed.
 	screenUpdate
+	// screenVersions is the searchable list of the versions of qatlas that can be chosen.
+	screenVersions
 	// screenRestart asks before the editor restarts into an installed release and drops unsaved input.
 	screenRestart
 	// screenTargets edits the target list of a connection entry by entry.
@@ -693,6 +695,16 @@ type Model struct {
 	logBarSpecs []barSpec
 	// updateText is what the update question says an installation does, set when it opens.
 	updateText string
+	// updateTarget is the version a running installation puts in place, empty for the newest stable
+	// release. versions is the open version list with versionList as its rows, versionPending the question
+	// about a chosen version, versionsLoading whether the list is being looked up, and versionRestored the
+	// backup a rollback in flight restores.
+	updateTarget    string
+	versions        *versionChoice
+	versionList     filterList
+	versionPending  *versionPending
+	versionsLoading bool
+	versionRestored string
 
 	// Vault header and 'ctrl+l' state (see vaultheader.go). vaultProcessUnlocked caches whether a vault
 	// process holds a locked vault open, refreshed by a tick and right after this window's own lock and
@@ -765,6 +777,8 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.picker = newFilterList(m.choiceShown)
 	m.templateList = newFilterList(m.templateText)
 	m.templateList.input.Placeholder = "Type to search"
+	m.versionList = newFilterList(m.versionText)
+	m.versionList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target + " " + m.targetLabels[target] })
 	m.targetInput = textField("", "", false).input
@@ -887,6 +901,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, msg.next
 	case updateDoneMsg:
 		return m, m.updateDone(msg)
+	case versionsLoadedMsg:
+		m.versionsLoaded(msg)
+		return m, nil
+	case rollbackPreparedMsg:
+		return m, m.rollbackPrepared(msg)
 	case selftestMsg:
 		return m, m.handleSelftest(msg)
 	case restartFailedMsg:
@@ -1010,6 +1029,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateHelp(msg)
 		case screenUpdate:
 			cmd = m.updateUpdateConfirm(msg)
+		case screenVersions:
+			cmd = m.updateVersions(msg)
 		case screenRestart:
 			cmd = m.updateRestartConfirm(msg)
 		case screenTargets:
@@ -1439,7 +1460,14 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenSelftest:
 		return m.updateSelftest(tea.KeyPressMsg{Code: tea.KeyEscape})
 	case screenUpdate:
+		if m.versionPending != nil {
+			m.cancelVersionAsk()
+			return nil
+		}
 		m.screen = m.updateFrom
+		return nil
+	case screenVersions:
+		m.closeVersions()
 		return nil
 	case screenRestart:
 		m.screen = m.restartBack
@@ -3852,6 +3880,8 @@ func (m *Model) editorView() string {
 		return m.selftestView()
 	case screenUpdate:
 		return m.framedText(m.updateView) + m.notes()
+	case screenVersions:
+		return m.versionsView()
 	case screenRestart:
 		return m.framedText(m.restartView) + m.notes()
 	case screenTargets:
@@ -4590,6 +4620,8 @@ func (m *Model) keepScrollPosition() {
 		if m.template != nil && m.template.picking {
 			m.templateList.offset, _ = m.templateWindow()
 		}
+	case screenVersions:
+		m.versionList.offset, _ = m.versionWindow()
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
 	case screenTargets:

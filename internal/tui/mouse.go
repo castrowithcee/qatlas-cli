@@ -170,7 +170,7 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 func (m *Model) wheelScreens() bool {
 	switch m.screen {
 	case screenList, screenForm, screenPicker, screenProviders, screenHelp, screenLogs, screenLogDetail,
-		screenTargets, screenPaths, screenTemplate, screenFindings, screenCommand:
+		screenTargets, screenPaths, screenTemplate, screenFindings, screenCommand, screenVersions:
 		return true
 	}
 	return m.textScreen()
@@ -435,7 +435,7 @@ func (m *Model) backShown() bool {
 	case screenSelftest:
 		// A running test is ended by esc; once it is ending, esc does nothing.
 		return m.st != nil && !m.st.cancelling
-	case screenPicker, screenProviders, screenLogDetail, screenFindings:
+	case screenPicker, screenProviders, screenLogDetail, screenFindings, screenVersions:
 		return true
 	}
 	return false

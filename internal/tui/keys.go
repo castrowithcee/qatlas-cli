@@ -16,7 +16,8 @@ func (m *Model) typing() bool {
 		return true
 	}
 	switch m.screen {
-	case screenCommand, screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenPicker, screenProviders:
+	case screenCommand, screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenPicker, screenProviders,
+		screenVersions:
 		return true
 	case screenList:
 		return m.list.editing
@@ -67,6 +68,8 @@ func (m *Model) helpReachable() bool {
 			return m.templateList.query() == ""
 		}
 		return true
+	case screenVersions:
+		return m.versionList.query() == ""
 	}
 	return !m.typing()
 }
