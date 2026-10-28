@@ -21,7 +21,9 @@ const (
 
 	auditLogRoles = "BookStack requires the role permissions settings-manage and users-manage for the token's user. " +
 		"The audit log covers the whole instance and contains IP addresses and sign-in events of all users, so a " +
-		"connection with targets cannot use this tool, and a tool allow list entry is required"
+		"connection with targets cannot use this tool, and a tool allow list entry is required. Entries about an " +
+		"excluded shelf, book, chapter, or page are left out; entries without an object, such as comment, attachment, " +
+		"and image events, cannot be assigned and stay"
 
 	// auditDateTime is the form in which dates are sent to BookStack, in UTC.
 	auditDateTime = "2006-01-02 15:04:05"
@@ -238,12 +240,29 @@ func invokeAuditLogList(ctx context.Context, resolved *config.Resolved, secrets 
 
 // ListAuditLog returns the reduced entries that match the filter.
 func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, q listQuery, limit, offset int) (output.Collection, error) {
+	out := map[int64]bool{}
 	spec := scanSpec[auditEntryJSON]{
-		op: "list audit log", path: "/api/audit-log", query: filter.query(), filtered: filter.active(),
+		op: "list audit log", path: "/api/audit-log", query: filter.query(), filtered: filter.active() || c.scope.excludes(),
 		narrow: "type, user_id, or created_after and created_before", limit: limit, offset: offset,
 		arguments: argNames(auditLogList),
 		id:        func(e auditEntryJSON) int64 { return e.ID },
-		keep:      filter.keep,
+		keep:      func(e auditEntryJSON) bool { return filter.keep(e) && !out[e.ID] },
+		prepare: func(ctx context.Context, entries []auditEntryJSON) error {
+			if !c.scope.excludes() {
+				return nil
+			}
+			for _, e := range entries {
+				if !filter.keep(e) {
+					continue
+				}
+				gone, err := c.auditEntryOut(ctx, e)
+				if err != nil {
+					return err
+				}
+				out[e.ID] = gone
+			}
+			return nil
+		},
 		row: func(e auditEntryJSON) output.Row {
 			row := output.Row{
 				"id": e.ID, "type": clip(e.Type, maxResultString), "detail": clip(e.Detail, maxResultString),
@@ -269,4 +288,27 @@ func (c *Client) ListAuditLog(ctx context.Context, filter auditFilter, q listQue
 		return output.Collection{}, err
 	}
 	return output.Collection{Columns: fieldNames(auditLogList), Rows: rows}, nil
+}
+
+// auditEntryOut reports whether an entry concerns an excluded object, by the loggable it names: a page, a
+// chapter, a book, or a shelf. The container of a page or chapter is read as evidence, and one that cannot be
+// read, such as a deleted page, counts as out as soon as an exclusion above it can exist. An entry without
+// loggable fields, such as a comment, attachment, or image event, cannot be assigned and stays.
+func (c *Client) auditEntryOut(ctx context.Context, e auditEntryJSON) (bool, error) {
+	if e.LoggableID == nil {
+		return false, nil
+	}
+	id := *e.LoggableID
+	switch e.LoggableType {
+	case "bookshelf":
+		return c.scope.excludesShelf(id), nil
+	case "book":
+		return c.bookOutLive(ctx, id)
+	case "chapter":
+		return c.chapterRowOut(ctx, id)
+	case "page":
+		in, err := c.pageRowReached(ctx, id)
+		return !in, err
+	}
+	return false, nil
 }

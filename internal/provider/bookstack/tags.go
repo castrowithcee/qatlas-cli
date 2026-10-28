@@ -37,7 +37,8 @@ var (
 	tagsList = capability.Descriptor{
 		ID: Provider + ".tags.list", Version: 1, Title: "List BookStack tag names",
 		Description: "List the tag names used on visible content with the number of distinct values and usages. Tags " +
-			"aggregate over the whole instance, so a connection with targets cannot use this tool",
+			"aggregate over the whole instance, so a connection with targets cannot use this tool; on a connection with " +
+			"exclusions, names, value counts, and usages may include excluded content",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},"name_contains":{"type":"string","minLength":1,"maxLength":255},` + tagNameListSchema.properties() + `},"additionalProperties":false}`),
@@ -57,7 +58,8 @@ var (
 	tagsValues = capability.Descriptor{
 		ID: Provider + ".tags.values", Version: 1, Title: "List values of a BookStack tag",
 		Description: "List the values used with one tag name on visible content with their usages. Tags aggregate over " +
-			"the whole instance, so a connection with targets cannot use this tool",
+			"the whole instance, so a connection with targets cannot use this tool; on a connection with exclusions, " +
+			"values and usages may include excluded content",
 		Tags: []string{"knowledge", "tags", "bookstack"},
 		Risk: bookstackReadRisk, Provider: Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"value_contains":{"type":"string","minLength":1,"maxLength":255},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0},` + tagValueListSchema.properties() + `},"required":["name"],"additionalProperties":false}`),
