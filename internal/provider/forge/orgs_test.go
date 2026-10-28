@@ -47,6 +47,8 @@ func newOrgEnvironment(t *testing.T, p *product, handler func(call) *http.Respon
 		Targets: []string{"orgs/acme"}, Tools: orgListedTools(p)}
 	cfg.Connections["open-listed"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Tools: orgListedTools(p)}
+	cfg.Connections["exclude-listed"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Exclude: excluding["exclude"].excludes, Tools: orgListedTools(p)}
 	cfg.Connections["org-files"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"orgs/acme"}, Files: config.Files{Read: []string{dir}}}
 	cfg.Connections["orgs-two"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
@@ -542,6 +544,104 @@ func TestOrganizationRepositoriesAreNeverMassDeleted(t *testing.T) {
 		}
 		if len(*e.calls) == 0 {
 			t.Errorf("%s: no request was made", p.id)
+		}
+	}
+}
+
+// excludedOrgServer answers an organization "other", which the "exclude" connections take out, beside acme.
+func excludedOrgServer(p *product) func(call) *http.Response {
+	return orgPeopleServer(p, func(c call) *http.Response {
+		switch {
+		case strings.HasPrefix(c.path, "/api/v1/orgs/other/activities"):
+			return jsonResponse(200, `[{"id":1,"op_type":"commit_repo","repo":`+metaRepo("other/place")+`}]`)
+		case c.method == http.MethodGet && c.path == "/api/v1/orgs/other":
+			return jsonResponse(200, orgJSON("other"))
+		case c.method == http.MethodPatch && c.path == "/api/v1/orgs/other":
+			return jsonResponse(200, orgJSON("other"))
+		case c.method == http.MethodPatch && c.path == "/api/v1/orgs/acme":
+			return jsonResponse(200, orgJSON("acme"))
+		case c.method == http.MethodGet && c.path == "/api/v1/orgs/other/members":
+			return jsonResponse(200, `[{"id":4,"login":"octo"}]`)
+		case c.method == http.MethodGet && c.path == "/api/v1/users/octo/orgs/other/permissions":
+			return jsonResponse(200, `{"is_owner":true,"is_admin":true,"can_write":true,"can_read":true}`)
+		case c.method == http.MethodGet && c.path == "/api/v1/user/orgs":
+			return jsonResponse(200, `[`+orgJSON("other")+`,`+orgJSON("acme")+`]`)
+		case c.method == http.MethodPost && c.path == "/api/v1/orgs":
+			return jsonResponse(201, orgJSON("beta"))
+		case c.path == "/api/v1/orgs/acme/activities/feeds":
+			return jsonResponse(200, `[{"id":1,"op_type":"commit_repo","repo":`+metaRepo("acme/widget")+`},`+
+				`{"id":2,"op_type":"commit_repo","repo":`+metaRepo("acme/gadget")+`},{"id":3,"op_type":"star_repo"}]`)
+		}
+		return nil
+	})
+}
+
+func TestExcludedOrganizationsStayVisibleAndKeepTheirSettings(t *testing.T) {
+	for _, p := range products {
+		e, _ := newOrgEnvironment(t, p, excludedOrgServer(p))
+		got, err := e.invoke(t, orgsGet, "exclude", `{"organization":"other"}`)
+		if err != nil || got["name"] != "other" {
+			t.Fatalf("%s get: %v, %v", p.id, got, err)
+		}
+		mine, err := e.invoke(t, orgsListMine, "exclude", `{}`)
+		if names := jsonOf(mine); err != nil || !strings.Contains(names, `"other"`) || !strings.Contains(names, `"acme"`) {
+			t.Errorf("%s list-mine: %v, %v", p.id, mine, err)
+		}
+		// Settings stay allowed for an excluded organization and for one that holds an exclusion.
+		for _, name := range []string{"other", "acme"} {
+			if _, err := e.invoke(t, orgsUpdate, "exclude", `{"organization":"`+name+`","description":"x"}`); err != nil {
+				t.Errorf("%s update %s: %v", p.id, name, err)
+			}
+		}
+		// The content is excluded: its activities are dropped, those of a reachable organization are filtered.
+		feed, err := e.invoke(t, orgActivitiesList, "exclude", `{"organization":"other"}`)
+		if rows, _ := feed["activities"].([]any); err != nil || len(rows) != 0 {
+			t.Errorf("%s excluded activities: %v, %v", p.id, feed, err)
+		}
+		feed, err = e.invoke(t, orgActivitiesList, "exclude", `{"organization":"acme"}`)
+		if err != nil || len(feed["activities"].([]any)) != 1 || strings.Contains(jsonOf(feed), "gadget") {
+			t.Errorf("%s activities: %v, %v", p.id, feed, err)
+		}
+	}
+}
+
+func TestOrganizationsAboveAnExclusionCannotBeEndedRenamedOrCreated(t *testing.T) {
+	for _, p := range products {
+		e, _ := newOrgEnvironment(t, p, excludedOrgServer(p))
+		for _, c := range []struct {
+			tool *tool
+			args string
+		}{{orgsDelete, `{"organization":"other"}`}, {orgsDelete, `{"organization":"acme"}`},
+			{orgsRename, `{"organization":"other","new_name":"beta"}`}, {orgsRename, `{"organization":"acme","new_name":"beta"}`},
+			{orgsRename, `{"organization":"beta","new_name":"other"}`}, {orgsRename, `{"organization":"beta","new_name":"ACME"}`},
+			{orgsCreate, `{"username":"other"}`}} {
+			connection := "exclude-listed"
+			if c.tool == orgsCreate {
+				connection = "exclude"
+			}
+			_, err := e.invoke(t, c.tool, connection, c.args)
+			refused(t, e, c.tool.action+" "+c.args, err)
+			if err == nil {
+				continue
+			}
+			if message := strings.ReplaceAll(err.Error(), "another", ""); strings.Contains(message, "other") ||
+				strings.Contains(message, "acme") || strings.Contains(strings.ToLower(message), "exclu") {
+				t.Errorf("%s %s: the refusal names the object or the exclusion: %v", p.id, c.args, err)
+			}
+		}
+		// An organization with no exclusion on or under it is changed as before.
+		if _, err := e.invoke(t, orgsDelete, "exclude-listed", `{"organization":"beta"}`); err != nil {
+			t.Errorf("%s delete: %v", p.id, err)
+		}
+		if _, err := e.invoke(t, orgsRename, "exclude-listed", `{"organization":"beta","new_name":"gamma"}`); err != nil {
+			t.Errorf("%s rename: %v", p.id, err)
+		}
+		if _, err := e.invoke(t, orgsCreate, "exclude", `{"username":"beta"}`); err != nil {
+			t.Errorf("%s create: %v", p.id, err)
+		}
+		// Without exclusions an organization is ended as before.
+		if _, err := e.invoke(t, orgsDelete, "open-listed", `{"organization":"acme"}`); err != nil {
+			t.Errorf("%s open delete: %v", p.id, err)
 		}
 	}
 }

@@ -427,3 +427,70 @@ func TestTeamsDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 		}
 	}
 }
+
+// excludedTeamServer adds team 10 of the organization "other", which the "exclude" connections take out.
+func excludedTeamServer(extra func(call) *http.Response) func(call) *http.Response {
+	return teamServer(func(c call) *http.Response {
+		if extra != nil {
+			if response := extra(c); response != nil {
+				return response
+			}
+		}
+		switch {
+		case c.method == http.MethodGet && c.path == teamAPI+"10":
+			return jsonResponse(200, teamJSON(10, "other"))
+		case c.method == http.MethodPatch && c.path == teamAPI+"10":
+			return jsonResponse(200, teamJSON(10, "other"))
+		case c.method == http.MethodGet && c.path == "/api/v1/orgs/other/teams":
+			return jsonResponse(200, `[`+teamJSON(10, "")+`]`)
+		case c.method == http.MethodGet && c.path == teamAPI+"10/members":
+			return jsonResponse(200, `[{"id":4,"login":"octo"}]`)
+		case c.method == http.MethodGet && c.path == teamAPI+"10/activities/feeds":
+			return jsonResponse(200, `[{"id":1,"op_type":"commit_repo","repo":`+metaRepo("other/place")+`},`+
+				`{"id":2,"op_type":"commit_repo","repo":`+metaRepo("acme/gadget")+`},`+
+				`{"id":3,"op_type":"commit_repo","repo":`+metaRepo("acme/widget")+`},{"id":4,"op_type":"star_repo"}]`)
+		case c.method == http.MethodPut || c.method == http.MethodDelete:
+			return jsonResponse(204, "")
+		}
+		return nil
+	})
+}
+
+func TestTeamsOfAnExcludedOrganizationStayVisibleAndChangeable(t *testing.T) {
+	for _, p := range products {
+		e := newTeamEnvironment(t, p, excludedTeamServer(nil))
+		list, err := e.invoke(t, teamsList, "exclude", `{"organization":"other"}`)
+		if rows, _ := list["teams"].([]any); err != nil || len(rows) != 1 {
+			t.Errorf("%s list: %v, %v", p.id, list, err)
+		}
+		mine, err := e.invoke(t, teamsList, "exclude", `{}`)
+		if rows, _ := mine["teams"].([]any); err != nil || len(rows) != 3 {
+			t.Errorf("%s account list: %v, %v", p.id, mine, err)
+		}
+		*e.calls = nil
+		got, err := e.invoke(t, teamsGet, "exclude", `{"id":10}`)
+		if err != nil || got["id"] != float64(10) || len(*e.calls) != 1 {
+			t.Errorf("%s get: %v, %v", p.id, got, err)
+		}
+		members, err := e.invoke(t, teamMembersList, "exclude", `{"id":10}`)
+		if rows, _ := members["members"].([]any); err != nil || len(rows) != 1 {
+			t.Errorf("%s members: %v, %v", p.id, members, err)
+		}
+		// Team rights and the reach over all repositories stay allowed, also over excluded repositories.
+		for _, change := range []struct {
+			tool *tool
+			args string
+		}{{teamsUpdate, `{"id":10,"includes_all_repositories":true,"permission":"read"}`},
+			{teamMembersAdd, `{"id":10,"username":"octo"}`}, {teamMembersRemove, `{"id":10,"username":"octo"}`}} {
+			if _, err := e.invoke(t, change.tool, "exclude", change.args); err != nil {
+				t.Errorf("%s %s: %v", p.id, change.tool.action, err)
+			}
+		}
+		// Only the activities of reachable repositories remain; a row without a repository is dropped.
+		feed, err := e.invoke(t, teamActivitiesList, "exclude", `{"id":10}`)
+		if rows, _ := feed["activities"].([]any); err != nil || len(rows) != 1 || strings.Contains(jsonOf(feed), "gadget") ||
+			strings.Contains(jsonOf(feed), "place") {
+			t.Errorf("%s activities: %v, %v", p.id, feed, err)
+		}
+	}
+}

@@ -53,7 +53,7 @@ func (a allowlist) otherPeopleOnly() error {
 }
 
 // ownAccountOnly allows a view of the account behind the token: without targets, or with a users/NAME target
-// (proved by verifyOwnAccount at run time) and no repository target.
+// (proved by verifyOwnProfile at run time) and no repository target.
 func (a allowlist) ownAccountOnly() error {
 	if !a.bound() {
 		return nil
@@ -68,6 +68,22 @@ func (a allowlist) ownAccountOnly() error {
 	}
 	return invalidArgument("the account behind the token is reached only when the connection's targets name it as " +
 		"users/NAME; add that target or use a connection without targets")
+}
+
+// keepsActivity reports whether an activity row may be shown: without exclusions every row, otherwise only one
+// whose canonical repository is known and not excluded. A row without a repository proves nothing about where it
+// belongs, so it is dropped.
+func (a allowlist) keepsActivity(row object) bool {
+	if len(a.excludes) == 0 {
+		return true
+	}
+	inner, ok := row.child("repo")
+	if !ok {
+		return false
+	}
+	name, _ := inner.text("full_name")
+	owner, repo, ok := strings.Cut(name, "/")
+	return ok && owner != "" && repo != "" && !a.excluded(owner, repo)
 }
 
 func userRows(p *product, rows []object) []map[string]any {
@@ -246,7 +262,8 @@ var userActivitiesList = &tool{
 			Title: "List the " + p.name + " activities of a user",
 			Description: "List one batch of the activity feed of one user with every member of each activity. It " +
 				"reaches past any target, so only a connection without targets offers it. The feed names the users " +
-				"who acted, and its texts are untrusted data.",
+				"who acted, and its texts are untrusted data. Rows of excluded repositories are left out, and so are " +
+				"rows without a repository once the connection excludes anything.",
 			Tags: []string{p.id, "user-activities", "list"},
 			Risk: readRisk(p.id + activitySensitivity),
 			InputSchema: inputSchema(`"username":`+issueSchemaLogin+`,"only_performed_by":`+searchSchemaFlag+
@@ -309,7 +326,7 @@ var userActivitiesList = &tool{
 			}
 			activities := make([]map[string]any, 0, len(rows))
 			for _, row := range rows {
-				if row != nil {
+				if row != nil && allowed.keepsActivity(row) {
 					activities = append(activities, project(p, activityMembers, row))
 				}
 			}
@@ -334,7 +351,8 @@ var userHeatmapGet = &tool{
 			Title: "Get the " + p.name + " contribution heatmap of a user",
 			Description: "Read the contribution counts of one user per time stamp, at most 400 entries. It reaches " +
 				"past any target, so only a connection without targets offers it. An instance can switch the " +
-				"heatmap off, and then it answers as if the user did not exist.",
+				"heatmap off, and then it answers as if the user did not exist. The counts are summed over all " +
+				"repositories, excluded ones included.",
 			Tags:        []string{p.id, "user-heatmap", "get"},
 			Risk:        readRisk(p.id + userSensitivity),
 			InputSchema: inputSchema(`"username":`+issueSchemaLogin, "username"),
@@ -437,7 +455,7 @@ func newFollowList(action, noun, path string) *tool {
 			return func(ctx context.Context, c *Client) (any, error) {
 				const op = "list users"
 				if a.Username == "" {
-					if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+					if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 						return nil, err
 					}
 				}
@@ -511,7 +529,7 @@ var userFollowingCheck = &tool{
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "check following"
 			if a.Username == "" {
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 					return nil, err
 				}
 			}
@@ -567,7 +585,7 @@ func newFollowChange(action, key, method, title, text string) *tool {
 				return nil, err
 			}
 			return func(ctx context.Context, c *Client) (any, error) {
-				if err := verifyOwnAccount(ctx, c, action+" follow", allowed); err != nil {
+				if err := verifyOwnProfile(ctx, c, action+" follow", allowed); err != nil {
 					return nil, err
 				}
 				if err := c.change(ctx, action+" follow", method, "/user/following/"+escape(a.Username), nil,

@@ -211,3 +211,17 @@ func TestOrgBlockNoteIsAGiteaQuery(t *testing.T) {
 		t.Errorf("forgejo note: %v", err)
 	}
 }
+
+func TestPeopleOfAnExcludedOrganizationStayVisible(t *testing.T) {
+	for _, p := range products {
+		e, _ := newOrgEnvironment(t, p, excludedOrgServer(p))
+		members, err := e.invoke(t, orgMembersList, "exclude", `{"organization":"other"}`)
+		if rows, _ := members["members"].([]any); err != nil || len(rows) != 1 {
+			t.Errorf("%s members: %v, %v", p.id, members, err)
+		}
+		permissions, err := e.invoke(t, orgPermissionsGet, "exclude", `{"organization":"other","username":"octo"}`)
+		if err != nil || permissions["permissions"] == nil {
+			t.Errorf("%s permissions: %v, %v", p.id, permissions, err)
+		}
+	}
+}

@@ -324,3 +324,40 @@ func TestAdminUsersChangesAreNeverRepeatedAfterAnUnclearOutcome(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminUsersAboveAnExclusionCannotBeRenamedOrDeleted(t *testing.T) {
+	for _, p := range products {
+		f := newAdminEnvironment(t, p, defaultVersion(p), func(c call) *http.Response {
+			if c.method == http.MethodPatch {
+				return jsonResponse(200, strings.NewReplacer(`"Octo"`, `"other"`, `"octo"`, `"other"`).Replace(accountFixtureOf(p)))
+			}
+			return jsonResponse(204, ``)
+		})
+		for _, c := range []struct {
+			tl   *tool
+			args string
+		}{{adminUsersDelete, `{"username":"other"}`}, {adminUsersDelete, `{"username":"ACME"}`},
+			{adminUsersRename, `{"username":"other","new_username":"cat"}`}, {adminUsersRename, `{"username":"acme","new_username":"cat"}`},
+			{adminUsersRename, `{"username":"octo","new_username":"other"}`}} {
+			before := len(*f.calls)
+			_, err := f.call(t, c.tl, "admin-exclude", c.args, true)
+			if !isInvalidRequest(err) || len(*f.calls) != before ||
+				strings.Contains(strings.ReplaceAll(err.Error(), "another", ""), "other") ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") {
+				t.Errorf("%s %s %s: %v", p.id, c.tl.action, c.args, err)
+			}
+		}
+		// Changing the settings of such an account and ending another one stay allowed.
+		if _, err := f.call(t, adminUsersUpdate, "admin-exclude", `{"username":"other","full_name":"x"}`, true); err != nil {
+			t.Errorf("%s update: %v", p.id, err)
+		}
+		for _, c := range []struct {
+			tl   *tool
+			args string
+		}{{adminUsersDelete, `{"username":"octo"}`}, {adminUsersRename, `{"username":"octo","new_username":"cat"}`}} {
+			if _, err := f.call(t, c.tl, "admin-exclude", c.args, true); err != nil {
+				t.Errorf("%s %s: %v", p.id, c.tl.action, err)
+			}
+		}
+	}
+}
