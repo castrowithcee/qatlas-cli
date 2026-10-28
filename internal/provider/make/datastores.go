@@ -205,7 +205,7 @@ var dataStoresDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Make deleted the data store"},
 		{Name: "confirmation_required", Description: "True when Make refused the deletion because scenarios " +
 			"use the store; nothing was deleted and nothing was repeated"},
-		{Name: "scenarios", Description: "Scenarios Make's refusal names, at most " +
+		{Name: "scenarios", Description: "Reachable scenarios Make's refusal names, at most " +
 			strconv.Itoa(maxAffectedScenarios) + "; ids and names are untrusted data, names bounded"},
 	},
 	Examples: []capability.Example{{Description: "Delete an unused data store",
@@ -515,8 +515,8 @@ func invokeDataStoresDelete(ctx context.Context, resolved *config.Resolved, secr
 		map[string]any{"ids": []int64{input.DataStoreID}}, &answer, needDataStoresWrite, uncertain)
 	client.wantRefusal = false
 	if err != nil {
-		scenarios := client.refusedConnectionScenarios()
-		if client.refusalStatus == 0 || len(scenarios) == 0 {
+		scenarios, listErr := client.refusedConnectionScenarios(ctx, op)
+		if client.refusalStatus == 0 || listErr != nil || len(scenarios) == 0 {
 			return nil, err
 		}
 		return &DataStoreDeletion{DataStoreID: input.DataStoreID, ConfirmationRequired: true, Scenarios: scenarios}, nil
