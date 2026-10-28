@@ -263,7 +263,7 @@ func TestPackageLinkAndUnlinkSendOneRequest(t *testing.T) {
 
 func TestPackageLinkRefusesRepositoryOutsideTargets(t *testing.T) {
 	// A repository of the owner follows the owner; the check also runs for the repository name.
-	allowed := allowlist{{kind: kindOwner, scope: "orgs", owner: "acme"}}
+	allowed := allowlist{targets: []target{{kind: kindOwner, scope: "orgs", owner: "acme"}}}
 	if allowed.allowsRepository("acme", "widget") != true || allowed.allowsRepository("other", "widget") {
 		t.Fatal("allowsRepository")
 	}

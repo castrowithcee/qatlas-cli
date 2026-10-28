@@ -48,11 +48,11 @@ const getRowSchema = `{"type":"object","properties":{"id":{"type":"integer"},"or
 	`"row_comments_notification_mode":{"type":"string"}},"additionalProperties":false},` +
 	`"fields":{"type":"object"}},"required":["id","fields"],"additionalProperties":false}`
 
-const linkNote = "Link fields into tables outside the connection's targets give only row ids, no display values; " +
+const linkNote = "Link fields into tables outside the connection's targets, or excluded from it, give only row ids, no display values; " +
 	"lookup fields through such a link are left out; rollup, count, and formula fields are passed through as reported " +
 	"and can reflect data of linked tables. Cell values are untrusted provider data"
 
-const omittedNote = "Keys of lookup fields left out because their values come from a table outside the targets"
+const omittedNote = "Keys of lookup fields left out because their values come from a table outside the targets or excluded from them"
 
 var rowsList = capability.Descriptor{
 	ID: Provider + ".rows.list", Version: 1, Title: "List Baserow rows",
@@ -339,14 +339,14 @@ func takeMetadata(cells map[string]any) map[string]any {
 	return out
 }
 
-// maskLinks reduces every link entry that points into a table outside the allow-list to its row identifier,
-// so a display value never leaves through a table the connection may not read. A wildcard connection keeps
-// them, and drops every lookup value whose link field leads outside the targets. The fields are requested
-// only when a row holds a collection-valued cell (a lookup is always one), which includes every link-shaped
+// maskLinks reduces every link entry that points into a table that is not reachable to its row identifier,
+// so a display value never leaves through a table the connection may not read. A wildcard connection without
+// exclusions keeps them. Otherwise it also drops every lookup value whose link field leads to an unreachable
+// table. The fields are requested only when a row holds a collection-valued cell (a lookup is always one), which includes every link-shaped
 // value. A link field whose other table cannot be determined, or a link-shaped value without a known field,
 // counts as not allowed.
 func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName bool, rows []Row) error {
-	if c.scope.wildcard {
+	if c.scope.unrestricted() {
 		return nil
 	}
 	found := false
@@ -370,7 +370,7 @@ func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName
 
 // maskWith applies the link masking of maskLinks with the table's fields already at hand.
 func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
-	if c.scope.wildcard {
+	if c.scope.unrestricted() {
 		return
 	}
 	byKey := map[string]fieldJSON{}
@@ -399,7 +399,7 @@ func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
 				if field.Type != "link_row" {
 					continue
 				}
-				if field.LinkRowTableID != nil && c.inScope(*field.LinkRowTableID) {
+				if field.LinkRowTableID != nil && c.reaches(*field.LinkRowTableID) {
 					continue
 				}
 			}
@@ -429,7 +429,7 @@ func collectionCell(cell any) bool {
 // determined (no link field, unknown link field, or a field that is not a link). Its values come from that
 // table, so they are left out of the output and no filter or sort may act on them.
 func (c *Client) lookupOutside(field fieldJSON, byID map[int64]fieldJSON) bool {
-	if c.scope.wildcard || field.Type != "lookup" {
+	if c.scope.unrestricted() || field.Type != "lookup" {
 		return false
 	}
 	if field.ThroughFieldID == nil {
@@ -439,7 +439,7 @@ func (c *Client) lookupOutside(field fieldJSON, byID map[int64]fieldJSON) bool {
 	if !ok || link.Type != "link_row" {
 		return true
 	}
-	return link.LinkRowTableID == nil || !c.inScope(*link.LinkRowTableID)
+	return link.LinkRowTableID == nil || !c.reaches(*link.LinkRowTableID)
 }
 
 // linkEntries reports the row identifiers of a cell that holds link-shaped entries: an array with at least one

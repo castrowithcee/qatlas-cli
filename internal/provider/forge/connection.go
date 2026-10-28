@@ -61,12 +61,12 @@ func (c *Client) proveFirstTarget(ctx context.Context, allowed allowlist) error 
 	const op = "test connection"
 	notReached := &provider.Error{Class: provider.ClassNotFound, Op: op,
 		Message: c.product.name + " does not show the first target of this connection to this token"}
-	if len(allowed) == 0 {
+	if !allowed.bound() {
 		var account object
 		_, err := c.get(ctx, op, "/user", nil, &account)
 		return err
 	}
-	first := allowed[0]
+	first := allowed.targets[0]
 	var answer object
 	if first.kind == kindRepository {
 		if _, err := c.get(ctx, op, "/repos/"+escape(first.owner)+"/"+escape(first.repo), nil, &answer); err != nil {
