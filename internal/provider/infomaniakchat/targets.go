@@ -2,6 +2,7 @@ package infomaniakchat
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -26,6 +27,9 @@ const (
 type scope struct {
 	teams    []string
 	channels []string
+	// excluded are channel/CHANNEL_ID exclusions. They are never targets: an excluded channel is treated
+	// like a private channel without membership, and an exclusion always wins.
+	excluded []string
 }
 
 // allowsTeam reports whether a team belongs to this connection's boundary.
@@ -38,10 +42,16 @@ func (s scope) allowsTeam(teamID string) bool {
 	return false
 }
 
+// excludes reports whether a channel is excluded by the connection.
+func (s scope) excludes(channelID string) bool { return slices.Contains(s.excluded, channelID) }
+
 // allowsChannel reports whether a channel belongs to this connection's local boundary. It says nothing
 // about which team the channel actually belongs to; only the live check against the instance proves that,
 // see (*Client).verifyChannelScope.
 func (s scope) allowsChannel(channelID string) bool {
+	if s.excludes(channelID) {
+		return false
+	}
 	if len(s.channels) == 0 {
 		return true
 	}
@@ -53,15 +63,16 @@ func (s scope) allowsChannel(channelID string) bool {
 	return false
 }
 
-// scopeOf reads the bound teams and channel allow-list of one connection.
+// scopeOf reads the bound teams, channel allow-list, and exclusions of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseScope(values)
+	return parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved)...)
 }
 
 // parseScope reads the configured targets of one connection: one or more team/TEAM_ID entries, and zero or
-// more channel/CHANNEL_ID entries, none named twice. No error ever quotes a configured value.
-func parseScope(values []string) (scope, error) {
+// more channel/CHANNEL_ID entries, none named twice. An exclusion is a channel/CHANNEL_ID, named once and
+// never equal to a target. It does not rely on the core validation, so an invalid exclusion fails closed
+// here too. No error ever quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
 	var bound scope
 	seenTeams, seenChannels := map[string]bool{}, map[string]bool{}
 	for _, raw := range values {
@@ -86,6 +97,17 @@ func parseScope(values []string) (scope, error) {
 	}
 	if len(bound.teams) == 0 {
 		return scope{}, errors.New("a kChat connection needs one or more team/TEAM_ID targets")
+	}
+	seenExcluded := map[string]bool{}
+	for _, raw := range excludes {
+		kind, id, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil || kind != "channel" || strings.TrimSpace(raw) != raw || seenExcluded[id] ||
+			seenChannels[id] {
+			return scope{}, errors.New("a kChat exclusion must be channel/CHANNEL_ID, named once and not equal " +
+				"to a target")
+		}
+		seenExcluded[id] = true
+		bound.excluded = append(bound.excluded, id)
 	}
 	return bound, nil
 }
