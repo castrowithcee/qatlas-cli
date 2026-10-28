@@ -135,11 +135,13 @@ func readExportRequest(raw json.RawMessage, formats []string) (exportRequest, st
 }
 
 // requireExportBound proves that the exported item lies in the connection: a book must be reached as a whole,
-// a chapter must be bound or lie in such a book, a page must lie in the connection. An unbound connection reads
-// nothing. BookStack inserts page includes into an export by what the token may read, so on a bound connection
-// the export is also refused when a contained page includes a page outside the targets.
+// a chapter must be bound or lie in such a book, a page must lie in the connection, and none of them may be
+// excluded. A connection without targets and exclusions reads nothing. An export file cannot be filtered, so a
+// chapter or book export that contains an excluded chapter or page is refused. BookStack inserts page includes
+// into an export by what the token may read, so the export is also refused when a contained page includes a page
+// outside the targets or excluded.
 func (c *Client) requireExportBound(ctx context.Context, in exportRequest) error {
-	if in.Type == "page" && c.scope.bound() {
+	if in.Type == "page" && c.scope.limited() {
 		// The read that proves the page also serves the include check.
 		return c.requireNoOutsideInclude(ctx, []int64{in.ID})
 	}
@@ -149,13 +151,13 @@ func (c *Client) requireExportBound(ctx context.Context, in exportRequest) error
 			return err
 		}
 	case "chapter":
-		if !c.scope.mayReachChapter(in.ID) {
+		if !c.scope.mayReachChapter(in.ID) || c.scope.excludesChapter(in.ID) {
 			return c.scope.outside(outsideChapter)
 		}
 	default:
 		return c.requirePageBound(ctx, strconv.FormatInt(in.ID, 10))
 	}
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
 	ids, err := c.exportedPages(ctx, in)
@@ -182,30 +184,34 @@ func (c *Client) exportedPages(ctx context.Context, in exportRequest) ([]int64, 
 		}
 		entries = chapter.Pages
 		// This read is also the evidence of the chapter's book.
-		if c.scope.bound() && !c.scope.hasChapter(in.ID) {
-			allowed, err := c.bookAllowed(ctx, chapter.BookID)
-			if err != nil {
-				return nil, err
-			}
-			if !allowed {
-				return nil, c.scope.outside(outsideChapter)
-			}
+		allowed, err := c.chapterAllowed(ctx, in.ID, chapter.BookID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, c.scope.outside(outsideChapter)
 		}
 	}
 	var ids []int64
+	excluded := false
 	add := func(e entryJSON) {
+		excluded = excluded || c.scope.excludesPage(e.ID)
 		if e.ID > 0 && !slices.Contains(ids, e.ID) {
 			ids = append(ids, e.ID)
 		}
 	}
 	for _, e := range entries {
 		if e.Type == "chapter" {
+			excluded = excluded || c.scope.excludesChapter(e.ID)
 			for _, p := range e.Pages {
 				add(p)
 			}
 		} else {
 			add(e)
 		}
+	}
+	if excluded {
+		return nil, c.scope.outside("a chapter or page in the export")
 	}
 	return ids, nil
 }
@@ -250,7 +256,7 @@ func invokeContentExport(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
-	if err := checkBookBeforeSecret(resolved, in); err != nil {
+	if err := checkExportBeforeSecret(resolved, in); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -296,7 +302,7 @@ func invokeContentDownload(ctx context.Context, resolved *config.Resolved, secre
 	if in.LocalPath == nil {
 		return nil, invalidRequest("local_path is required")
 	}
-	if err := checkBookBeforeSecret(resolved, in); err != nil {
+	if err := checkExportBeforeSecret(resolved, in); err != nil {
 		return nil, err
 	}
 	// The target is prepared before the credential is resolved, so a path outside the release, or a file that
@@ -357,13 +363,15 @@ func invokeContentDownload(ctx context.Context, resolved *config.Resolved, secre
 
 const exportTooLarge512 = "the export is larger than the limit of 512 MiB"
 
-// checkBookBeforeSecret refuses a book outside the connection before any secret is resolved.
-func checkBookBeforeSecret(resolved *config.Resolved, in exportRequest) error {
-	if in.Type != "book" {
-		return nil
-	}
+// checkExportBeforeSecret refuses a book outside the connection, and an item excluded by its identifier, before
+// any secret is resolved.
+func checkExportBeforeSecret(resolved *config.Resolved, in exportRequest) error {
 	bound, err := boundScope(resolved)
 	if err != nil {
+		return err
+	}
+	prefix := map[string]string{"book": bookPrefix, "chapter": chapterPrefix, "page": pagePrefix}[in.Type]
+	if err := bound.checkExcluded(prefix, in.ID); err != nil || in.Type != "book" {
 		return err
 	}
 	return bound.checkBook(in.ID)
