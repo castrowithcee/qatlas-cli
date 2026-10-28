@@ -61,7 +61,7 @@ var projectsList = capability.Descriptor{
 	Description: "List one bounded batch of the projects of a user or an organization a connection " +
 		"allows, in number order unless order_by says otherwise, with number, title, URL, whether each is " +
 		"closed, and the members of GitHub's project; the repositories of a project are cut at 10, with their " +
-		"total count and a truncated marker",
+		"total count and a truncated marker; excluded projects are left out, but counts may include them",
 	Tags:        []string{"github", "projects", "owner", "list", "planning"},
 	Risk:        readRisk,
 	Provider:    Provider,
@@ -99,7 +99,8 @@ var repositoriesList = capability.Descriptor{
 	Description: "List one bounded batch of the repositories a user or an organization owns and an explicit " +
 		"connection allows, in name order unless order_by says otherwise, with visibility, whether each is " +
 		"archived, and the members of GitHub's repository; lists and connections are cut at 10 entries per " +
-		"repository, with their total count and a truncated marker",
+		"repository, with their total count and a truncated marker; excluded repositories are left out, but " +
+		"counts may include them",
 	Tags:        []string{"github", "repositories", "owner", "list"},
 	Risk:        readRisk,
 	Provider:    Provider,

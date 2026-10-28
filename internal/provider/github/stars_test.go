@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -112,5 +113,70 @@ func TestStarRefusalsBeforeIO(t *testing.T) {
 	}
 	if reads != 0 || len(f.recorded()) != before {
 		t.Errorf("%s outside the targets reached the credential or GitHub", starsAdd.ID)
+	}
+}
+
+func TestStarListDropsExcludedRepositories(t *testing.T) {
+	f := &fakeGitHub{starList: []fakeStar{
+		{fullName: "octo-org/example", owner: "octo-org", visibility: "public"},
+		{fullName: "octo-org/secret", owner: "octo-org", visibility: "private"},
+		{fullName: "octocat/hello-world", owner: "octocat", visibility: "public"},
+		{fullName: "hubot/tool", owner: "hubot", visibility: "public"},
+	}}
+	cfg := discoveryConfig(serve(t, f))
+	add := func(name string, targets, excludes []string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: config.Effects(),
+			Targets: targets, Exclude: excludes}
+	}
+	add("ex-repo", nil, []string{"repos/Octo-Org/SECRET"})
+	add("ex-owner", nil, []string{"users/octocat"})
+	add("ex-pattern", nil, []string{"repos/octo-org/*"})
+	add("owner-ex", []string{"orgs/octo-org", "users/octocat"}, []string{"repos/octo-org/secret"})
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	for _, tt := range []struct {
+		connection string
+		want, miss []string
+	}{
+		{"ex-repo", []string{"octo-org/example", "hello-world", "hubot/tool"}, []string{"octo-org/secret"}},
+		{"ex-owner", []string{"octo-org/example", "octo-org/secret", "hubot/tool"}, []string{"hello-world"}},
+		{"ex-pattern", []string{"hello-world", "hubot/tool"}, []string{"octo-org/example", "octo-org/secret"}},
+		{"owner-ex", []string{"octo-org/example", "hello-world"}, []string{"octo-org/secret", "hubot/tool"}},
+	} {
+		out, err := invoke(t, core, starsList.ID, tt.connection, `{}`, false)
+		if err != nil {
+			t.Fatalf("%s on %s = %v", starsList.ID, tt.connection, err)
+		}
+		for _, w := range tt.want {
+			if !strings.Contains(string(out), w) {
+				t.Errorf("%s lacks %s: %s", tt.connection, w, out)
+			}
+		}
+		for _, m := range tt.miss {
+			if strings.Contains(string(out), m) {
+				t.Errorf("%s shows %s: %s", tt.connection, m, out)
+			}
+		}
+	}
+}
+
+func TestStarListDropsUnreadableNamesOnlyWithExclusions(t *testing.T) {
+	f := &fakeGitHub{starList: []fakeStar{
+		{fullName: "octo-org/example", owner: "octo-org", visibility: "public"},
+		{fullName: "broken-name", owner: "octo-org", visibility: "public"},
+	}}
+	cfg := discoveryConfig(serve(t, f))
+	cfg.Connections["ex"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: config.Effects(),
+		Exclude: []string{"repos/hubot/tool"}}
+	cfg.Connections["plain"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: config.Effects()}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	out, err := invoke(t, core, starsList.ID, "ex", `{}`, false)
+	if err != nil || !strings.Contains(string(out), "octo-org/example") || strings.Contains(string(out), "broken-name") {
+		t.Errorf("with an exclusion = %s, %v, want the unreadable row dropped", out, err)
+	}
+	out, err = invoke(t, core, starsList.ID, "plain", `{}`, false)
+	if err != nil || !strings.Contains(string(out), "broken-name") {
+		t.Errorf("without an exclusion = %s, %v, want the row kept", out, err)
 	}
 }
