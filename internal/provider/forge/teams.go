@@ -99,7 +99,7 @@ func (a allowlist) teamOrganization(team object) (string, bool) {
 		return "", false
 	}
 	for _, name := range names {
-		if !validName(name) || !a.namesOwnerOfScope("orgs", name) {
+		if !validName(name) || !a.admitsOwnerOfScope("orgs", name) {
 			return "", false
 		}
 	}
@@ -117,7 +117,7 @@ func readTeam(ctx context.Context, c *Client, allowed allowlist, op string, id i
 	if got, ok := team.integer("id"); !ok || got != id {
 		return nil, "", provider.InvalidResponse(op, c.product.name+" returned another team than the one asked for")
 	}
-	if allowed.open() {
+	if !allowed.bound() {
 		return team, "", nil
 	}
 	name, ok := allowed.teamOrganization(team)
@@ -130,7 +130,7 @@ func readTeam(ctx context.Context, c *Client, allowed allowlist, op string, id i
 // proveTeam binds a team ID to the targets before a detail or change follows. It sends one read when targets
 // exist and none without them, and returns the organization of the team, empty without targets.
 func proveTeam(ctx context.Context, c *Client, allowed allowlist, op string, id int64) (string, error) {
-	if allowed.open() {
+	if !allowed.bound() {
 		return "", nil
 	}
 	_, name, err := readTeam(ctx, c, allowed, op, id)
@@ -206,7 +206,7 @@ var teamsList = &tool{
 				// The lists of one organization are bound by the organization; the account's list is checked row
 				// by row against the targets.
 				if name == "" {
-					if _, ok := allowed.teamOrganization(row); !ok && !allowed.open() {
+					if _, ok := allowed.teamOrganization(row); !ok && allowed.bound() {
 						continue
 					}
 				}
@@ -709,7 +709,7 @@ var teamActivitiesList = &tool{
 					}
 					fullName, _ := inner.text("full_name")
 					if owner, _, _ := strings.Cut(fullName, "/"); !allowed.allowsFullName(fullName) ||
-						!strings.EqualFold(owner, org) {
+						(org != "" && !strings.EqualFold(owner, org)) {
 						continue
 					}
 				}

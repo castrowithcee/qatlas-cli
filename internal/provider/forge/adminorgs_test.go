@@ -204,3 +204,28 @@ func TestAdminOrgCreatesAreNeverRepeatedAfterAServerError(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminCreatesAreRefusedForExcludedOwnersAndNames(t *testing.T) {
+	for _, p := range products {
+		e := newAdminEnvironment(t, p, defaultVersion(p), func(call) *http.Response { return jsonResponse(201, adminOrgFixture) })
+		for _, c := range []struct {
+			tl   *tool
+			args string
+		}{{adminOrgsCreate, `{"username":"other","organization":"example-org"}`},
+			{adminOrgsCreate, `{"username":"octo","organization":"OTHER"}`},
+			{adminRepositoriesCreate, `{"username":"other","name":"project"}`},
+			{adminRepositoriesCreate, `{"username":"acme","name":"gadget"}`}} {
+			before := len(*e.calls)
+			_, err := e.call(t, c.tl, "admin-exclude", c.args, true)
+			if !isInvalidRequest(err) || len(*e.calls) != before ||
+				strings.Contains(strings.ReplaceAll(err.Error(), "another", ""), "other") ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") {
+				t.Errorf("%s %s %s: %v", p.id, c.tl.group, c.args, err)
+			}
+		}
+		if _, err := e.call(t, adminOrgsCreate, "admin-exclude", `{"username":"Octo","organization":"example-org"}`,
+			true); err != nil {
+			t.Errorf("%s reachable create: %v", p.id, err)
+		}
+	}
+}

@@ -210,3 +210,32 @@ func TestRepositoryTeamsListCheckAndChange(t *testing.T) {
 		}
 	}
 }
+
+func TestTeamRepositoriesDropAndRefuseExcludedRepositories(t *testing.T) {
+	for _, p := range products {
+		e := newTeamEnvironment(t, p, teamRepoServer(func(c call) *http.Response {
+			if c.method == http.MethodGet && c.path == teamAPI+"7/repos" {
+				return jsonResponse(200, `[`+metaRepo("acme/gadget")+`,`+
+					`{"id":2,"name":"fork","full_name":"acme/fork","parent":`+metaRepo("acme/gadget")+`},`+metaRepo("acme/widget")+`]`)
+			}
+			return nil
+		}))
+		list, err := e.invoke(t, teamRepositoriesList, "exclude", `{"id":7}`)
+		rows, _ := list["repositories"].([]any)
+		if err != nil || len(rows) != 2 || strings.Contains(jsonOf(list), "gadget") {
+			t.Fatalf("%s list: %v, %v", p.id, list, err)
+		}
+		// Check, add, and remove are refused before any request; a reachable repository passes.
+		for _, tool := range []*tool{teamRepositoriesCheck, teamRepositoriesAdd, teamRepositoriesRemove} {
+			*e.calls = nil
+			_, err := e.invoke(t, tool, "exclude", `{"id":7,"repository":"acme/GADGET"}`)
+			if !isInvalidRequest(err) || len(*e.calls) != 0 || strings.Contains(err.Error(), "gadget") ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") {
+				t.Errorf("%s %s: %v, %v", p.id, tool.action, err, methods(e))
+			}
+			if _, err := e.invoke(t, tool, "exclude", `{"id":7,"repository":"acme/widget"}`); err != nil {
+				t.Errorf("%s %s reachable: %v", p.id, tool.action, err)
+			}
+		}
+	}
+}

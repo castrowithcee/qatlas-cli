@@ -157,6 +157,12 @@ func (a allowlist) excludedOwner(name string) bool {
 	return false
 }
 
+// keepsRepositoryRow reports whether a row of an instance-wide list may be shown by the canonical OWNER/REPO it
+// names: without exclusions every row; otherwise only one whose repository is known and not excluded.
+func (a allowlist) keepsRepositoryRow(fullName string, named bool) bool {
+	return len(a.excludes) == 0 || (named && !a.excludedFullName(fullName))
+}
+
 // allowsRepository reports whether the list admits the repository OWNER/REPO.
 func (a allowlist) allowsRepository(owner, repo string) bool {
 	if a.excluded(owner, repo) {

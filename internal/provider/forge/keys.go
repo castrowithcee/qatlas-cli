@@ -210,7 +210,7 @@ func (r ownResource) list() *tool {
 			return func(ctx context.Context, c *Client) (any, error) {
 				op := "list " + r.group
 				if a.Username == "" {
-					if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+					if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 						return nil, err
 					}
 				}
@@ -267,7 +267,7 @@ func (r ownResource) get() *tool {
 			}
 			return func(ctx context.Context, c *Client) (any, error) {
 				op := "get " + r.group
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 					return nil, err
 				}
 				var row object
@@ -320,7 +320,7 @@ func (r ownResource) delete() *tool {
 			}
 			return func(ctx context.Context, c *Client) (any, error) {
 				op := "delete " + r.group
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 					return nil, err
 				}
 				if err := c.change(ctx, op, http.MethodDelete, r.path+"/"+itoa64(a.ID), nil, nil); err != nil {
