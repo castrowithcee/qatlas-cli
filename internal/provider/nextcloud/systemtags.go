@@ -187,6 +187,9 @@ func invokeFilesTagsList(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -200,6 +203,9 @@ func invokeFilesTagsAdd(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -211,6 +217,9 @@ func invokeFilesTagsRemove(ctx context.Context, resolved *config.Resolved, secre
 	const op = "remove file tag"
 	input, rel, err := readTagArguments(op, raw, true)
 	if err != nil {
+		return nil, err
+	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

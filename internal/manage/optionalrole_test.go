@@ -245,7 +245,7 @@ func TestDraftSecretsSkipAnUnsetOptionalRole(t *testing.T) {
 	})
 }
 
-const optionalTransferSource = `version: 3
+const optionalTransferSource = `version: 4
 services:
     site-a:
         provider: site

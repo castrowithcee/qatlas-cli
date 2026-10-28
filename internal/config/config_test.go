@@ -389,7 +389,7 @@ func TestDecodeRejects(t *testing.T) {
 		{
 			name:    "future version",
 			replace: [2]string{"version: 1", "version: 99"},
-			wantIn:  "version: got 99, want 1, 2 or 3",
+			wantIn:  "version: got 99, want 1, 2, 3 or 4",
 		},
 		{
 			name:    "unknown top level key",

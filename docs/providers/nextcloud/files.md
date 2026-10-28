@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Nextcloud files
@@ -41,12 +41,23 @@ the `files_trashbin` app is active Nextcloud moves the deleted item to the trash
 for good; Qatlas cannot tell which applies (see [Trash bin](#trash-bin)). Both tools require a tools list: no profile and no
 effect offers them.
 
+## Exclusions
+
+The rules are in [Exclusions](README.md#exclusions). An excluded folder, and everything below it, answers like a
+path that does not exist: listings and searches leave it out, and the tools for favorites, versions, tags,
+comments, and the trash bin do not reach it. A folder above an excluded one stays visible, but `files.files.delete`,
+`files.folders.delete`, `files.files.move`, and `files.files.copy` refuse it as source, and `move` and `copy` refuse it as destination, because the operation would take the hidden content along
+or detach it; an excluded folder itself cannot be created or replaced. A folder's `size` and `etag`, as well as the
+quota, are totals of Nextcloud and still count excluded content; the descriptions of `files.files.list`,
+`files.files.stat`, and `files.files.search` say so.
+
 ## Trash bin
 
 `nextcloud.files.trash.list`, `nextcloud.files.trash.restore`, and `nextcloud.files.trash.delete` work on the deleted items of the
 identity whose original location lies below the bound root folder (`/` binds all). Everything else in the trash
-bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
-naming it. Items inside a deleted folder, emptying the trash bin, and restoring elsewhere are not offered.
+bin, an item that lay on or below an excluded folder included, is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
+naming it. Items inside a deleted folder, emptying the trash bin, and restoring elsewhere are not offered. A deleted folder
+above an excluded one is neither restored nor purged, because it carries the excluded content.
 
 `restore` puts an item from `list` back to its original location and `delete` removes it for good, each after one
 read with one request; `delete` requires a tools list, and no profile contains any of the three tools. Unclear

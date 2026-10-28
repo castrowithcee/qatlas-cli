@@ -419,7 +419,7 @@ func TestForVaultNamesItsVaultAndStoresNothing(t *testing.T) {
 func TestSaveConfigKeepsStableIDs(t *testing.T) {
 	f := newFixture(t)
 	const idBase, idConn = "00000000000000000000000000000001", "00000000000000000000000000000002"
-	file := "version: 3\nservices:\n  s:\n    provider: docs\n    base_url: https://a.example\ncredentials:\n  base:\n    id: " + idBase +
+	file := "version: 4\nservices:\n  s:\n    provider: docs\n    base_url: https://a.example\ncredentials:\n  base:\n    id: " + idBase +
 		"\n    type: keyring\nconnections:\n  c:\n    id: " + idConn + "\n    service: s\n    credential: base\n"
 	if err := os.WriteFile(f.path, []byte(file), 0o600); err != nil {
 		t.Fatal(err)
