@@ -328,7 +328,7 @@ func notificationList(group string, repository bool) *tool {
 				threads := make([]map[string]any, 0, len(rows))
 				for _, row := range rows {
 					if row != nil && admitted(allowed, row) {
-						threads = append(threads, project(p, notificationMembers, row))
+						threads = append(threads, project(p, notificationMembers, allowed.hideExcludedParentIn(row, "repository")))
 					}
 				}
 				next := page.next(header, len(rows))
@@ -412,7 +412,7 @@ var notificationsGet = &tool{
 			if err != nil {
 				return nil, err
 			}
-			return project(p, notificationMembers, thread), nil
+			return project(p, notificationMembers, allowed.hideExcludedParentIn(thread, "repository")), nil
 		}, nil
 	},
 }

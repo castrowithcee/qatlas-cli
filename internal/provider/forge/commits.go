@@ -633,7 +633,7 @@ var commitStatusesGetCombined = &tool{
 			if err != nil {
 				return nil, err
 			}
-			result := project(p, combinedStatusMembers, combined)
+			result := project(p, combinedStatusMembers, allowed.hideExcludedParentIn(combined, "repository"))
 			var rows []json.RawMessage
 			_ = json.Unmarshal(combined["statuses"], &rows)
 			next := page.next(header, len(rows))

@@ -766,7 +766,7 @@ var orgActivitiesList = &tool{
 					fullName, _ := inner.text("full_name")
 					if owner, _, _ := strings.Cut(fullName, "/"); allowed.allowsFullName(fullName) &&
 						strings.EqualFold(owner, name) {
-						activities = append(activities, project(p, activityMembers, row))
+						activities = append(activities, project(p, activityMembers, allowed.hideExcludedParentIn(row, "repo")))
 					}
 				}
 			}
