@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -232,5 +233,59 @@ func TestAdvisoryCursorIsBoundToItsTarget(t *testing.T) {
 	}
 	if _, err := invoke(t, core, organizationAdvisoriesList.ID, "open", `{"owner":"orgs/other","cursor":"`+page.NextCursor+`"}`, false); !isInvalidRequest(err) {
 		t.Errorf("cursor of another organization = %v, want invalid request", err)
+	}
+}
+
+func TestOrganizationAdvisoriesDropExcludedAndUnmappedRows(t *testing.T) {
+	row := func(ghsa, htmlURL string) string {
+		return `{"ghsa_id":"` + ghsa + `","html_url":"` + htmlURL + `","state":"draft","severity":"low","summary":"s"}`
+	}
+	rows := "[" + strings.Join([]string{
+		row("GHSA-aaaa-aaaa-aaaa", "https://github.com/octo-org/open/security/advisories/GHSA-aaaa-aaaa-aaaa"),
+		row("GHSA-bbbb-bbbb-bbbb", "https://github.com/Octo-Org/Secret/security/advisories/GHSA-bbbb-bbbb-bbbb"),
+		row("GHSA-cccc-cccc-cccc", "https://x/odd"),
+		row("GHSA-dddd-dddd-dddd", "https://github.com/octo-org/"),
+	}, ",") + "]"
+	f := &fakeGitHub{failure: func(w http.ResponseWriter, r *http.Request) bool {
+		if r.URL.Path != "/api/v3/orgs/octo-org/security-advisories" {
+			return false
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, rows)
+		return true
+	}}
+	cfg := discoveryConfig(serve(t, f))
+	add := func(name string, targets, excludes []string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: config.Effects(),
+			Targets: targets, Exclude: excludes}
+	}
+	add("plain", []string{"orgs/octo-org"}, nil)
+	add("ex-repo", []string{"orgs/octo-org"}, []string{"repos/octo-org/secret"})
+	add("ex-pattern", []string{"orgs/octo-org"}, []string{"repos/octo-org/*"})
+	add("ex-owner", nil, []string{"users/octo-org"})
+	red := &redact.Redactor{}
+	reads := 0
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+	count := func(connection string) (int, string) {
+		out, err := invoke(t, core, organizationAdvisoriesList.ID, connection, `{}`, false)
+		if err != nil {
+			t.Fatalf("list on %s = %v", connection, err)
+		}
+		return strings.Count(string(out), `"ghsa_id"`), string(out)
+	}
+	if n, out := count("plain"); n != 4 {
+		t.Errorf("without exclusions %d rows, want all 4: %s", n, out)
+	}
+	if n, out := count("ex-repo"); n != 1 || !strings.Contains(out, "GHSA-aaaa-aaaa-aaaa") {
+		t.Errorf("with a repository excluded %d rows, want only the open one: %s", n, out)
+	}
+	if n, out := count("ex-pattern"); n != 0 {
+		t.Errorf("with all repositories excluded %d rows, want none: %s", n, out)
+	}
+	reads = 0
+	before := len(f.recorded())
+	if _, err := invoke(t, core, organizationAdvisoriesList.ID, "ex-owner", `{"owner":"orgs/octo-org"}`, false); !isInvalidRequest(err) ||
+		reads != 0 || len(f.recorded()) != before {
+		t.Errorf("list of an excluded organization = %v (reads %d), want an invalid request before any I/O", err, reads)
 	}
 }

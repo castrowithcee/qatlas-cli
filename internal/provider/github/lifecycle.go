@@ -584,6 +584,20 @@ func (c *Client) markTemplate(ctx context.Context, template bool) (*Templated, e
 // The handlers check every target and argument before a credential is resolved, so a refused request never
 // becomes a secret read or a provider call.
 
+// refuseNewProject refuses a new project, created or copied, in an owner whose projects the exclusions cover
+// as a whole: the number of a new project is unknown, so the narrower reading refuses it. The error names
+// neither the owner nor the exclusion.
+func refuseNewProject(resolved *config.Resolved, owner target) error {
+	allowed, err := allowlistOf(resolved)
+	if err != nil {
+		return providerError("open", err.Error())
+	}
+	if allowed.excluded(target{kind: kindProject, scope: owner.scope, owner: owner.owner}) {
+		return invalidRequest("owner is not available on this connection; pass another one")
+	}
+	return nil
+}
+
 func invokeProjectsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
@@ -594,6 +608,9 @@ func invokeProjectsCreate(ctx context.Context, resolved *config.Resolved, secret
 	}
 	owner, err := selectOwner(resolved, kindOwner, raw)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseNewProject(resolved, owner); err != nil {
 		return nil, err
 	}
 	if err := checkProjectTitle(arguments.Title); err != nil {
@@ -655,6 +672,9 @@ func invokeProjectsCopy(ctx context.Context, resolved *config.Resolved, secrets 
 	}
 	owner, err := selectOwner(resolved, kindOwner, raw)
 	if err != nil {
+		return nil, err
+	}
+	if err := refuseNewProject(resolved, owner); err != nil {
 		return nil, err
 	}
 	if err := checkProjectTitle(arguments.Title); err != nil {
