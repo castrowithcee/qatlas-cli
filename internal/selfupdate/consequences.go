@@ -12,6 +12,15 @@ func Question(latest string) string {
 	return "Update qatlas to " + latest + "? " + Consequences()
 }
 
+// TargetQuestion is Question for a release chosen by version: it says whether the version is a prerelease.
+func TargetQuestion(version string, prerelease bool) string {
+	kind := "version"
+	if prerelease {
+		kind = "prerelease"
+	}
+	return "Install qatlas " + kind + " " + version + " (newer than the running version)? " + Consequences()
+}
+
 // Consequences is ConsequencesText for this platform and the processes running now.
 func Consequences() string { return ConsequencesText(runtime.GOOS, OtherProcesses()) }
 
