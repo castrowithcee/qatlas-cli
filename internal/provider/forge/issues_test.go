@@ -188,7 +188,7 @@ func TestIssueMembersOfTheOtherProductAreRefusedBeforeTheSecret(t *testing.T) {
 			if entry.tool == issuesList {
 				continue
 			}
-			if _, err := entry.tool.prepare(p, nil, json.RawMessage(entry.arguments)); !isInvalidRequest(err) {
+			if _, err := entry.tool.prepare(p, allowlist{}, json.RawMessage(entry.arguments)); !isInvalidRequest(err) {
 				t.Errorf("%s %s prepare: %v", p.id, entry.arguments, err)
 			}
 		}

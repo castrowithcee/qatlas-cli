@@ -363,7 +363,7 @@ var (
 // allowsQuotaRow reports whether a row may be shown: without targets always; under targets only when at least one
 // address names a repository and every address that is set names one inside the targets.
 func (a allowlist) allowsQuotaRow(addresses []string) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
 	named := false
