@@ -27,6 +27,7 @@ const (
 	addValue = "value:"
 	addTyped = "typed"
 	addDone  = "done"
+	addExcl  = "exclusion"
 )
 
 // targetAdd is the add menu while it is open, and the builder once a kind was chosen in it.
@@ -82,6 +83,7 @@ func (m *Model) serviceTargets(others bool) map[string][]string {
 // startAdd opens the add menu, or the empty line when it would offer nothing but typing.
 func (m *Model) startAdd() {
 	metadata := m.targetMetadata()
+	m.targetAsExclusion = false
 	known := m.serviceTargets(true)
 	for _, target := range m.targetList.all {
 		delete(known, target)
@@ -129,6 +131,13 @@ func (m *Model) refreshAdd() {
 		}
 		for _, kind := range m.pickRoots() {
 			add(addPick+kind, tr(tTargetChooseAFromTheProvider, kind))
+		}
+		if m.excludeAvailable() {
+			text := tr(tTargetAddAsExclusion)
+			if m.targetAsExclusion {
+				text = tr(tTargetAddAsTarget)
+			}
+			add(addExcl, text)
 		}
 		typed := tr(tTargetTypeATarget)
 		if query != "" {
@@ -447,6 +456,10 @@ func (m *Model) updateAdd(key tea.KeyPressMsg) tea.Cmd {
 			if kind, isPick := strings.CutPrefix(choice, addPick); isPick && a.kind < 0 {
 				return m.startPick(kind)
 			}
+			if choice == addExcl && a.kind < 0 {
+				m.setAsExclusion(!m.targetAsExclusion)
+				return nil
+			}
 			if choice == addTyped && a.kind < 0 && looksLikeURL(a.choices.query()) {
 				if cmd, ok := m.startResolve(strings.TrimSpace(a.choices.query())); ok {
 					return cmd
@@ -509,6 +522,9 @@ func (m *Model) addFrame() (string, string) {
 		if len(a.history) <= 1 {
 			keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} cancel entry"
 		}
+	}
+	if m.targetAsExclusion {
+		head.WriteString(p.text(styles.warning, tr(tTargetTakenAsExclusion)))
 	}
 	head.WriteString(p.styled(m.searchLineIn(p.room, &a.choices, label)))
 	if len(a.choices.matches) == 0 {

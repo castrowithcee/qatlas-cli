@@ -478,10 +478,12 @@ func (m *Model) detailFacts(name string, tab detailTab) []detailFact {
 			add("Effects", cells[3])
 			add("Tools", cells[4])
 			facts = append(facts, listFacts("Targets", m.targetTexts(conn), 5)...)
+			facts = append(facts, listFacts("Excluded", m.excludeTexts(conn), 5)...)
 			add("Description", conn.Description)
 			break
 		}
 		facts = append(facts, listFacts("Targets", m.targetTexts(conn), 8)...)
+		facts = append(facts, listFacts("Excluded", m.excludeTexts(conn), 8)...)
 		add("Effects", cells[3])
 		if conn.Tools != nil {
 			facts = append(facts, listFacts("Tools", conn.Tools, 8)...)
@@ -502,7 +504,15 @@ func (m *Model) detailFacts(name string, tab detailTab) []detailFact {
 
 // targetTexts are the targets of a connection, each with its label where it has one.
 func (m *Model) targetTexts(conn config.Connection) []string {
-	values := conn.TargetValues()
+	return m.labelledTexts(conn, conn.TargetValues())
+}
+
+// excludeTexts are the exclusions of a connection, each with its label where it has one.
+func (m *Model) excludeTexts(conn config.Connection) []string {
+	return m.labelledTexts(conn, conn.Exclude)
+}
+
+func (m *Model) labelledTexts(conn config.Connection, values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, target := range values {
 		text := target
@@ -517,7 +527,7 @@ func (m *Model) targetTexts(conn config.Connection) []string {
 // detailLabels are the labels of the detail pane.
 var detailLabels = []string{"Group", "Entries", "Provider", "Base URL", "Connections", "Storage", "Secrets", "Service",
 	"Credential", "State", "Effects", "Tools", "Targets", "Description", "Last test", "Options", "Used by", "Type", "Fields",
-	"Read files", "Write files", "Forwarded", "Paths", "Active until"}
+	"Read files", "Write files", "Forwarded", "Paths", "Active until", "Excluded"}
 
 // detailLabelColumn is the width of the label column of the detail pane: 13 cells, or one more than the
 // longest label where a language needs more.

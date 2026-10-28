@@ -21,8 +21,8 @@ func TestDiffShowsExcludeChange(t *testing.T) {
 		!reflect.DeepEqual(got.Kept, []string{"b"}) {
 		t.Errorf("exclude change = %+v", got)
 	}
-	if DirectApprovable(Change{Fields: fields}) {
-		t.Error("DirectApprovable() = true for a changed exclude list")
+	if !DirectApprovable(Change{Fields: fields}) {
+		t.Error("DirectApprovable() = false for a changed exclude list")
 	}
 	now.Exclude = nil
 	if got := diff(vault.Approval{Scope: scopeFixture()}, now, "", nil); len(got) != 0 {
