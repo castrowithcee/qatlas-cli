@@ -31,6 +31,7 @@ const (
 	// costs one member read.
 	maxDirectListLimit     = 50
 	defaultDirectListLimit = 20
+	excludedOpenRefusal    = "the channel kChat returned is outside the targets of this connection"
 	allowListOpenRefusal   = "this connection has a channel allow-list, so it opens no direct or group " +
 		"channel; add the channel as a channel target and address it by channel_id instead"
 )
@@ -288,6 +289,9 @@ func (c *Client) OpenDirect(ctx context.Context, userID string) (*OpenedChannel,
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned an invalid response" + uncertainOpen}
 	}
+	if c.scope.excludes(ch.ID) {
+		return nil, invalidRequest(excludedOpenRefusal)
+	}
 	return &OpenedChannel{ID: ch.ID, Type: channelDirect, UserIDs: []string{userID}}, nil
 }
 
@@ -352,6 +356,9 @@ func (c *Client) OpenGroup(ctx context.Context, ids []string) (*OpenedChannel, e
 	if ch.Type != channelGroup || ch.TeamID != "" || !validMattermostID(ch.ID) {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned an invalid response" + uncertainOpen}
+	}
+	if c.scope.excludes(ch.ID) {
+		return nil, invalidRequest(excludedOpenRefusal)
 	}
 	return &OpenedChannel{ID: ch.ID, Type: channelGroup, UserIDs: others}, nil
 }
