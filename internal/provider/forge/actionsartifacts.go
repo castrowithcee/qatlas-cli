@@ -93,7 +93,7 @@ func artifactAnswer(c *Client, allowed allowlist, op string, row object, id int6
 		return provider.InvalidResponse(op, c.product.name+" returned an artifact without the requested ID")
 	}
 	if name, ok := artifactRepository(row); ok && !allowed.allowsFullName(name) {
-		return provider.InvalidResponse(op, c.product.name+" returned an artifact of a repository outside the targets")
+		return allowed.outsideAnswer(op, c.product, name, "an artifact")
 	}
 	return nil
 }
