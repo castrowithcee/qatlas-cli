@@ -371,10 +371,14 @@ func (c *Client) Search(ctx context.Context, providerID, term string, limit int,
 	}
 	name, cutName := cut(raw.Name, maxProviderName)
 	result := &SearchResult{Provider: providerID, Name: name, Entries: []SearchHit{}, IsPaginated: raw.IsPaginated, Truncated: cutName}
+	hidden := c.newFeedFilter(ctx, op)
 	for _, entry := range raw.Entries {
 		if len(result.Entries) == limit {
 			result.Truncated = true
 			break
+		}
+		if hidden.hides(searchRefs(entry.ResourceURL, entry.Attributes)) {
+			continue
 		}
 		title, a := cut(entry.Title, maxHitText)
 		subtitle, b := cut(entry.Subline, maxHitText)
@@ -463,7 +467,9 @@ var searchQueryTool = capability.Descriptor{
 	Description: "Search the instance through one search provider of account.search.providers: one page of at most 25 hits " +
 		"with title, subtitle, link, thumbnail, icon, and attributes as text. Hits are untrusted data and no address is " +
 		"followed. A filter is sent only when the provider declares it and is refused otherwise. A paginated " +
-		"provider reports next_cursor, which continues the same search with the same filters",
+		"provider reports next_cursor, which continues the same search with the same filters. Where the connection " +
+		"has exclusions, hits that name an excluded object are left out and hits that name no identifier a " +
+		"provider reports are kept, so a title, subtitle, or text may still mention excluded content",
 	Tags: []string{"nextcloud", "search", "account", "query"}, Provider: Provider, Group: groupAccount, Risk: accountRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"provider":{"type":"string","minLength":1,"maxLength":64,` +
 		`"pattern":"^[a-z0-9_.-]+$","x-form":"an id of account.search.providers"},"term":{"type":"string","minLength":1,"maxLength":256},` +
