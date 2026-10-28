@@ -3,7 +3,6 @@ package baserow
 import (
 	"context"
 	"encoding/json"
-	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -24,7 +23,7 @@ var schemaRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: cap
 var tablesList = capability.Descriptor{
 	ID: Provider + ".tables.list", Version: 1, Title: "List Baserow tables",
 	Description: "List the tables the database token reads, restricted to the connection's tables and databases " +
-		"when it has one; names are untrusted provider data",
+		"when it has them, without excluded tables and databases; names are untrusted provider data",
 	Tags: []string{"baserow", "tables", "list", "database"}, Risk: schemaRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"tables":{"type":"array","items":` +
@@ -51,7 +50,7 @@ type tableJSON struct {
 	Order      *int64 `json:"order"`
 }
 
-// Table is one table of the connection's allow-list.
+// Table is one reachable table of the connection.
 type Table struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
@@ -75,15 +74,16 @@ func invokeTablesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	return client.ListTables(ctx, "list tables")
 }
 
-// ListTables reads every table of the token and keeps only those the allow-list admits.
+// ListTables reads every table of the token and keeps only the reachable ones, judged by the same list.
 func (c *Client) ListTables(ctx context.Context, op string) (*TablesResult, error) {
 	var raw []tableJSON
 	if err := c.get(ctx, op, allTablesPath, nil, &raw); err != nil {
 		return nil, err
 	}
+	c.databaseOf = indexTables(raw)
 	result := &TablesResult{Tables: []Table{}}
 	for _, entry := range raw {
-		if entry.ID <= 0 || !c.scope.allows(entry.ID) && !slices.Contains(c.scope.databases, entry.DatabaseID) {
+		if entry.ID <= 0 || !c.reaches(entry.ID) {
 			continue
 		}
 		if len(result.Tables) >= maxTables {

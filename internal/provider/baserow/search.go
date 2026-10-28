@@ -72,7 +72,7 @@ var rowsSearch = capability.Descriptor{
 	ID: Provider + ".rows.search", Version: 1, Title: "Search Baserow rows",
 	Description: "Search, filter, and sort the rows of one table, page by page. Filters use a fixed list of types " +
 		"on fields the table's schema confirms, named by field or field_id; link fields into tables outside the " +
-		"connection's targets allow only empty, not_empty, link_row_has, and link_row_has_not and cannot be sorted. " +
+		"connection's targets or excluded from them allow only empty, not_empty, link_row_has, and link_row_has_not and cannot be sorted. " +
 		"A view applies only when it belongs to the table. " + linkNote,
 	Tags: []string{"baserow", "rows", "search", "filter", "sort", "records"}, Risk: rowsRisk, Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `,` +
@@ -95,7 +95,7 @@ var rowsSearch = capability.Descriptor{
 		`"required":["table_id"],"additionalProperties":false}`),
 	OutputSchema: rowsList.OutputSchema,
 	Arguments: []capability.Argument{tableIDArgument,
-		{Name: "search", Description: "Text to search for in the table, up to " + strconv.Itoa(maxSearchLen) + " characters; refused on a table with a link field into a table outside the connection's targets unless the connection targets *"},
+		{Name: "search", Description: "Text to search for in the table, up to " + strconv.Itoa(maxSearchLen) + " characters; refused on a table with a link field into a table outside the connection's targets or excluded from them unless the connection targets * without exclusions"},
 		{Name: "search_mode", Description: "full-text (default of Baserow), full-text-with-count, or compat"},
 		{Name: "filters", Description: "Up to " + strconv.Itoa(maxFilters) + " objects with field (name) or field_id (exactly one), type (one of the filter types Baserow documents for listing rows, see the input schema), and value (up to " + strconv.Itoa(maxFilterValue) + " characters; whether a type needs one is up to Baserow, except that equal, not_equal, contains, contains_not, higher_than, higher_than_or_equal, lower_than, and lower_than_or_equal need one and empty and not_empty take none)"},
 		{Name: "filter_type", Description: "AND (default) or OR across the filters"},
@@ -241,10 +241,10 @@ func resolveField(name string, id *int64, byName map[string]fieldJSON, byID map[
 // display values are masked in the output, so a filter, sort, or search must not act on them. The test is the
 // one of maskWith.
 func (c *Client) linkOutside(field fieldJSON) bool {
-	if c.scope.wildcard || field.Type != "link_row" {
+	if c.scope.unrestricted() || field.Type != "link_row" {
 		return false
 	}
-	return field.LinkRowTableID == nil || !c.inScope(*field.LinkRowTableID)
+	return field.LinkRowTableID == nil || !c.reaches(*field.LinkRowTableID)
 }
 
 // usableFieldName refuses names that would break the parameter syntax: "__" separates filter parts, "," and a

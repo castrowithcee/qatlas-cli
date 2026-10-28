@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Rows
@@ -31,14 +31,14 @@ begin with `-` or `+`. Filter types come from a fixed list; for most of them Bas
 needed. Values travel only as URL-encoded query parameters, never as a passthrough. The API documents no format for
 filter groups and a flat tree does no more than the offered filters, so the JSON filter tree is not offered.
 
-Formula, rollup, and count fields are filterable and sortable. A lookup field through a link into a table outside the
-targets (or one that cannot be determined) is left out of the output and refuses any filter and sorting, as does a
-full-text `search` on a table with one. A link field whose other table is outside
-the targets (or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
-sorting. Display values of linked rows outside the targets are masked; a text filter, a sort, or a full-text search on
+Formula, rollup, and count fields are filterable and sortable. A lookup field through a link into a table that is not
+reachable (outside the targets or excluded, or one that cannot be determined) is left out of the output and refuses any
+filter and sorting, as does a full-text `search` on a table with one. A link field whose other table is not reachable
+(or cannot be determined) allows only `empty`, `not_empty`, `link_row_has`, and `link_row_has_not`, and no
+sorting. Display values of linked rows in such a table are masked; a text filter, a sort, or a full-text search on
 them would disclose them. Filters by row ID or emptiness show only what the output shows anyway. For the same reason
-`search` is refused on a table with such a link or lookup field unless the connection targets `*`; with `*`, or when the
-other table is inside the targets, nothing is refused.
+`search` is refused on a table with such a link or lookup field unless the connection targets `*` without exclusions; with
+that, or when the other table is reachable, nothing is refused.
 
 Order of checks: the table (before the credential), argument shape, limits, column keys, and filter types (before any
 request), then one read of the table's fields, after which an unknown or unsuitable field, a repeated field and type,
@@ -48,7 +48,7 @@ list is read; a view that is not in it is rejected. The rows request follows las
 
 ## Row changes
 
-Each change takes `table_id` (inside the targets), needs `confirm`, and sends exactly one request. A change is never
+Each change takes `table_id` (reachable), needs `confirm`, and sends exactly one request. A change is never
 repeated by Qatlas: after a timeout, a connection reset, an unknown transport failure, an HTTP 5xx, or an unreadable
 answer the error says the change may have taken effect, and the row should be read before it is tried again.
 `rows.delete` runs only for a connection whose `tools` list names it.
@@ -65,7 +65,7 @@ answer the error says the change may have taken effect, and the row should be re
 based on the schema. A field name that does not exist, a field flagged read-only, and the computed types
 (formula, lookup, count, rollup, created on, last modified, created by, last modified by, autonumber, button,
 AI) are refused without quoting the name. A link field takes only an array of row IDs (or primary-field
-texts) and only when its other table is inside the targets; with `*` any table is allowed, and a link field
+texts) and only when its other table is reachable; with `*` any table is allowed unless excluded, and a link field
 whose other table cannot be determined is refused. The body is limited to 1 MiB and 500 cells. A missing
 token right is reported as a `permission` error naming the right to grant (`create`, `update`, or `delete`).
 
