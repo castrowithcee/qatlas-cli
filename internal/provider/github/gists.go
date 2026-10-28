@@ -430,10 +430,17 @@ func (a allowlist) namesUser(login string) bool {
 	return false
 }
 
-// admitsGistOwner reports whether the list lets a tool touch a gist of the user: it has no targets, or names
-// the user.
+// admitsGistOwner reports whether the list lets a tool touch a gist of the user: nothing narrows the list, or
+// the user is not excluded and the list has no targets or names the user. A gist without a readable owner
+// passes only an open list, since an exclusion could not be checked against it.
 func (a allowlist) admitsGistOwner(login string) bool {
-	return a.open() || (login != "" && a.namesUser(login))
+	if a.open() {
+		return true
+	}
+	if login == "" || a.excludedOwner(login) {
+		return false
+	}
+	return !a.bound() || a.namesUser(login)
 }
 
 func checkGistID(id string) error {
@@ -519,6 +526,9 @@ func (c *Client) listGists(ctx context.Context, o *gistListOptions) (*GistList, 
 		if err != nil {
 			return nil, err
 		}
+		if c.allowed.excludedOwner(entry.owner()) {
+			continue
+		}
 		result.Gists = append(result.Gists, view)
 	}
 	result.HasMore, result.NextCursor = morePage(o.binding, o.page, o.perPage, hasNext)
@@ -528,14 +538,18 @@ func (c *Client) listGists(ctx context.Context, o *gistListOptions) (*GistList, 
 // requireOwnAccount lets a connection with targets act for the account behind its token only when a user
 // target names that account.
 func (c *Client) requireOwnAccount(ctx context.Context, op string) error {
-	if !c.allowed.bound() {
+	if c.allowed.open() {
 		return nil
 	}
 	account, err := c.getAccount(ctx)
 	if err != nil {
 		return err
 	}
-	if !c.allowed.namesUser(account.Login) {
+	if c.allowed.excludedOwner(account.Login) {
+		return invalidRequest("the account behind this connection's token is not available on this connection; " +
+			"use another connection")
+	}
+	if c.allowed.bound() && !c.allowed.namesUser(account.Login) {
 		return invalidRequest("the account behind this connection's token is not one of the users its targets " +
 			"name; add it as users/LOGIN to the targets or use another connection")
 	}
