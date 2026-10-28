@@ -84,7 +84,7 @@ func runPaused(t *testing.T, model *Model, gap time.Duration, chunks ...string) 
 	observe := func(m tea.Model, msg tea.Msg) tea.Msg {
 		if key, ok := msg.(tea.KeyPressMsg); ok && key.Code == tea.KeyF11 {
 			clock.offset.Add(int64(time.Second))
-			time.Sleep(4 * bracketHold)
+			time.Sleep(2 * bracketHold)
 			return nil
 		}
 		msg = fragments.filter(m, msg)
@@ -105,7 +105,7 @@ func runPaused(t *testing.T, model *Model, gap time.Duration, chunks ...string) 
 	}
 	p := tea.NewProgram(model, tea.WithInput(reader), tea.WithOutput(io.Discard), tea.WithFilter(observe),
 		tea.WithoutSignals())
-	fragments.program = p
+	fragments.send = p.Send
 	done := make(chan error, 1)
 	go func() { _, err := p.Run(); done <- err }()
 	select {
@@ -289,5 +289,81 @@ func TestAPasteReachesTheFocusedField(t *testing.T) {
 	m.Update(tea.PasteMsg{Content: "-pasted"})
 	if got := fieldValue(m); got != "abc-pasted" {
 		t.Errorf("a paste message leaves the field at %q", got)
+	}
+}
+
+// heldFilter is a filter on a clock the test moves, which holds a "[" without a program: the release is sent
+// by hand, so the order of the timer and the rest of the report is the test's choice.
+func heldFilter() (*fragmentFilter, *time.Time) {
+	now := time.Unix(1000, 0)
+	f := newFragmentFilter(func() time.Time { return now })
+	f.send = func(tea.Msg) {}
+	return f, &now
+}
+
+// keyTexts lists what a filter result delivers as keys, in order.
+func keyTexts(msg tea.Msg) []string {
+	switch msg := msg.(type) {
+	case nil:
+		return nil
+	case tea.KeyPressMsg:
+		return []string{msg.String()}
+	case keysMsg:
+		var out []string
+		for _, key := range msg {
+			out = append(out, key.String())
+		}
+		return out
+	}
+	return []string{fmt.Sprintf("%T", msg)}
+}
+
+// The rest of a report that arrives while the "[" is still held, even late in the window, makes no key at all.
+func TestHeldBracketSwallowsTheRestWithinTheWindow(t *testing.T) {
+	f, now := heldFilter()
+	if got := f.filter(nil, tea.KeyPressMsg{Code: '[', Mod: tea.ModAlt}); got != nil {
+		t.Fatalf("alt+[ passed at once: %v", keyTexts(got))
+	}
+	*now = now.Add(bracketHold - time.Millisecond)
+	if got := f.filter(nil, textKey("<65;12;5M")); got != nil {
+		t.Errorf("the rest made keys %v", keyTexts(got))
+	}
+	if got := f.filter(nil, heldKeyMsg{f.id}); got != nil {
+		t.Errorf("the release made keys %v", keyTexts(got))
+	}
+}
+
+// A head that comes after the hold ended is text, whether or not the window would still take it.
+func TestHeadAfterTheReleaseIsText(t *testing.T) {
+	f, now := heldFilter()
+	f.filter(nil, tea.KeyPressMsg{Code: tea.KeyEscape})
+	f.filter(nil, textKey("["))
+	*now = now.Add(bracketHold)
+	if got := keyTexts(f.filter(nil, heldKeyMsg{f.id})); len(got) != 1 || got[0] != "[" {
+		t.Fatalf("release: %v", got)
+	}
+	*now = now.Add(time.Millisecond)
+	if got := keyTexts(f.filter(nil, textKey("<65;12;5M"))); len(got) != 1 || got[0] != "<65;12;5M" {
+		t.Errorf("head after the release: %v", got)
+	}
+}
+
+// A head after the window is text too, and the held "[" goes first.
+func TestHeadAfterTheWindowIsText(t *testing.T) {
+	f, now := heldFilter()
+	f.filter(nil, tea.KeyPressMsg{Code: '[', Mod: tea.ModAlt})
+	*now = now.Add(fragmentWindow + time.Millisecond)
+	got := keyTexts(f.filter(nil, textKey("<65;12;5M")))
+	if len(got) != 2 || got[0] != "alt+[" {
+		t.Errorf("keys %v, want alt+[ then the text", got)
+	}
+}
+
+// An alt+[ typed alone reaches the model once the hold ends.
+func TestLoneAltBracketArrivesAfterTheHold(t *testing.T) {
+	f, _ := heldFilter()
+	f.filter(nil, tea.KeyPressMsg{Code: '[', Mod: tea.ModAlt})
+	if got := keyTexts(f.filter(nil, heldKeyMsg{f.id})); len(got) != 1 || got[0] != "alt+[" {
+		t.Errorf("keys %v, want alt+[", got)
 	}
 }

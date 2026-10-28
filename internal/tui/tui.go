@@ -5089,7 +5089,7 @@ func Run(opts Options) error {
 	fragments := newFragmentFilter(time.Now)
 	program := tea.NewProgram(model, tea.WithInput(opts.In), tea.WithOutput(legacyKeys{opts.Out}),
 		tea.WithFilter(fragments.filter), tea.WithColorProfile(toColorprofile(currentProfile())))
-	fragments.program = program
+	fragments.send = program.Send
 	_, err = program.Run()
 	return err
 }
