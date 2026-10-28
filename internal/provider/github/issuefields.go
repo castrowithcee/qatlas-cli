@@ -191,7 +191,7 @@ func selectFieldsOwner(allowed allowlist, value string) (target, error) {
 		return target{}, invalidRequest("organization is outside the targets of this connection; pass one " +
 			"they allow, or add it or one of its repositories to the connection's targets")
 	}
-	for _, entry := range allowed {
+	for _, entry := range allowed.targets {
 		if entry.kind == kindOwner && strings.EqualFold(entry.String(), parsed.String()) {
 			parsed = entry
 		}

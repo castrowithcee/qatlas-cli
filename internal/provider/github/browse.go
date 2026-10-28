@@ -55,7 +55,7 @@ func browseClient(ctx context.Context, resolved *config.Resolved, secrets *secre
 	if err != nil {
 		return nil, err
 	}
-	client.allowed = nil
+	client.allowed = allowlist{}
 	return client, nil
 }
 
