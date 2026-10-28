@@ -101,6 +101,9 @@ func fieldMap(o output.Object) map[string]any {
 	return m
 }
 
+// objectField returns one field of a tool result that is an object.
+func objectField(got any, name string) any { return fieldMap(got.(output.Object))[name] }
+
 func TestBooksListPaginatesAndStopsWithoutProgress(t *testing.T) {
 	rec := &recorder{}
 	c := newClient(t, booksServer(t, rec, false).URL, nil)

@@ -149,7 +149,7 @@ func TestMigrationNarrowsToolConnectionsAndReportsTheirApprovals(t *testing.T) {
 				t.Fatal(err)
 			}
 			text := string(data)
-			if !strings.Contains(text, "version: 3") || strings.Contains(text, "permissions") {
+			if !strings.Contains(text, "version: 4") || strings.Contains(text, "permissions") {
 				t.Errorf("migrated file:\n%s", text)
 			}
 			cfg, err := config.Load(w.path, setupCatalog{})

@@ -394,7 +394,7 @@ func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
 
 func TestFormerPermissionsInACurrentFileAreAStructuredProblem(t *testing.T) {
 	for _, lines := range []string{"    permissions: [read]\n", "    permissions: [read]\n    effects: [read]\n"} {
-		current := strings.Replace(withTools(lines), "version: 1", "version: 3", 1)
+		current := strings.Replace(withTools(lines), "version: 1", "version: 4", 1)
 		_, err := Decode(strings.NewReader(current), testProviders)
 		var p Problem
 		if !errors.As(err, &p) || p.Code != CodePermissionsRenamed || p.Field != "effects" || !strings.Contains(p.Hint(), "effects") {

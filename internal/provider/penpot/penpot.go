@@ -480,7 +480,10 @@ func Register(reg *capability.Registry) error {
 			Multiple: true,
 			Description: "one or more team/TEAM_ID targets, and optionally an allow-list of project/PROJECT_ID " +
 				"projects and file/FILE_ID files of those teams; without a project or file target every project of " +
-				"the bound teams is reachable",
+				"the bound teams is reachable. A project or file can be excluded: it then behaves like an object of " +
+				"a team without membership, its rows leave the lists, details and changes are refused, and a " +
+				"project or team delete that would remove one is refused; no tool is blocked and team-wide " +
+				"objects such as members and webhooks stay as they are",
 			Kinds: []config.TargetKind{{
 				Name:        "team",
 				Description: "a team whose projects and files this connection may read; required, repeatable",
@@ -490,11 +493,13 @@ func Register(reg *capability.Registry) error {
 				Description: "a project of a bound team that narrows the connection; optional, repeatable",
 				Forms:       []string{"project/PROJECT_ID"},
 				Parents:     []string{"team"},
+				Excludable:  true,
 			}, {
 				Name:        "file",
 				Description: "a single file of a bound team that narrows the connection to it; optional, repeatable",
 				Forms:       []string{"file/FILE_ID"},
 				Parents:     []string{"project"},
+				Excludable:  true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,

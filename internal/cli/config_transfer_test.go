@@ -15,7 +15,7 @@ import (
 )
 
 const otherConfig = `
-version: 3
+version: 4
 services:
   other:
     provider: bookstack
@@ -33,7 +33,7 @@ defaults:
 `
 
 const transferConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack
