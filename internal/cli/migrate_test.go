@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -15,7 +18,7 @@ import (
 func schemaOneFixture(t *testing.T) string {
 	t.Helper()
 	dir := keyringFixture(t)
-	if err := os.WriteFile(configIn(dir), []byte(strings.Replace(keyringConfig, "version: 3", "version: 1", 1)), 0o600); err != nil {
+	if err := os.WriteFile(configIn(dir), []byte(strings.Replace(keyringConfig, "version: 4", "version: 1", 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -36,7 +39,7 @@ func TestFirstCommandMigratesAndKeepsStdoutClean(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &answer); err != nil || answer["valid"] != true {
 		t.Fatalf("stdout = %q is not the answer alone: %v", stdout, err)
 	}
-	for _, want := range []string{"migrated " + configIn(dir) + " to configuration schema 3", "backed up as",
+	for _, want := range []string{"migrated " + configIn(dir) + " to configuration schema 4", "backed up as",
 		"to go back, copy the backups back"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, stderr)
@@ -99,7 +102,7 @@ func TestMCPMigratesWithoutTouchingStdout(t *testing.T) {
 // stderr, names the problem.
 func TestInvalidFileIsNotMigrated(t *testing.T) {
 	dir := schemaOneFixture(t)
-	invalid := strings.Replace(strings.Replace(keyringConfig, "version: 3", "version: 1", 1), "credential: vault-reader",
+	invalid := strings.Replace(strings.Replace(keyringConfig, "version: 4", "version: 1", 1), "credential: vault-reader",
 		"credential: nobody", 1)
 	if err := os.WriteFile(configIn(dir), []byte(invalid), 0o600); err != nil {
 		t.Fatal(err)
@@ -122,7 +125,7 @@ func TestInvalidFileIsNotMigrated(t *testing.T) {
 func TestMigrationNamesTheFormerIDsItRewrites(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
-	path := writeConfig(t, strings.Replace(formerNamesConfig, "version: 3", "version: 1", 1))
+	path := writeConfig(t, strings.Replace(formerNamesConfig, "version: 4", "version: 1", 1))
 
 	code, _, stderr := runRenameCLI(t, "config", "validate", "--config", path)
 
@@ -177,10 +180,101 @@ connections:
 
 // The migration message names only the schema steps the file actually passed.
 func TestMigrationChangeNamesOnlyThePassedSteps(t *testing.T) {
-	if got := migrationChange(1); !strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") {
-		t.Errorf("v1 message = %q, want both steps", got)
+	if got := migrationChange(1); !strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") ||
+		!strings.Contains(got, "targets") {
+		t.Errorf("v1 message = %q, want every step", got)
 	}
-	if got := migrationChange(2); strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") {
-		t.Errorf("v2 message = %q, want the effects step alone", got)
+	if got := migrationChange(2); strings.Contains(got, "stable ids") || !strings.Contains(got, "effects") ||
+		!strings.Contains(got, "targets") {
+		t.Errorf("v2 message = %q, want the effects and the targets step", got)
+	}
+	if got := migrationChange(3); strings.Contains(got, "stable ids") || strings.Contains(got, "effects") ||
+		!strings.Contains(got, "targets") {
+		t.Errorf("v3 message = %q, want the targets step alone", got)
+	}
+}
+
+// shelfRegistry holds a provider whose former box/NAME meant exactly that box and box/NAME/* the box with
+// everything below it, while its current box/NAME reaches everything below the box too. Its migration refuses
+// a connection that names a box both ways.
+func shelfRegistry(t *testing.T) *capability.Registry {
+	t.Helper()
+	registry := capability.NewRegistry()
+	migrate := func(targets, exclude []string) (config.TargetMigration, bool) {
+		out := config.TargetMigration{Targets: []string{}, Exclude: exclude}
+		for _, target := range targets {
+			if base, tree := strings.CutSuffix(target, "/*"); tree {
+				if slices.Contains(targets, base) {
+					return config.TargetMigration{}, false
+				}
+				out.Targets = append(out.Targets, base)
+				continue
+			}
+			out.Targets = append(out.Targets, target)
+			out.Exclude = append(out.Exclude, target+"/*")
+		}
+		return out, true
+	}
+	err := registry.RegisterProvider(config.ProviderMetadata{ID: "shelf", Name: "Shelf",
+		DefaultBaseURL: "https://shelf.example.test", SecretRoles: []config.SecretRole{{Name: "token"}},
+		Target: config.TargetMetadata{Label: "box", Multiple: true, MigrateTargets: migrate,
+			Kinds: []config.TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, Excludable: true}}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
+// The report names the rewritten vault connection and the refused one, and no target; the command then fails
+// on the refused connection with a problem that quotes no target either.
+func TestMigrationReportsRewrittenAndRefusedTargetsWithoutValues(t *testing.T) {
+	dir := t.TempDir()
+	file := `version: 3
+services:
+  store:
+    provider: shelf
+credentials:
+  vault-reader:
+    type: vault
+connections:
+  exact:
+    service: store
+    credential: vault-reader
+    target: box/alpha-7f3c
+  mixed:
+    service: store
+    credential: vault-reader
+    targets: [box/beta-9d1e, box/beta-9d1e/*]
+`
+	if err := os.WriteFile(configIn(dir), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	offer := func(string) (string, error) { return "synthetic-passphrase-7d21", nil }
+	if err := vault.New(dir).Set("vault-reader", "token", "synthetic-token", offer); err != nil {
+		t.Fatal(err)
+	}
+	opts := testOptionsIn(t, dir, nil)
+	opts.Secrets = opts.Secrets.WithVault(vault.New(dir), nil)
+	var stdout, stderr bytes.Buffer
+
+	code := run(newRootCommand(opts, shelfRegistry(t)), opts, []string{"config", "validate", "--config", configIn(dir)},
+		&stdout, &stderr)
+
+	text := stderr.String()
+	if code == exitOK {
+		t.Fatalf("exit = %d, want the refused connection to fail the command:\n%s", code, text)
+	}
+	for _, want := range []string{
+		"to configuration schema 4: the targets of providers whose target forms changed meaning are now written in their current form\n",
+		"vault approval once more ('qatlas vault approve' or 'qatlas tui'): exact\n",
+		"is invalid until its targets are chosen again and its targets_outdated mark is removed: mixed\n",
+		"connections.mixed.targets",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "alpha-7f3c") || strings.Contains(text, "beta-9d1e") {
+		t.Errorf("stderr quotes a target:\n%s", text)
 	}
 }

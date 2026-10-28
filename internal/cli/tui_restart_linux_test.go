@@ -120,7 +120,7 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 
 	// An encrypted vault beside the configuration.
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: 3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: 4\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if prefs != "" {

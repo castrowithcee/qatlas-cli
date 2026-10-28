@@ -143,7 +143,7 @@ func TestPlanImportReadsPlainFileWithSecrets(t *testing.T) {
 
 func TestPlanImportSkippedCredentialBringsNoSecret(t *testing.T) {
 	out, _ := exportWithSecrets(t, secretsWorld(t), SecretExport{Unencrypted: true})
-	dst := newTransferWorld(t, "version: 3\ncredentials:\n    mail-key:\n        provider: mail\n        type: keyring\n")
+	dst := newTransferWorld(t, "version: 4\ncredentials:\n    mail-key:\n        provider: mail\n        type: keyring\n")
 	plan, err := dst.svc.PlanImport(out, ImportModeMerge)
 	if err != nil {
 		t.Fatal(err)

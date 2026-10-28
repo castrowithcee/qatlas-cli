@@ -355,7 +355,7 @@ func TestImportSecretsStoreOption(t *testing.T) {
 
 // overwriteTarget has a vault credential read by two connections, one of them outside the file, and a second
 // vault credential the file replaces without a secret.
-const overwriteTarget = `version: 3
+const overwriteTarget = `version: 4
 services:
     mail-svc:
         provider: mail
