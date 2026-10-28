@@ -373,7 +373,8 @@ func invokeNotesList(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, providerError(op, "the chunk cursor is unusable")
 	}
 	if input.Category != "" {
-		if err := checkCategory(input.Category); err != nil || !sel.coversCategory(input.Category) {
+		if err := checkCategory(input.Category); err != nil || !sel.coversCategory(input.Category) ||
+			categoryHidden(resolved, input.Category) {
 			// The refusal does not say which categories the connection binds.
 			return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
 				Message: "this connection does not hold this category"}
@@ -567,7 +568,8 @@ func (c *Client) ListNotes(ctx context.Context, sel selection, filter string, si
 		if listed.Category != nil {
 			item.Category = *listed.Category
 		}
-		if !sel.coversCategory(item.Category) || filter != "" && !inCategory(item.Category, filter) {
+		if !sel.coversCategory(item.Category) || c.scope.categoryExcluded(item.Category) ||
+			filter != "" && !inCategory(item.Category, filter) {
 			continue
 		}
 		if !validNoteID(item.ID.String()) {
@@ -606,7 +608,7 @@ func (c *Client) fetchNote(ctx context.Context, op string, sel selection, id str
 	if err := json.Unmarshal(body, &note); err != nil || note.ID.String() != id {
 		return nil, invalidResponse(op, "the Nextcloud note could not be read")
 	}
-	if !sel.coversCategory(note.Category) {
+	if !sel.coversCategory(note.Category) || c.scope.categoryExcluded(note.Category) {
 		return nil, noteNotFound(op)
 	}
 	return &note, nil
