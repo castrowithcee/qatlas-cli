@@ -228,7 +228,8 @@ func readThread(ctx context.Context, c *Client, allowed allowlist, op string, id
 		return nil, provider.InvalidResponse(op, c.product.name+" returned a notification without its ID")
 	}
 	if !admitted(allowed, thread) {
-		return nil, outsideTargets("notification thread")
+		name, _ := issueRepository(thread)
+		return nil, allowed.outside(op, c.product, name, "notification thread")
 	}
 	return thread, nil
 }
@@ -245,7 +246,7 @@ func proveRepository(ctx context.Context, c *Client, allowed allowlist, op strin
 	}
 	name, ok := answer.text("full_name")
 	if !ok || !allowed.allowsFullName(name) {
-		return outsideTargets("repository")
+		return allowed.outside(op, c.product, name, "repository")
 	}
 	return nil
 }
@@ -352,7 +353,8 @@ var notificationsCheckNew = &tool{
 		return capability.Descriptor{
 			Title: "Count new " + p.name + " notifications",
 			Description: "Read the number of unread notifications of the account behind the token over all " +
-				"repositories. The number reaches past any target, so a connection with targets refuses it.",
+				"repositories. The number reaches past any target, so a connection with targets refuses it; under " +
+				"exclusions alone it still counts the notifications of excluded repositories.",
 			Tags:         []string{p.id, "notifications", "check-new"},
 			Risk:         readRisk(p.id + notificationSensitivity),
 			InputSchema:  inputSchema(``),
@@ -362,7 +364,7 @@ var notificationsCheckNew = &tool{
 		}
 	},
 	prepare: func(p *product, allowed allowlist, raw json.RawMessage) (run, error) {
-		if !allowed.open() {
+		if allowed.bound() {
 			return nil, invalidArgument("the number of new notifications covers every repository of the account, " +
 				"beyond this connection's targets; use a connection without targets")
 		}
@@ -483,8 +485,9 @@ var notificationsMarkAllRead = &tool{
 		return capability.Descriptor{
 			Title: "Mark all " + p.name + " notifications",
 			Description: "Mark the notification threads of the account behind the token in every repository as read, " +
-				"unread, or pinned, limited by status-types and last_read_at. It reaches past any target, so a " +
-				"connection with targets refuses it before any request. The answer is discarded unread. Without " +
+				"unread, or pinned, limited by status-types and last_read_at. It reaches past any target and any " +
+				"exclusion, so a connection with targets or exclusions refuses it before any request. The answer is " +
+				"discarded unread. Without " +
 				"last_read_at a repeat can reach threads that changed in between; the request is sent once and never " +
 				"repeated after an unclear outcome. Offered only by a connection without targets whose tools list names " +
 				"it, in no profile.",
@@ -507,8 +510,8 @@ var notificationsMarkAllRead = &tool{
 			return nil, err
 		}
 		if !allowed.open() {
-			return nil, invalidArgument("marking every notification reaches past this connection's targets; use a " +
-				"connection without targets")
+			return nil, invalidArgument("marking every notification reaches past this connection's targets and " +
+				"exclusions; use a connection without either")
 		}
 		if err := a.checkMark(p, true); err != nil {
 			return nil, err

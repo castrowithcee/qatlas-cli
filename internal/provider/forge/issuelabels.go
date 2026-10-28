@@ -45,7 +45,8 @@ func readIndexObject(ctx context.Context, c *Client, allowed allowlist, op strin
 		return nil, provider.InvalidResponse(op, c.product.name+" returned an issue without its index")
 	}
 	if !admitted(allowed, issue) {
-		return nil, outsideTargets("repository")
+		name, _ := issueRepository(issue)
+		return nil, allowed.outside(op, c.product, name, "repository")
 	}
 	return issue, nil
 }

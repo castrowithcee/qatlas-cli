@@ -130,7 +130,10 @@ func (a allowlist) chooseOrganization(value string) (target, error) {
 	if org.scope != "orgs" {
 		return target{}, invalidArgument("owner must be orgs/NAME for organization labels")
 	}
-	if a.open() {
+	if a.excludedOwner(org.owner) {
+		return target{}, unavailable("owner")
+	}
+	if !a.bound() {
 		return org, nil
 	}
 	for _, entry := range a.targets {

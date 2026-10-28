@@ -253,3 +253,80 @@ func TestNotificationChangesAreNeverRepeatedAfterAnUnclearOutcome(t *testing.T) 
 		}
 	}
 }
+
+func TestExcludedThreadsAreDroppedAndProvenWithoutTargets(t *testing.T) {
+	for _, p := range products {
+		status := 205
+		e := newEnvironment(t, p, notificationServer(&status))
+		result, err := e.invoke(t, notificationsList, "exclude", `{}`)
+		rows, _ := result["notifications"].([]any)
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("%s list: %v, %v", p.id, result, err)
+		}
+		if _, err := e.invoke(t, notificationsGet, "exclude", `{"id":11}`); err != nil {
+			t.Errorf("%s reachable thread: %v", p.id, err)
+		}
+		*e.calls = (*e.calls)[:0]
+		_, err = e.invoke(t, notificationsGet, "exclude", `{"id":12}`)
+		if classOfError(err) != "not-found" || strings.Contains(err.Error(), "hidden") ||
+			strings.Contains(err.Error(), "other") || len(*e.calls) != 1 {
+			t.Errorf("%s excluded thread: %v, %v", p.id, err, e.paths())
+		}
+		*e.calls = (*e.calls)[:0]
+		if _, err := e.invoke(t, notificationsMarkThread, "exclude", `{"id":12}`); classOfError(err) != "not-found" ||
+			len(*e.calls) != 1 {
+			t.Errorf("%s mark excluded thread: %v, %v", p.id, err, e.paths())
+		}
+	}
+}
+
+func TestExcludedRepositoryNotificationsAreRefusedBeforeAnyIO(t *testing.T) {
+	for _, p := range products {
+		status := 205
+		e := newEnvironment(t, p, notificationServer(&status))
+		for _, connection := range []string{"exclude", "owner-exclude"} {
+			reads := *e.reads
+			_, err := e.invoke(t, repositoryNotificationsList, connection, `{"repository":"other/hidden"}`)
+			if connection == "owner-exclude" {
+				_, err = e.invoke(t, repositoryNotificationsList, connection, `{"repository":"acme/gadget"}`)
+			}
+			if !isInvalidRequest(err) || len(*e.calls) != 0 || *e.reads != reads ||
+				strings.Contains(err.Error(), "hidden") || strings.Contains(err.Error(), "gadget") ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") {
+				t.Errorf("%s %s: %v, calls %v", p.id, connection, err, e.paths())
+			}
+		}
+		// A reachable repository can still be marked, after one proof read of its canonical name.
+		result, err := e.invoke(t, repositoryNotificationsMarkRead, "notify-exclude", `{"repository":"acme/widget"}`)
+		if err != nil || result["repository"] != "acme/widget" ||
+			strings.Join(methods(e), ",") != "GET /api/v1/repos/acme/widget,PUT /api/v1/repos/acme/widget/notifications" {
+			t.Errorf("%s mark reachable: %v, %v, %v", p.id, result, err, methods(e))
+		}
+		// A repository that was renamed into an excluded one is not reached under its old name.
+		*e.calls = (*e.calls)[:0]
+		_, err = e.invoke(t, repositoryNotificationsMarkRead, "notify-exclude", `{"repository":"old/name"}`)
+		if classOfError(err) != "not-found" || len(*e.calls) != 1 {
+			t.Errorf("%s renamed: %v, %v", p.id, err, e.paths())
+		}
+	}
+}
+
+func TestNotificationBulkToolsUnderExclusions(t *testing.T) {
+	for _, p := range products {
+		status := 205
+		e := newEnvironment(t, p, notificationServer(&status))
+		before, reads := len(*e.calls), *e.reads
+		if _, err := e.invoke(t, notificationsMarkAllRead, "notify-exclude", `{}`); !isInvalidRequest(err) ||
+			len(*e.calls) != before || *e.reads != reads {
+			t.Errorf("%s mark-all with exclusions: %v", p.id, err)
+		}
+		// The count is one number over the account; exclusions alone allow it, targets do not.
+		result, err := e.invoke(t, notificationsCheckNew, "exclude", `{}`)
+		if err != nil || result["new"] != float64(3) {
+			t.Errorf("%s check-new with exclusions: %v, %v", p.id, result, err)
+		}
+		if _, err := e.invoke(t, notificationsCheckNew, "owner-exclude", `{}`); !isInvalidRequest(err) {
+			t.Errorf("%s check-new with targets and exclusions: %v", p.id, err)
+		}
+	}
+}

@@ -130,7 +130,7 @@ func metadata(p *product) config.ProviderMetadata {
 				return err
 			},
 			ValidateSet: func(values []string) error {
-				_, err := parseAllowlist(values)
+				_, err := parseAllowlist(values, nil)
 				return err
 			},
 			Reaches: reaches(p),

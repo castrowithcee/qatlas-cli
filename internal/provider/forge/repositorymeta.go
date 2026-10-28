@@ -167,7 +167,7 @@ var repositoriesSearch = &tool{
 			for _, row := range answer.Data {
 				fullName, _ := row.text("full_name")
 				if allowed.allowsFullName(fullName) {
-					repositories = append(repositories, project(p, repositoryMembers, row))
+					repositories = append(repositories, project(p, repositoryMembers, allowed.hideExcludedParent(row)))
 				}
 			}
 			next := page.next(header, len(answer.Data))

@@ -621,3 +621,102 @@ func TestChangeAllowsOnlyTheMutatingMethods(t *testing.T) {
 		t.Errorf("PUT = %v, %+v", err, calls)
 	}
 }
+
+func TestExclusionsDropIssueRowsAndReferences(t *testing.T) {
+	for _, p := range products {
+		rows := "[" + widgetIssue(p, 1, "open") + "," + issueFixture(p, 2, "open", false, "other/place") + "," +
+			issueFixture(p, 3, "open", false, "acme/gadget") + "," + issueFixture(p, 4, "open", false, "Acme/Widget") +
+			`,{"id":5,"number":5,"title":"no repository"}]`
+		e := newEnvironment(t, p, func(c call) *http.Response {
+			if c.path == "/api/v1/repos/acme/widget/issues/9" {
+				return jsonResponse(200, issueFixture(p, 9, "open", false, "other/place"))
+			}
+			return jsonResponse(200, rows)
+		})
+		for _, connection := range []string{"exclude", "owner-exclude"} {
+			result, err := e.invoke(t, issuesSearch, connection, `{"q":"crash"}`)
+			var numbers []float64
+			for _, row := range rowsOf(t, result, "issues") {
+				numbers = append(numbers, row["number"].(float64))
+			}
+			if err != nil || !reflect.DeepEqual(numbers, []float64{1, 4}) {
+				t.Errorf("%s %s search = %v, %v", p.id, connection, numbers, err)
+			}
+			result, err = e.invoke(t, issuesList, connection, `{"repository":"acme/widget"}`)
+			if err != nil || len(rowsOf(t, result, "issues")) != 2 {
+				t.Errorf("%s %s list = %v, %v", p.id, connection, result, err)
+			}
+		}
+		// An excluded owner or repository is refused before any request; the owner filter is an argument too.
+		*e.calls = nil
+		for _, c := range []struct {
+			tl         *tool
+			connection string
+			args       string
+		}{
+			{issuesSearch, "exclude", `{"owner":"other"}`},
+			{issuesList, "exclude", `{"repository":"other/place"}`},
+			{issuesGet, "owner-exclude", `{"repository":"acme/gadget","number":1}`},
+			{issueTimelineList, "exclude", `{"repository":"ACME/gadget","number":1}`},
+		} {
+			if _, err := e.invoke(t, c.tl, c.connection, c.args); !isInvalidRequest(err) || len(*e.calls) != 0 ||
+				strings.Contains(err.Error(), "place") || strings.Contains(err.Error(), "gadget") {
+				t.Errorf("%s %s %s: %v, calls %v", p.id, c.tl.action, c.args, err, e.paths())
+			}
+		}
+		// The issue read names the canonical repository: one an exclusion takes out is not found.
+		_, err := e.invoke(t, issuesGet, "exclude", `{"repository":"acme/widget","number":9}`)
+		if classOfError(err) != "not-found" || strings.Contains(err.Error(), "place") {
+			t.Errorf("%s: canonical repository in an exclusion: %v", p.id, err)
+		}
+	}
+}
+
+func TestExclusionsDropTimelineReferencesFromExcludedRepositories(t *testing.T) {
+	ref := func(id int, kind, repository string) string {
+		source := `"ref_issue":{"id":50,"number":4`
+		if repository != "" {
+			source += `,"repository":{"full_name":"` + repository + `"}`
+		}
+		return `{"id":` + strconv.Itoa(id) + `,"type":"` + kind + `",` + source + `}}`
+	}
+	events := "[" + ref(1, "issue_ref", "other/place") + "," + ref(2, "pull_ref", "acme/widget") + "," +
+		ref(3, "comment_ref", "Acme/Widget") + "," + ref(4, "issue_ref", "") + "," + ref(5, "pull_ref", "acme/gadget") + "," +
+		ref(6, "comment_ref", "OTHER/place") + "," + ref(7, "issue_ref", "elsewhere/place") + `,{"id":8,"type":"comment"}]`
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response { return jsonResponse(200, events) })
+		for connection, want := range map[string][]float64{"exclude": {2, 3, 7, 8}, "owner-exclude": {2, 3, 8}} {
+			result, err := e.invoke(t, issueTimelineList, connection, `{"repository":"acme/widget","number":7}`)
+			var got []float64
+			for _, event := range rowsOf(t, result, "events") {
+				got = append(got, event["id"].(float64))
+			}
+			// Without targets an event whose source names no repository is dropped as well, since the connection
+			// restricts; with a user target the one of elsewhere/place falls outside it.
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("%s %s: timeline = %v, %v, want %v", p.id, connection, got, err, want)
+			}
+		}
+	}
+}
+
+func TestExclusionsKeepIdentifierOnlyTimelineEventsLikeOutsideTheTargets(t *testing.T) {
+	events := `[{"id":1,"type":"issue_ref","ref_issue":{"id":50,"number":4,"repository":{"full_name":"acme/gadget"}}},` +
+		`{"id":2,"type":"pull_ref","ref_issue":{"id":50,"number":4,"repository":{"full_name":"other/place"}}},` +
+		`{"id":3,"type":"dependent_issue","dependent_issue":{"id":51,"number":5,"repository":{"full_name":"other/place"}}},` +
+		`{"id":4,"type":"commit_ref","ref_commit_sha":"abc"},` +
+		`{"id":5,"type":"issue_ref","ref_issue":{"id":50,"number":4,"repository":{"full_name":"acme/widget"}}}]`
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response { return jsonResponse(200, events) })
+		for _, connection := range []string{"exclude", "owner-exclude"} {
+			result, err := e.invoke(t, issueTimelineList, connection, `{"repository":"acme/widget","number":7}`)
+			var got []float64
+			for _, event := range rowsOf(t, result, "events") {
+				got = append(got, event["id"].(float64))
+			}
+			if err != nil || !reflect.DeepEqual(got, []float64{3, 4, 5}) {
+				t.Errorf("%s %s: timeline = %v, %v, want [3 4 5]", p.id, connection, got, err)
+			}
+		}
+	}
+}
