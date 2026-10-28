@@ -4,9 +4,12 @@
 //
 // The token is sent as "Authorization: Token ...". A database token carries create, read, update, and
 // delete rights per workspace, database, or table; Qatlas adds its own boundary, the allow-list of the
-// connection (table/ID and database/ID entries, or *). A table ID that no table entry lists is proven against a
-// database entry by one read of the token's table list; outside both it is refused, before the credential is
-// resolved when no database entry exists, without a request on the table, and never naming the table. Every request is built from
+// connection (table/ID and database/ID entries, or *) and its exclusions (table/ID and database/ID, which win
+// over every target). A table ID that no table entry lists is proven against a database entry by one read of the
+// token's table list, as is every table where a database is excluded; an excluded table, and one outside every
+// target when no database entry exists, is refused before the credential is resolved, without a request on the
+// table, and never naming the table or the exclusion. A table whose database cannot be determined counts as
+// excluded where a database is excluded. Every request is built from
 // fixed paths, fixed methods, and validated integers, never from a free URL or method of an agent. The body of
 // a row change carries only cell values whose field names the table's schema confirms as writable.
 //
@@ -17,7 +20,7 @@
 // host of the connection and for exactly the picked file, without the token and without a redirect. A URL that
 // Baserow is asked to fetch must be https on a public host name; Baserow's own guard covers the resolution.
 //
-// Link fields (link_row) into a table outside the allow-list are reduced to row IDs: their display values
+// Link fields (link_row) into a table the connection does not reach are reduced to row IDs: their display values
 // are dropped. A link field whose other table cannot be determined counts as outside. A lookup
 // field through such a link, or through a link that cannot be found, is left out of the output and refused
 // in filters and sorting. Rollup, count, and formula fields can reflect data of other tables but cannot be
@@ -255,16 +258,18 @@ func Register(reg *capability.Registry) error {
 			Wildcard: "*",
 			WildcardWarning: "All tables the database token may read are exposed to the agent. " +
 				"Use a table allow-list when not all of them are required.",
-			Description: "tables and databases as an allow-list, or * for every table the token reads",
+			Description: "tables and databases as an allow-list, or * for every table the token reads; exclude takes tables and databases out again",
 			Kinds: []config.TargetKind{{
 				Name:        "database",
 				Description: "a database whose tables, also later ones, this connection may read; optional, repeatable",
 				Forms:       []string{"database/DATABASE_ID"},
+				Excludable:  true,
 			}, {
 				Name:        "table",
 				Description: "a table whose fields and rows this connection may read",
 				Forms:       []string{"table/TABLE_ID", "*"},
 				Parents:     []string{"database"},
+				Excludable:  true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: validateSet,
