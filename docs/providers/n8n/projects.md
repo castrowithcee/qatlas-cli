@@ -40,6 +40,9 @@ below. The routes are those of n8n-io/n8n at commit `191a22e`.
   configured project allow-list: without a `project/PROJECT_ID` target no project is on the list, and both
   are refused locally. A foreign ID is refused the same way. Both refusals are invalid requests, made before a
   secret is read and before any request is sent, and neither names a project.
+- An excluded project counts as outside the allow-list: `list` leaves it out, and `update`, `delete` and the
+  member tools refuse it. `delete` of a reachable project that owns an excluded workflow is refused as well,
+  see [Exclusions](README.md#exclusions).
 - `projects.create` is refused on a connection with a project allow-list, since the new project cannot
   already be on it. The request carries only `name`; n8n's `id`, `icon`, `description`, and telemetry tags
   are not offered, so a caller cannot choose the ID of the new project.
