@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
 func searchRequest(p *product, connection, cursor string) application.SearchRequest {
@@ -143,4 +144,74 @@ func symmetric(a, b []string) []string {
 		}
 	}
 	return out
+}
+
+func TestExclusionsAreDeclaredAndValidatedByTheCore(t *testing.T) {
+	reg := registry(t)
+	for _, p := range products {
+		metadata, _ := reg.ProviderMetadata(p.id)
+		target := metadata.Target
+		if !target.Excludes() {
+			t.Fatalf("%s declares no exclusions", p.id)
+		}
+		for _, kind := range target.Kinds {
+			if !kind.Excludable {
+				t.Errorf("%s: kind %s is not excludable", p.id, kind.Name)
+			}
+		}
+		for _, valid := range [][2][]string{
+			{{"users/alice", "orgs/acme", "repos/acme/widget"}, nil},
+			{{"repos/acme/widget"}, {"orgs/acme"}},
+			{{"repos/zz/yy"}, {"orgs/acme"}},
+		} {
+			if got := target.CheckExcludes(valid[0], valid[1]); len(got) != 0 {
+				t.Errorf("%s: CheckExcludes(%v, %v) = %+v", p.id, valid[0], valid[1], got)
+			}
+		}
+		for _, bad := range []string{"", "*", "users/*", "orgs/*", "repos/acme/*", "repos/*/*", "acme", "repos/acme",
+			"teams/acme/x", " orgs/acme"} {
+			if got := target.CheckExcludes([]string{bad}, nil); len(got) != 1 {
+				t.Errorf("%s: CheckExcludes(%q) = %+v", p.id, bad, got)
+			}
+		}
+		if got := target.CheckExcludes([]string{"orgs/acme"}, []string{"orgs/acme"}); len(got) != 1 {
+			t.Errorf("%s: an exclusion equal to a target = %+v", p.id, got)
+		}
+		if got := target.CheckExcludes([]string{"repos/a/b", "repos/a/b"}, nil); len(got) != 1 {
+			t.Errorf("%s: a repeated exclusion = %+v", p.id, got)
+		}
+		document := `version: 1
+services:
+  forge:
+    provider: ` + p.id + `
+    base_url: ` + baseURL + `
+credentials:
+  token:
+    type: env
+    provider: ` + p.id + `
+    values:
+      token: ` + tokenEnv + `
+connections:
+  excluding:
+    service: forge
+    credential: token
+    targets: [orgs/acme]
+    exclude: [repos/acme/gadget, users/other]
+`
+		cfg, err := config.Decode(strings.NewReader(document), reg)
+		if err != nil {
+			t.Fatalf("%s: %v", p.id, err)
+		}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%s: a connection with exclusions is invalid: %v", p.id, err)
+		}
+		cfg.Connections["plain"] = config.Connection{Service: "forge", Credential: "token", Exclude: []string{"orgs/acme"}}
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%s: an exclusion without targets is invalid: %v", p.id, err)
+		}
+		cfg.Connections["wildcard"] = config.Connection{Service: "forge", Credential: "token", Exclude: []string{"orgs/*"}}
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: a wildcard exclusion is valid", p.id)
+		}
+	}
 }

@@ -128,7 +128,7 @@ var teamRepositoriesList = &tool{
 				if name, _ := row.text("full_name"); !allowed.allowsFullName(name) {
 					continue
 				}
-				repositories = append(repositories, project(p, repositoryMembers, row))
+				repositories = append(repositories, project(p, repositoryMembers, allowed.hideExcludedParent(row)))
 			}
 			next := page.next(header, len(rows))
 			result := map[string]any{"id": a.ID, "repositories": repositories, "has_more": next != ""}

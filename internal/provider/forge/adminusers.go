@@ -379,6 +379,12 @@ var adminUsersRename = &tool{
 		if err := userNameOf("new_username", a.NewUsername); err != nil {
 			return nil, err
 		}
+		if err := allowed.refuseCarrier("account", a.Username); err != nil {
+			return nil, err
+		}
+		if err := allowed.refuseCarrier("new_username", a.NewUsername); err != nil {
+			return nil, err
+		}
 		body := map[string]any{"new_username": a.NewUsername}
 		return func(ctx context.Context, c *Client) (any, error) {
 			if err := c.change(ctx, "rename instance user", http.MethodPost, "/admin/users/"+escape(a.Username)+"/rename",
@@ -425,6 +431,9 @@ var adminUsersDelete = &tool{
 			return nil, err
 		}
 		if err := userNameOf("username", a.Username); err != nil {
+			return nil, err
+		}
+		if err := allowed.refuseCarrier("account", a.Username); err != nil {
 			return nil, err
 		}
 		query := url.Values{}

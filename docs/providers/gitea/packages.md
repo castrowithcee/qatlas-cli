@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Packages
@@ -29,6 +29,8 @@ one product. Names, versions, and file names in answers are untrusted data.
   of the same scope; a repository target does not allow it, and `users/NAME` does not allow `orgs/NAME`. Without
   targets any owner the token reaches is allowed. The refusal comes before the token is read and does not name the
   value.
+- Exclusions ([Targets](README.md#exclusions)): packages of an excluded owner are excluded, a `repository` of a package
+  inside an exclusion is dropped, and `packages.link` to an excluded repository is refused.
 - `packages.link` takes `repo_name`, a repository of the same owner, and checks `OWNER/repo_name` against the targets
   as well.
 - The owner in the path binds the package. A row or an answer whose `owner` is another or missing is dropped from a

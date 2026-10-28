@@ -189,3 +189,36 @@ func TestAdminUnadoptedChangesRefuseInvalidNamesWithoutRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminUnadoptedDropsAndRefusesExclusions(t *testing.T) {
+	for _, p := range products {
+		e := newAdminEnvironment(t, p, defaultVersion(p), func(c call) *http.Response {
+			return jsonResponse(200, `["octo/project","Acme/Gadget","other/anything","acme/widget"]`)
+		})
+		result, err := e.call(t, adminUnadoptedList, "admin-exclude", `{}`, false)
+		var names []string
+		for _, row := range rowsOf(t, result, "unadopted") {
+			names = append(names, row["full_name"].(string))
+		}
+		if err != nil || !slices.Equal(names, []string{"octo/project", "acme/widget"}) {
+			t.Errorf("%s: list with exclusions = %v, %v", p.id, names, err)
+		}
+		for _, tc := range []struct {
+			tl        *tool
+			arguments string
+		}{
+			{adminUnadoptedAdopt, `{"owner":"acme","repo":"GADGET"}`}, {adminUnadoptedDelete, `{"owner":"acme","repo":"gadget"}`},
+			{adminUnadoptedAdopt, `{"owner":"Other","repo":"x"}`}, {adminUnadoptedDelete, `{"owner":"other","repo":"x"}`},
+		} {
+			before := len(*e.calls)
+			_, err := e.call(t, tc.tl, "admin-exclude", tc.arguments, true)
+			if err == nil || !isInvalidRequest(err) || len(*e.calls) != before || strings.Contains(err.Error(), "exclu") ||
+				strings.Contains(strings.ToLower(err.Error()), "gadget") {
+				t.Errorf("%s %s %s: %v", p.id, tc.tl.action, tc.arguments, err)
+			}
+		}
+		if _, err := e.call(t, adminUnadoptedAdopt, "admin-exclude", `{"owner":"acme","repo":"widget"}`, true); err != nil {
+			t.Errorf("%s: adopt of a reachable name: %v", p.id, err)
+		}
+	}
+}

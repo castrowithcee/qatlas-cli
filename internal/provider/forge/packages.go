@@ -113,7 +113,8 @@ type packageArguments struct {
 // packageCall is what a call acts on after the checks: the owner as a target, and the fixed paths.
 type packageCall struct {
 	packageArguments
-	owner target
+	owner   target
+	allowed allowlist
 }
 
 func (c packageCall) ownerPath() string { return "/packages/" + escape(c.owner.owner) }
@@ -149,7 +150,7 @@ func readPackage(p *product, allowed allowlist, raw json.RawMessage, needType, n
 		return packageCall{}, err
 	}
 	if !allowed.namesOwner(owner) {
-		return packageCall{}, outsideTargets("owner")
+		return packageCall{}, allowed.outsideOwner("owner", owner.owner)
 	}
 	if needType || a.Type != "" {
 		known := false
@@ -174,6 +175,9 @@ func readPackage(p *product, allowed allowlist, raw json.RawMessage, needType, n
 		if !validRepoName(a.RepoName) {
 			return packageCall{}, invalidArgument("repo_name must be a repository name")
 		}
+		if allowed.excluded(owner.owner, a.RepoName) {
+			return packageCall{}, unavailable("repository")
+		}
 		if !allowed.allowsRepository(owner.owner, a.RepoName) {
 			return packageCall{}, outsideTargets("repository")
 		}
@@ -181,7 +185,7 @@ func readPackage(p *product, allowed allowlist, raw json.RawMessage, needType, n
 	if a.Query != "" && (utf8.RuneCountInString(a.Query) > maxPackageQuery || !plainText(a.Query)) {
 		return packageCall{}, invalidArgument("q must hold at most 100 characters without control characters")
 	}
-	return packageCall{packageArguments: a, owner: owner}, nil
+	return packageCall{packageArguments: a, owner: owner, allowed: allowed}, nil
 }
 
 // ownedBy reports whether a package row names the owner of the call; a row without an owner proves nothing.
@@ -194,11 +198,53 @@ func (c packageCall) ownedBy(row object) bool {
 	return ok && strings.EqualFold(login, c.owner.owner)
 }
 
+// hidesRepository drops the repository of a package row when an exclusion takes it out, as for a token without
+// the right to read it, and the excluded parent of a fork inside it. With exclusions, a repository without a
+// canonical name is dropped too.
+func (a allowlist) hidesRepository(row object) object {
+	repository, ok := row.child("repository")
+	if !ok {
+		return row
+	}
+	name, _ := repository.text("full_name")
+	if a.excludedFullName(name) || (len(a.excludes) > 0 && name == "") {
+		delete(row, "repository")
+		return row
+	}
+	if _, ok := repository.child("parent"); ok {
+		if parent, err := json.Marshal(a.hideExcludedParent(repository)); err == nil {
+			row["repository"] = parent
+		}
+	}
+	return row
+}
+
+// keepsPackage reports whether a row of the package list of the whole instance may be shown: without exclusions
+// every row; otherwise one whose owner is known and not excluded, and whose repository, if linked, is not.
+func (a allowlist) keepsPackage(row object) bool {
+	if len(a.excludes) == 0 {
+		return true
+	}
+	owner, ok := row.child("owner")
+	if !ok {
+		return false
+	}
+	login, ok := owner.text("login")
+	if !ok || login == "" || a.excludedOwner(login) {
+		return false
+	}
+	if repository, ok := row.child("repository"); ok {
+		name, _ := repository.text("full_name")
+		return name != "" && !a.excludedFullName(name)
+	}
+	return true
+}
+
 func packageRows(p *product, c packageCall, rows []object) []map[string]any {
 	out := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
 		if row != nil && c.ownedBy(row) {
-			out = append(out, project(p, packageMembers, row))
+			out = append(out, project(p, packageMembers, c.allowed.hidesRepository(row)))
 		}
 	}
 	return out
@@ -285,7 +331,7 @@ func packageVersionRow(p *product, cl *Client, op string, c packageCall, row obj
 	if row == nil || !c.ownedBy(row) {
 		return nil, notShown(op, cl.product)
 	}
-	return project(p, packageMembers, row), nil
+	return project(p, packageMembers, c.allowed.hidesRepository(row)), nil
 }
 
 var packagesGet = &tool{
