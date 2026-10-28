@@ -262,15 +262,15 @@ func TestClickOnALogRowMarksItAndASecondClickOpensIt(t *testing.T) {
 	m.screen = screenLogs
 	m.setLogTab(logTabTable)
 	m.render()
-	clickOn(t, m, "2026-10-23 12:02")
+	clickOn(t, m, activityStamp(4, 2))
 	if m.screen != screenLogs || m.logs.list.cursor != 2 {
 		t.Fatalf("first click: screen %v cursor %d, want the table with row 2 marked", m.screen, m.logs.list.cursor)
 	}
-	clickOn(t, m, "2026-10-23 12:01")
+	clickOn(t, m, activityStamp(4, 1))
 	if m.screen != screenLogs || m.logs.list.cursor != 1 {
 		t.Fatalf("click on another row: screen %v cursor %d, want only row 1 marked", m.screen, m.logs.list.cursor)
 	}
-	clickOn(t, m, "2026-10-23 12:01")
+	clickOn(t, m, activityStamp(4, 1))
 	if m.screen != screenLogDetail {
 		t.Fatalf("click on the marked row: screen %v, want the entry", m.screen)
 	}
@@ -284,17 +284,17 @@ func TestClickFromTheTabLineOnTheMarkedLogRowOnlyMarks(t *testing.T) {
 	m.setLogTab(logTabTable)
 	m.render()
 	m.focusNav()
-	clickOn(t, m, "2026-10-19 12:00")
+	clickOn(t, m, activityStamp(8, 0))
 	if m.screen != screenLogs || m.logs.focus != logFocusRows {
 		t.Fatalf("click from the tab line: screen %v focus %v, want the rows", m.screen, m.logs.focus)
 	}
 	m.logs.focus = logFocusTabs
 	m.render()
-	clickOn(t, m, "2026-10-19 12:00")
+	clickOn(t, m, activityStamp(8, 0))
 	if m.screen != screenLogs || m.logs.focus != logFocusRows {
 		t.Fatalf("click from the log tabs: screen %v focus %v, want only the focus on the rows", m.screen, m.logs.focus)
 	}
-	clickOn(t, m, "2026-10-19 12:00")
+	clickOn(t, m, activityStamp(8, 0))
 	if m.screen != screenLogDetail {
 		t.Fatalf("second click: screen %v, want the entry", m.screen)
 	}

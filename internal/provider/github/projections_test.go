@@ -45,7 +45,7 @@ func TestRepositoryProjectionMatchesDocumentedExamples(t *testing.T) {
 		if err := json.Unmarshal([]byte(tc.in), &raw); err != nil {
 			t.Fatal(err)
 		}
-		t.Run(tc.name, func(t *testing.T) { assertJSON(t, raw.project(nil), tc.want) })
+		t.Run(tc.name, func(t *testing.T) { assertJSON(t, raw.project(allowlist{}), tc.want) })
 	}
 }
 
@@ -57,7 +57,7 @@ func TestRepositoryProjectionNeverCarriesTheCloneToken(t *testing.T) {
 	if !strings.Contains(exampleFullRepository, "temp_clone_token") {
 		t.Fatal("the documented example no longer carries the token")
 	}
-	out := marshalProjection(t, raw.project(nil))
+	out := marshalProjection(t, raw.project(allowlist{}))
 	if strings.Contains(out, "temp_clone_token") || strings.Contains(out, "ABTLWHOULUVAXGTRYU7OC2876QJ2O") {
 		t.Errorf("clone token in output: %s", out)
 	}
@@ -92,7 +92,7 @@ func TestRepositoryOutsideTheTargetsShowsOnlyIdentifiers(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"id":5,"full_name":"no-slash","name":"x"}`), &bad); err != nil {
 		t.Fatal(err)
 	}
-	assertJSON(t, bad.project(nil), `{"id":5,"full_name":"no-slash"}`)
+	assertJSON(t, bad.project(allowlist{}), `{"id":5,"full_name":"no-slash"}`)
 }
 
 func TestRepositoryProjectionDropsMissingAndNull(t *testing.T) {
@@ -103,7 +103,7 @@ func TestRepositoryProjectionDropsMissingAndNull(t *testing.T) {
 	if err := json.Unmarshal([]byte(in), &raw); err != nil {
 		t.Fatal(err)
 	}
-	assertJSON(t, raw.project(nil), `{"id":1,"full_name":"a/b","name":"b","forks_count":0,"private":false,`+
+	assertJSON(t, raw.project(allowlist{}), `{"id":1,"full_name":"a/b","name":"b","forks_count":0,"private":false,`+
 		`"links":{"url":"https://api.github.com/repos/a/b"}}`)
 }
 
@@ -117,7 +117,7 @@ func TestRepositoryNestedObjects(t *testing.T) {
 	if err := json.Unmarshal([]byte(in), &raw); err != nil {
 		t.Fatal(err)
 	}
-	assertJSON(t, raw.project(nil), `{"id":1,"full_name":"a/b","code_of_conduct":{"key":"contributor_covenant","name":"CoC",`+
+	assertJSON(t, raw.project(allowlist{}), `{"id":1,"full_name":"a/b","code_of_conduct":{"key":"contributor_covenant","name":"CoC",`+
 		`"body":"line1\nline2 ","url":"https://github.com/codes_of_conduct/x","links":{"url":"https://api.github.com/codes_of_conduct/x"}},`+
 		`"security_and_analysis":{"advanced_security":{"status":"enabled"},"secret_scanning_delegated_bypass_options":`+
 		`{"reviewers":[{"reviewer_id":9,"reviewer_type":"TEAM","mode":"ALWAYS"}]}},`+
@@ -130,7 +130,7 @@ func TestCustomPropertiesAreMarkedNotCut(t *testing.T) {
 		if err := json.Unmarshal([]byte(`{"id":1,"full_name":"a/b","custom_properties":`+props+`}`), &raw); err != nil {
 			t.Fatal(err)
 		}
-		return raw.project(nil)
+		return raw.project(allowlist{})
 	}
 	assertJSON(t, project(`{"team":"core","tags":["a","b"],"n":12345678901234567,"on":true,"unset":null}`),
 		`{"id":1,"full_name":"a/b","custom_properties":{"team":"core","tags":["a","b"],"n":12345678901234567,"on":true}}`)
@@ -165,7 +165,7 @@ func TestTopicsAndTextsAreBounded(t *testing.T) {
 	if err := json.Unmarshal([]byte(in), &raw); err != nil {
 		t.Fatal(err)
 	}
-	got := raw.project(nil)
+	got := raw.project(allowlist{})
 	if len(got.Topics) != projectionListLimit || !got.TopicsTruncated {
 		t.Errorf("topics = %d, truncated %v", len(got.Topics), got.TopicsTruncated)
 	}
@@ -317,7 +317,7 @@ func TestLinkSchemasCoverTheEmittedLinks(t *testing.T) {
 	if err := json.Unmarshal([]byte(exampleMinimalRepository), &raw); err != nil {
 		t.Fatal(err)
 	}
-	got := raw.project(nil)
+	got := raw.project(allowlist{})
 	if len(got.Links) != len(restRepositoryLinkKeys) {
 		t.Errorf("links = %d, want %d", len(got.Links), len(restRepositoryLinkKeys))
 	}

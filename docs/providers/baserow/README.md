@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Baserow
@@ -43,21 +43,35 @@ single entry `*` for every table the token reads. Entries are positive integers 
 database covers all its tables, also those created later; tables and databases together form the allow-list. A listed
 table does not open its database.
 
+`exclude` takes tables and databases out again, in the same two forms, and is how to say "everything except":
+`*` plus `exclude`. It needs a target, may not contain `*`, name an entry twice, or repeat a target. An exclusion wins
+over every target, a table, a database, and `*`. It is no target and removes no tool. One that matches nothing is valid
+and has no effect. It is not the `include` and `exclude` of `rows.list` and `rows.search`, which choose the columns of a
+row.
+
 ```yaml
 connections:
   customer-a-crm:
     service: baserow-customer-a
     credential: baserow-customer-a-token
     targets: [table/11, database/3]
+  customer-a-rest:
+    service: baserow-customer-a
+    credential: baserow-customer-a-token
+    targets: ["*"]
+    exclude: [database/7, table/42]
 ```
 
-A `table_id` outside the targets is refused as an invalid request without naming the table. A listed table is checked
-before the credential is resolved and before any request. A table that is not listed itself is proven by one read of
-the token's table list, which names the table's database; it is refused without any request on the table when its
-database is not listed. That read is made at most once per call and is shared with the link checks ([Links](links.md)).
-`baserow.tables.list` shows only the tables of the targets when the connection has an allow-list. The target limits
-what Qatlas shows; it does not narrow what the token itself may read; see [Set up Baserow](setup.md). Every tool acts
-on one table or lists tables, so a database target reaches all of them.
+A table that is not reachable, outside the targets or excluded, behaves the same everywhere and is refused as an
+invalid request that names neither the table nor the exclusion. A `table_id` that the entries alone decide (an excluded
+table, or one not listed while no database is a target) is refused before the credential is resolved and before any
+request. Otherwise one read of the token's table list, which names the table's database, proves the table; this is
+needed for a table of a listed database, and for every table where a database is excluded. A table whose database the
+list does not give counts as excluded there. That read is made at most once per call and is shared with the link checks
+([Links](links.md)); the table itself is not requested before the answer. `baserow.tables.list` shows only the
+reachable tables, judged by the list it reads anyway. The target limits what Qatlas shows; it does not narrow what the
+token itself may read; see [Set up Baserow](setup.md). Every tool acts on one table or lists tables, so a database
+target reaches all of them.
 
 ## Choosing targets
 
@@ -74,7 +88,7 @@ address. Any other host names nothing.
 
 | Tool | Effect | Confirmation | Does |
 | --- | --- | --- | --- |
-| `baserow.tables.list` | read | none | lists the tables of the targets, also those of a listed database |
+| `baserow.tables.list` | read | none | lists the reachable tables, also those of a listed database |
 | `baserow.fields.list` | read | none | lists one table's fields with their type-specific schema properties |
 | `baserow.rows.list` | read | none | lists one table's rows page by page |
 | `baserow.rows.get` | read | none | reads one row |
@@ -144,8 +158,8 @@ Assumed, not verified: `user_field_names=true` and a JSON body keyed by field na
 object as the answer of create, update, and move (move's answer is not read), an empty 204 answer for delete,
 `before_id` as the query parameter of move, `403` for a missing token right, link values as arrays of row IDs or
 texts, link entries as objects with `id` and `value`, `link_row_table_id` being null when the other table is not
-available, and that the table list of a token also contains the tables it may not read, which is why the target
-filter is applied to it.
+available, and that the table list of a token holds every table on which it has any of the create, read, update, or
+delete right, which can be more than a connection's effects use, which is why the target filter is applied to it.
 
 Batch endpoints, assumed from the documented API shape: `POST .../table/{table_id}/batch/` with
 `{"items": [cells]}` and `PATCH .../batch/` with `{"items": [{"id": N, ...cells}]}`, both with
