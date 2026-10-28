@@ -20,6 +20,11 @@ import (
 // webhook ID nor the foreign team or channel.
 const outgoingHookOutOfScope = "hook_id belongs to a team or channel outside the targets of this connection"
 
+// outgoingHookExcludedRefusal is the refusal to change a webhook that watches every public channel of its
+// team on a connection with exclusions: the change cannot be shown to leave excluded channels alone.
+const outgoingHookExcludedRefusal = "this connection has exclusions, so it changes no outgoing webhook that " +
+	"watches every public channel of its team"
+
 // maxHookListEntries bounds the trigger words and callback origins reported for one webhook.
 const maxHookListEntries = 50
 
@@ -121,7 +126,8 @@ var outgoingWebhooksUpdate = capability.Descriptor{
 	Title:   "Change an Infomaniak kChat outgoing webhook",
 	Description: "Change the display name or description of exactly one active outgoing webhook of a bound team " +
 		"whose channel this connection may reach, with one confirmed request; channel, callback URLs, trigger " +
-		"words, and the other fields stay as read, and only the given fields change",
+		"words, and the other fields stay as read, and only the given fields change; a webhook without a " +
+		"channel, which watches every public channel of its team, is refused when the connection has exclusions",
 	Tags:                  []string{"infomaniak", "kchat", "webhooks", "integrations", "update"},
 	Risk:                  hookRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired),
 	Provider:              Provider,
@@ -391,6 +397,9 @@ func invokeOutgoingWebhooksUpdate(ctx context.Context, resolved *config.Resolved
 	hook, err := client.boundOutgoingHook(ctx, op, input.HookID)
 	if err != nil {
 		return nil, err
+	}
+	if hook.ChannelID == "" && len(client.scope.excluded) != 0 {
+		return nil, invalidRequest(outgoingHookExcludedRefusal)
 	}
 	return client.UpdateOutgoingWebhook(ctx, hook, input)
 }
