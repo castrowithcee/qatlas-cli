@@ -39,10 +39,10 @@ func fullName(repo target) string { return repo.owner + "/" + repo.repo }
 
 // namesOwnerOfScope reports whether the list admits the owner by an owner target of exactly that scope.
 func (a allowlist) namesOwnerOfScope(scope, name string) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == scope && strings.EqualFold(entry.owner, name) {
 			return true
 		}
@@ -63,10 +63,10 @@ func (a allowlist) checkDestination(organization string) error {
 		}
 		return nil
 	}
-	if len(a) == 0 {
+	if a.open() {
 		return nil
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == "users" {
 			return nil
 		}
@@ -78,7 +78,7 @@ func (a allowlist) checkDestination(organization string) error {
 // verifyOwnAccount is the evidence read before a change that lands in the account behind the token: that
 // account must be a user the targets name.
 func verifyOwnAccount(ctx context.Context, c *Client, op string, allowed allowlist) error {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return nil
 	}
 	var account object

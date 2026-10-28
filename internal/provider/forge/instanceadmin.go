@@ -29,7 +29,7 @@ var sinceAdminPackages = map[string]version{gitea.id: giteaActions28}
 
 // instanceWide refuses a connection with targets: the instance-wide data reaches past any target.
 func (a allowlist) instanceWide() error {
-	if len(a) != 0 {
+	if a.bound() {
 		return invalidArgument("instance administration reaches past any target, so this connection's targets do " +
 			"not allow it; use a connection without targets")
 	}
