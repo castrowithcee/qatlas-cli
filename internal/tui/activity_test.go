@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,6 +44,11 @@ func writeActivityLog(t *testing.T, f *logFixture, calls []activityCall) {
 		mustNoError(t, file.Close())
 		previous = sha256.Sum256(raw)
 	}
+}
+
+// activityStamp is the log table time of the call at minute that writeActivityLog wrote daysAgo days back.
+func activityStamp(daysAgo, minute int) string {
+	return fmt.Sprintf("%s 12:%02d", time.Now().AddDate(0, 0, -daysAgo).Format("2006-01-02"), minute)
 }
 
 // repeatCalls is n successful calls of op, daysAgo days back.
