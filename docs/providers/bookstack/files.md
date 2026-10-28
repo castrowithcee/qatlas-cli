@@ -15,7 +15,7 @@ Group `files`: attachments and images of pages. The token rights are listed unde
 ## Attachments
 
 Attachments belong to pages. `bookstack.attachments.list` takes an optional `page_id` (required on a
-connection with targets), `limit`, and `offset`, and lists the attachments without any content. The filter
+connection with targets, optional with exclusions only), `limit`, and `offset`, and lists the attachments without any content. The filter
 sent to BookStack is only an optimization: every row is checked again for the page. BookStack before v26.09.1 also
 lists attachments of pages in the recycle bin.
 
@@ -28,7 +28,7 @@ the local file, decoded as a stream, up to 72 MiB within 10 minutes. A link atta
 file. The answer never carries the content. An existing file is replaced
 only with confirmation. Writing needs the connection's local file release for writing.
 
-On a connection with targets, the page of the attachment is proven before anything is returned or written: the
+On a connection with targets or exclusions, the page of the attachment is proven before anything is returned or written: the
 metadata comes first in the answer of BookStack, and only after the proof is the first byte of content decoded.
 These three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
 
@@ -49,7 +49,7 @@ accepts a multipart body only on `POST`, so the request is `POST /api/attachment
 `bookstack.attachments.delete` takes the `id` and deletes the attachment; attachments are not kept in the recycle bin,
 so the deletion is final.
 
-On a connection with targets, `update`, `replace`, and `delete` find the page of an existing attachment through the
+On a connection with targets or exclusions, `update`, `replace`, and `delete` find the page of an existing attachment through the
 attachment listing filtered by `id`, which carries no file content, and prove that page (see [Targets](README.md#targets)).
 
 Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
@@ -61,7 +61,8 @@ is idempotent; `replace` updates and is not idempotent; `delete` requires an ent
 ## Images
 
 Gallery images and drawings belong to pages. `bookstack.images.list` takes an optional `page_id` (required on a
-connection with targets), an optional `type` (`gallery` or `drawio`), `limit`, and `offset`, and lists the images without any image data. The
+connection with targets, optional with exclusions only), an optional `type` (`gallery` or `drawio`), `limit`, and
+`offset`, and lists the images without any image data. The
 filters sent to BookStack are only an optimization: every row is checked again for page and type.
 
 `bookstack.images.get` takes the `id` and returns the same metadata plus the `thumbs` urls and the ready-made
@@ -73,8 +74,9 @@ to 64 MiB within 10 minutes. The answer never carries the
 data. An existing file is replaced only with confirmation. Writing needs the connection's local file release for
 writing. Downloading by an arbitrary image url is not offered.
 
-On a connection with targets, the metadata of the image is read first and its page proven, and only then is the data
-requested. These three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+On a connection with targets or exclusions, the metadata of the image is read first and its page proven, and only then
+is the data requested. An image belongs to the page it was uploaded to: one without a page is out of reach on such a
+connection, and an excluded page takes its attachments and images with it. These three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
 
 ### Changing images
 
@@ -92,8 +94,8 @@ only on `POST`, so the request is `POST /api/image-gallery/{id}` with the form f
 `bookstack.images.delete` takes the `id` and deletes the image: final, without a usage check, and it can leave pages
 with broken image references.
 
-On a connection with targets, `update`, `replace`, and `delete` read the metadata of the existing image and prove
-its page before the change.
+On a connection with targets or exclusions, `update`, `replace`, and `delete` read the metadata of the existing image
+and prove its page before the change.
 
 Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
 result is reported as uncertain. All four tools require confirmation and are part of no profile; `delete` also

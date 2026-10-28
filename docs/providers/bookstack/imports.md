@@ -30,7 +30,10 @@ checked before a secret is read. If BookStack rejects the file, Qatlas' message 
 `bookstack.imports.run` imports one pending import by `id`. It reads the import first and checks the arguments
 against its type before sending anything: a `book` import takes no `parent_type` or `parent_id`; a `chapter`
 import needs `parent_type` `book` and the `parent_id` of that book; a `page` import needs `parent_type` `book`
-or `chapter` and its `parent_id`. The result is the `type` and `id` of the created object.
+or `chapter` and its `parent_id`. The result is the `type` and `id` of the created object. An import into an
+excluded parent, or into a book or chapter below an excluded object, is refused before anything is sent. The
+tools stay available on a connection with exclusions; the imports themselves are not objects of the
+exclusions.
 
 `bookstack.imports.delete` discards one pending import by `id`; content created by an earlier run stays.
 

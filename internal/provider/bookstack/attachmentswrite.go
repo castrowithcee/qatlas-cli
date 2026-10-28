@@ -36,8 +36,8 @@ const notAFile = "the attachment is a link, not a file"
 
 const attachmentWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"extension":{"type":"string"},"page_id":{"type":"integer"},"external":{"type":"boolean"},"order":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","page_id","external"]}`
 
-const attachmentBindNote = "On a connection with targets the page is proven to lie in them first, " +
-	"and so is the page of an existing attachment"
+const attachmentBindNote = "On a connection with targets or exclusions the page is proven to lie in the targets and outside the " +
+	"exclusions first, and so is the page of an existing attachment"
 
 var attachmentWriteFields = []capability.Field{
 	{Name: "id", Description: "Attachment identifier"},
@@ -194,6 +194,9 @@ func invokeAttachmentsLink(ctx context.Context, resolved *config.Resolved, secre
 	if err := checkAttachmentLink(in.Link); err != nil {
 		return nil, err
 	}
+	if err := boundExcluded(resolved, pagePrefix, in.PageID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -239,6 +242,9 @@ func invokeAttachmentsUpload(ctx context.Context, resolved *config.Resolved, sec
 		return nil, err
 	}
 	if err := checkAttachmentName(in.Name); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, pagePrefix, in.PageID); err != nil {
 		return nil, err
 	}
 	upload, err := openUpload(ctx, resolved, in.LocalPath)
@@ -310,17 +316,17 @@ func (c *Client) readAttachmentMeta(ctx context.Context, op string, id int64) (a
 		Message: "BookStack does not hold this resource or does not show it to this token"}
 }
 
-// requireAttachmentBound proves the page of an existing attachment on a bound connection. An unbound
-// connection reads nothing, unless needFile asks for the type check of a file.
+// requireAttachmentBound proves the page of an existing attachment on a bound connection or one with
+// exclusions. A connection without both reads nothing, unless needFile asks for the type check of a file.
 func (c *Client) requireAttachmentBound(ctx context.Context, op string, id int64, needFile bool) error {
-	if !c.scope.bound() && !needFile {
+	if !c.scope.limited() && !needFile {
 		return nil
 	}
 	meta, err := c.readAttachmentMeta(ctx, op, id)
 	if err != nil {
 		return err
 	}
-	if c.scope.bound() {
+	if c.scope.limited() {
 		if err := c.bindAttachment(ctx, &attachmentJSON{UploadedTo: meta.UploadedTo}); err != nil {
 			return err
 		}
@@ -366,6 +372,9 @@ func invokeAttachmentsUpdate(ctx context.Context, resolved *config.Resolved, sec
 			return nil, err
 		}
 		body["uploaded_to"] = *in.PageID
+		if err := boundExcluded(resolved, pagePrefix, *in.PageID); err != nil {
+			return nil, err
+		}
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {

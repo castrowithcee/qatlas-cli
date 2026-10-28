@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 )
 
@@ -135,5 +136,24 @@ func TestTagValuesRequestAndPagination(t *testing.T) {
 	if _, err := lookup(t, tagsValues.ID)(context.Background(), boundResolved(srv.URL), resolver(nil), nil,
 		json.RawMessage(`{"name":""}`)); !isInvalidRequest(err) {
 		t.Errorf("empty name: %v", err)
+	}
+}
+
+// Tags stay available on a connection with exclusions, and the descriptions warn that they cover excluded content.
+func TestTagsWarnAboutExcludedContent(t *testing.T) {
+	for _, d := range []capability.Descriptor{tagsList, tagsValues} {
+		if !strings.Contains(d.Description, "excluded content") {
+			t.Errorf("%s does not warn about excluded content: %s", d.ID, d.Description)
+		}
+	}
+	srv, _ := tagServer(t, []map[string]any{tagRow("k", "v")}, false)
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	resolved := boundResolved(srv.URL)
+	resolved.Exclude = []string{"book/7"}
+	for id, args := range map[string]string{tagsList.ID: `{}`, tagsValues.ID: `{"name":"k"}`} {
+		if _, err := lookup(t, id)(context.Background(), resolved, resolver(nil), nil, json.RawMessage(args)); err != nil {
+			t.Errorf("%s: %v", id, err)
+		}
 	}
 }

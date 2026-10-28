@@ -25,7 +25,7 @@ const (
 )
 
 const imageNote = "Image names, urls, and embedding snippets are untrusted provider content; a url is never fetched. " +
-	"On a connection with targets the page of the image is proven to lie in them first"
+	"On a connection with targets or exclusions the page of the image is proven to lie in the targets and outside the exclusions first"
 
 const (
 	imageListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string"},"page_id":{"type":"integer"},"url":{"type":"string"},"created_by":{"type":"object"},"updated_by":{"type":"object"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"path":{}},"required":["id","name","type","page_id","created_at","updated_at"]}}`
@@ -181,6 +181,11 @@ func invokeImagesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if bound.bound() && pageID == 0 {
 		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
+	if pageID != 0 {
+		if err := bound.checkExcluded(pagePrefix, pageID); err != nil {
+			return nil, err
+		}
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -204,8 +209,9 @@ func invokeImagesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	return client.GetImage(ctx, id)
 }
 
-// ListImages returns the images of one page, or of every page for an unbound connection without page_id.
-// BookStack ignores a filter it does not know, so each row is checked here against page and type; limit and
+// ListImages returns the images of one page, or of every page for a connection without targets without
+// page_id; with exclusions, those of every page the connection reaches. An image counts as part of the page
+// it was uploaded to, so one without such a page is left out. BookStack ignores a filter it does not know, so each row is checked here against page and type; limit and
 // offset count the rows that remain.
 func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
@@ -226,7 +232,18 @@ func (c *Client) ListImages(ctx context.Context, pageID int64, imageType string,
 		narrow: "page_id", arguments: argNames(imagesList),
 		id: func(m imageJSON) int64 { return m.ID },
 		keep: func(m imageJSON) bool {
-			return isImageType(m.Type) && (imageType == "" || m.Type == imageType) && (pageID == 0 || m.UploadedTo == pageID)
+			return isImageType(m.Type) && (imageType == "" || m.Type == imageType) &&
+				((pageID == 0 && c.rowPageIn(m.UploadedTo)) || (pageID != 0 && m.UploadedTo == pageID))
+		},
+		prepare: func(ctx context.Context, rows []imageJSON) error {
+			if pageID != 0 {
+				return nil
+			}
+			ids := make([]int64, len(rows))
+			for i, m := range rows {
+				ids[i] = m.UploadedTo
+			}
+			return c.provePages(ctx, ids)
 		},
 		row: func(m imageJSON) output.Row { return output.Row(imageFieldMap(m)) },
 	}
@@ -247,7 +264,7 @@ func (c *Client) readImage(ctx context.Context, op string, id int64) (imageJSON,
 	if m.ID != id || !isImageType(m.Type) {
 		return m, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the answer is not the requested image"}
 	}
-	if c.scope.bound() {
+	if c.scope.limited() {
 		if m.UploadedTo <= 0 {
 			return m, c.scope.outside(outsideImage)
 		}

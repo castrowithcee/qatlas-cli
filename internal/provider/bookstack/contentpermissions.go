@@ -36,8 +36,10 @@ const (
 )
 
 const permissionsNote = "Owners and role names are personal data and untrusted provider content. On a connection " +
-	"with targets a page is proven to lie in them first, a book or chapter must lie in a bound book or on a bound " +
-	"shelf, and a shelf is only reachable on a connection without targets"
+	"with targets or exclusions a page is proven to lie in the targets and outside the exclusions first, a book or " +
+	"chapter must lie in a bound book or on a bound shelf, and a shelf is only reachable on a connection without " +
+	"targets. An excluded item is refused, and so is a change to a book or chapter with an excluded chapter or " +
+	"page below it, since permissions are inherited; a shelf does not pass its permissions to its books"
 
 var (
 	contentPermissionsRead = capability.Risk{
@@ -308,26 +310,33 @@ func parsePermissionTarget(raw json.RawMessage, op string) (permissionTarget, er
 	return permissionTarget{kind: in.Type, id: in.ID}, nil
 }
 
-// requireLocalBinding is the part of the binding that needs no request: a book against the targets, a shelf
-// only without targets.
+// requireLocalBinding is the part of the binding that needs no request: an item against the exclusions, a book
+// against the targets, a shelf only without targets.
 func (t permissionTarget) requireLocalBinding(resolved *config.Resolved) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
 	switch t.kind {
 	case "book":
-		bound, err := boundScope(resolved)
-		if err != nil {
+		if err := bound.checkBook(t.id); err != nil {
 			return err
 		}
-		return bound.checkBook(t.id)
+		return bound.checkExcluded(bookPrefix, t.id)
 	case "bookshelf":
+		if err := bound.checkExcluded(shelfPrefix, t.id); err != nil {
+			return err
+		}
 		return requireInstanceScope(resolved, permissionsInstanceWide)
 	case "chapter":
-		bound, err := boundScope(resolved)
-		if err != nil {
+		if err := bound.checkExcluded(chapterPrefix, t.id); err != nil {
 			return err
 		}
 		if bound.bound() && !bound.bookWide() {
 			return needsBook(chapterPermissions)
 		}
+	case "page":
+		return bound.checkExcluded(pagePrefix, t.id)
 	}
 	return nil
 }
@@ -368,19 +377,45 @@ func invokeContentPermissionsUpdate(ctx context.Context, resolved *config.Resolv
 	return client.UpdateContentPermissions(ctx, target, change)
 }
 
-// bindPermissionTarget proves the item on a bound connection: a book or a chapter must be reached as a whole
-// book, since a bound chapter grants its pages and not the chapter's permissions; a page must lie in the
-// connection.
-func (c *Client) bindPermissionTarget(ctx context.Context, t permissionTarget) error {
+// bindPermissionTarget proves the item on a bound connection or one with exclusions: a book or a chapter must
+// be reached as a whole book, since a bound chapter grants its pages and not the chapter's permissions; a page
+// must lie in the connection. A change reaches everything below a book or chapter through inheritance, so it
+// is refused while an excluded chapter or page lies below. A shelf does not pass its permissions to its books.
+func (c *Client) bindPermissionTarget(ctx context.Context, t permissionTarget, change bool) error {
 	switch t.kind {
 	case "book":
-		return c.requireBook(ctx, t.id)
+		if err := c.requireBook(ctx, t.id); err != nil {
+			return err
+		}
+		if !change || len(c.scope.exChapters)+len(c.scope.exPages) == 0 {
+			return nil
+		}
+		var book bookJSON
+		if err := c.get(ctx, "get book", "/api/books/"+strconv.FormatInt(t.id, 10), nil, &book, nil, provider.ClassPermission); err != nil {
+			return err
+		}
+		if c.entriesExcluded(book.Contents) {
+			return c.scope.outside(outsideBelow)
+		}
 	case "bookshelf":
 		if c.scope.bound() {
 			return instanceRefusal(c.scope, permissionsInstanceWide)
 		}
+		return c.scope.checkExcluded(shelfPrefix, t.id)
 	case "chapter":
-		return c.requireChapterBookWide(ctx, t.id, chapterPermissions)
+		if err := c.requireChapterBookWide(ctx, t.id, chapterPermissions); err != nil {
+			return err
+		}
+		if !change || len(c.scope.exPages) == 0 {
+			return nil
+		}
+		var chapter chapterJSON
+		if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(t.id, 10), nil, &chapter, nil, provider.ClassPermission); err != nil {
+			return err
+		}
+		if c.entriesExcluded(chapter.Pages) {
+			return c.scope.outside(outsideBelow)
+		}
 	case "page":
 		return c.requirePageBound(ctx, strconv.FormatInt(t.id, 10))
 	}
@@ -395,7 +430,7 @@ func (c *Client) readContentPermissions(ctx context.Context, op string, t permis
 
 // GetContentPermissions reads the permission overrides of one item within the connection's books.
 func (c *Client) GetContentPermissions(ctx context.Context, t permissionTarget) (output.Object, error) {
-	if err := c.bindPermissionTarget(ctx, t); err != nil {
+	if err := c.bindPermissionTarget(ctx, t, false); err != nil {
 		return output.Object{}, err
 	}
 	current, err := c.readContentPermissions(ctx, "get content permissions", t)
@@ -408,7 +443,7 @@ func (c *Client) GetContentPermissions(ctx context.Context, t permissionTarget) 
 // UpdateContentPermissions binds the item, determines the guest role, reads the current state, refuses locally
 // what would open the guest role, and then sends exactly one request, which is never repeated.
 func (c *Client) UpdateContentPermissions(ctx context.Context, t permissionTarget, change permissionsChange) (output.Object, error) {
-	if err := c.bindPermissionTarget(ctx, t); err != nil {
+	if err := c.bindPermissionTarget(ctx, t, true); err != nil {
 		return output.Object{}, err
 	}
 	guest, err := c.guestRole(ctx)
