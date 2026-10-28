@@ -160,7 +160,8 @@ func TestSigningKeysRefuseTheOtherProductsFormatBeforeTheToken(t *testing.T) {
 			t.Errorf("%s %s: %v, calls %d, reads %d", tc.p.id, tc.format, err, len(*e.calls), *e.reads)
 		}
 		// the handler refuses on its own too, whatever the schema says
-		if _, err := signingKeysGet.prepare(tc.p, nil, []byte(`{"format":"`+tc.format+`"}`)); !isInvalidRequest(err) {
+		arguments := []byte(`{"format":"` + tc.format + `"}`)
+		if _, err := signingKeysGet.prepare(tc.p, allowlist{}, arguments); !isInvalidRequest(err) {
 			t.Errorf("%s %s prepare: %v", tc.p.id, tc.format, err)
 		}
 	}

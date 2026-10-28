@@ -75,46 +75,56 @@ func parseTarget(raw string) (target, error) {
 	return target{}, errors.New("a Forgejo or Gitea target must be users/NAME, orgs/NAME, or repos/OWNER/REPO")
 }
 
-// allowlist is the targets of one connection. Empty, it allows whatever the token reaches; otherwise the
-// owners it names with everything they own, and the repositories it names. Names compare without case.
-type allowlist []target
+// allowlist is the targets of one connection, plus the targets it excludes. Without targets, it allows whatever
+// the token reaches; otherwise the owners it names with everything they own, and the repositories it names.
+// Names compare without case.
+type allowlist struct {
+	targets  []target
+	excludes []target
+}
+
+// bound reports whether the list names targets.
+func (a allowlist) bound() bool { return len(a.targets) > 0 }
+
+// open reports whether nothing restricts the token.
+func (a allowlist) open() bool { return len(a.targets) == 0 && len(a.excludes) == 0 }
 
 func allowlistOf(resolved *config.Resolved) (allowlist, error) {
 	list, err := parseAllowlist(provider.TargetsOf(resolved))
 	if err != nil {
-		return nil, provider.Fail("open", err.Error())
+		return allowlist{}, provider.Fail("open", err.Error())
 	}
 	return list, nil
 }
 
 func parseAllowlist(values []string) (allowlist, error) {
 	if len(values) > maxTargets {
-		return nil, errors.New("the Forgejo or Gitea target list names too many targets")
+		return allowlist{}, errors.New("the Forgejo or Gitea target list names too many targets")
 	}
-	list := make(allowlist, 0, len(values))
+	list := allowlist{targets: make([]target, 0, len(values))}
 	seen := map[string]bool{}
 	for _, value := range values {
 		parsed, err := parseTarget(value)
 		if err != nil {
-			return nil, err
+			return allowlist{}, err
 		}
 		// users/NAME and orgs/NAME name the same owner, since users and organizations share their names.
 		key := strings.ToLower(parsed.kind + "/" + parsed.owner + "/" + parsed.repo)
 		if seen[key] {
-			return nil, errors.New("the Forgejo or Gitea target list names a target more than once")
+			return allowlist{}, errors.New("the Forgejo or Gitea target list names a target more than once")
 		}
 		seen[key] = true
-		list = append(list, parsed)
+		list.targets = append(list.targets, parsed)
 	}
 	return list, nil
 }
 
 // allowsRepository reports whether the list admits the repository OWNER/REPO.
 func (a allowlist) allowsRepository(owner, repo string) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if !strings.EqualFold(entry.owner, owner) {
 			continue
 		}
@@ -127,10 +137,10 @@ func (a allowlist) allowsRepository(owner, repo string) bool {
 
 // allowsOwner reports whether the list admits an owner as a whole.
 func (a allowlist) allowsOwner(name string) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && strings.EqualFold(entry.owner, name) {
 			return true
 		}
@@ -144,7 +154,7 @@ func (a allowlist) listsOwner(name string) bool {
 	if a.allowsOwner(name) {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindRepository && strings.EqualFold(entry.owner, name) {
 			return true
 		}
@@ -153,7 +163,7 @@ func (a allowlist) listsOwner(name string) bool {
 }
 
 func (a allowlist) namesRepository() bool {
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindRepository {
 			return true
 		}
@@ -165,7 +175,7 @@ func (a allowlist) namesRepository() bool {
 // exactly one.
 func (a allowlist) onlyRepository() (target, bool) {
 	var found []target
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindRepository {
 			found = append(found, entry)
 		}
@@ -182,7 +192,7 @@ func (a allowlist) allowsFullName(fullName string) bool {
 	if !ok || owner == "" || repo == "" {
 		return false
 	}
-	return len(a) == 0 || a.allowsRepository(owner, repo)
+	return a.open() || a.allowsRepository(owner, repo)
 }
 
 // parseOwnerArgument reads users/NAME or orgs/NAME.
