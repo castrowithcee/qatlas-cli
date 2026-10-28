@@ -265,7 +265,14 @@ func openCalendar(ctx context.Context, op string, resolved *config.Resolved, sec
 	if err != nil {
 		return nil, err
 	}
-	if checkSegment(uri) != nil || !bound.holdsCalendar(uri) {
+	if checkSegment(uri) != nil {
+		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageCalendarNone}
+	}
+	// An excluded calendar answers like one that does not exist.
+	if bound.hides(uri) {
+		return nil, hiddenError(op)
+	}
+	if !bound.holdsCalendar(uri) {
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op, Message: messageCalendarNone}
 	}
 	return open(ctx, resolved, secrets, red, false)
