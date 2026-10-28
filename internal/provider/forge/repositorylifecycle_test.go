@@ -46,6 +46,8 @@ func newLifecycleEnvironment(t *testing.T, p *product, handler func(call) *http.
 		Targets: []string{"repos/acme/widget"}, Tools: lifecycleListedOnly(p)}
 	cfg.Connections["life-owners"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget", "orgs/dest"}, Tools: lifecycleListedOnly(p)}
+	cfg.Connections["life-exclude"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Exclude: []string{"repos/acme/gadget", "orgs/other", "repos/dest/widget"}, Tools: lifecycleListedOnly(p)}
 	cfg.Connections["widget-dest"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget", "orgs/dest"}}
 	cfg.Connections["files"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
@@ -617,4 +619,139 @@ func TestRepositoryAvatarSizeLimit(t *testing.T) {
 	}
 	_, err := e.invoke(t, repositoryAvatarsUpdate, "files", `{"local_path":`+quote(image)+`}`)
 	refused(t, e, "oversized image", err)
+}
+
+// excludedRefusal checks that a lifecycle call is refused as an invalid request before any I/O and that the
+// refusal names neither the excluded object nor an exclusion.
+func excludedRefusal(t *testing.T, e *environment, label string, err error) {
+	t.Helper()
+	refused(t, e, label, err)
+	if err != nil {
+		text := strings.ToLower(err.Error())
+		for _, leaked := range []string{"gadget", "exclu", "outside the targets"} {
+			if strings.Contains(text, leaked) {
+				t.Errorf("%s %s: the refusal says %q: %v", e.p.id, label, leaked, err)
+			}
+		}
+	}
+}
+
+func TestExclusionsRefuseNewRepositoriesBeforeAnyIO(t *testing.T) {
+	for _, p := range products {
+		done := func(c call) *http.Response { return jsonResponse(201, lifecycleRepo("acme/project")) }
+		e, _ := newLifecycleEnvironment(t, p, accountServer("alice", done))
+		for label, c := range map[string]struct {
+			tool *tool
+			args string
+		}{
+			"create in an excluded owner":    {repositoriesCreate, `{"organization":"other","name":"project"}`},
+			"create under an excluded name":  {repositoriesCreate, `{"organization":"acme","name":"Gadget"}`},
+			"fork of an excluded source":     {repositoriesFork, `{"repository":"ACME/gadget","organization":"acme"}`},
+			"fork into an excluded owner":    {repositoriesFork, `{"repository":"acme/widget","organization":"other"}`},
+			"fork under an excluded name":    {repositoriesFork, `{"repository":"acme/widget","organization":"acme","name":"gadget"}`},
+			"generate from an excluded base": {repositoriesGenerate, `{"template":"acme/gadget","owner":"orgs/acme","name":"new"}`},
+			"generate in an excluded owner":  {repositoriesGenerate, `{"template":"acme/widget","owner":"orgs/other","name":"new"}`},
+			"generate in an excluded user":   {repositoriesGenerate, `{"template":"acme/widget","owner":"users/OTHER","name":"new"}`},
+			"generate under an excluded name": {repositoriesGenerate,
+				`{"template":"acme/widget","owner":"orgs/acme","name":"gadget"}`},
+			"rename to an excluded name": {repositoriesUpdate, `{"repository":"acme/widget","name":"GADGET"}`},
+			"update of an excluded one":  {repositoriesUpdate, `{"repository":"acme/gadget","description":"x"}`},
+		} {
+			_, err := e.invoke(t, c.tool, "exclude", c.args)
+			excludedRefusal(t, e, label, err)
+		}
+		// Only the exact repository is excluded from a transfer: a free owner and name go through.
+		for label, args := range map[string]string{
+			"transfer of an excluded source": `{"repository":"acme/gadget","new_owner":"orgs/dest"}`,
+			"transfer to an excluded owner":  `{"repository":"acme/widget","new_owner":"orgs/other"}`,
+			"transfer to an excluded name":   `{"repository":"acme/widget","new_owner":"users/DEST"}`,
+		} {
+			_, err := e.invoke(t, repositoriesTransfer, "life-exclude", args)
+			excludedRefusal(t, e, label, err)
+		}
+	}
+}
+
+func TestExclusionsOnlyRestrictTheDestinationOfNewRepositories(t *testing.T) {
+	for _, p := range products {
+		done := func(c call) *http.Response { return jsonResponse(201, lifecycleRepo("acme/project")) }
+		// A connection with exclusions and no targets does not bind: the account behind the token may receive.
+		e, _ := newLifecycleEnvironment(t, p, accountServer("alice", done))
+		for _, c := range []struct {
+			tool *tool
+			args string
+			want []string
+		}{
+			{repositoriesCreate, `{"name":"project"}`, []string{"GET /api/v1/user", "POST /api/v1/user/repos"}},
+			{repositoriesCreate, `{"organization":"acme","name":"project"}`, []string{"POST /api/v1/orgs/acme/repos"}},
+			{repositoriesFork, `{"repository":"acme/widget"}`, []string{"GET /api/v1/user",
+				"POST /api/v1/repos/acme/widget/forks"}},
+			{repositoriesGenerate, `{"template":"acme/widget","owner":"orgs/dest","name":"new"}`,
+				[]string{"POST /api/v1/repos/acme/widget/generate"}},
+			{repositoriesUpdate, `{"repository":"acme/widget","name":"renamed"}`, []string{"PATCH /api/v1/repos/acme/widget"}},
+		} {
+			*e.calls = nil
+			if _, err := e.invoke(t, c.tool, "exclude", c.args); err != nil || !reflect.DeepEqual(methods(e), c.want) {
+				t.Errorf("%s %s: %v, calls %v, want %v", p.id, c.args, err, methods(e), c.want)
+			}
+		}
+		// The account behind the token is read once; an exclusion of it or of the exact name refuses afterwards.
+		for _, c := range []struct {
+			login string
+			tool  *tool
+			args  string
+		}{
+			{"other", repositoriesCreate, `{"name":"project"}`},
+			{"acme", repositoriesCreate, `{"name":"gadget"}`},
+			{"Acme", repositoriesFork, `{"repository":"acme/widget","name":"Gadget"}`},
+			{"other", repositoriesFork, `{"repository":"acme/widget"}`},
+		} {
+			e2, _ := newLifecycleEnvironment(t, p, accountServer(c.login, done))
+			_, err := e2.invoke(t, c.tool, "exclude", c.args)
+			if !isInvalidRequest(err) || !reflect.DeepEqual(methods(e2), []string{"GET /api/v1/user"}) ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") || strings.Contains(err.Error(), "gadget") {
+				t.Errorf("%s %s as %s: %v, calls %v", p.id, c.args, c.login, err, methods(e2))
+			}
+		}
+		// With a user target the account is read too, and the exact exclusion of the name still refuses.
+		e3, _ := newLifecycleEnvironment(t, p, accountServer("acme", done))
+		_, err := e3.invoke(t, repositoriesCreate, "owner-exclude", `{"name":"gadget"}`)
+		if !isInvalidRequest(err) || !reflect.DeepEqual(methods(e3), []string{"GET /api/v1/user"}) {
+			t.Errorf("%s owner-exclude: %v, calls %v", p.id, err, methods(e3))
+		}
+		*e3.calls = nil
+		if _, err := e3.invoke(t, repositoriesCreate, "owner-exclude", `{"name":"project"}`); err != nil ||
+			len(*e3.calls) != 2 {
+			t.Errorf("%s owner-exclude free name: %v, calls %v", p.id, err, methods(e3))
+		}
+	}
+}
+
+func TestExclusionsFilterTheAnswerOfALifecycleChange(t *testing.T) {
+	for _, p := range products {
+		answer := "acme/widget"
+		e, _ := newLifecycleEnvironment(t, p, func(c call) *http.Response {
+			return jsonResponse(200, lifecycleRepo(answer))
+		})
+		for _, c := range []struct {
+			tool       *tool
+			connection string
+			args       string
+			key        string
+		}{
+			{repositoriesUpdate, "exclude", `{"repository":"acme/widget","description":"x"}`, "updated"},
+			{repositoriesTransfer, "life-exclude", `{"repository":"acme/widget","new_owner":"orgs/dest2"}`, "transferred"},
+			{repositoriesAcceptTransfer, "life-exclude", `{"repository":"acme/widget"}`, "accepted"},
+		} {
+			for answered, reachable := range map[string]bool{"acme/widget": true, "ACME/Gadget": false, "other/widget": false,
+				"elsewhere/widget": true} {
+				answer = answered
+				result, err := e.invoke(t, c.tool, c.connection, c.args)
+				_, shown := result["repository"]
+				if err != nil || result[c.key] != true || result["reachable"] != reachable || shown != reachable {
+					t.Errorf("%s %s answering %s: %v, %v", p.id, c.key, answered, result, err)
+				}
+			}
+		}
+	}
 }

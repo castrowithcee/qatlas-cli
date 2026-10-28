@@ -186,3 +186,68 @@ func TestRelationChangeIsNotRepeatedAfterAnUnclearResult(t *testing.T) {
 		}
 	}
 }
+
+func TestExclusionsTreatAnExcludedCounterpartLikeOneOutsideTheTargets(t *testing.T) {
+	for _, p := range products {
+		for _, r := range relations {
+			// The lists: an excluded counterpart is withheld, or left out of the blocks list.
+			e := newEnvironment(t, p, relationServer(p, nil))
+			for _, connection := range []string{"exclude", "owner-exclude"} {
+				result, err := e.invoke(t, r.list, connection, `{"repository":"acme/widget","number":7}`)
+				issues, _ := result["issues"].([]any)
+				want := 3
+				if r.relation.omitsForeign {
+					want = 1
+				}
+				if err != nil || len(issues) != want {
+					t.Fatalf("%s %s %s: %v, %v", p.id, r.relation.group, connection, result, err)
+				}
+				if !r.relation.omitsForeign {
+					row, _ := issues[1].(map[string]any)
+					if row["withheld"] != true || row["title"] != nil || row["body"] != nil {
+						t.Errorf("%s %s: excluded counterpart = %v", p.id, connection, row)
+					}
+				}
+			}
+
+			// A counterpart named by argument is refused before any I/O, without saying that an exclusion
+			// took it out; for plain targets the text stays.
+			for _, tool := range []*tool{r.add, r.remove} {
+				for _, args := range []string{
+					`{"number":7,"` + r.relation.number + `":3,"` + r.relation.repo + `":"acme/GADGET"}`,
+					`{"number":7,"` + r.relation.number + `":3,"` + r.relation.repo + `":"other/place"}`,
+				} {
+					before := len(*e.calls)
+					_, err := e.invoke(t, tool, "exclude", args)
+					if !isInvalidRequest(err) || len(*e.calls) != before ||
+						strings.Contains(err.Error(), "outside the targets") || strings.Contains(err.Error(), "gadget") ||
+						strings.Contains(strings.ToLower(err.Error()), "exclu") {
+						t.Errorf("%s %s: %v, calls %d", p.id, args, err, len(*e.calls)-before)
+					}
+				}
+				_, err := e.invoke(t, tool, "repo", `{"number":7,"`+r.relation.number+`":3,"`+r.relation.repo+
+					`":"acme/gadget"}`)
+				if !isInvalidRequest(err) || !strings.Contains(err.Error(), "outside the targets") {
+					t.Errorf("%s: target refusal text: %v", p.id, err)
+				}
+			}
+
+			// A counterpart whose canonical repository is excluded is only found out by the evidence read: it
+			// is not found, and nothing is sent.
+			changes := newEnvironment(t, p, relationServer(p, func(call) *http.Response { return jsonResponse(200, "{}") }))
+			for _, tool := range []*tool{r.add, r.remove} {
+				*changes.calls = nil
+				_, err := changes.invoke(t, tool, "exclude", `{"repository":"acme/widget","number":7,"`+
+					r.relation.number+`":9}`)
+				if classOfError(err) != "not-found" || strings.Contains(err.Error(), "place") {
+					t.Errorf("%s: excluded counterpart: %v", p.id, err)
+				}
+				for _, c := range *changes.calls {
+					if c.method != http.MethodGet {
+						t.Errorf("%s: change request %s %s", p.id, c.method, c.path)
+					}
+				}
+			}
+		}
+	}
+}

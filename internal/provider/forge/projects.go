@@ -149,7 +149,10 @@ func (l projectLevel) ownsRepository(fullName string) bool {
 
 // namesOwner reports whether the list admits the owner by an owner target of the same scope.
 func (a allowlist) namesOwner(owner target) bool {
-	if a.open() {
+	if a.excludedOwner(owner.owner) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -179,7 +182,7 @@ func (a projectArguments) level(allowed allowlist, listing bool) (projectLevel, 
 		return projectLevel{}, err
 	}
 	if !allowed.namesOwner(owner) {
-		return projectLevel{}, outsideTargets("owner")
+		return projectLevel{}, allowed.outsideOwner("owner", owner.owner)
 	}
 	switch {
 	case owner.scope == "orgs":
@@ -296,7 +299,7 @@ func bindIssue(ctx context.Context, c *Client, allowed allowlist, op string, l p
 	}
 	name, ok := issueRepository(issue)
 	if !ok || !allowed.allowsFullName(name) {
-		return 0, outsideTargets("issue_repository")
+		return 0, allowed.outside(op, c.product, name, "issue_repository")
 	}
 	if !l.ownsRepository(name) {
 		return 0, invalidArgument("issue_repository must be the repository of the project, or belong to its owner")

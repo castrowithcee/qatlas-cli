@@ -140,7 +140,11 @@ var usersDelete = capability.Descriptor{
 	Description: "Delete one user of the bound n8n instance. Exactly one consequence must be chosen: " +
 		"transfer_project_id moves the user's workflows and credentials into that project, or " +
 		"delete_owned_resources: true deletes them permanently together with the user. Neither, both, or " +
-		"delete_owned_resources: false without transfer_project_id is refused locally. " + userInstanceNote,
+		"delete_owned_resources: false without transfer_project_id is refused locally. Where the connection " +
+		"excludes projects or workflows, a transfer project outside what it reaches is refused, and so is " +
+		"deleting the resources of a user whose personal project is excluded or owns an excluded workflow; " +
+		"membership of an excluded project, or of a project that owns an excluded workflow, is read as " +
+		"ownership, and anything that cannot be proven refuses. " + userInstanceNote,
 	Tags: []string{"n8n", "users", "delete", "automation"},
 	Risk: userChangeRisk(capability.EffectDelete, capability.IdempotencyIdempotent), Provider: Provider,
 	RequiresToolAllowList: true,
@@ -393,12 +397,17 @@ func invokeUsersDelete(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, invalidRequest("give exactly one of transfer_project_id (moves the user's workflows and " +
 			"credentials into that project) or delete_owned_resources: true (deletes them with the user)")
 	}
+	if transfer && !validTargetID(input.TransferProjectID) {
+		return nil, invalidRequest("transfer_project_id must be a usable n8n identifier")
+	}
+	if transfer {
+		if err := selectProjectTarget(resolved, input.TransferProjectID); err != nil {
+			return nil, err
+		}
+	}
 	var query url.Values
 	result := &UserDeleted{UserID: input.UserID, Deleted: true, Consequence: "deleted_with_user"}
 	if transfer {
-		if !validTargetID(input.TransferProjectID) {
-			return nil, invalidRequest("transfer_project_id must be a usable n8n identifier")
-		}
 		query = url.Values{"transferId": {input.TransferProjectID}}
 		result.Consequence, result.TransferProjectID = "transferred", input.TransferProjectID
 	}
@@ -406,9 +415,99 @@ func invokeUsersDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
+	if deleteResources {
+		if err := client.refuseUserOwningExcluded(ctx, op, input.UserID); err != nil {
+			return nil, err
+		}
+	}
 	if err := client.change(ctx, op, http.MethodDelete, "/users/"+url.PathEscape(input.UserID), query, nil, nil,
 		maxResponseBytes); err != nil {
 		return nil, userError(err)
 	}
 	return result, nil
+}
+
+// maxMemberLookupPages bounds the member pages read to place one user in one project.
+const maxMemberLookupPages = 20
+
+// userInProject reports whether the user is a member of the project. n8n deletes the resources of the
+// personal project of a user, and the Public API names no personal project of a user, so membership is the
+// proof. A project that cannot be read or paged to its end counts as one the user belongs to; only a
+// failure that says nothing about the project (transport, rate limit) ends the call.
+func (c *Client) userInProject(ctx context.Context, op, projectID, userID string) (bool, error) {
+	cursor := ""
+	for i := 0; i < maxMemberLookupPages; i++ {
+		page, err := c.ListMembers(ctx, projectID, cursor, maxListLimit)
+		if err != nil {
+			if failure, ok := err.(*provider.Error); ok && (failure.Class == provider.ClassNotFound ||
+				failure.Class == provider.ClassPermission || failure.Class == provider.ClassInvalidResponse) {
+				return true, nil
+			}
+			return false, err
+		}
+		for _, member := range page.Members {
+			if member.ID == userID {
+				return true, nil
+			}
+		}
+		if !page.HasMore {
+			return false, nil
+		}
+		cursor = page.Cursor
+	}
+	return true, nil
+}
+
+// refuseUserOwningExcluded stops the deletion of a user together with their resources when that would delete
+// something excluded: the user belongs to an excluded project, or to a project that owns an excluded
+// workflow. This is narrower than n8n, which deletes only the personal project, because the type of a
+// project is not part of this proof. Transferring the resources to a reachable project does not come here.
+// The refusal names neither the user's project nor the excluded object.
+func (c *Client) refuseUserOwningExcluded(ctx context.Context, op, userID string) error {
+	if len(c.scope.excludedProjects) == 0 && len(c.scope.excludedWorkflows) == 0 {
+		return nil
+	}
+	refusal := invalidRequest("the user owns objects outside the targets of this connection, so their " +
+		"resources cannot be deleted")
+	checked := map[string]bool{}
+	member := func(projectID string) (bool, error) {
+		if checked[projectID] {
+			return false, nil
+		}
+		in, err := c.userInProject(ctx, op, projectID, userID)
+		checked[projectID] = !in
+		return in, err
+	}
+	for _, projectID := range c.scope.excludedProjects {
+		if in, err := member(projectID); err != nil || in {
+			return orRefusal(err, refusal)
+		}
+	}
+	for _, workflowID := range c.scope.excludedWorkflows {
+		workflow, err := c.fetchWorkflow(ctx, op, workflowID)
+		if err != nil {
+			if failure, ok := err.(*provider.Error); ok && failure.Class == provider.ClassNotFound {
+				continue
+			}
+			return err
+		}
+		owners, placed := workflow.ownerProjectIDs()
+		if !placed {
+			return refusal
+		}
+		for _, projectID := range owners {
+			if in, err := member(projectID); err != nil || in {
+				return orRefusal(err, refusal)
+			}
+		}
+	}
+	return nil
+}
+
+// orRefusal returns err when there is one and the refusal otherwise.
+func orRefusal(err, refusal error) error {
+	if err != nil {
+		return err
+	}
+	return refusal
 }

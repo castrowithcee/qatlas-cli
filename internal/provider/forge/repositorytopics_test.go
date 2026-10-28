@@ -170,3 +170,24 @@ func TestTemplatesNeedNoTargetsAndCapText(t *testing.T) {
 		t.Errorf("repository licenses outside targets: %v", err)
 	}
 }
+
+func TestTopicSearchRunsUnderExclusionsAloneAndLabelsRefuseExcludedOwners(t *testing.T) {
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response {
+			return topicsServer(c)
+		})
+		if _, err := e.invoke(t, topicsSearch, "exclude", `{}`); err != nil {
+			t.Errorf("%s: exclusions alone: %v", p.id, err)
+		}
+		before := len(*e.calls)
+		if _, err := e.invoke(t, topicsSearch, "owner-exclude", `{}`); !isInvalidRequest(err) || len(*e.calls) != before {
+			t.Errorf("%s: targets with exclusions: %v", p.id, err)
+		}
+		reads := *e.reads
+		before = len(*e.calls)
+		if _, err := e.invoke(t, orgLabelsList, "exclude", `{"owner":"orgs/Other"}`); !isInvalidRequest(err) ||
+			len(*e.calls) != before || *e.reads != reads || strings.Contains(strings.ToLower(err.Error()), "orgs/other") {
+			t.Errorf("%s: excluded organization labels: %v", p.id, err)
+		}
+	}
+}

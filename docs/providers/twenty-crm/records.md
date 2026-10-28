@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Twenty CRM: records
@@ -20,8 +20,8 @@ array, and rich-text fields cannot be sorted by.
 - Qatlas checks `fields` and `order_by` against the response shape of the object in the workspace document,
   so an unknown field is refused before any record is read, and the refusal does not name it.
 - Qatlas always reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an
-  embedded record, and a relation to an object the connection cannot reach stays an identifier. Rich text
-  appears only as `markdown`.
+  embedded record, and a relation to an object the connection cannot reach (outside the targets or excluded)
+  stays an identifier. Rich text appears only as `markdown`.
 - Twenty signs file addresses with a token that serves the content without sign-in, so record values never
   show a file address; read a file through `twenty-crm.attachments.*`, which never output the token.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
@@ -48,7 +48,7 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   multi-selections, and subfields that hold identifiers are not filterable. Soft-deleted records are never
   searched.
 - A relation identifier (`<relation>Id`) is accepted only when the relation field names a target object that
-  the connection reaches; otherwise the condition could probe objects outside the targets.
+  the connection reaches; otherwise the condition could probe objects outside the targets or excluded ones.
 - The operators follow the field kind, which Qatlas derives from the schema; the tool help lists them. A
   selection value must be an enum value of the schema.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,

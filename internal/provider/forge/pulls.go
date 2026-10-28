@@ -89,7 +89,8 @@ func readPull(ctx context.Context, c *Client, allowed allowlist, op, path string
 		return nil, err
 	}
 	if !pullAdmitted(allowed, pr) {
-		return nil, outsideTargets("repository")
+		name, _ := pullRepository(pr)
+		return nil, allowed.outside(op, c.product, name, "repository")
 	}
 	return pr, nil
 }

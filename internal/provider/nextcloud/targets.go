@@ -79,11 +79,13 @@ var targetKinds = []config.TargetKind{{
 	Name:        kindCalendar,
 	Description: "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
 	Forms:       []string{kindCalendar, kindCalendar + "/URI"},
+	Excludable:  true,
 }, {
 	Name: kindAddressbook,
 	Description: "all address books of the identity except the system address book, or one by its URI; optional, " +
 		"and may be listed more than once",
-	Forms: []string{kindAddressbook, kindAddressbook + "/URI"},
+	Forms:      []string{kindAddressbook, kindAddressbook + "/URI"},
+	Excludable: true,
 }, {
 	Name:        kindTalk,
 	Description: "all Talk conversations of the identity, or one by its token; optional, and may be listed more than once",
@@ -92,6 +94,7 @@ var targetKinds = []config.TargetKind{{
 	Name:        kindDeck,
 	Description: "all Deck boards of the identity, or one by its numeric board ID; optional, and may be listed more than once",
 	Forms:       []string{kindDeck, kindDeck + "/BOARD_ID"},
+	Excludable:  true,
 }, {
 	Name: kindNotes,
 	Description: "all notes of the identity, or the notes of one category, which may be a sub-folder such as " +
@@ -124,6 +127,11 @@ func isKind(name string) bool {
 type selection struct {
 	all bool
 	ids []string
+	// excluded holds the exclusions of the kind in the form hides compares in. They only take effect through
+	// holds and hides; they never change what the kind binds.
+	excluded []string
+	// numeric says that excluded and the compared IDs are numbers in canonical form (Deck board IDs).
+	numeric bool
 }
 
 // bound reports whether the kind is bound at all.
@@ -384,7 +392,7 @@ func requireCalendar(resolved *config.Resolved) (selection, error) {
 			Class: provider.ClassPermission, Op: "open", Message: "this connection is not bound to calendars",
 		}
 	}
-	return s.calendars, nil
+	return s.calendars.excluding(s.excludes.calendars, false), nil
 }
 
 // calendarBound is folderBound for the calendar tools.
