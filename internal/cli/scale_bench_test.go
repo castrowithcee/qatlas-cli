@@ -90,7 +90,7 @@ func scaleEnvName(credential int, role string) string {
 func scaleYAML(shape scaleShape) []byte {
 	providers := len(scaleProviders)
 	var b strings.Builder
-	b.WriteString("version: 3\nservices:\n")
+	b.WriteString("version: 4\nservices:\n")
 	for s := 0; s < shape.services; s++ {
 		p := scaleProviders[s%providers]
 		baseURL := p.baseURL

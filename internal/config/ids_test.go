@@ -49,7 +49,7 @@ func TestEntryWithoutIDIsValidAndGetsOneWhenSaved(t *testing.T) {
 	must(t, store.Save(cfg))
 
 	data, _ := os.ReadFile(path)
-	if !strings.Contains(string(data), "version: 3") || len(idKey.FindAll(data, -1)) != 3 {
+	if !strings.Contains(string(data), "version: 4") || len(idKey.FindAll(data, -1)) != 3 {
 		t.Fatalf("file lacks version 3 and three ids:\n%s", data)
 	}
 	loaded, err := store.Load()
@@ -101,7 +101,7 @@ func TestVersionNinetyNineReportsVersion(t *testing.T) {
 }
 
 func TestCurrentVersionWithIDsLoadsAndStaysCurrent(t *testing.T) {
-	in := strings.NewReplacer("version: 1", "version: 3",
+	in := strings.NewReplacer("version: 1", "version: 4",
 		"  wiki:\n    provider", "  wiki:\n    id: "+idA+"\n    provider",
 		"  reader:\n", "  reader:\n    id: "+idB+"\n",
 		"  wiki:\n    service", "  wiki:\n    id: "+idA+"\n    service").Replace(minimal)
@@ -118,7 +118,7 @@ func TestCurrentVersionWithIDsLoadsAndStaysCurrent(t *testing.T) {
 	}
 	must(t, store.Save(cfg))
 	data, _ := os.ReadFile(path)
-	if !strings.Contains(string(data), "version: 3") || strings.Count(string(data), idA) != 2 {
+	if !strings.Contains(string(data), "version: 4") || strings.Count(string(data), idA) != 2 {
 		t.Errorf("ids or version lost:\n%s", data)
 	}
 }
@@ -130,12 +130,12 @@ func TestHasCurrentSchemaReadsOnlyTheVersionLine(t *testing.T) {
 	}
 	must(t, os.MkdirAll(strings.TrimSuffix(path, "config.yaml"), 0o700))
 	for in, want := range map[string]bool{
-		"version: 3\nservices: {}\n":          true,
-		"version: 3\r\n":                      true,
+		"version: 4\nservices: {}\n":          true,
+		"version: 4\r\n":                      true,
 		"version: 1\n":                        false,
-		"# version: 3\nversion: 1\n":          false,
-		"version: 3 # the current schema\n":   false,
-		"services:\n  version: 3\nversion: 1": false,
+		"# version: 4\nversion: 1\n":          false,
+		"version: 4 # the current schema\n":   false,
+		"services:\n  version: 4\nversion: 1": false,
 	} {
 		must(t, os.WriteFile(path, []byte(in), 0o600))
 		if got := store.HasCurrentSchema(); got != want {

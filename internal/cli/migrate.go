@@ -73,6 +73,16 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 		fmt.Fprintf(stderr, "qatlas: the effects of these connections now follow their tools, so each needs its vault "+
 			"approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n", strings.Join(m.Reapproval, ", "))
 	}
+	if len(m.Retargeted) > 0 {
+		fmt.Fprintf(stderr, "qatlas: the targets of these connections are now written in their current form with the "+
+			"same reach, so each needs its vault approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n",
+			strings.Join(m.Retargeted, ", "))
+	}
+	if len(m.OutdatedTargets) > 0 {
+		fmt.Fprintf(stderr, "qatlas: no current form keeps the reach of the targets of these connections, so each "+
+			"stays as it was and is invalid until its targets are chosen again and its targets_outdated mark is removed: %s\n",
+			strings.Join(m.OutdatedTargets, ", "))
+	}
 	fmt.Fprintln(stderr, "qatlas: to go back, copy the backups back in place and install the previous qatlas version")
 	if m.Warning != "" {
 		fmt.Fprintln(stderr, withQatlasPrefix(m.Warning))
@@ -81,9 +91,14 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 
 // migrationChange says what a migration from the schema from changed, one clause per schema step it passed.
 func migrationChange(from int) string {
-	const effects = "a connection offers its tools by effects or by a tools list, and permissions is now called effects"
-	if from >= 2 {
-		return effects
+	steps := []string{
+		2: "services, credentials, and connections now have stable ids",
+		3: "a connection offers its tools by effects or by a tools list, and permissions is now called effects",
+		4: "the targets of providers whose target forms changed meaning are now written in their current form",
 	}
-	return "services, credentials, and connections now have stable ids; " + effects
+	var passed []string
+	for to := max(from+1, 2); to < len(steps); to++ {
+		passed = append(passed, steps[to])
+	}
+	return strings.Join(passed, "; ")
 }
