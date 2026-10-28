@@ -92,6 +92,8 @@ type Client struct {
 	// Progress, when set, is called while the release archive downloads, with the bytes received so far and
 	// the archive's size, or -1 when the server does not say.
 	Progress func(done, total int64)
+	// CheckTimeout bounds one run of a prepared program in ReadsConfig; zero selects the default.
+	CheckTimeout time.Duration
 }
 
 // Release names the files of the verified release a hook of Client may read: copies in a private directory
@@ -144,59 +146,91 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 
 // installRelease downloads, verifies, and installs rel, the release named by result.Latest.
 func (c *Client) installRelease(ctx context.Context, result Result, rel release) (Result, error) {
+	p, err := c.prepareRelease(ctx, result, rel)
+	if err != nil {
+		return Result{}, err
+	}
+	return c.InstallPrepared(ctx, p)
+}
+
+// Prepared is a release that is downloaded and verified (signature, checksum, archive contents) but not
+// installed. A caller can run the program it holds before it replaces anything (see ReadsConfig).
+type Prepared struct {
+	result      Result
+	goos        string
+	archiveName string
+	payload     payload
+	checksums   []byte
+	signature   []byte
+	archive     []byte
+	timeout     time.Duration
+}
+
+// Version is the release's tag.
+func (p *Prepared) Version() string { return p.result.Latest }
+
+// prepareRelease downloads and verifies rel, the release named by result.Latest. Nothing is installed.
+func (c *Client) prepareRelease(ctx context.Context, result Result, rel release) (*Prepared, error) {
 	goos, goarch := c.platform()
 	archiveName := assetName(result.Latest, goos, goarch)
 	archiveURL, checksumURL, signatureURL, err := releaseURLs(rel, archiveName)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	checksums, err := c.download(ctx, checksumURL, maxMetadataBytes, nil)
 	if err != nil {
-		return Result{}, fmt.Errorf("download checksums: %w", err)
+		return nil, fmt.Errorf("download checksums: %w", err)
 	}
 	var signature []byte
 	if signatureURL != "" {
 		signature, err = c.download(ctx, signatureURL, maxMetadataBytes, nil)
 		if err != nil {
-			return Result{}, fmt.Errorf("download checksums signature: %w", err)
+			return nil, fmt.Errorf("download checksums signature: %w", err)
 		}
 		keys := c.SigningKeys
 		if keys == nil {
 			keys = releaseverify.TrustedKeys()
 		}
 		if err := releaseverify.VerifyChecksums(checksums, signature, keys); err != nil {
-			return Result{}, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
+			return nil, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
 		}
 		result.Signed = true
 	}
 	want, err := releaseverify.ChecksumFor(checksums, archiveName)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	archive, err := c.download(ctx, archiveURL, maxArchiveBytes, c.Progress)
 	if err != nil {
-		return Result{}, fmt.Errorf("download %s: %w", archiveName, err)
+		return nil, fmt.Errorf("download %s: %w", archiveName, err)
 	}
 	got := sha256.Sum256(archive)
 	if !strings.EqualFold(hex.EncodeToString(got[:]), want) {
-		return Result{}, fmt.Errorf("checksum mismatch for %s", archiveName)
+		return nil, fmt.Errorf("checksum mismatch for %s", archiveName)
 	}
-	payload, err := extractPayload(archiveName, archive, goos)
+	files, err := extractPayload(archiveName, archive, goos)
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
-	files := Release{Signed: result.Signed, ArchiveName: archiveName}
+	return &Prepared{result: result, goos: goos, archiveName: archiveName, payload: files,
+		checksums: checksums, signature: signature, archive: archive, timeout: c.CheckTimeout}, nil
+}
+
+// InstallPrepared installs a release Prepare returned, with the hooks of c.
+func (c *Client) InstallPrepared(ctx context.Context, p *Prepared) (Result, error) {
+	result := p.result
+	files := Release{Signed: result.Signed, ArchiveName: p.archiveName}
 	if c.BeforeReplace != nil || c.AfterReplace != nil {
 		dir, err := os.MkdirTemp("", "qatlas-release-*")
 		if err != nil {
 			return Result{}, fmt.Errorf("create release directory: %w", err)
 		}
 		defer os.RemoveAll(dir)
-		if files, err = writeRelease(dir, files, checksums, signature, archive); err != nil {
+		if files, err = writeRelease(dir, files, p.checksums, p.signature, p.archive); err != nil {
 			return Result{}, err
 		}
 	}
-	if err := c.install(ctx, payload, goos, files); err != nil {
+	if err := c.install(ctx, p.payload, p.goos, files); err != nil {
 		return Result{}, err
 	}
 	result.Updated = true

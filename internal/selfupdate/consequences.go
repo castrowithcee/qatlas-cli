@@ -12,11 +12,17 @@ func Question(latest string) string {
 	return "Update qatlas to " + latest + "? " + Consequences()
 }
 
-// TargetQuestion is Question for a release chosen by version: it says whether the version is a prerelease.
-func TargetQuestion(version string, prerelease bool) string {
+// TargetQuestion is Question for a release chosen by version: it says whether the version is a prerelease
+// and whether it is newer or older than the running one. An older version lacks the fixes made since, and
+// it cannot take over an unlocked vault, so the question says the vault process is locked first.
+func TargetQuestion(version string, prerelease, older bool) string {
 	kind := "version"
 	if prerelease {
 		kind = "prerelease"
+	}
+	if older {
+		return "Install qatlas " + kind + " " + version + " (older than the running version: its fixes of later " +
+			"versions are missing)? " + consequences(runtime.GOOS, OtherProcesses(), true)
 	}
 	return "Install qatlas " + kind + " " + version + " (newer than the running version)? " + Consequences()
 }
@@ -27,7 +33,11 @@ func Consequences() string { return ConsequencesText(runtime.GOOS, OtherProcesse
 // ConsequencesText is the part of the update question that names what an installation does to running
 // qatlas processes, the same words for the command line and the editor. others is the number of other
 // qatlas processes of this user, or negative where it is not known; goos selects the platform's next step.
-func ConsequencesText(goos string, others int) string {
+func ConsequencesText(goos string, others int) string { return consequences(goos, others, false) }
+
+// consequences is ConsequencesText; older selects the words for an installation of an older version, which
+// never hands the vault over.
+func consequences(goos string, others int, older bool) string {
 	var b strings.Builder
 	if goos == "windows" {
 		b.WriteString("The running qatlas.exe is renamed to qatlas.exe.old and replaced; the old file is removed " +
@@ -42,8 +52,13 @@ func ConsequencesText(goos string, others int) string {
 			"they are restarted or, for 'qatlas mcp', reconnected in their client.")
 		return b.String()
 	}
-	b.WriteString("A running vault process is handed over to the new version if the release is signed and the " +
-		"update behaviour is handover, and locked first otherwise.")
+	if older {
+		b.WriteString("A running vault process is locked first, whatever the update behaviour is, because an " +
+			"older version cannot take over an unlocked vault; 'qatlas vault unlock' unlocks it again.")
+	} else {
+		b.WriteString("A running vault process is handed over to the new version if the release is signed and the " +
+			"update behaviour is handover, and locked first otherwise.")
+	}
 	if others > 0 {
 		fmt.Fprintf(&b, " %d other qatlas %s of yours %s running.", others, plural(others, "process", "processes"),
 			plural(others, "is", "are"))

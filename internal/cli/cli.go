@@ -237,7 +237,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newMCPCommand(opts, reg),
 		newTUICommand(opts, reg, version),
 		newWebCommand(opts, reg),
-		newUpdateCommand(opts, version),
+		newUpdateCommand(opts, reg, version),
 		newSelftestCommand(opts),
 	)
 	// A command without a run function is a help topic: 'qatlas help <topic>' prints its text, and the

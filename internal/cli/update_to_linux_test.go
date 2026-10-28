@@ -29,6 +29,9 @@ type chosenRelease struct {
 	unsigned   bool
 }
 
+// chosenProgram is the program the releases of the local server carry.
+var chosenProgram = "new-program"
+
 // chosenUpdater serves the given releases signed by a fresh signer and returns an updater for a program
 // that runs v1.0.0.
 func chosenUpdater(t *testing.T, executable string, releases []chosenRelease, replaced *int) *selfupdate.Client {
@@ -37,7 +40,7 @@ func chosenUpdater(t *testing.T, executable string, releases []chosenRelease, re
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
 	tw := tar.NewWriter(gz)
-	for name, content := range map[string]string{"bin/qatlas": "new-program", "share/man/man1/qatlas.1": "manual"} {
+	for name, content := range map[string]string{"bin/qatlas": chosenProgram, "share/man/man1/qatlas.1": "manual"} {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(content)), Typeflag: tar.TypeReg}); err != nil {
 			t.Fatal(err)
 		}
@@ -193,7 +196,6 @@ func TestUpdateToRefusesWithoutChanges(t *testing.T) {
 	for name, tt := range map[string]struct{ tag, want string }{
 		"unsigned":      {"v1.4.0", "not signed"},
 		"below minimum": {"v0.29.0", "oldest version"},
-		"older":         {"v0.31.0", "not available yet"},
 	} {
 		code, _, stderr, program, replaced := chosenRun(t, "--to", tt.tag, "--yes")
 		if code != exitUsage || !strings.Contains(stderr, tt.want) || program != "old-program" || replaced != 0 {

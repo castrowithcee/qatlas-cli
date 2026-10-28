@@ -43,6 +43,8 @@ type Target struct {
 	Prerelease bool
 	// Current reports that Version is the running version; installing it changes nothing.
 	Current bool
+	// Older reports that Version is older than the running version: installing it is a rollback.
+	Older bool
 	// running is the running version, for the result.
 	running string
 	rel     release
@@ -150,7 +152,7 @@ func (c *Client) releases(ctx context.Context) ([]release, error) {
 }
 
 // Target resolves tag to a release that can be installed. It refuses a tag that is not a signed release
-// from MinVersion on, and a version older than the running one.
+// from MinVersion on. A version older than the running one is allowed and marked Older.
 func (c *Client) Target(ctx context.Context, tag string) (Target, error) {
 	current, err := c.currentVersion()
 	if err != nil {
@@ -178,16 +180,25 @@ func (c *Client) Target(ctx context.Context, tag string) (Target, error) {
 		return Target{}, &TargetError{fmt.Sprintf("release %s is not signed and cannot be chosen", tag)}
 	}
 	cmp := v.compare(current)
-	// Installing an older version is not available yet; this is the only place that refuses it.
-	if cmp < 0 {
-		return Target{}, &TargetError{fmt.Sprintf("%s is older than the running version %s; installing an older version is not available yet", tag, c.Version)}
+	return Target{Version: tag, Prerelease: r.Prerelease, Current: cmp == 0, Older: cmp < 0, running: c.Version, rel: r}, nil
+}
+
+// Prepare downloads and verifies the release t names without installing it. It refuses the running
+// version, which has nothing to install.
+func (c *Client) Prepare(ctx context.Context, t Target) (*Prepared, error) {
+	if t.Current {
+		return nil, &TargetError{fmt.Sprintf("%s is the running version", t.Version)}
 	}
-	return Target{Version: tag, Prerelease: r.Prerelease, Current: cmp == 0, running: c.Version, rel: r}, nil
+	return c.prepareRelease(ctx, Result{Current: t.running, Latest: t.Version, UpdateAvailable: true}, t.rel)
 }
 
 // UpdateTo installs the release t names, through the same download, verification, and replacement as
-// Update. Nothing is changed when t is the running version.
+// Update. Nothing is changed when t is the running version. An older version is refused here: a rollback
+// goes through Prepare, a check of the program against the configuration, and InstallPrepared.
 func (c *Client) UpdateTo(ctx context.Context, t Target) (Result, error) {
+	if t.Older {
+		return Result{}, &TargetError{fmt.Sprintf("%s is older than the running version and is installed as a checked rollback", t.Version)}
+	}
 	result := Result{Current: t.running, Latest: t.Version, UpdateAvailable: !t.Current}
 	if t.Current {
 		return result, nil
