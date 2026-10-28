@@ -111,7 +111,7 @@ var connectionsDelete = capability.Descriptor{
 		{Name: "deleted", Description: "True when Make deleted the connection"},
 		{Name: "confirmation_required", Description: "True when Make refused the deletion because scenarios " +
 			"use the connection; nothing was deleted and nothing was repeated"},
-		{Name: "scenarios", Description: "Scenarios Make's refusal names, at most " +
+		{Name: "scenarios", Description: "Reachable scenarios Make's refusal names, at most " +
 			strconv.Itoa(maxAffectedScenarios) + "; ids and names are untrusted data, names bounded"},
 	},
 	Examples: []capability.Example{{Description: "Delete an unused connection",
@@ -285,8 +285,8 @@ func invokeConnectionsDelete(ctx context.Context, resolved *config.Resolved, sec
 		needConnectionsDelete, uncertain)
 	client.wantRefusal = false
 	if err != nil {
-		scenarios := client.refusedConnectionScenarios()
-		if client.refusalStatus == 0 || len(scenarios) == 0 {
+		scenarios, listErr := client.refusedConnectionScenarios(ctx, op)
+		if client.refusalStatus == 0 || listErr != nil || len(scenarios) == 0 {
 			return nil, err
 		}
 		return &ConnectionDeletion{ConnectionID: id, ConfirmationRequired: true, Scenarios: scenarios}, nil
@@ -298,8 +298,9 @@ func invokeConnectionsDelete(ctx context.Context, resolved *config.Resolved, sec
 }
 
 // refusedConnectionScenarios reads the scenarios a refused deletion's body lists, tolerating the two places
-// Make uses for such a list. Names are bounded and the list is capped.
-func (c *Client) refusedConnectionScenarios() []AffectedScenario {
+// Make uses for such a list, without any excluded scenario. Names are bounded and the list is capped after
+// filtering.
+func (c *Client) refusedConnectionScenarios(ctx context.Context, op string) ([]AffectedScenario, error) {
 	type scenarioRef struct {
 		ID   int64  `json:"id"`
 		Name string `json:"name"`
@@ -318,13 +319,20 @@ func (c *Client) refusedConnectionScenarios() []AffectedScenario {
 			continue
 		}
 		seen[ref.ID] = true
+		excluded, err := c.scenarioIDExcluded(ctx, op, ref.ID)
+		if err != nil {
+			return nil, err
+		}
+		if excluded {
+			continue
+		}
 		name := ref.Name
 		if len(name) > maxAffectedNameLength {
 			name = name[:maxAffectedNameLength]
 		}
 		out = append(out, AffectedScenario{ID: ref.ID, Name: strings.ToValidUTF8(name, "")})
 	}
-	return out
+	return out, nil
 }
 
 type accessMemberJSON struct {
