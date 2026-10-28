@@ -82,7 +82,8 @@ var executionsList = capability.Descriptor{
 	Description: "List the executions of the bound n8n instance, restricted to its workflow allow-list " +
 		"when it has one; page by page with an opaque cursor. When this connection also holds a project " +
 		"allow-list, workflow_id is required, so this connection's project membership can be verified once " +
-		"for the whole page instead of guessed: an execution carries no project of its own",
+		"for the whole page instead of guessed: an execution carries no project of its own. Where the connection " +
+		"excludes projects, each row is placed through its workflow, which costs one read per workflow",
 	Tags:     []string{"n8n", "executions", "list", "automation"},
 	Risk:     n8nReadRisk,
 	Provider: Provider,
@@ -403,19 +404,29 @@ func invokeExecutionsList(ctx context.Context, resolved *config.Resolved, secret
 			"requires workflow_id: an execution carries no project of its own, and only checking one named " +
 			"workflow's project once keeps that verification affordable for a whole page")
 	}
+	// A filter on an excluded workflow or project is an empty page, but only after every other argument has
+	// been checked, so the answer does not depend on what is excluded.
+	emptyPage := false
 	if input.WorkflowID != "" {
-		if err := selectWorkflow(resolved, input.WorkflowID); err != nil {
+		excluded, err := selectWorkflowFilter(resolved, input.WorkflowID)
+		if err != nil {
 			return nil, err
 		}
+		emptyPage = emptyPage || excluded
 	}
 	if input.ProjectID != "" {
-		if err := selectProjectFilter(resolved, input.ProjectID); err != nil {
+		excluded, err := selectProjectFilter(resolved, input.ProjectID)
+		if err != nil {
 			return nil, err
 		}
+		emptyPage = emptyPage || excluded
 	}
 	startedAfter, startedBefore, err := parseExecutionTimes(input.StartedAfter, input.StartedBefore)
 	if err != nil {
 		return nil, err
+	}
+	if emptyPage {
+		return &ExecutionsPage{Executions: []ExecutionListEntry{}}, nil
 	}
 	limit := input.Limit
 	if limit == 0 {
@@ -425,7 +436,7 @@ func invokeExecutionsList(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	if input.WorkflowID != "" && len(bound.projects) > 0 {
+	if input.WorkflowID != "" && bound.restrictsProjects() {
 		workflow, err := client.fetchWorkflow(ctx, "list executions", input.WorkflowID)
 		if err != nil {
 			return nil, err
@@ -469,6 +480,10 @@ func (c *Client) ListExecutions(ctx context.Context, cursor string, limit int,
 		return nil, err
 	}
 	summaries := make([]ExecutionListEntry, 0, len(page.Data))
+	// An execution carries no project, so without a workflow filter each row is placed through its workflow.
+	// The answer is kept per workflow for this call only; a workflow named by the filter was proven by the
+	// caller already.
+	placed := map[string]bool{}
 	for _, e := range page.Data {
 		if !c.scope.allowsWorkflow(e.WorkflowID) {
 			continue
@@ -476,11 +491,42 @@ func (c *Client) ListExecutions(ctx context.Context, cursor string, limit int,
 		if workflowID != "" && e.WorkflowID != workflowID {
 			continue
 		}
+		if workflowID == "" && c.scope.restrictsProjects() {
+			reachable, known := placed[e.WorkflowID]
+			if !known {
+				var err error
+				if reachable, err = c.workflowReachable(ctx, op, e.WorkflowID); err != nil {
+					return nil, err
+				}
+				placed[e.WorkflowID] = reachable
+			}
+			if !reachable {
+				continue
+			}
+		}
 		summaries = append(summaries, executionListEntryOf(e))
 	}
 	return &ExecutionsPage{
 		Executions: summaries, Cursor: page.NextCursor, HasMore: page.NextCursor != "", Count: len(summaries),
 	}, nil
+}
+
+// workflowReachable proves through the workflow itself that it lies in a reachable project. A workflow that
+// n8n does not return, refuses, or answers for another ID cannot be placed and counts as unreachable; any
+// other failure ends the call instead of silently emptying the page.
+func (c *Client) workflowReachable(ctx context.Context, op, workflowID string) (bool, error) {
+	if !validTargetID(workflowID) {
+		return false, nil
+	}
+	workflow, err := c.fetchWorkflow(ctx, op, workflowID)
+	if err != nil {
+		if failure, ok := err.(*provider.Error); ok && (failure.Class == provider.ClassNotFound ||
+			failure.Class == provider.ClassPermission || failure.Class == provider.ClassInvalidResponse) {
+			return false, nil
+		}
+		return false, err
+	}
+	return c.verifyWorkflowScope(workflow) == nil, nil
 }
 
 type executionArguments struct {
@@ -562,7 +608,7 @@ func (c *Client) checkExecutionScope(ctx context.Context, op string, raw executi
 	if !c.scope.allowsWorkflow(raw.WorkflowID) {
 		return invalidRequest("execution_id belongs to a workflow outside the targets of this connection")
 	}
-	if len(c.scope.projects) > 0 {
+	if c.scope.restrictsProjects() {
 		workflow, err := c.fetchWorkflow(ctx, op, raw.WorkflowID)
 		if err != nil {
 			return err
