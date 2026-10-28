@@ -1,4 +1,4 @@
-version: 3
+version: 4
 
 # Two services of the same provider: two separate BookStack instances.
 services:

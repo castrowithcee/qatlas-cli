@@ -44,7 +44,7 @@ func TestSignedInvokeLogEndToEnd(t *testing.T) {
 	server := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Signed Runbook")}, "<p>x</p>")
 
 	configPath := filepath.Join(dir, "config.yaml")
-	config := fmt.Sprintf(`version: 3
+	config := fmt.Sprintf(`version: 4
 services:
   wiki:
     provider: bookstack

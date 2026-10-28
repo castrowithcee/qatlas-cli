@@ -170,7 +170,7 @@ func categoryRefused(op string) error {
 
 // checkNoteFields validates every given field before any secret or request, and refuses a category outside
 // the binding, a new one of a category change included.
-func checkNoteFields(op string, sel selection, input noteWriteArguments) error {
+func checkNoteFields(op string, resolved *config.Resolved, sel selection, input noteWriteArguments) error {
 	if input.Title != nil && (strings.TrimSpace(*input.Title) == "" || utf8.RuneCountInString(*input.Title) > maxNoteTitle ||
 		hasControl(*input.Title) || !utf8.ValidString(*input.Title)) {
 		return providerError(op, "the title must be 1 to 255 characters without control characters")
@@ -179,7 +179,8 @@ func checkNoteFields(op string, sel selection, input noteWriteArguments) error {
 		return providerError(op, "the content must be valid text of at most 4 MiB")
 	}
 	if input.Category != nil {
-		if err := checkCategory(*input.Category); err != nil || !sel.coversCategory(*input.Category) {
+		if err := checkCategory(*input.Category); err != nil || !sel.coversCategory(*input.Category) ||
+			categoryHidden(resolved, *input.Category) {
 			return categoryRefused(op)
 		}
 	}
@@ -200,7 +201,7 @@ func invokeNotesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	if input.ID != "" || input.ETag != "" || input.Title == nil {
 		return nil, providerError(op, "a new note needs a title and takes no id or etag")
 	}
-	if err := checkNoteFields(op, sel, input); err != nil {
+	if err := checkNoteFields(op, resolved, sel, input); err != nil {
 		return nil, err
 	}
 	if input.Category == nil && !sel.coversCategory("") {
@@ -208,6 +209,9 @@ func invokeNotesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	client, err := open(ctx, resolved, secrets, red, false)
 	if err != nil {
+		return nil, err
+	}
+	if err := client.checkWriteCategory(op, input.Category); err != nil {
 		return nil, err
 	}
 	stored, err := client.noteSend(ctx, op, http.MethodPost, "",
@@ -238,12 +242,17 @@ func invokeNotesUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if input.Title == nil && input.Content == nil && input.Category == nil && input.Favorite == nil {
 		return nil, providerError(op, "give at least one of title, content, category, and favorite")
 	}
-	if err := checkNoteFields(op, sel, input); err != nil {
+	if err := checkNoteFields(op, resolved, sel, input); err != nil {
 		return nil, err
 	}
 	client, err := open(ctx, resolved, secrets, red, false)
 	if err != nil {
 		return nil, err
+	}
+	if input.Category != nil {
+		if err := client.checkWriteCategory(op, input.Category); err != nil {
+			return nil, err
+		}
 	}
 	current, err := client.fetchNote(ctx, op, sel, input.ID, false)
 	if err != nil {
