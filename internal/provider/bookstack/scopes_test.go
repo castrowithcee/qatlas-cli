@@ -17,9 +17,9 @@ import (
 
 // areaServer holds two books with chapters and pages, two shelves, comments, attachments, and a search. Book
 // 701 holds chapter 1001 with pages 111 and 555 and the loose page 333; book 901 holds chapter 2001 with page
-// 222 and the loose page 444. Shelf 301 holds book 701, shelf 302 nothing. The list routes ignore every filter,
-// so only the client check holds the boundary. The identifiers are distinct, so a refusal that quotes one is
-// caught.
+// 222 and the loose page 444; book 1101 is empty. Shelf 301 holds book 701, shelf 302 nothing; shelf 399 fails
+// with a server error, every other shelf is missing. The list routes ignore every filter, so only the client
+// check holds the boundary. The identifiers are distinct, so a refusal that quotes one is caught.
 type areaServer struct {
 	*httptest.Server
 	rec     *recorder
@@ -37,7 +37,10 @@ var areaPages = []map[string]any{
 	{"id": 555, "book_id": 701, "chapter_id": 1001, "name": "In chapter two"},
 }
 
-var areaChapters = []map[string]any{{"id": 1001, "book_id": 701}, {"id": 2001, "book_id": 901}}
+var areaChapters = []map[string]any{
+	{"id": 1001, "book_id": 701, "pages": []map[string]any{{"id": 111, "book_id": 701}, {"id": 555, "book_id": 701}}},
+	{"id": 2001, "book_id": 901},
+}
 
 var areaComments = map[string]map[string]any{
 	"61": {"id": 61, "commentable_id": 555, "commentable_type": "page", "local_id": 1},
@@ -105,7 +108,10 @@ func newAreaServer(t *testing.T) *areaServer {
 		s.rec.record(r)
 		answer(w, r, areaChapters, "/api/chapters/")
 	})
-	books := []map[string]any{{"id": 701, "name": "Own"}, {"id": 901, "name": "Foreign"}, {"id": 1101, "name": "Other"}}
+	books := []map[string]any{{"id": 701, "name": "Own", "contents": []map[string]any{
+		{"type": "chapter", "id": 1001, "pages": []map[string]any{{"id": 111}, {"id": 555}}},
+		{"type": "page", "id": 333},
+	}}, {"id": 901, "name": "Foreign"}, {"id": 1101, "name": "Other"}}
 	mux.HandleFunc("/api/books", func(w http.ResponseWriter, r *http.Request) {
 		s.rec.record(r)
 		list(w, r, books)
@@ -121,6 +127,10 @@ func newAreaServer(t *testing.T) *areaServer {
 	mux.HandleFunc("/api/shelves/", func(w http.ResponseWriter, r *http.Request) {
 		s.rec.record(r)
 		id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/shelves/"), 10, 64)
+		if id == 399 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		s.mu.Lock()
 		held, ok := s.shelves[id]
 		s.mu.Unlock()
@@ -199,6 +209,12 @@ func (s *areaServer) requests() []string {
 // call runs one tool through its registered handler on a connection with the targets.
 func (s *areaServer) call(t *testing.T, tool, args string, targets ...string) (any, error) {
 	t.Helper()
+	return s.callExcluding(t, tool, args, targets, nil)
+}
+
+// callExcluding is call on a connection that also carries exclusions.
+func (s *areaServer) callExcluding(t *testing.T, tool, args string, targets, excludes []string) (any, error) {
+	t.Helper()
 	t.Setenv("TEST_TOKEN_ID", canaryID)
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
 	reg := capability.NewRegistry()
@@ -209,11 +225,15 @@ func (s *areaServer) call(t *testing.T, tool, args string, targets ...string) (a
 	if !ok {
 		t.Fatalf("%s is not registered", tool)
 	}
-	return handler(context.Background(), boundResolved(s.URL, targets...), resolver(nil), nil, json.RawMessage(args))
+	resolved := boundResolved(s.URL, targets...)
+	resolved.Exclude = excludes
+	return handler(context.Background(), resolved, resolver(nil), nil, json.RawMessage(args))
 }
 
 // areaIDs are every identifier of the server; no refusal may quote one.
-var areaIDs = []string{"111", "222", "333", "444", "555", "701", "901", "1001", "2001", "301", "302", "61", "62"}
+var areaIDs = []string{
+	"111", "222", "333", "444", "555", "701", "901", "1101", "1001", "2001", "301", "302", "399", "61", "62",
+}
 
 // refused checks an invalid-request refusal that quotes no identifier.
 func refused(t *testing.T, what string, err error) {
