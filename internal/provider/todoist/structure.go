@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -110,7 +111,8 @@ var projectsUpdate = changing(capability.EffectUpdate, capability.IdempotencyIde
 var projectsArchive = changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("projects",
 	"archive", "Archive a Todoist project",
 	"Archive one personal project of an explicit Todoist connection together with all its subprojects; on a "+
-		"project connection every subproject must belong to the connection as well"+retryNote,
+		"project connection every subproject must belong to the connection as well; a project with an excluded "+
+		"subproject or section below it is refused"+retryNote,
 	[]string{"projects", "archive", "update"},
 	projectIDInput, changeOutput("archived"), projectIDArgument, structureFields,
 	[]capability.Example{{Description: "Archive a project", Arguments: json.RawMessage(`{"project_id":"6XGgm6PHrGgMpCFX"}`)}}))
@@ -127,7 +129,8 @@ var projectsDelete = listedOnly(changing(capability.EffectDelete, capability.Ide
 	"delete", "Delete a Todoist project",
 	"Delete one personal project of an explicit Todoist connection permanently, with all its subprojects, "+
 		"sections, tasks, and comments; on a project connection every subproject must belong to the connection "+
-		"as well. Offered only by a connection whose tools list names it"+retryNote,
+		"as well; a project with an excluded subproject or section below it is refused. Offered only by a "+
+		"connection whose tools list names it"+retryNote,
 	[]string{"projects", "delete"},
 	projectIDInput, changeOutput("deleted"), projectIDArgument, structureFields,
 	[]capability.Example{{Description: "Delete a project", Arguments: json.RawMessage(`{"project_id":"6XGgm6PHrGgMpCFX"}`)}})))
@@ -235,7 +238,9 @@ var labelsCreate = changing(capability.EffectCreate, capability.IdempotencyNonId
 var labelsUpdate = changing(capability.EffectUpdate, capability.IdempotencyIdempotent, descriptor("labels",
 	"update", "Update a Todoist label",
 	"Change the name, color, or favorite mark of one personal label on an explicit Todoist * account "+
-		"connection; a new name reaches every task that carries the label",
+		"connection; a new name reaches every task that carries the label, so on a connection with exclusions "+
+		"it is refused when an active task with the label lies outside the connection; completed tasks are "+
+		"not checked",
 	[]string{"labels", "update"},
 	`{"type":"object","properties":{"label_id":`+idSchema+`,"name":`+labelNameSchema+`,`+labelFieldInput+`},`+
 		`"required":["label_id"],"additionalProperties":false}`,
@@ -264,7 +269,9 @@ var labelsReorder = changing(capability.EffectUpdate, capability.IdempotencyIdem
 var labelsDelete = listedOnly(changing(capability.EffectDelete, capability.IdempotencyIdempotent, descriptor("labels",
 	"delete", "Delete a Todoist label",
 	"Delete one personal label on an explicit Todoist * account connection permanently and remove it from "+
-		"every task. Offered only by a connection whose tools list names it"+retryNote,
+		"every task; on a connection with exclusions it is refused when an active task with the label lies "+
+		"outside the connection, and completed tasks are not checked. Offered only by a connection whose "+
+		"tools list names it"+retryNote,
 	[]string{"labels", "delete"},
 	`{"type":"object","properties":{"label_id":`+idSchema+`},"required":["label_id"],"additionalProperties":false}`,
 	changeOutput("deleted"), []capability.Argument{labelIDArgument}, structureFields,
@@ -381,12 +388,13 @@ func (c *Client) personalProject(ctx context.Context, op, id string) (rawProject
 	return raw, nil
 }
 
-// subprojectsInScope refuses to archive or delete a project on a project connection when one of its
-// subprojects at any depth lies outside the connection, because Todoist archives and deletes a project with
-// all its descendants. It reads the active projects and, for a delete, the archived ones too; a tree larger
-// than the bound is refused unchecked. An account connection holds every project.
+// subprojectsInScope refuses to archive or delete a project when one of its subprojects at any depth lies
+// outside the connection, or when it, or a subproject, holds an excluded section, because Todoist archives
+// and deletes a project with all its descendants. It reads the active projects and, for a delete, the
+// archived ones too; a tree larger than the bound is refused unchecked. Only an account connection without
+// exclusions holds every project.
 func (c *Client) subprojectsInScope(ctx context.Context, op, projectID string, archived bool) error {
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return nil
 	}
 	if err := c.loadProjects(ctx, op, archived); err != nil {
@@ -395,13 +403,41 @@ func (c *Client) subprojectsInScope(ctx context.Context, op, projectID string, a
 	for id, ancestor := range c.tree.parents {
 		for steps := 0; ancestor != "" && steps < len(c.tree.parents); steps++ {
 			if ancestor == projectID {
-				if !c.scope.exact(id) && !c.below(id) {
-					return invalidRequest("the project has a subproject outside this connection, which Todoist " +
-						"would change with it")
+				if c.excludedLoaded(id) || (!c.scope.exact(id) && !c.below(id)) {
+					return errSubprojectOutside
 				}
 				break
 			}
 			ancestor = c.tree.parents[ancestor]
+		}
+	}
+	return c.sectionsBelow(ctx, op, projectID)
+}
+
+var errSubprojectOutside = invalidRequest("the project has a subproject outside this connection, which Todoist " +
+	"would change with it")
+
+// sectionsBelow refuses a project that holds an excluded section itself or in a subproject at any depth. The
+// section is read to learn its project; a section Todoist does not hold lies in no project.
+func (c *Client) sectionsBelow(ctx context.Context, op, projectID string) error {
+	for _, sectionID := range c.scope.exSections {
+		var raw rawSection
+		if err := c.get(ctx, op, "/sections/"+url.PathEscape(sectionID), nil, &raw); err != nil {
+			var failure *provider.Error
+			if errors.As(err, &failure) && failure.Class == provider.ClassNotFound {
+				continue
+			}
+			return err
+		}
+		if raw.ID != sectionID || !validID(raw.ProjectID) {
+			return invalidResponse(op)
+		}
+		current := raw.ProjectID
+		for steps := 0; current != "" && steps <= len(c.tree.parents); steps++ {
+			if current == projectID {
+				return errSubprojectOutside
+			}
+			current = c.tree.parents[current]
 		}
 	}
 	return nil
@@ -539,9 +575,10 @@ func prepareProjectState(op, method, suffix, result string, subprojects, archive
 	}
 }
 
-// sectionInScope reads the section a change concerns on a project connection and refuses one outside it.
+// sectionInScope reads the section a change concerns and refuses one outside the connection. Only an
+// account connection without exclusions reads nothing first.
 func (c *Client) sectionInScope(ctx context.Context, op, id string) error {
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return nil
 	}
 	_, err := c.readSection(ctx, op, id)
@@ -800,6 +837,55 @@ func prepareLabelsCreate(_ scope, arguments labelValues) (run, error) {
 	return labelChange("create label", "/labels", body, ""), nil
 }
 
+// labelTasksInScope refuses a label change that reaches tasks outside the connection. A new name or a
+// delete reaches every task with the label, so on a connection with exclusions the active tasks that carry
+// it are read first, at most maxScanPages pages, and the change is refused when one lies outside or the
+// list cannot be read to its end. Completed tasks are not checked.
+func (c *Client) labelTasksInScope(ctx context.Context, op, labelID string) error {
+	if !c.scope.hasExcludes() {
+		return nil
+	}
+	var label rawLabel
+	if err := c.get(ctx, op, "/labels/"+url.PathEscape(labelID), nil, &label); err != nil {
+		return err
+	}
+	if label.ID != labelID || label.Name == "" {
+		return invalidResponse(op)
+	}
+	after := ""
+	for pages := 0; ; pages++ {
+		if pages == maxScanPages {
+			return &provider.Error{Class: provider.ClassProviderError, Op: op,
+				Message: "the tasks with this label could not all be checked; nothing was changed"}
+		}
+		entries, next, err := c.page(ctx, op, "/tasks", url.Values{"label": {label.Name}}, maxLimit, after)
+		if err != nil {
+			return err
+		}
+		tasks, err := decodeEach(op, entries, func(t rawTask) string { return t.ID })
+		if err != nil {
+			return err
+		}
+		for _, task := range tasks {
+			if task.IsDeleted {
+				continue
+			}
+			ok, err := c.taskAllowed(ctx, op, task)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return invalidRequest("a task with this label lies outside this connection, which the change " +
+					"would reach")
+			}
+		}
+		if next == "" {
+			return nil
+		}
+		after = next
+	}
+}
+
 func prepareLabelsUpdate(_ scope, arguments struct {
 	LabelID string `json:"label_id"`
 	labelValues
@@ -814,7 +900,17 @@ func prepareLabelsUpdate(_ scope, arguments struct {
 	if len(body) == 0 {
 		return nil, invalidRequest("name at least one value to change")
 	}
-	return labelChange("update label", "/labels/"+url.PathEscape(arguments.LabelID), body, arguments.LabelID), nil
+	change := labelChange("update label", "/labels/"+url.PathEscape(arguments.LabelID), body, arguments.LabelID)
+	if arguments.Name == nil {
+		return change, nil
+	}
+	// Only a new name reaches the tasks that carry the label.
+	return func(ctx context.Context, c *Client) (any, error) {
+		if err := c.labelTasksInScope(ctx, "update label", arguments.LabelID); err != nil {
+			return nil, err
+		}
+		return change(ctx, c)
+	}, nil
 }
 
 func prepareLabelsReorder(_ scope, arguments struct {
@@ -839,6 +935,9 @@ func prepareLabelsDelete(_ scope, arguments struct {
 		return nil, err
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
+		if err := c.labelTasksInScope(ctx, op, arguments.LabelID); err != nil {
+			return nil, err
+		}
 		if err := c.change(ctx, op, http.MethodDelete, "/labels/"+url.PathEscape(arguments.LabelID), nil,
 			nil); err != nil {
 			return nil, err
