@@ -13,7 +13,7 @@ Group `comments`. The token rights are listed under [Comments](setup.md#comments
 
 Comments are read and managed on pages only; comments on other object types are not reachable.
 
-`comments.list` takes an optional `page_id` (required on a connection with targets), `limit`, and `offset`. It
+`comments.list` takes an optional `page_id` (required on a connection with targets, optional with exclusions only), `limit`, and `offset`. It
 lists the comments of the page without their text. `parent_id` is the `local_id` of the parent comment on the
 same page (0 for a top-level comment); `local_id` is a number scoped to the page, `id` is global. Without
 `page_id` on a connection without targets, the page comments of the whole instance are listed. The filters sent
@@ -37,5 +37,8 @@ tools. `comments.create` is not idempotent; `comments.update` is idempotent. All
 confirmation, send exactly one request, and are never retried; after a timeout or a 5xx answer the result is
 reported as uncertain.
 
-A comment that is not a page comment is refused. On a connection with targets, `get`, `update`, and `delete`
-read the comment and prove its page before it is returned or changed (see [Targets](README.md#targets)).
+A comment that is not a page comment is refused. On a connection with targets or exclusions, `get`, `update`, and
+`delete` read the comment and prove its page before it is returned or changed, and a list without `page_id`
+leaves out the comments of pages outside that reach (see [Targets](README.md#targets) and
+[Exclusions](README.md#exclusions)). A comment belongs to the page it is on; an excluded page takes its comments
+with it.

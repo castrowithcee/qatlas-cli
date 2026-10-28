@@ -54,7 +54,13 @@ role read goes separately as the original answer. The guest lookup is made once 
 
 The tool requires confirmation and a tool allow list, is idempotent, is part of no profile, and sends exactly
 one `PUT` without retry; after a timeout or a 5xx answer the result is reported as uncertain. On a connection
-with targets the item is proven first (see [Targets](README.md#targets)).
+with targets or exclusions the item is proven first (see [Targets](README.md#targets)).
+
+Exclusions: reading or changing the permissions of an excluded object is refused. BookStack passes the
+permissions of a book or chapter on to everything below it, so a change to a book or chapter is also refused while
+an excluded chapter or page lies below it; Qatlas reads the content tree for that, and a tree it cannot read
+refuses the change. A read of such a book or chapter stays allowed. A shelf does not pass its permissions to its
+books, so a shelf's permissions stay changeable unless the shelf itself is excluded.
 
 ## Recycle bin
 
@@ -65,8 +71,14 @@ content. Names and descriptions are untrusted data.
 `bookstack.recycle-bin.restore` restores one deletion by `deletion_id`.
 `bookstack.recycle-bin.destroy` destroys one deletion permanently; this cannot be
 undone.
-The recycle bin spans the whole instance, so the tools are refused on a connection with targets. Each
-change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
+The recycle bin spans the whole instance, so the tools are refused on a connection with targets. On a
+connection with exclusions, `list` leaves out an entry that belongs to an excluded object, by its own type and
+identifier, its `book_id` or `chapter_id`, or its parent, and `restore` and `destroy` refuse such an entry. A
+deleted book is no longer on its shelf, so with an excluded shelf a deleted book, and an entry whose book is
+deleted, counts as excluded unless it can still be read. `restore` and `destroy` of a deleted book or chapter
+also take everything deleted with it, which the API does not list: they are refused unless every excluded chapter
+or page that could lie below the entry is still readable and lies in another book or chapter, and they are
+refused for an entry the list does not show. Each change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
 reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
 that names it and the `delete` effect.
 
@@ -74,7 +86,9 @@ that names it and the `delete` effect.
 
 These tools cover the whole instance, so they are refused on a connection with targets (before any secret is
 read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
-authentication identifiers, IP addresses). Names and texts are untrusted data.
+authentication identifiers, IP addresses). Names and texts are untrusted data. Exclusions do not reach users and
+roles: a role applies to the whole instance, so changing one or a user's roles also changes the access to
+excluded content.
 
 `bookstack.users.list` (`limit`, `offset`, `sort`, `filters`) and `bookstack.users.get` (`id`) read users. BookStack does not report roles in the
 listing, so only `get` carries them. The avatar and edit addresses are returned as untrusted addresses of the instance and are never fetched. `last_activity_at` and `created_at`
@@ -134,7 +148,8 @@ them.
   user like `users.get`.
 - `users.delete` takes `id` and optionally `migrate_ownership_id`, which must differ from `id`. It is final.
   Without `migrate_ownership_id` the content of the user stays without an owner; with it, the ownership passes to
-  that user. BookStack refuses to delete the only administrator and the guest user.
+  that user, for all of the user's content, excluded content included. BookStack refuses to delete the only
+  administrator and the guest user.
 
 Public access is protected. When `roles` is given, `users.update` determines the guest role (system role `public`;
 a read of the role list, at most 100 roles, and a read of that role) and
@@ -149,3 +164,10 @@ the arguments `type` (lowercase letters, digits, and underscores, at most 64 cha
 (`YYYY-MM-DD` or RFC 3339; dates are UTC and a date alone means the start of that day). Values are checked before
 any request. The arguments and `filters` all must hold; `ip` is personal data, and a filter on it widens neither
 the connection nor the tool allow list.
+
+Exclusions: on a connection with exclusions, entries whose `loggable_type` and `loggable_id` name an excluded shelf,
+book, chapter, or page are left out, and so are those of a page or chapter in an excluded container. The
+container is read per page or chapter; one that cannot be read, such as a deleted page, is left out as soon as a
+container can be excluded. Entries without `loggable_type` and `loggable_id`, such as comment, attachment, and
+image events, cannot be assigned and stay, and so do sign-in events; their `detail` text can still name excluded
+content.

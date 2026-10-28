@@ -45,8 +45,9 @@ see [Deleting](#deleting), for cover images see [Cover images](#cover-images).
 - `chapters.update` with `book_id` moves the chapter into that book. Moving needs more than updating; see
   [Content](setup.md#content).
 
-On a connection with targets, the book, the chapter, a target `book_id`, and a `default_template_id` are proven
-before the change (see [Targets](README.md#targets)).
+On a connection with targets or exclusions, the book, the chapter, a target `book_id`, and a `default_template_id`
+are proven before the change (see [Targets](README.md#targets)). Excluded chapters and pages are left out of the
+content trees and lists.
 
 The tools are not part of any profile. All four require confirmation; the creating tools are not idempotent.
 Each change is sent once and never retried; the result shows the changed object without its content tree.
@@ -54,7 +55,9 @@ Each change is sent once and never retried; the result shows the changed object 
 ## Shelves
 
 Shelves hold any books and span the whole instance, so the shelf tools work only on a connection without
-targets; `shelves.get` also reads a bound shelf (see [Targets](README.md#targets)).
+targets; `shelves.get` also reads a bound shelf (see [Targets](README.md#targets)). An excluded shelf is left out of the
+list and refused by every shelf tool; `books` of a shelf, in `shelves.get` and as an argument, follows BookStack's
+assignment without the excluded books: they are not shown, not sent, and an update keeps those already on the shelf.
 
 `bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
 sorted by `id`. `bookstack.shelves.get` takes an `id` and lists `books` in shelf order (at most 2000 entries;
@@ -97,7 +100,8 @@ arguments (at most 255 characters, case-insensitive) are sent as a `%...%` filte
 masked as literals; every returned row is checked against the filter again, because BookStack ignores filters
 it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection with
 targets, like the shelf tools. Names and values are untrusted data. Tags are written through the items that
-carry them.
+carry them. A connection with exclusions may use both tools, but the catalog counts every tag of the instance:
+names, value counts, and usages can include excluded content.
 
 ## Pages
 
@@ -176,10 +180,15 @@ call allows (50 pages that are only included). A `rate-limited` answer while rea
 smaller items then. A connection without targets reads nothing extra. Images of other pages are embedded by
 BookStack by its own storage rights; Qatlas does not check them.
 
-The token rights are listed under [Content](setup.md#content). On a connection with targets the item is proven first (see [Targets](README.md#targets)).
+Both tools refuse an excluded item, and a book or chapter that holds an excluded chapter or page, before any
+export request. The token rights are listed under [Content](setup.md#content). On a connection with targets or
+exclusions the item is proven first (see [Targets](README.md#targets)).
 
 ## Deleting
 
 `bookstack.pages.delete`, `bookstack.books.delete`, and `bookstack.chapters.delete` move the object to the
-recycle bin. A book goes with all its chapters and pages, a chapter with all its pages. `bookstack.shelves.delete`
-removes only the shelf; its books stay. The general rules are in [Deleting](README.md#deleting).
+recycle bin. A book goes with all its chapters and pages, a chapter with all its pages; on a connection with
+exclusions a book or chapter that holds an excluded chapter or page is refused, which Qatlas finds in the content
+tree it reads for the proof. A move into or out of a book or chapter stays allowed when source and target are in
+reach. `bookstack.shelves.delete` removes only the shelf; its books stay, and an excluded shelf is refused. The
+general rules are in [Deleting](README.md#deleting).

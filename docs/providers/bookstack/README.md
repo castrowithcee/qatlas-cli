@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the BookStack provider: connection, credential, base URL, targets, tool groups, limits, deletion rules, and error classes.
+  Describes the BookStack provider: connection, credential, base URL, targets, exclusions, tool groups, limits, deletion rules, and error classes.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -41,6 +41,7 @@ A connection may be bound with `target` or the `targets` list: at most 100 entri
 each identifier a positive integer without a leading zero. A target that does not match these forms makes the
 connection invalid; it fails closed in the configuration check and at every call, and the message never quotes
 the value. Without a target, everything the token reaches stays reachable. Several targets reach their union.
+`exclude` takes objects out of that reach (see [Exclusions](#exclusions)).
 
 | Target | Reaches | Proof |
 | --- | --- | --- |
@@ -58,7 +59,8 @@ own book, chapter, and page, and `limit` and `offset` count the remaining rows. 
 200 requests; a server that delivers more fails the call as `invalid-provider-response`. A page included in the
 `html` of a page or in an export (see [Pages](content.md#pages), [Export](content.md#export)) is proven with one
 read per call, which also supplies its content for the next level; a page the targets exclude by its identifier
-alone, as with only `page/` targets, is not read. A connection without targets sends no proof read.
+alone, as with only `page/` targets, is not read. The reads that prove an exclusion come on top (see
+[Exclusions](#exclusions)); a connection with neither targets nor exclusions sends no proof read.
 
 Without `book_id` and `chapter_id`, `pages.list` and `content.search` use the only bound book or the only bound
 chapter, and `chapters.list` the only bound book. A connection bound to pages alone lists these pages; its search
@@ -76,6 +78,33 @@ A tool that a binding does not reach is not offered, and a call is refused local
 
 Limit of the binding: the proof read and the action are two requests. An object moved out of the targets
 between them, for example by another user, can still be changed once.
+
+### Exclusions
+
+`exclude` takes `shelf/SHELF_ID`, `book/BOOK_ID`, `chapter/CHAPTER_ID`, and `page/PAGE_ID` entries in the forms of
+the targets. An entry is named once and differs from every target; the connection needs no target. Qatlas reads
+the entries like targets and refuses a connection whose entry it cannot read. An exclusion beats every target,
+never blocks a tool, and does not make the connection bound: the same tools are offered, and a tool that needs
+no target keeps working. A refused call reads like one outside the targets and names neither the object nor the
+exclusion; where the identifier alone decides, it is raised before any secret is read.
+
+| Exclusion | Takes out | Proof |
+| --- | --- | --- |
+| `shelf/SHELF_ID` | the shelf and the books on it at the time of the call, with everything below them | one read of each excluded shelf per call, only when a book has to be checked; a shelf that cannot be read fails the call |
+| `book/BOOK_ID` | the book with its chapters and pages and their attachments, images, and comments | a `book_id` locally, a page or chapter by the read of it |
+| `chapter/CHAPTER_ID` | the chapter with its pages and their attachments, images, and comments | a chapter locally, a page by the read of it (its `chapter_id`) |
+| `page/PAGE_ID` | the page with its attachments, images, and comments | locally |
+
+- Lists, trees, and searches leave excluded rows out, and `limit` and `offset` count the rest. A row that
+  points to a page, such as a comment, attachment, or image, is proven by one read of that page per call; a row
+  whose page cannot be read, or that has none, as with an image without a page, is left out.
+- A change or delete of an excluded object is refused, and so is one of an object that holds something excluded
+  below it, because it would take that with it: deleting a book or chapter, changing the content permissions of a
+  book or chapter, and exporting a book or chapter; so is an import into an excluded book or chapter. A move is
+  proven at its source and its target like any change.
+- Shelves, tags, the audit log, the recycle bin, users, and roles span the instance, not the objects; what they
+  hold for excluded content and where they stay as they are is in [content](content.md#tags-and-instance-information),
+  [administration](administration.md), and [imports](imports.md).
 
 ### Choosing targets
 

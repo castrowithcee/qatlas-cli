@@ -24,8 +24,8 @@ const maxImageNameChars = 180
 
 const imageWriteOutput = `{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"type":{"type":"string"},"page_id":{"type":"integer"},"url":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","type","page_id"]}`
 
-const imageBindNote = "On a connection with targets the page is proven to lie in them first, " +
-	"and so is the page of an existing image. Allowed file types are png, jpg, jpeg, gif, and webp; a drawing " +
+const imageBindNote = "On a connection with targets or exclusions the page is proven to lie in the targets and outside the " +
+	"exclusions first, and so is the page of an existing image. Allowed file types are png, jpg, jpeg, gif, and webp; a drawing " +
 	"must be a png"
 
 var imageWriteFields = []capability.Field{
@@ -179,6 +179,9 @@ func invokeImagesUpload(ctx context.Context, resolved *config.Resolved, secrets 
 		}
 	}
 	if _, err := checkImageFile(in.LocalPath, in.Type); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, pagePrefix, in.PageID); err != nil {
 		return nil, err
 	}
 	upload, err := openUpload(ctx, resolved, in.LocalPath)

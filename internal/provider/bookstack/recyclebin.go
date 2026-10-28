@@ -17,7 +17,9 @@ import (
 const recycleBinInstanceWide = "recycle bin"
 
 const recycleBinRoles = "BookStack requires the role permissions settings-manage and restrictions-manage-all for the token's user. " +
-	"The recycle bin covers the whole instance, so a connection with targets cannot use this tool"
+	"The recycle bin covers the whole instance, so a connection with targets cannot use this tool. Entries of an " +
+	"excluded object are left out and refused for restore and destroy, and so is an entry of a book or chapter " +
+	"that may hold an excluded chapter or page"
 
 const recycleBinListOutput = `{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"deleted_by":{"type":"integer"},"created_at":{"type":"string"},"deletable_type":{"type":"string"},"deletable_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"parent_type":{"type":"string"},"parent_id":{"type":"integer"},"pages_count":{"type":"integer"},"chapters_count":{"type":"integer"},"updated_at":{},"deletable":{}},"required":["id","deleted_by","created_at","deletable_type","deletable_id"]}}`
 
@@ -215,12 +217,24 @@ func invokeRecycleBinList(ctx context.Context, resolved *config.Resolved, secret
 
 // ListRecycleBin returns the reduced entries of the recycle bin.
 func (c *Client) ListRecycleBin(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
+	out := map[int64]bool{}
 	spec := scanSpec[recycleBinEntryJSON]{
-		op: "list recycle bin", path: "/api/recycle-bin", limit: limit, offset: offset,
+		op: "list recycle bin", path: "/api/recycle-bin", limit: limit, offset: offset, filtered: c.scope.excludes(),
+		narrow:    "filters",
 		arguments: argNames(recycleBinList),
 		id:        func(e recycleBinEntryJSON) int64 { return e.ID },
-		keep:      func(recycleBinEntryJSON) bool { return true },
-		row:       recycleBinRow,
+		keep:      func(e recycleBinEntryJSON) bool { return !out[e.ID] },
+		prepare: func(ctx context.Context, entries []recycleBinEntryJSON) error {
+			for _, e := range entries {
+				gone, err := c.deletionOut(ctx, e)
+				if err != nil {
+					return err
+				}
+				out[e.ID] = gone
+			}
+			return nil
+		},
+		row: recycleBinRow,
 	}
 	spec.withListQuery(q, recycleBinValue)
 	rows, err := scanList(ctx, c, spec)
@@ -278,8 +292,11 @@ func invokeRecycleBinDestroy(ctx context.Context, resolved *config.Resolved, sec
 	return client.DestroyFromRecycleBin(ctx, id)
 }
 
-// RestoreFromRecycleBin sends one restore request.
+// RestoreFromRecycleBin sends one restore request, after requireDeletion on a connection with exclusions.
 func (c *Client) RestoreFromRecycleBin(ctx context.Context, id int64) (output.Object, error) {
+	if err := c.requireDeletion(ctx, id); err != nil {
+		return output.Object{}, err
+	}
 	var result struct {
 		RestoreCount int64 `json:"restore_count"`
 	}
@@ -290,8 +307,11 @@ func (c *Client) RestoreFromRecycleBin(ctx context.Context, id int64) (output.Ob
 	return output.Object{Fields: []output.Field{{Name: "restore_count", Value: result.RestoreCount}}}, nil
 }
 
-// DestroyFromRecycleBin sends one destroy request.
+// DestroyFromRecycleBin sends one destroy request, after requireDeletion on a connection with exclusions.
 func (c *Client) DestroyFromRecycleBin(ctx context.Context, id int64) (output.Object, error) {
+	if err := c.requireDeletion(ctx, id); err != nil {
+		return output.Object{}, err
+	}
 	var result struct {
 		DeleteCount int64 `json:"delete_count"`
 	}
