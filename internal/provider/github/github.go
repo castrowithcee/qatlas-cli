@@ -1191,7 +1191,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	}
 	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: lim}
-	for _, entry := range allowed {
+	for _, entry := range allowed.targets {
 		if !entry.pattern() && entry.kind != kindOwner {
 			client.target = entry
 			break

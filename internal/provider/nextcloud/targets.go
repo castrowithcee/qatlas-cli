@@ -139,6 +139,7 @@ type scope struct {
 	notes        selection
 	account      bool
 	admin        bool
+	excludes     exclusions
 }
 
 // scopeOf reads the targets of a resolved connection. The single target field keeps its old meaning, the
@@ -155,9 +156,9 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 		if err != nil {
 			return scope{}, err
 		}
-		return scope{hasFolder: true, folder: root}, nil
+		return scope{hasFolder: true, folder: root}.withExcludes(provider.ExcludesOf(resolved))
 	}
-	return parseScope(resolved.Targets)
+	return parseScopeExcluding(resolved.Targets, provider.ExcludesOf(resolved))
 }
 
 // parseLegacyRoot reads the single target field: a root folder as before. A first segment that equals a
@@ -175,8 +176,11 @@ func parseLegacyRoot(raw string) ([]string, error) {
 	return parseRoot(trimmed)
 }
 
-// parseScope reads a typed target list.
-func parseScope(values []string) (scope, error) {
+// parseScope reads a typed target list without exclusions.
+func parseScope(values []string) (scope, error) { return parseScopeExcluding(values, nil) }
+
+// parseScopeExcluding reads a typed target list and the exclusions of the connection.
+func parseScopeExcluding(values, excludes []string) (scope, error) {
 	var s scope
 	seen := map[string]bool{}
 	for _, raw := range values {
@@ -204,7 +208,7 @@ func parseScope(values []string) (scope, error) {
 			return scope{}, errors.New("a Nextcloud connection may list at most 100 targets per kind")
 		}
 	}
-	return s, nil
+	return s.withExcludes(excludes)
 }
 
 func (s *scope) add(value string) error {

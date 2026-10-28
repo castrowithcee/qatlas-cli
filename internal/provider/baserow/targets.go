@@ -22,35 +22,53 @@ const (
 )
 
 // scope is the table boundary of one connection: every table the token reads (an explicit wildcard), or the
-// tables listed together with every table of the databases listed.
+// tables listed together with every table of the databases listed. Exclusions take tables out of either; they
+// are never targets.
 type scope struct {
-	wildcard  bool
-	tables    []int64
-	databases []int64
+	wildcard          bool
+	tables            []int64
+	databases         []int64
+	excludedTables    []int64
+	excludedDatabases []int64
 }
 
-// allows reports whether the table itself is listed. A table that belongs to a listed database is proven by
-// Client.admit, which needs the table list.
-func (s scope) allows(tableID int64) bool {
-	if s.wildcard {
-		return true
+// reaches is the one predicate behind every gate, mask and check: whether the table is reachable, given the
+// database it belongs to (0 when unknown). An exclusion wins over a table, a database and the wildcard, and a
+// table whose database is unknown counts as excluded where databases are excluded.
+func (s scope) reaches(tableID, databaseID int64) bool {
+	if slices.Contains(s.excludedTables, tableID) {
+		return false
 	}
-	for _, allowed := range s.tables {
-		if allowed == tableID {
-			return true
-		}
+	if len(s.excludedDatabases) > 0 && (databaseID == 0 || slices.Contains(s.excludedDatabases, databaseID)) {
+		return false
 	}
-	return false
+	return s.wildcard || slices.Contains(s.tables, tableID) || databaseID != 0 && slices.Contains(s.databases, databaseID)
 }
+
+// mayReach is the necessary condition of reaches that the table ID alone decides: it fails only for a table
+// that no database could make reachable, so a refusal needs neither a secret nor a request.
+func (s scope) mayReach(tableID int64) bool {
+	return !slices.Contains(s.excludedTables, tableID) &&
+		(s.wildcard || slices.Contains(s.tables, tableID) || len(s.databases) > 0)
+}
+
+// unrestricted is the wildcard without exclusions: every table is reachable and nothing needs checking.
+func (s scope) unrestricted() bool {
+	return s.wildcard && len(s.excludedTables) == 0 && len(s.excludedDatabases) == 0
+}
+
+// needsDatabases reports whether judging a table takes the table list, which maps tables to databases.
+func (s scope) needsDatabases() bool { return len(s.databases) > 0 || len(s.excludedDatabases) > 0 }
 
 // parseScope reads the configured targets: the single wildcard, or one or more table/TABLE_ID and
-// database/DATABASE_ID entries, none named twice. No error quotes a configured value.
-func parseScope(values []string) (scope, error) {
+// database/DATABASE_ID entries, none named twice; then the optional exclusions of the same two forms, each named
+// once and never equal to a target. The core validation is not relied on. No error quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
 	if len(values) == 0 {
 		return scope{}, errors.New("a Baserow connection needs at least one table/TABLE_ID or database/DATABASE_ID target, or the * wildcard")
 	}
 	if len(values) == 1 && strings.TrimSpace(values[0]) == wildcard {
-		return scope{wildcard: true}, nil
+		return parseExcludes(scope{wildcard: true}, excludes)
 	}
 	var bound scope
 	seenTables, seenDatabases := map[int64]bool{}, map[int64]bool{}
@@ -76,6 +94,27 @@ func parseScope(values []string) (scope, error) {
 		}
 		seenTables[id] = true
 		bound.tables = append(bound.tables, id)
+	}
+	return parseExcludes(bound, excludes)
+}
+
+// parseExcludes adds the exclusions to a scope that already holds the targets.
+func parseExcludes(bound scope, excludes []string) (scope, error) {
+	invalid := errors.New("a Baserow exclusion must be table/TABLE_ID or database/DATABASE_ID, named once and " +
+		"different from every target")
+	for _, raw := range excludes {
+		database, id, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return scope{}, invalid
+		}
+		excluded, targets := &bound.excludedTables, bound.tables
+		if database {
+			excluded, targets = &bound.excludedDatabases, bound.databases
+		}
+		if slices.Contains(*excluded, id) || slices.Contains(targets, id) {
+			return scope{}, invalid
+		}
+		*excluded = append(*excluded, id)
 	}
 	return bound, nil
 }
@@ -130,17 +169,16 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	if resolved == nil {
 		return scope{}, providerError("open", "no connection was selected")
 	}
-	values := provider.TargetsOf(resolved)
-	bound, err := parseScope(values)
+	bound, err := parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved)...)
 	if err != nil {
 		return scope{}, providerError("open", err.Error())
 	}
 	return bound, nil
 }
 
-// selectTable checks a table_id argument against the connection's allow-list before any secret is resolved
-// and before any request is sent. A table that is not listed itself passes only when database targets exist;
-// Client.admit then proves its database. The refusal never names the table.
+// selectTable checks a table_id argument against the connection's targets and exclusions before any secret is
+// resolved and before any request is sent. An excluded table, and one that is not listed itself while no database
+// target exists, is refused here; Client.admit proves the rest by database. The refusal never names the table.
 func selectTable(resolved *config.Resolved, tableID int64) error {
 	bound, err := boundScope(resolved)
 	if err != nil {
@@ -149,13 +187,24 @@ func selectTable(resolved *config.Resolved, tableID int64) error {
 	if tableID <= 0 || len(strconv.FormatInt(tableID, 10)) > maxIDDigits {
 		return invalidRequest("table_id must be a positive integer")
 	}
-	if !bound.allows(tableID) && len(bound.databases) == 0 {
+	if !bound.mayReach(tableID) {
 		return invalidRequest(outsideTargets)
 	}
 	return nil
 }
 
 const outsideTargets = "table_id is outside the targets of this connection"
+
+// indexTables maps each table of a table list to its database, 0 where the answer gives none.
+func indexTables(raw []tableJSON) map[int64]int64 {
+	known := make(map[int64]int64, len(raw))
+	for _, entry := range raw {
+		if entry.ID > 0 {
+			known[entry.ID] = entry.DatabaseID
+		}
+	}
+	return known
+}
 
 // tableDatabases reads the token's table list once per client and keeps each table's database.
 func (c *Client) tableDatabases(ctx context.Context, op string) (map[int64]int64, error) {
@@ -166,37 +215,30 @@ func (c *Client) tableDatabases(ctx context.Context, op string) (map[int64]int64
 	if err := c.get(ctx, op, allTablesPath, nil, &raw); err != nil {
 		return nil, err
 	}
-	known := make(map[int64]int64, len(raw))
-	for _, entry := range raw {
-		if entry.ID > 0 {
-			known[entry.ID] = entry.DatabaseID
-		}
-	}
-	c.databaseOf = known
-	return known, nil
+	c.databaseOf = indexTables(raw)
+	return c.databaseOf, nil
 }
 
-// inScope reports whether the table is listed or belongs to a listed database, by the loaded table list.
-func (c *Client) inScope(tableID int64) bool {
-	if c.scope.allows(tableID) {
-		return true
-	}
-	return c.databaseOf != nil && c.databaseOf[tableID] != 0 && slices.Contains(c.scope.databases, c.databaseOf[tableID])
+// reaches reports whether the table is reachable, by the loaded table list. Where databases matter and the list
+// is not loaded or does not show the table, its database is unknown.
+func (c *Client) reaches(tableID int64) bool {
+	return c.scope.reaches(tableID, c.databaseOf[tableID])
 }
 
-// admit proves, before any action on the table, that it is listed or in a listed database. A listed table
-// costs no request; otherwise one read of the table list answers it, once per client.
+// admit proves, before any action on the table, that it is reachable. A table that no exclusion of a database
+// can touch and that the targets name or the wildcard covers costs no request; otherwise one read of the table
+// list answers it, once per client.
 func (c *Client) admit(ctx context.Context, op string, tableID int64) error {
-	if c.scope.allows(tableID) {
-		return nil
-	}
-	if len(c.scope.databases) == 0 {
+	if !c.scope.mayReach(tableID) {
 		return invalidRequest(outsideTargets)
+	}
+	if len(c.scope.excludedDatabases) == 0 && c.scope.reaches(tableID, 0) {
+		return nil
 	}
 	if _, err := c.tableDatabases(ctx, op); err != nil {
 		return err
 	}
-	if !c.inScope(tableID) {
+	if !c.reaches(tableID) {
 		return invalidRequest(outsideTargets)
 	}
 	return nil
