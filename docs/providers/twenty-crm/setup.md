@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Set up Twenty CRM
@@ -64,16 +64,16 @@ printf %s "$TWENTY_API_KEY" | qatlas credential set twenty-reader api-key
 `twenty-reader` is the name of the credential in your configuration and `api-key` is its only secret. To replace a
 key that was revoked, run the same command again with the new key. Run
 `qatlas config validate` to check the configuration file. It contacts no provider. Object targets and what a
-connection reaches without them are described under [Object targets](README.md#object-targets).
+connection reaches without them are described under [Object targets](README.md#object-targets-and-exclusions).
 
 ## Check the connection
 
 In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means:
 
 - Without object targets: Twenty let the key read companies, and the workspace describes the company fields Qatlas
-  reads.
-- With object targets: Twenty let the key read every bound object. For a bound company object, the company fields are
-  checked too.
+  reads. If `company` is excluded, no company is read and only the catalog is checked.
+- With object targets: Twenty let the key read every bound object that is not excluded. For a bound company
+  object, the company fields are checked too.
 
 **A passing test does not mean every tool works.** Twenty checks the role again on every call, and the test reads
 nothing but one record per object. Compare the role with [Rights per tool group](#rights-per-tool-group) for the tools
@@ -107,7 +107,7 @@ differ in your version.
 | Duplicates, merge preview, merge | Object rights on the object. A merge deletes the source records, so Twenty decides which rights it needs; Qatlas names only the object rights |
 
 Companies need these rights on the object `company`. Object targets and the company rule are described under
-[Object targets](README.md#object-targets).
+[Object targets](README.md#object-targets-and-exclusions).
 
 ### Notes, tasks, and attachments
 
@@ -233,5 +233,6 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 | `rate-limited` | The key sent more than Twenty's 100 requests per minute | Wait and retry. Qatlas holds the key back for the time Twenty asks for. |
 | `unreachable`: Twenty is unavailable or in maintenance, or `timeout` | The workspace is down or slow | Retry later. After an unclear result of a change, read the data before repeating the change; the message says how. |
 | `invalid-response`: this Twenty workspace does not describe a Company object, does not expose the company route, or is missing company fields | The workspace schema changed or the company object was renamed | Restore the standard company object, or bind object targets without `object/company`. |
-| `invalid-response`: this Twenty workspace does not hold an object bound to this connection | A target names an object the workspace lacks | Correct the target; see [Object targets](README.md#object-targets). |
-| `invalid-request` naming the targets | The object is outside the connection's targets | Not a role problem. Pass a target the connection allows, or add it. |
+| `invalid-response`: this Twenty workspace does not hold an object bound to this connection | A target names an object the workspace lacks | Correct the target; see [Object targets](README.md#object-targets-and-exclusions). |
+| `invalid-request` naming the targets | The object is outside the connection's targets or excluded | Not a role problem. Pass an object the connection allows, or change its targets or exclusions. |
+| `invalid-response`: this Twenty workspace does not hold an object excluded on this connection | An excluded object was renamed or removed in the workspace | Change the exclusion to the new object name, or remove it. Until then, calls that read the workspace catalog fail. |

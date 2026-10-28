@@ -7,14 +7,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Twenty CRM
 
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
-objects (see [Object targets](#object-targets)). It can list, read, create, change (name or primary domain), and delete
-companies, and work with records of any reachable object, also up to 60 at a time, plus notes, tasks,
+objects, or exclude some of them (see [Object targets and exclusions](#object-targets-and-exclusions)). It can
+list, read, create, change (name or primary domain), and delete companies, and work with records of any reachable object, also up to 60 at a time, plus notes, tasks,
 attachments, webhooks, workflows, dashboards, and the data model; each has its own page. Mutations require
 confirmation and only use the generated REST routes of the company or of a reachable object, or fixed
 metadata, webhook, and workflow routes. Qatlas sends each mutation once; after an unclear result (timeout,
@@ -38,28 +38,41 @@ Pages by area:
 - [Notes, tasks, and attachments](activity-and-attachments.md)
 - [Webhooks](webhooks.md)
 
-## Object targets
+## Object targets and exclusions
 
 A target has the form `object/NAME` with the singular camelCase API name of an object, for example
 `object/person`. A connection may list several; a value without the `object/` form fails validation.
 
 - With targets, the connection reaches exactly the bound objects.
-- Without targets, the connection reaches every non-system object its API key reaches. Set `object/` targets
-  on every connection that should not see all of them.
+- Without targets, the connection reaches every non-system object its API key reaches, minus the excluded
+  ones. Set `object/` targets or `exclude` entries on every connection that should not see all of them.
+- `exclude` takes entries of the same form (`object/NAME`, no system objects, no wildcard). An exclusion wins
+  over a target. An exclusion beside targets that matches no target is valid and has no effect.
+- An excluded object is as unreachable as one outside the targets, for the record, object, search, link, and
+  attachment tools: relation fields to it are left out, and a filter, grouping, or write through its
+  `<relation>Id` is refused. An identifier a read returns stays an identifier.
+- Exclusions are names, and own objects can be renamed. A call that reads the workspace catalog fails
+  without naming the object when an excluded name is missing from it; see [Fixing
+  errors](setup.md#fixing-errors).
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
   never reachable through the object and record tools and cannot be a target; workflows, workspace
   members, and attachments have their own tools. The two link objects of notes and tasks are system
   objects too; only the link tools touch them. Qatlas keeps them in a fixed list, so an object a later
   Twenty version marks as a system object stays reachable on a connection without targets until the list
   is updated.
-- `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
+- `companies.*` need `company` to be reachable: bound if there are targets, and not excluded.
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
-  refused before the key is read and listed as not reachable.
+  refused before the key is read and listed as not reachable. Exclusions alone do not bind a connection, so
+  they stay offered and usable.
+- Exclusions limit objects, not workspace settings. Views, page layouts, dashboards, roles, webhooks, and
+  workflows stay allowed even where they concern an excluded object: an existing webhook still reports its
+  records, a workflow still acts on them, and notes on its records stay readable. The data model tools are
+  described in [Data model](data-model.md).
 
 The target choice lists the objects from one page of the metadata list (`/rest/metadata/objects`; rights: see
 [Data model](setup.md#data-model)) as `object/NAME` with the label of the object; the list ignores a connection's
-targets, so the choice also offers objects outside them, and system objects are left out. The metadata API has
-no search, so the list is filtered locally. Qatlas resolves no URL to a target.
+targets and exclusions, so the choice also offers objects outside them, and system objects are left out. The
+metadata API has no search, so the list is filtered locally. Qatlas resolves no URL to a target.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
 connection does not reach are left out. The catalog comes from the generated API document, not from the metadata API
