@@ -142,6 +142,9 @@ func (c *Client) SendMessage(ctx context.Context, token, text, replyTo string, s
 	if err != nil {
 		return nil, providerError(op, "a reference could not be generated")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoMessage); err != nil {
+		return nil, err
+	}
 	if err := c.talkFeature(ctx, op, featureChat, featureReferenceID); err != nil {
 		return nil, err
 	}
@@ -170,6 +173,9 @@ func (c *Client) EditMessage(ctx context.Context, token, id, text string) (*Edit
 	if !validTalkToken(token) || !validMessageID(id) || !validMessageText(text) {
 		return nil, providerError(op, "the message arguments are unusable")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoMessage); err != nil {
+		return nil, err
+	}
 	if err := c.talkFeature(ctx, op, featureChat, featureEdit); err != nil {
 		return nil, err
 	}
@@ -186,6 +192,9 @@ func (c *Client) DeleteMessage(ctx context.Context, token, id string) (*DeleteMe
 	const op = "delete talk message"
 	if !validTalkToken(token) || !validMessageID(id) {
 		return nil, providerError(op, "the message arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoMessage); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featureChat); err != nil {
 		return nil, err
@@ -204,6 +213,9 @@ func (c *Client) SetReaction(ctx context.Context, token, id, reaction string, ad
 	const op = "set talk reaction"
 	if !validTalkToken(token) || !validMessageID(id) || !validReaction(reaction) {
 		return nil, providerError(op, "the reaction arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoMessage); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featureReactions); err != nil {
 		return nil, err
@@ -339,20 +351,20 @@ type talkWriteArguments struct {
 }
 
 // readTalkWrite decodes strictly and binds the conversation before any credential access.
-func readTalkWrite(op string, resolved *config.Resolved, raw json.RawMessage) (talkWriteArguments, error) {
+func readTalkWrite(op, missing string, resolved *config.Resolved, raw json.RawMessage) (talkWriteArguments, error) {
 	var input talkWriteArguments
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
 		return input, providerError(op, "the validated arguments could not be read")
 	}
-	return input, requireTalkToken(resolved, input.Token)
+	return input, requireTalkToken(resolved, op, missing, input.Token)
 }
 
 func invokeTalkMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "send talk message"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoMessage, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +381,7 @@ func invokeTalkMessagesSend(ctx context.Context, resolved *config.Resolved, secr
 func invokeTalkMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "edit talk message"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoMessage, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +398,7 @@ func invokeTalkMessagesEdit(ctx context.Context, resolved *config.Resolved, secr
 func invokeTalkMessagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "delete talk message"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoMessage, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +415,7 @@ func invokeTalkMessagesDelete(ctx context.Context, resolved *config.Resolved, se
 func invokeTalkReactionsSet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "set talk reaction"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoMessage, resolved, raw)
 	if err != nil {
 		return nil, err
 	}

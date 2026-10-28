@@ -12,7 +12,7 @@ import (
 func TestExclusionsAreDeclaredForTheEnforcedKindsOnly(t *testing.T) {
 	meta, _ := registry(t).ProviderMetadata(Provider)
 	for _, kind := range meta.Target.Kinds {
-		want := slices.Contains([]string{kindFolder, kindNotes, kindCalendar, kindAddressbook, kindDeck}, kind.Name)
+		want := slices.Contains([]string{kindFolder, kindNotes, kindCalendar, kindAddressbook, kindDeck, kindTalk}, kind.Name)
 		if kind.Excludable != want {
 			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, kind.Excludable, want)
 		}
@@ -32,13 +32,15 @@ func TestExcludeConfigurationIsCheckedByTheCore(t *testing.T) {
 		{"[folder/Team, notes/Work]", "[folder/Team/Private, notes/Work/Secret]"},
 		{"[folder, notes]", "[folder/Private, notes/Secret/Deep]"},
 		{"[calendar, addressbook, deck]", "[calendar/work, addressbook/book, deck/42]"},
+		{"[talk]", "[talk/abcd1234]"},
+		{"[folder/Team, talk]", "[folder/Team/Private, talk/abcd1234]"},
 	} {
 		if _, err := config.Decode(strings.NewReader(document(c[0], c[1])), reg); err != nil {
 			t.Errorf("targets %s exclude %s: %v", c[0], c[1], err)
 		}
 	}
 	for _, c := range [][2]string{
-		{"[folder/Team, talk]", "[talk/abcd1234]"},
+		{"[talk]", "[talk/abc/d]"},
 		{"[calendar]", "[calendar]"},
 		{"[deck]", "[deck/abc]"},
 		{"[folder/Team, account]", "[account]"},

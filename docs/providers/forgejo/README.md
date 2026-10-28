@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Forgejo
@@ -109,6 +109,8 @@ token rights are in [Set up Forgejo](setup.md#quota-and-quota-administration).
 - In the lists, a row that names a repository outside the targets is dropped, and with targets so is a row that names
   none; packages belong to their owner and are not filtered. A page may therefore hold fewer rows than `limit` and
   still have a successor.
+- Exclusions ([Targets](../gitea/README.md#exclusions)): quota totals stay aggregated, and runner-job rows that carry
+  only a `repo_id` are dropped when exclusions exist.
 - Names, versions, and addresses are untrusted data.
 - An instance can switch the quota off; it then does not serve the routes and answers 404, like it does for an
   organization or a token it does not reach. After a 404 the tool reads `GET /user` or `GET /orgs/NAME`: if that

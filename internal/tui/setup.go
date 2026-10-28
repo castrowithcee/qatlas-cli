@@ -389,7 +389,10 @@ func (m *Model) setupDraft(upto int) (manage.ConnectionDraft, manage.ConnectionS
 		stage = manage.StageScope
 		page := w.pages[stepScope]
 		plan.connection = pageValue(page, "name")
-		draft.Name, draft.Targets, draft.Description = plan.connection, targetEntries(page), pageValue(page, "description")
+		draft.Name, draft.Description = plan.connection, pageValue(page, "description")
+		if row := targetRowOf(page); row != nil {
+			draft.Targets, draft.Exclude = row.reachable(), excludesOf(row.entries, row.excluded)
+		}
 		if upto >= stepEffects {
 			stage = manage.StageRights
 			page := w.pages[stepEffects]
@@ -407,7 +410,7 @@ func (m *Model) setupDraft(upto int) (manage.ConnectionDraft, manage.ConnectionS
 		// Labels the target row holds come from the provider's list; a label the template carries for the
 		// same target stays. Only targets that were chosen keep a label.
 		for target, label := range targetLabelsOf(page) {
-			if slices.Contains(draft.Targets, target) {
+			if slices.Contains(draft.Targets, target) || slices.Contains(draft.Exclude, target) {
 				if draft.TargetLabels == nil {
 					draft.TargetLabels = map[string]string{}
 				}
@@ -758,12 +761,17 @@ func (m *Model) summaryRows() []summaryPair {
 		}
 	}
 
-	return append([]summaryPair{
+	rows := []summaryPair{
 		line("provider", metadata.Name),
 		line("service", fmt.Sprintf("%s %s · %s", plan.service, state(plan.newService), config.MaskURL(cfg.Services[plan.service].BaseURL))),
 		line("credential", fmt.Sprintf("%s %s · %s", plan.credential, state(plan.newCredential), secrets)),
 		line("connection", plan.connection),
 		line(targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
 		line("description", choiceText(conn.Description)),
-	}, access...)
+	}
+	if len(conn.Exclude) > 0 {
+		at := slices.IndexFunc(rows, func(p summaryPair) bool { return p.label == labelText(targetsLabel) }) + 1
+		rows = slices.Insert(rows, at, line("excluded", strings.Join(conn.Exclude, ", ")))
+	}
+	return append(rows, access...)
 }

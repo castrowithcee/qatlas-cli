@@ -118,7 +118,7 @@ func (m *Model) pickSubject() (connection string, draft *manage.ConnectionDraft,
 			return "", nil, false
 		}
 		d, _, _ := m.setupDraft(stepCredential)
-		d.Targets = slices.Clone(m.targetList.all)
+		d.Targets = reachableOf(m.targetList.all, m.targetExcluded)
 		return "", &d, d.Service != "" && d.Credential != ""
 	}
 	service, credential := m.formService(), m.fieldValue("credential")
@@ -127,7 +127,7 @@ func (m *Model) pickSubject() (connection string, draft *manage.ConnectionDraft,
 		return m.editing, nil, true
 	}
 	d := manage.ConnectionDraft{Provider: provider, Service: service, Credential: credential,
-		Targets: slices.Clone(m.targetList.all)}
+		Targets: reachableOf(m.targetList.all, m.targetExcluded)}
 	return "", &d, service != "" && credential != ""
 }
 
@@ -573,7 +573,7 @@ func (m *Model) pickMark(lv *pickLevel) {
 	if !ok {
 		return
 	}
-	if !m.targetMetadata().Multiple {
+	if !m.targetMetadata().Multiple && !m.targetAsExclusion {
 		m.fail = tr(tPickThisProviderTakesOneOnly, m.targetMetadata().Label)
 		return
 	}
@@ -616,10 +616,17 @@ func (m *Model) takeEntries(picked []config.TargetEntry) bool {
 		return false
 	}
 	pending := map[string]bool{}
+	if !m.targetAsExclusion && m.tooManyTargets(len(picked)) {
+		m.fail = tr(tPickThisProviderTakesOneOnly, m.targetMetadata().Label)
+		return false
+	}
 	for _, e := range picked {
 		problem := m.targetProblem(e.Target, len(m.targetList.all))
 		if problem == "" && pending[e.Target] {
 			problem = tr(tPickThisIsAlreadyInThe, m.targetMetadata().Label)
+		}
+		if problem == "" && m.targetAsExclusion && !m.canExclude(e.Target) {
+			problem = tr(tTargetCannotBeExcluded, m.targetMetadata().Label)
 		}
 		if problem != "" {
 			m.fail = m.pickText(e.Target) + ": " + problem
@@ -670,6 +677,9 @@ func (m *Model) pickFrame() (string, string) {
 	}
 	if len(p.marks) > 0 {
 		title += tr(tPickMarked, len(p.marks))
+	}
+	if m.targetAsExclusion {
+		title += " · " + tr(tTargetTakenAsExclusionShort)
 	}
 	var head strings.Builder
 	head.WriteString(m.boxTop(title, ""))

@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # Schema
@@ -22,9 +22,9 @@ profile.
 are untrusted provider content; control characters in `data`, `permission_type`, and
 `permitted_users` are replaced.
 
-- A link or link-formula column whose joined table is outside the connection's allow-list, or cannot be
-  determined from the base metadata, loses every `data` entry that names that table, its views, or its
-  columns. A wildcard connection keeps them.
+- A link or link-formula column whose joined table is outside the connection's allow-list, excluded, or cannot
+  be determined from the base metadata, loses every `data` entry that names that table, its views, or its
+  columns. A wildcard connection without exclusions keeps them.
 - A member larger than 4096 bytes, nested deeper than 8 levels, or holding more than 1000 elements is left out
   whole, never shortened, and its name is listed in the column's `omitted_fields`.
 - `permitted_users` are internal SeaTable user identifiers. Names belong to `collaborators.list`.
@@ -35,16 +35,18 @@ are untrusted provider content; control characters in `data`, `permission_type`,
 `seatable.base.tables.delete` manage the tables of the base. `tables.delete` is offered only by a connection whose `tools` list names it.
 
 - A change never widens the table boundary of a connection. A new or duplicated table is not in an
-  allow-list, so `tables.create` and `tables.duplicate` work only on a connection with `target: "*"`; any
-  other connection refuses them before the credential is read and before SeaTable is contacted.
+  allow-list, so `tables.create` and `tables.duplicate` work only on a connection with `target: "*"`, with or
+  without exclusions; any other connection refuses them before the credential is read and before SeaTable is
+  contacted. A name that an exclusion claims by name cannot be created or renamed to.
 - `tables.duplicate` copies the rows only when `with_rows` is true. The copy is named by SeaTable;
   `tables.list` shows it.
 - `tables.rename` is refused when the table is a connection target by name, such as `Kunden`; a table bound
-  as `id:TABLEID` can be renamed. The new name may not be the name of an allow-list entry. Qatlas reads the
-  base metadata to see whether the table is also bound by name; that read is the only provider access that
-  can precede such a refusal.
+  as `id:TABLEID` can be renamed. A table that a view exclusion names by table name cannot be renamed either.
+  The new name may not be the name of an allow-list entry. Qatlas reads the base metadata to see whether the
+  table is also bound by name; that read is the only provider access that can precede such a refusal.
 - `tables.delete` removes the table with its rows and views. It works on a table in the allow-list, or on any
-  table with `*`.
+  table with `*`. `tables.delete` and `tables.duplicate` are refused for a table with a link column to an
+  excluded table, because the change would reach the counterpart column there.
 - A new name has 1 to 255 printable characters, no `/`, no surrounding blanks, no `id:` prefix, and is not
   `*`.
 - List the tables before repeating an uncertain change.
@@ -65,9 +67,9 @@ the columns of an allowed table. `columns.delete` is offered only by a connectio
 - `data` has one bounded form per column type and nothing else is accepted. Omitted settings take fixed
   defaults.
 - `columns.update` makes exactly one change per call; changing the type may lose existing cell values.
-- A link column is created or set only when the joined table is inside the connection's allow-list. An
-  existing link column whose joined table is outside it can be neither changed nor deleted. The message never
-  names the other table.
+- A link column is created or set only when the joined table is inside the connection's allow-list and not
+  excluded. An existing link column whose joined table is outside it, or excluded, can be neither changed nor
+  deleted. The message never names the other table.
 - System columns, unknown columns, a name that already exists, an unsupported type, or data that does not fit
   the type are refused before the request. A selection narrowed to one view is refused before the credential
   is read.

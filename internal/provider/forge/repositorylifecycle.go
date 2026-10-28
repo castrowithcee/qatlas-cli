@@ -51,6 +51,15 @@ func (a allowlist) namesOwnerOfScope(scope, name string) bool {
 	return false
 }
 
+// admitsOwnerOfScope is namesOwnerOfScope for profiles, organization settings and teams: only the targets decide,
+// since an exclusion takes out the content of an owner and not the owner itself.
+func (a allowlist) admitsOwnerOfScope(scope, name string) bool {
+	if !a.bound() {
+		return true
+	}
+	return a.namesOwnerOfScope(scope, name)
+}
+
 // checkDestination checks where a new repository goes: the organization, which the targets name as orgs/NAME,
 // or, left out, the account behind the token, for which they must name some user. Exclusions never bind: they
 // only take a destination out, and the account behind the token is proven by reading it before the change.
@@ -110,6 +119,27 @@ func ownAccount(ctx context.Context, c *Client, op string, allowed allowlist) (s
 func verifyOwnAccount(ctx context.Context, c *Client, op string, allowed allowlist) error {
 	_, err := ownAccount(ctx, c, op, allowed)
 	return err
+}
+
+// verifyOwnProfile proves the account behind the token for a tool that shows or changes the account itself,
+// which stays reachable when an exclusion takes out its content: only the targets are checked, and nothing is read
+// without them.
+func verifyOwnProfile(ctx context.Context, c *Client, op string, allowed allowlist) error {
+	if !allowed.bound() {
+		return nil
+	}
+	var account object
+	if _, err := c.get(ctx, op, "/user", nil, &account); err != nil {
+		return err
+	}
+	login, ok := account.text("login")
+	if !ok || login == "" {
+		return provider.InvalidResponse(op, c.product.name+" returned an account without a login")
+	}
+	if !allowed.namesOwnerOfScope("users", login) {
+		return outsideTargets("account behind the token")
+	}
+	return nil
 }
 
 // verifyNewRepository proves where a repository named NAME lands when no organization is given: in the account

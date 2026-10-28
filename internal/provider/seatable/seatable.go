@@ -3,7 +3,10 @@
 // A SeaTable installation holds many bases, and every base can issue several API tokens with their own
 // read or write permission. That cardinality is the configuration: a service is one instance, a credential
 // is one API token of one base, and a connection binds it to one table, an explicit table allow-list, or
-// the explicit * wildcard. The API token itself never reaches a base route; it is exchanged for a
+// the explicit * wildcard. Exclusions (tables and views) take parts out of that reach and win over every
+// target: an excluded table or view behaves like one outside the allow-list, an exclusion by name that the base
+// metadata no longer resolves makes the call fail instead of reaching further, and no refusal names the
+// table. The API token itself never reaches a base route; it is exchanged for a
 // short-lived base token that is kept in memory for the current process and never stored.
 //
 // Column names and cell values arrive from the provider and are treated as untrusted data: they are
@@ -19,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -328,18 +332,20 @@ func Register(reg *capability.Registry) error {
 				Name: tableKind,
 				Description: "a table, by name or as id:TABLEID, or * for every table of the base; the id: form " +
 					"survives a rename",
-				Forms: []string{"TABLE", "*"},
+				Forms:      []string{"TABLE", "*"},
+				Excludable: true,
 			}, {
 				Name:        "view",
 				Description: "one view of a table, by name or as id:TABLEID/id:VIEWID, narrowing rows.list to it",
 				Forms:       []string{"TABLE/VIEW"},
 				Parents:     []string{tableKind},
+				Excludable:  true,
 			}},
 			Reaches: reaches,
 			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +
 				"Use an allow-list when the whole base is not required.",
 			Description: "one or more tables as an allow-list, or * for the whole base; use " +
-				"TABLE, TABLE/VIEW, id:TABLEID, or id:TABLEID/id:VIEWID",
+				"TABLE, TABLE/VIEW, id:TABLEID, or id:TABLEID/id:VIEWID; exclude takes tables and views out again",
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
@@ -415,7 +421,7 @@ func invokeColumnsList(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list columns", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "list columns", resolved, secrets, red, options.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +434,7 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list rows", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "list rows", resolved, secrets, red, options.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +450,7 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get row", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "get row", resolved, secrets, red, arguments.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +468,7 @@ func invokeRowsCreate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("create row", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "create row", resolved, secrets, red, input.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +483,7 @@ func invokeRowsUpdate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("update row", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "update row", resolved, secrets, red, input.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -492,7 +498,7 @@ func invokeRowsDelete(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("delete row", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openForTable(ctx, "delete row", resolved, secrets, red, input.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -511,9 +517,11 @@ type target struct {
 }
 
 // scope is the complete table boundary of one connection. A wildcard is explicit configuration; an empty
-// target never becomes a wider scope by accident.
+// target never becomes a wider scope by accident. Exclusions take tables or views out of what the targets or
+// the wildcard reach; they are never targets.
 type scope struct {
 	targets  []target
+	excluded []target
 	wildcard bool
 }
 
@@ -602,10 +610,12 @@ func parseScope(resolved *config.Resolved) (scope, error) {
 	if len(values) == 0 {
 		return scope{}, errors.New("a SeaTable connection needs at least one table or the * wildcard")
 	}
+	var bound scope
 	if len(values) == 1 && strings.TrimSpace(values[0]) == "*" {
-		return scope{wildcard: true}, nil
+		bound = scope{wildcard: true}
+		return parseExcludes(bound, provider.ExcludesOf(resolved))
 	}
-	bound := scope{targets: make([]target, 0, len(values))}
+	bound = scope{targets: make([]target, 0, len(values))}
 	for _, value := range values {
 		if strings.TrimSpace(value) == "*" {
 			return scope{}, errors.New("the SeaTable * wildcard must be the only configured target")
@@ -620,6 +630,25 @@ func parseScope(resolved *config.Resolved) (scope, error) {
 			}
 		}
 		bound.targets = append(bound.targets, parsed)
+	}
+	return parseExcludes(bound, provider.ExcludesOf(resolved))
+}
+
+// parseExcludes adds the exclusions to a scope that holds the targets: each a table or view in one of the
+// target forms, named once and never spelled like a target. The core validation is not relied on, and no
+// error quotes a configured value.
+func parseExcludes(bound scope, values []string) (scope, error) {
+	invalid := errors.New("a SeaTable exclusion must be a table or view in a target form, named once, " +
+		"different from every target, and not the * wildcard")
+	for _, value := range values {
+		if strings.TrimSpace(value) == "*" {
+			return scope{}, invalid
+		}
+		parsed, err := parseTarget(value)
+		if err != nil || slices.Contains(bound.excluded, parsed) || slices.Contains(bound.targets, parsed) {
+			return scope{}, invalid
+		}
+		bound.excluded = append(bound.excluded, parsed)
 	}
 	return bound, nil
 }
@@ -639,7 +668,7 @@ func (s scope) selectTarget(raw string) (target, error) {
 	if s.admits(selected) {
 		return selected, nil
 	}
-	return target{}, errors.New("the selected SeaTable table is outside this connection's allow-list")
+	return target{}, errors.New(errOutsideAllowList)
 }
 
 // originOf validates the configured service origin and returns it without a trailing slash. Cloud,
@@ -797,12 +826,13 @@ func (c *Client) checkTarget(ctx context.Context, op string) error {
 		return err
 	}
 
-	if c.scope.wholeBase() {
-		return nil
-	}
 	for _, wanted := range c.scope.targets {
 		if err := metadataHasTarget(document, wanted); err != nil {
 			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: err.Error()}
+		}
+		if c.scope.targetExcluded(document, wanted) {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "an exclusion of this connection takes a connection target out again"}
 		}
 	}
 	return nil
@@ -1012,7 +1042,10 @@ func (c *Client) ListTables(ctx context.Context, options PageOptions) (*TablesRe
 
 	allowed := make([]TableSummary, 0, len(document.Metadata.Tables))
 	for _, table := range document.Metadata.Tables {
-		if c.scope.wholeBase() && (!validID(table.ID) || !validName(table.Name)) {
+		if c.scope.tableExcluded(table) {
+			continue
+		}
+		if c.scope.wildcard && (!validID(table.ID) || !validName(table.Name)) {
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "SeaTable returned a table without a usable identifier or name"}
 		}
@@ -1044,9 +1077,9 @@ func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*Colu
 	if err := page.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	selected, err := c.scope.selectTarget(options.Table)
+	selected, err := c.selectTable(ctx, op, options.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	document, err := c.metadata(ctx, op)
 	if err != nil {
@@ -1095,6 +1128,12 @@ func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) 
 		access.token, maxMetadataBytes, &document); err != nil {
 		return metadataJSON{}, err
 	}
+	// An exclusion by name that finds nothing may mean a renamed table or view, which would no longer be
+	// excluded: nothing is answered from this metadata.
+	if c.scope.unresolved(document) {
+		return metadataJSON{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "an exclusion of this connection names a table or view that this SeaTable base does not hold"}
+	}
 	c.meta = &document
 	return document, nil
 }
@@ -1120,9 +1159,9 @@ func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult
 	if err := options.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	selected, err := c.scope.selectTarget(options.Table)
+	selected, err := c.selectTable(ctx, op, options.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
@@ -1184,9 +1223,9 @@ func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, err
 	if !validRowID(rowID) {
 		return nil, providerError(op, "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
 	}
-	selected, err := c.scope.selectTarget(table)
+	selected, err := c.selectTable(ctx, op, table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
@@ -1379,9 +1418,9 @@ func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[
 			}
 		}
 	}
-	selected, err := c.scope.selectTarget(table)
+	selected, err := c.selectTable(ctx, op, table)
 	if err != nil {
-		return "", "", nil, providerError(op, err.Error())
+		return "", "", nil, err
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {

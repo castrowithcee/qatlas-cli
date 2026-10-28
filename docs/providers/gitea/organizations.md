@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Organizations
@@ -25,6 +25,8 @@ These tools act on organizations themselves. Names, descriptions, and activity t
 - `orgs.list` and `orgs.list-user` reach organizations beyond any target and are refused on a connection with
   targets. `orgs.list-mine` reads the organizations of the account behind the token and drops every row the targets
   do not name as `orgs/NAME`; a batch may be short or empty while `has_more` is true.
+- Exclusions ([Targets](README.md#exclusions)) refuse `orgs.create` with an excluded name and `orgs.delete` or
+  `orgs.rename` of an excluded organization or one holding an exclusion; profiles, members, and settings stay allowed.
 - `org-permissions.get` is bound by the organization only. The `username` is not checked against the targets because
   the answer holds five flags about the organization and nothing about the user.
 - `org-activities.list` keeps only activities whose repository belongs to the organization and lies inside the targets.

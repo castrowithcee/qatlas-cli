@@ -271,11 +271,11 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldTargets && f.expanded:
 		lines := make([]string, len(f.entries))
 		for i, target := range f.entries {
-			lines[i] = m.labelled(target, f.labels)
+			lines[i] = m.targetLine(target, f.labels, f.excluded)
 		}
 		value = listLines(lines, "target", "targets")
 	case f.kind == fieldTargets:
-		value = targetSummary(f.entries)
+		value = targetsSummary(f.entries, f.excluded)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
 		value = emptyValue(wordNone)
 	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
