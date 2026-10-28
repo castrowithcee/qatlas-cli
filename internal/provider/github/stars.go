@@ -303,6 +303,11 @@ func (c *Client) listStars(ctx context.Context, o *starListOptions) (*StarredRep
 		if !c.allowed.ownerNames(repo.Owner.Login) {
 			continue
 		}
+		if len(c.allowed.excludes) > 0 &&
+			(!validRepository(repo.FullName) || c.allowed.excluded(starTarget(repo.FullName))) {
+			// An exclusion cannot be checked against a name that is not OWNER/REPO.
+			continue
+		}
 		result.Starred = append(result.Starred, StarredRepository{
 			RepositorySummary: RepositorySummary{Repository: repo.FullName,
 				Visibility: strings.ToLower(repo.Visibility), Archived: repo.Archived},
@@ -310,6 +315,12 @@ func (c *Client) listStars(ctx context.Context, o *starListOptions) (*StarredRep
 	}
 	result.HasMore, result.NextCursor = morePage(o.binding, o.page, o.perPage, hasNext)
 	return result, nil
+}
+
+// starTarget reads the repository of a full name.
+func starTarget(fullName string) target {
+	owner, name, _ := strings.Cut(fullName, "/")
+	return target{kind: kindRepository, owner: owner, repo: name}
 }
 
 // starPath is the starring REST route of the bound repository.

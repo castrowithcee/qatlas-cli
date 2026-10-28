@@ -124,7 +124,10 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 // allowlist is the targets of one connection, plus the targets it excludes. Without targets it is unbound
 // and allows every repository, project, and owner the token reaches; otherwise only the listed ones. Without
 // targets and without excludes it is open: nothing narrows the token. The token stays an independent upper
-// bound, so the effective scope is what both allow.
+// bound, so the effective scope is what both allow. An exclusion always wins over a target: an owner takes
+// all its repositories, projects, and gists out, also against a pattern of that owner, and users/X and
+// orgs/X name the same login. Excludes never offer or withhold a tool: names and accountWideAllowed read
+// the targets only.
 type allowlist struct {
 	targets  []target
 	excludes []target
@@ -137,13 +140,54 @@ func (a allowlist) bound() bool { return len(a.targets) > 0 }
 func (a allowlist) open() bool { return len(a.targets) == 0 && len(a.excludes) == 0 }
 
 func allowlistOf(resolved *config.Resolved) (allowlist, error) {
-	values := provider.TargetsOf(resolved)
-	return parseAllowlist(values)
+	return parseAllowlistExcluding(provider.TargetsOf(resolved), provider.ExcludesOf(resolved))
 }
 
 // parseAllowlist reads the targets of one connection in any mix of projects, repositories, owners, and
 // patterns.
 func parseAllowlist(values []string) (allowlist, error) {
+	return parseAllowlistExcluding(values, nil)
+}
+
+// parseAllowlistExcluding also reads the exclusions, spelled like targets. An exclusion that equals a target
+// is invalid, since it would cancel it; one that matches nothing is valid and has no effect. The errors never
+// quote a value.
+func parseAllowlistExcluding(targets, excludes []string) (allowlist, error) {
+	list, err := parseAllowlistTargets(targets)
+	if err != nil {
+		return allowlist{}, err
+	}
+	seen := map[string]bool{}
+	for _, value := range excludes {
+		parsed, err := parseTarget(value)
+		if err != nil {
+			return allowlist{}, errors.New("the GitHub exclusion list holds an unusable entry")
+		}
+		key := excludeKey(parsed)
+		if seen[key] {
+			return allowlist{}, errors.New("the GitHub exclusion list names an exclusion more than once")
+		}
+		seen[key] = true
+		for _, entry := range list.targets {
+			if excludeKey(entry) == key {
+				return allowlist{}, errors.New("a GitHub exclusion equals a target of the connection")
+			}
+		}
+		list.excludes = append(list.excludes, parsed)
+	}
+	return list, nil
+}
+
+// excludeKey is the identity of a target when compared with an exclusion: an owner is its login alone, since
+// users/X and orgs/X name the same login.
+func excludeKey(t target) string {
+	if t.kind == kindOwner {
+		return "owner:" + strings.ToLower(t.owner)
+	}
+	return strings.ToLower(t.String())
+}
+
+func parseAllowlistTargets(values []string) (allowlist, error) {
 	list := make([]target, 0, len(values))
 	seen := map[string]bool{}
 	for _, value := range values {
@@ -164,7 +208,10 @@ func parseAllowlist(values []string) (allowlist, error) {
 // allows reports whether the list admits one project, repository, or owner. GitHub compares owner and
 // repository names without case.
 func (a allowlist) allows(t target) bool {
-	if a.open() {
+	if a.excluded(t) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -184,10 +231,42 @@ func (a allowlist) allows(t target) bool {
 	return false
 }
 
+// excluded reports whether an exclusion covers one project, repository, or owner. An owner exclusion covers
+// everything of the login, an owner as well; a pattern covers all repositories or all projects of its owner.
+// An exclusion ignores the scope of a project, since a login is one namespace for users and organizations.
+func (a allowlist) excluded(t target) bool {
+	for _, entry := range a.excludes {
+		if !strings.EqualFold(entry.owner, t.owner) {
+			continue
+		}
+		switch entry.kind {
+		case kindOwner:
+			return true
+		case kindRepository:
+			if t.kind == kindRepository && (entry.repo == "*" || strings.EqualFold(entry.repo, t.repo)) {
+				return true
+			}
+		case kindProject:
+			if t.kind == kindProject && (entry.number == 0 || entry.number == t.number) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// excludedOwner reports whether an owner exclusion takes the login out as a whole.
+func (a allowlist) excludedOwner(login string) bool {
+	return a.excluded(target{kind: kindOwner, owner: login})
+}
+
 // lists reports whether an owner tool may list the projects or the repositories of one owner: the list is
 // empty or names the owner, or it names a project or repository of that owner, or all of them. A repository
 // target carries no users or orgs, so its login alone decides.
 func (a allowlist) lists(owner target, kind targetKind) bool {
+	if a.excluded(owner) {
+		return false
+	}
 	if a.allows(owner) {
 		return true
 	}
@@ -203,7 +282,7 @@ func (a allowlist) lists(owner target, kind targetKind) bool {
 // shows reports whether an owner list may show one of its projects or repositories: every one when the list
 // allows the owner as a whole, otherwise only those it allows itself.
 func (a allowlist) shows(owner, listed target) bool {
-	return a.allows(owner) || a.allows(listed)
+	return !a.excluded(listed) && (a.allows(owner) || a.allows(listed))
 }
 
 // only returns the one target of a kind the list allows: it names exactly one of that kind, and no pattern.
@@ -233,7 +312,10 @@ func (a allowlist) names(kind targetKind) bool {
 // or project it may also name: used to filter an account-wide result, such as the starred repositories, down
 // to what an owner target of the list allows, rather than down to a repository or a project of it.
 func (a allowlist) ownerNames(login string) bool {
-	if a.open() {
+	if a.excludedOwner(login) {
+		return false
+	}
+	if !a.bound() {
 		return true
 	}
 	for _, entry := range a.targets {
@@ -283,6 +365,9 @@ func (a allowlist) chooseOwner(kind targetKind, value string) (target, error) {
 		return target{}, invalidRequest("owner is required because the connection's targets do not name exactly " +
 			"one; pass owner as " + form)
 	}
+	if a.excluded(chosen) {
+		return target{}, invalidRequest("owner is not available on this connection; pass another one")
+	}
 	if kind == kindOwner && !a.allows(chosen) {
 		return target{}, invalidRequest("owner is outside the targets of this connection for a new project; " +
 			"pass an owner target they name, or add the owner as users/LOGIN or orgs/LOGIN to the connection's " +
@@ -313,6 +398,9 @@ func (a allowlist) choose(kind targetKind, value string) (target, error) {
 		if err != nil {
 			return target{}, invalidRequest(name + " must be " + form)
 		}
+		if a.excluded(chosen) {
+			return target{}, invalidRequest(name + " is not available on this connection; pass another one")
+		}
 		if !a.allows(chosen) {
 			return target{}, invalidRequest(name + " is outside the targets of this connection; pass one they " +
 				"allow, or add it to the connection's targets")
@@ -326,6 +414,9 @@ func (a allowlist) choose(kind targetKind, value string) (target, error) {
 		return chosen, nil
 	}
 	if only, ok := a.only(kind); ok {
+		if a.excluded(only) {
+			return target{}, invalidRequest(name + " is not available on this connection; pass another one")
+		}
 		return only, nil
 	}
 	if a.bound() && !a.names(kind) {

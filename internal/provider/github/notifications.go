@@ -411,9 +411,9 @@ func (n notificationJSON) view(op string, allowed allowlist) (Notification, erro
 }
 
 // admitsRepository reports whether the list lets a tool touch data of one repository: the list is empty, or
-// names the repository, or names its owner.
+// names the repository, or names its owner; an exclusion of the repository or its owner takes it out.
 func (a allowlist) admitsRepository(t target) bool {
-	return a.allows(t) || (a.bound() && a.ownerNames(t.owner))
+	return !a.excluded(t) && (a.allows(t) || (a.bound() && a.ownerNames(t.owner)))
 }
 
 // selectNotificationScope resolves the optional repository argument of the list and the mark-all tool against
@@ -455,8 +455,9 @@ func selectNotificationScope(resolved *config.Resolved, raw json.RawMessage, who
 		return chosen, err == nil, err
 	}
 	if wholeAccountNeedsNoTargets && !allowed.open() {
-		return target{}, false, invalidRequest("repository is required because the connection has targets; " +
-			"GitHub marks the whole account read, which the targets cannot narrow, so pass a repository they allow")
+		return target{}, false, invalidRequest("repository is required because the connection has targets or " +
+			"exclusions; GitHub marks the whole account read, which they cannot narrow, so pass a repository " +
+			"the connection allows")
 	}
 	return target{}, false, nil
 }
@@ -613,11 +614,18 @@ func (c *Client) listNotifications(ctx context.Context, o *notificationListOptio
 		result.Repository = scope.argument()
 	}
 	for _, entry := range raw {
+		repository, known := entry.repositoryTarget()
+		if !known && len(c.allowed.excludes) > 0 {
+			// An exclusion cannot be checked against a thread whose repository is unreadable.
+			continue
+		}
 		view, err := entry.view(op, c.allowed)
 		if err != nil {
 			return nil, err
 		}
-		if !bound && !c.allowed.ownerNames(entry.Repository.Owner.Login) {
+		login := entry.Repository.Owner.Login
+		if c.allowed.excluded(repository) || c.allowed.excludedOwner(login) ||
+			(!bound && !c.allowed.ownerNames(login)) {
 			continue
 		}
 		result.Notifications = append(result.Notifications, view)
