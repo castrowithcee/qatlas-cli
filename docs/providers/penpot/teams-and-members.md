@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Penpot: teams and members
@@ -29,7 +29,13 @@ team that `teams.create` makes is outside every connection until you add `team/I
 - `teams.create` takes a `name` of 1 to 250 characters, none of `.`, `:`, `/`, which Penpot refuses. The new team is
   owned by the token's account.
 - `teams.delete`: Penpot marks the team and its projects and files as deleted and removes them after the deletion
-  delay. The roles each tool needs are in [Rights per tool group](setup.md#rights-per-tool-group).
+  delay. On a connection with [exclusions](README.md#exclusions), **a team that holds an excluded project or file
+  is not deleted**: the projects of the team (`get-projects`), their files (`get-project-files`, read only when a
+  file is excluded), and the team's deleted files (`get-team-deleted-files`) must hold none. A request that fails,
+  an answer that is no list, an entry without an ID, or a team with more than 1000 projects leaves the proof
+  incomplete and refuses the delete as well. The refusal reads like a team outside the targets. A connection without
+  exclusions needs no proof. The roles each tool needs are in
+  [Rights per tool group](setup.md#rights-per-tool-group).
 
 Team and member changes affect the whole team, so **a connection with a project or file allow-list refuses all of
 them, and `teams.create`**; `members.list` is still allowed unless the connection is bound to files only. Changes

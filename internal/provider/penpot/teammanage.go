@@ -35,7 +35,8 @@ var teamsCreate = capability.Descriptor{
 var teamsDelete = capability.Descriptor{
 	ID: Provider + ".teams.delete", Version: 1, Title: "Delete a Penpot team",
 	Description: "Delete one bound team with all its projects and files. Penpot marks the team as deleted and removes it " +
-		"after its deletion delay; only the owner may do it and the default team of an account is refused. " + manageNote,
+		"after its deletion delay; only the owner may do it and the default team of an account is refused. A team that holds an excluded project or file, " +
+		"also a deleted one that can still be restored, is refused. " + manageNote,
 	Tags: []string{"penpot", "teams", "delete", "design"}, Provider: Provider, RequiresToolAllowList: true,
 	Risk:         manageRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema:  schemaOf(`"team_id":`+uuidSchema, `"team_id"`),
@@ -126,6 +127,9 @@ func invokeTeamsDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
+		return nil, err
+	}
+	if err := client.refuseExcludedInTeam(ctx, op, teamID); err != nil {
 		return nil, err
 	}
 	if _, err := client.change(ctx, op, cmdDeleteTeam, map[string]any{"id": teamID}); err != nil {

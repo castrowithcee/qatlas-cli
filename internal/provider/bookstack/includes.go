@@ -15,10 +15,10 @@ import (
 )
 
 // BookStack resolves page includes ({{@ID}} and {{@ID#section}}) in the rendered html by what the token may
-// read, not by the targets. On a connection with targets an include of a page outside them would put foreign
-// content into html. The rules below follow BookStack's include parser so that a page without such an include
-// keeps BookStack's html unchanged, and one with such an include gets an html built here in which that include
-// stays empty.
+// read, not by the targets. On a connection with targets or exclusions an include of a page outside the targets
+// or excluded would put foreign content into html. The rules below follow BookStack's include parser so that a
+// page without such an include keeps BookStack's html unchanged, and one with such an include gets an html built
+// here in which that include stays empty.
 const (
 	// maxIncludeDepth is the number of passes BookStack runs over a page: a tag inside content included in the
 	// last pass stays text.
@@ -77,10 +77,11 @@ func includeCandidates(raw string) []string {
 }
 
 // scopeHTML replaces page.HTML with an html built from page.RawHTML when an include BookStack may have resolved
-// names a page outside the targets. Without targets or without such an include it changes nothing.
+// names a page outside the targets or excluded. Without targets and exclusions, or without such an include, it
+// changes nothing.
 func (c *Client) scopeHTML(ctx context.Context, page *pageJSON) error {
 	candidates := includeCandidates(page.RawHTML)
-	if !c.scope.bound() || len(candidates) == 0 {
+	if !c.scope.limited() || len(candidates) == 0 {
 		return nil
 	}
 	r := &includeRenderer{ctx: ctx, c: c, seen: map[[2]int64]bool{}}
@@ -104,9 +105,9 @@ func withholdHTML(page *pageJSON) {
 	page.htmlWithheld = true
 }
 
-// includedPage resolves one include for this call. A page the targets exclude by its identifier is decided
-// without a read; any other one is read once, which is both the evidence of its reach and its stored HTML.
-// A page the token cannot read is empty, as in BookStack.
+// includedPage resolves one include for this call. A page the targets or the exclusions rule out by its
+// identifier is decided without a read; any other one is read once, which is both the evidence of its reach and
+// its stored HTML. A page the token cannot read is empty, as in BookStack.
 func (c *Client) includedPage(ctx context.Context, id int64) (*includedPage, error) {
 	return c.readIncludedPage(ctx, id, false)
 }

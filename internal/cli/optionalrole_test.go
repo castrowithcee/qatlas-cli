@@ -12,7 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const optionalConfig = `version: 3
+const optionalConfig = `version: 4
 services:
   site:
     provider: site

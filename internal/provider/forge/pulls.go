@@ -64,7 +64,7 @@ func pullRepository(pr object) (string, bool) {
 // pullAdmitted reports whether the base repository of a pull request lies inside the targets. Without targets
 // everything the token reaches is admitted; with them, an object that names no base repository is not.
 func pullAdmitted(allowed allowlist, pr object) bool {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return true
 	}
 	name, ok := pullRepository(pr)

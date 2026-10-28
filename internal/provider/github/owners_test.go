@@ -398,3 +398,64 @@ func TestTargetMetadataDescribesEveryKind(t *testing.T) {
 		t.Error("the published metadata shares its target kinds with a caller")
 	}
 }
+
+func TestOwnerListsHonourExclusions(t *testing.T) {
+	f := &fakeGitHub{ownerProjects: []int{1, 2, 3, 4, 5}}
+	for i := 0; i < 6; i++ {
+		f.ownerRepos = append(f.ownerRepos, fmt.Sprintf("repo-%02d", i))
+	}
+	cfg := ownersConfig(serve(t, f))
+	add := func(name string, targets, excludes []string) {
+		cfg.Connections[name] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: targets,
+			Exclude: excludes}
+	}
+	add("ex-rows", nil, []string{"repos/Octo-Org/repo-01", "orgs/octo-org/projects/2"})
+	add("ex-patterns", nil, []string{"repos/octo-org/*", "orgs/octo-org/projects/*"})
+	add("ex-owner", []string{"repos/octo-org/*", "orgs/octo-org/projects/*"}, []string{"users/OCTO-ORG"})
+	add("ex-other", nil, []string{"orgs/hubot"})
+	add("ex-over-target", []string{"repos/octo-org/*", "orgs/octo-org/projects/*"},
+		[]string{"repos/octo-org/repo-00", "orgs/octo-org/projects/1"})
+	red := &redact.Redactor{}
+	reads := 0
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+
+	for _, tt := range []struct {
+		name, operation, connection, field string
+		want                               []string
+	}{
+		{"repository rows", repositoriesList.ID, "ex-rows", "repository", names("octo-org/repo-%02d", 0, 2, 3, 4, 5)},
+		{"project rows", projectsList.ID, "ex-rows", "project", names("orgs/octo-org/projects/%d", 1, 3, 4, 5)},
+		{"repository pattern", repositoriesList.ID, "ex-patterns", "repository", []string{}},
+		{"project pattern", projectsList.ID, "ex-patterns", "project", []string{}},
+		{"an exclusion of another owner", projectsList.ID, "ex-other", "project",
+			names("orgs/octo-org/projects/%d", 1, 2, 3, 4, 5)},
+		{"rows against target patterns", repositoriesList.ID, "ex-over-target", "repository",
+			names("octo-org/repo-%02d", 1, 2, 3, 4, 5)},
+		{"project rows against target patterns", projectsList.ID, "ex-over-target", "project",
+			names("orgs/octo-org/projects/%d", 2, 3, 4, 5)},
+	} {
+		for _, limit := range []int{1, 4} {
+			got, _ := listAll(t, core, tt.operation, tt.connection, "orgs/octo-org", tt.field, limit)
+			if len(got) == 0 && len(tt.want) == 0 {
+				continue
+			}
+			t.Run(tt.name, func(t *testing.T) { equalIDs(t, got, tt.want) })
+		}
+	}
+
+	// An excluded owner is refused before a secret and a request, also against patterns of that owner.
+	for _, call := range []struct{ tool, arguments string }{
+		{repositoriesList.ID, `{"owner":"orgs/octo-org"}`}, {projectsList.ID, `{"owner":"users/octo-org"}`},
+		{projectsList.ID, `{}`},
+	} {
+		reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, call.tool, "ex-owner", call.arguments, false)
+		if !isInvalidRequest(err) || reads != 0 || len(f.recorded()) != before {
+			t.Errorf("%s %s = %v (reads %d), want an invalid request before any I/O", call.tool, call.arguments, err, reads)
+		}
+		if err != nil && strings.Contains(err.Error(), "octo-org") {
+			t.Errorf("the refusal names the owner: %v", err)
+		}
+	}
+}

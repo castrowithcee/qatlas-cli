@@ -40,7 +40,7 @@ func vendorProviderRegistry(t *testing.T) *capability.Registry {
 	return registry
 }
 
-const vendorProviderConfig = `version: 3
+const vendorProviderConfig = `version: 4
 services:
   chat:
     provider: acme.chat

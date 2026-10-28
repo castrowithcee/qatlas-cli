@@ -263,6 +263,9 @@ func invokeSharesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateSource); err != nil {
+		return nil, err
+	}
 	client, err := shareManageOpen(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -324,6 +327,9 @@ func (c *Client) sharedAnswer(op string, data json.RawMessage, hint string) (Sha
 
 // createShare sends exactly one POST.
 func (c *Client) createShare(ctx context.Context, op string, input shareManageArguments, rel []string) (any, error) {
+	if err := c.scope.gateSource(op, rel); err != nil {
+		return nil, err
+	}
 	form := url.Values{"path": {c.absolute(rel)}, "shareWith": {input.ShareWith}}
 	if input.Type == shareTypeGroup {
 		form.Set("shareType", ocsShareGroup)
@@ -349,9 +355,10 @@ func (c *Client) createShare(ctx context.Context, op string, input shareManageAr
 }
 
 // ownShare reads the share once and refuses, without a change, every share that is not the identity's own
-// below the root. The refusal names no path.
-func (c *Client) ownShare(ctx context.Context, op, id string) (*Share, error) {
-	share, err := c.GetShare(ctx, id)
+// below the root. The refusal names no path. A share on an ancestor of an excluded folder is visible only
+// to a revoke.
+func (c *Client) ownShare(ctx context.Context, op, id string, revoke bool) (*Share, error) {
+	share, err := c.getShare(ctx, id, revoke)
 	if err != nil {
 		return nil, err
 	}
@@ -366,7 +373,7 @@ func (c *Client) ownShare(ctx context.Context, op, id string) (*Share, error) {
 
 // updateShare reads the share once and sends exactly one PUT.
 func (c *Client) updateShare(ctx context.Context, op string, input shareManageArguments) (any, error) {
-	current, err := c.ownShare(ctx, op, input.ShareID)
+	current, err := c.ownShare(ctx, op, input.ShareID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -399,7 +406,7 @@ func (c *Client) updateShare(ctx context.Context, op string, input shareManageAr
 
 // deleteShare reads the share once and sends exactly one DELETE.
 func (c *Client) deleteShare(ctx context.Context, op string, input shareManageArguments) (any, error) {
-	current, err := c.ownShare(ctx, op, input.ShareID)
+	current, err := c.ownShare(ctx, op, input.ShareID, true)
 	if err != nil {
 		return nil, err
 	}

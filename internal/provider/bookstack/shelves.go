@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -290,6 +291,9 @@ func invokeShelvesGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := checkShelfID(in.ID); err != nil {
 		return nil, err
 	}
+	if err := bound.checkExcluded(shelfPrefix, in.ID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -331,6 +335,9 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 	if err := checkShelfID(id); err != nil {
 		return nil, err
 	}
+	if err := boundExcluded(resolved, shelfPrefix, id); err != nil {
+		return nil, err
+	}
 	if change.empty() {
 		return nil, invalidRequest("at least one field to change is required")
 	}
@@ -344,13 +351,13 @@ func invokeShelvesUpdate(ctx context.Context, resolved *config.Resolved, secrets
 	return client.UpdateShelf(ctx, id, change)
 }
 
-// ListShelves returns shelves of the instance.
+// ListShelves returns shelves of the instance without the excluded ones.
 func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery) (output.Collection, error) {
 	spec := scanSpec[listedJSON]{
-		op: "list shelves", path: "/api/shelves", limit: limit, offset: offset,
+		op: "list shelves", path: "/api/shelves", filtered: c.scope.excludes(), limit: limit, offset: offset,
 		arguments: argNames(shelvesList),
 		id:        func(s listedJSON) int64 { return s.ID },
-		keep:      func(listedJSON) bool { return true },
+		keep:      func(s listedJSON) bool { return !c.scope.excludesShelf(s.ID) },
 		row: func(s listedJSON) output.Row {
 			row := output.Row{
 				"id": s.ID, "name": clip(s.Name, maxResultString), "slug": clip(s.Slug, maxResultString),
@@ -369,15 +376,23 @@ func (c *Client) ListShelves(ctx context.Context, limit, offset int, q listQuery
 	return output.Collection{Columns: fieldNames(shelvesList), Rows: rows}, nil
 }
 
-// GetShelf returns one shelf with its books. A bound connection reads only a bound shelf.
+// GetShelf returns one shelf with its books, without the excluded ones. A bound connection reads only a bound
+// shelf.
 func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) {
 	if c.scope.bound() && !c.scope.hasShelf(id) {
 		return output.Object{}, instanceRefusal(c.scope, shelvesInstanceWide)
+	}
+	if c.scope.excludesShelf(id) {
+		return output.Object{}, c.scope.outside(outsideShelf)
 	}
 	var shelf shelfJSON
 	if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &shelf, nil, provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return output.Object{}, err
+	}
+	shelf.Books = slices.DeleteFunc(shelf.Books, func(b shelfBookJSON) bool { return c.bookOut(b.ID) })
 	truncated := len(shelf.Books) > maxTreeEntries
 	books := make([]map[string]any, 0, min(len(shelf.Books), maxTreeEntries))
 	for _, b := range shelf.Books {
@@ -417,11 +432,38 @@ func (c *Client) GetShelf(ctx context.Context, id int64) (output.Object, error) 
 	return output.Object{Fields: fields}, nil
 }
 
-// CreateShelf sends one create request.
+// boundExcluded is checkExcluded for a connection read from the configuration, for a caller that has no scope.
+func boundExcluded(resolved *config.Resolved, prefix string, id int64) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
+	return bound.checkExcluded(prefix, id)
+}
+
+// withoutExcludedBooks drops the books the connection excludes from a book list, as BookStack leaves out the
+// books its user may not see when it assigns the books of a shelf. It keeps an omitted list omitted.
+func (c *Client) withoutExcludedBooks(ctx context.Context, books *[]int64) (*[]int64, error) {
+	if books == nil || !c.scope.excludesBooks() {
+		return books, nil
+	}
+	if err := c.loadExcludedShelves(ctx, 0); err != nil {
+		return nil, err
+	}
+	kept := slices.DeleteFunc(slices.Clone(*books), c.bookOut)
+	return &kept, nil
+}
+
+// CreateShelf sends one create request. Excluded books are not sent.
 func (c *Client) CreateShelf(ctx context.Context, input shelfMutation) (output.Object, error) {
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
 	}
+	books, err := c.withoutExcludedBooks(ctx, input.Books)
+	if err != nil {
+		return output.Object{}, err
+	}
+	input.Books = books
 	var shelf shelfJSON
 	if err := c.mutate(ctx, "create shelf", http.MethodPost, "/api/shelves", input, &shelf, argNames(shelvesCreate)); err != nil {
 		return output.Object{}, err
@@ -429,10 +471,28 @@ func (c *Client) CreateShelf(ctx context.Context, input shelfMutation) (output.O
 	return shelfWriteObject(shelf), nil
 }
 
-// UpdateShelf sends one update request.
+// UpdateShelf sends one update request. BookStack's assignment of books removes every book of the shelf that
+// the list lacks, so a book of the shelf that the connection excludes is read first and sent again behind the
+// others, where BookStack itself keeps the books its user may not see.
 func (c *Client) UpdateShelf(ctx context.Context, id int64, input shelfMutation) (output.Object, error) {
 	if err := input.validate(); err != nil {
 		return output.Object{}, err
+	}
+	if input.Books != nil && c.scope.excludesBooks() {
+		var current shelfJSON
+		if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &current, nil, provider.ClassPermission); err != nil {
+			return output.Object{}, err
+		}
+		books, err := c.withoutExcludedBooks(ctx, input.Books)
+		if err != nil {
+			return output.Object{}, err
+		}
+		for _, b := range current.Books {
+			if c.bookOut(b.ID) && !slices.Contains(*books, b.ID) {
+				*books = append(*books, b.ID)
+			}
+		}
+		input.Books = books
 	}
 	var shelf shelfJSON
 	if err := c.mutate(ctx, "update shelf", http.MethodPut, "/api/shelves/"+strconv.FormatInt(id, 10), input, &shelf, argNames(shelvesUpdate)); err != nil {
@@ -476,6 +536,9 @@ func invokeShelvesDelete(ctx context.Context, resolved *config.Resolved, secrets
 		return nil, err
 	}
 	if err := checkShelfID(id); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, shelfPrefix, id); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

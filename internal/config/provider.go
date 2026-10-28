@@ -94,6 +94,21 @@ type TargetMetadata struct {
 	// offered. When it does not, needs names the forms of Kinds a binding would take to reach the tool.
 	// Without it every binding reaches every tool.
 	Reaches func(tool string, targets []string) (reached bool, needs []string)
+	// MigrateTargets, when set, carries the targets and exclusions of a connection read from a file of a
+	// schema before 4 over to their current form with exactly the same reach, for a provider whose forms
+	// changed meaning; it is called for every connection of the provider, also one without targets. Without
+	// it the targets keep their spelling. It returns false for a connection whose reach no current form
+	// expresses; that connection stays as it was and is marked Connection.TargetsOutdated.
+	MigrateTargets func(targets, exclude []string) (TargetMigration, bool)
+}
+
+// TargetMigration is the current form of the targets and exclusions of one connection (see
+// TargetMetadata.MigrateTargets). Targets carries the former targets over index for index, and the label of
+// former target i moves to Targets[i]. Exclude starts with the former exclusions, index for index in the same
+// way, and may go on with the exclusions the same reach needs; such an added exclusion has no label.
+type TargetMigration struct {
+	Targets []string
+	Exclude []string
 }
 
 // Reach reports whether a binding to targets reaches a tool and, when it does not, a hint naming the forms

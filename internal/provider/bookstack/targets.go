@@ -25,6 +25,10 @@ const (
 const (
 	targetForm = "a BookStack target must be shelf/SHELF_ID, book/BOOK_ID, chapter/CHAPTER_ID, or page/PAGE_ID " +
 		"with a positive integer"
+	excludeForm = "a BookStack exclusion must be shelf/SHELF_ID, book/BOOK_ID, chapter/CHAPTER_ID, or page/PAGE_ID " +
+		"with a positive integer, named once and different from every target"
+	// unprovable refuses a call whose reach could not be read; it names neither an object nor an exclusion.
+	unprovable        = "the reach of this call cannot be checked against the targets of this connection"
 	bookIDRequiredMsg = "book_id is required for a connection bound to several books"
 	targetRequiredMsg = "book_id or chapter_id is required for a connection bound to a shelf or to several targets"
 )
@@ -34,6 +38,7 @@ const (
 	outsidePage    = "the page"
 	outsideChapter = "the chapter"
 	outsideBook    = "book_id"
+	outsideShelf   = "the shelf"
 )
 
 func invalidRequest(message string) error { return &provider.InvalidRequestError{Message: message} }
@@ -41,16 +46,45 @@ func invalidRequest(message string) error { return &provider.InvalidRequestError
 // scope is the boundary of one connection: a shelf stands for the books on it at the time of a call, a chapter
 // for its pages, a page for itself. Several targets reach their union. An unbound scope (no target configured)
 // reaches everything the token reaches.
+//
+// The exclusions take an object with everything below it out of that reach, an excluded shelf the books on it
+// at the time of a call, and win over every target. They are kept apart on purpose: they never decide whether
+// the connection is bound, which tools it is offered, or which argument a call needs.
 type scope struct {
 	shelves  []int64
 	books    []int64
 	chapters []int64
 	pages    []int64
+
+	exShelves  []int64
+	exBooks    []int64
+	exChapters []int64
+	exPages    []int64
 }
 
 func (s scope) bound() bool {
 	return len(s.shelves)+len(s.books)+len(s.chapters)+len(s.pages) > 0
 }
+
+// limited reports whether a call has anything to prove: the connection is bound or carries exclusions.
+func (s scope) limited() bool { return s.bound() || s.excludes() }
+
+// excludes reports whether the connection carries any exclusion.
+func (s scope) excludes() bool {
+	return len(s.exShelves)+len(s.exBooks)+len(s.exChapters)+len(s.exPages) > 0
+}
+
+// excludesBooks reports exclusions that a book can fall under, so every book needs a check.
+func (s scope) excludesBooks() bool { return len(s.exShelves)+len(s.exBooks) > 0 }
+
+// excludesContainers reports exclusions that a page can fall under through its chapter or book, so a page
+// needs its chapter and book as evidence even where a target names it.
+func (s scope) excludesContainers() bool { return len(s.exChapters) > 0 || s.excludesBooks() }
+
+func (s scope) excludesShelf(id int64) bool   { return slices.Contains(s.exShelves, id) }
+func (s scope) excludesBook(id int64) bool    { return slices.Contains(s.exBooks, id) }
+func (s scope) excludesChapter(id int64) bool { return slices.Contains(s.exChapters, id) }
+func (s scope) excludesPage(id int64) bool    { return slices.Contains(s.exPages, id) }
 
 // bookWide reports whether the scope can reach a whole book at all: through a book or a shelf.
 func (s scope) bookWide() bool { return len(s.books)+len(s.shelves) > 0 }
@@ -82,9 +116,34 @@ func (s scope) boundTo() string {
 	return "targets"
 }
 
-// outside refuses an object outside the connection without naming it or a target.
+// outside refuses an object outside the connection without naming it, a target, or an exclusion. An excluded
+// object is refused in the same words as one the targets do not reach.
 func (s scope) outside(subject string) error {
+	if !s.bound() {
+		return invalidRequest(subject + " is outside the targets of this connection")
+	}
 	return invalidRequest(subject + " is outside the " + s.boundTo() + " this connection is bound to")
+}
+
+// checkExcluded is the local check of an identifier argument against the exclusions, before any secret or
+// request. Only an object excluded by its own identifier is decided here; one below an excluded object needs
+// its evidence read.
+func (s scope) checkExcluded(prefix string, id int64) error {
+	excluded, subject := false, outsidePage
+	switch prefix {
+	case shelfPrefix:
+		excluded, subject = s.excludesShelf(id), outsideShelf
+	case bookPrefix:
+		excluded, subject = s.excludesBook(id), outsideBook
+	case chapterPrefix:
+		excluded, subject = s.excludesChapter(id), outsideChapter
+	case pagePrefix:
+		excluded = s.excludesPage(id)
+	}
+	if excluded {
+		return s.outside(subject)
+	}
+	return nil
 }
 
 // needsBook refuses a book-wide capability on a connection bound only to chapters or pages.
@@ -113,6 +172,27 @@ func parseScope(values []string) (scope, error) {
 		*list = append(*list, id)
 	}
 	return bound, nil
+}
+
+// withExcludes reads the exclusions of the connection into the scope. An exclusion has the form of a target,
+// is named once, and differs from every target; the checks do not rely on the configuration validation, so an
+// invalid exclusion fails closed here too. No error quotes a configured value.
+func (s scope) withExcludes(values []string) (scope, error) {
+	for _, raw := range values {
+		prefix, id, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return scope{}, errors.New(excludeForm)
+		}
+		lists := map[string][2]*[]int64{
+			shelfPrefix: {&s.exShelves, &s.shelves}, bookPrefix: {&s.exBooks, &s.books},
+			chapterPrefix: {&s.exChapters, &s.chapters}, pagePrefix: {&s.exPages, &s.pages},
+		}[prefix]
+		if slices.Contains(*lists[0], id) || slices.Contains(*lists[1], id) {
+			return scope{}, errors.New(excludeForm)
+		}
+		*lists[0] = append(*lists[0], id)
+	}
+	return s, nil
 }
 
 // parseTarget reads one KIND/ID entry and returns its prefix.
@@ -154,14 +234,16 @@ func validateSet(values []string) error {
 	return err
 }
 
-// boundScope reads the connection's scope before any secret is resolved. A configured target that cannot be
-// read makes the connection unusable instead of widening it.
+// boundScope reads the connection's scope with its exclusions before any secret is resolved. A configured
+// target or exclusion that cannot be read makes the connection unusable instead of widening it.
 func boundScope(resolved *config.Resolved) (scope, error) {
 	if resolved == nil {
 		return scope{}, providerError("open", "no connection was selected")
 	}
-	values := provider.TargetsOf(resolved)
-	bound, err := parseScope(values)
+	bound, err := parseScope(provider.TargetsOf(resolved))
+	if err == nil {
+		bound, err = bound.withExcludes(provider.ExcludesOf(resolved))
+	}
 	if err != nil {
 		return scope{}, providerError("open", err.Error())
 	}
@@ -217,12 +299,15 @@ func (s scope) listIn(t listTarget) (listTarget, error) {
 	case t.BookID != 0 && t.ChapterID != 0:
 		return t, invalidRequest("book_id and chapter_id are mutually exclusive")
 	case t.BookID != 0:
-		return t, s.checkBook(t.BookID)
+		if err := s.checkBook(t.BookID); err != nil {
+			return t, err
+		}
+		return t, s.checkExcluded(bookPrefix, t.BookID)
 	case t.ChapterID != 0:
 		if !s.mayReachChapter(t.ChapterID) {
 			return t, s.outside(outsideChapter)
 		}
-		return t, nil
+		return t, s.checkExcluded(chapterPrefix, t.ChapterID)
 	case !s.bound():
 		return t, nil
 	case s.booksOnly() && len(s.books) == 1:
@@ -244,7 +329,10 @@ func (s scope) listIn(t listTarget) (listTarget, error) {
 func (s scope) listBook(bookID int64, what string) (int64, error) {
 	switch {
 	case bookID != 0:
-		return bookID, s.checkBook(bookID)
+		if err := s.checkBook(bookID); err != nil {
+			return bookID, err
+		}
+		return bookID, s.checkExcluded(bookPrefix, bookID)
 	case !s.bound():
 		return 0, nil
 	case !s.bookWide():
@@ -288,27 +376,110 @@ func (c *Client) loadShelves(ctx context.Context, want int64) error {
 	return nil
 }
 
+// loadExcludedShelves reads the excluded shelves this call has not read yet, each at most once, and stops as
+// soon as one holds want; want 0 reads them all. Like a bound shelf, an excluded one stands for the books on it
+// at the time of the call. A shelf that cannot be read fails the call instead of letting its books through,
+// and the failure names neither the shelf nor the exclusion.
+func (c *Client) loadExcludedShelves(ctx context.Context, want int64) error {
+	if c.exShelfBooks == nil {
+		c.exShelfBooks = map[int64]bool{}
+		c.exShelvesRead = map[int64]bool{}
+	}
+	for _, id := range c.scope.exShelves {
+		if want != 0 && c.exShelfBooks[want] {
+			return nil
+		}
+		if c.exShelvesRead[id] {
+			continue
+		}
+		var shelf struct {
+			Books []struct {
+				ID int64 `json:"id"`
+			} `json:"books"`
+		}
+		if err := c.get(ctx, "get shelf", "/api/shelves/"+strconv.FormatInt(id, 10), nil, &shelf, nil, provider.ClassPermission); err != nil {
+			return unreadableExclusion(err)
+		}
+		c.exShelvesRead[id] = true
+		for _, b := range shelf.Books {
+			c.exShelfBooks[b.ID] = true
+		}
+	}
+	return nil
+}
+
+// unreadableExclusion is the failure of an excluded shelf's read without the object it concerns: an answer that
+// says nothing about the shelf, such as a rate limit, keeps its class; one that leaves it unknown is a refusal.
+func unreadableExclusion(err error) error {
+	var perr *provider.Error
+	if !errors.As(err, &perr) {
+		return err
+	}
+	switch perr.Class {
+	case provider.ClassNotFound, provider.ClassPermission, provider.ClassInvalidResponse:
+		return invalidRequest(unprovable)
+	}
+	return &provider.Error{Class: perr.Class, Op: "check reach", Message: perr.Message, Cause: perr.Cause}
+}
+
+// bookOut reports whether a book is excluded, by itself or through an excluded shelf; it decides only after
+// loadExcludedShelves read every excluded shelf. A book that cannot be named counts as excluded as soon as a
+// book can be.
+func (c *Client) bookOut(id int64) bool {
+	if id <= 0 {
+		return c.scope.excludesBooks()
+	}
+	return c.scope.excludesBook(id) || c.exShelfBooks[id]
+}
+
+// bookExcluded is bookOut for one book, reading the excluded shelves only as far as needed.
+func (c *Client) bookExcluded(ctx context.Context, id int64) (bool, error) {
+	if id <= 0 || c.scope.excludesBook(id) || len(c.scope.exShelves) == 0 {
+		return c.bookOut(id), nil
+	}
+	if err := c.loadExcludedShelves(ctx, id); err != nil {
+		return true, err
+	}
+	return c.bookOut(id), nil
+}
+
+// pageOut reports whether a page with its chapter and book is excluded; like bookOut it decides only after
+// every excluded shelf was read.
+func (c *Client) pageOut(id, chapterID, bookID int64) bool {
+	return c.scope.excludesPage(id) || (chapterID > 0 && c.scope.excludesChapter(chapterID)) || c.bookOut(bookID)
+}
+
 // inBook reports whether a book is bound or stands on a shelf this call has read.
 func (c *Client) inBook(id int64) bool { return id > 0 && (c.scope.hasBook(id) || c.shelfBooks[id]) }
 
-// bookAllowed reports whether the connection reaches a whole book: a bound book or a book on a bound shelf.
+// bookAllowed reports whether the connection reaches a whole book: without targets, a bound book, or a book on
+// a bound shelf, and in each case not excluded.
 func (c *Client) bookAllowed(ctx context.Context, id int64) (bool, error) {
 	if id <= 0 {
 		return false, nil
 	}
-	if c.scope.hasBook(id) || len(c.scope.shelves) == 0 {
-		return c.scope.hasBook(id), nil
+	if c.scope.bound() && !c.scope.hasBook(id) {
+		if len(c.scope.shelves) == 0 {
+			return false, nil
+		}
+		if err := c.loadShelves(ctx, id); err != nil {
+			return false, err
+		}
+		if !c.inBook(id) {
+			return false, nil
+		}
 	}
-	if err := c.loadShelves(ctx, id); err != nil {
-		return false, err
-	}
-	return c.inBook(id), nil
+	excluded, err := c.bookExcluded(ctx, id)
+	return !excluded, err
 }
 
-// requireBook proves a book_id before it is used: locally against the bound books, through the bound shelves
-// otherwise. An unbound connection reads nothing.
+// requireBook proves a book_id before it is used: locally against the bound books and the exclusions, through
+// the bound and the excluded shelves otherwise. A connection without targets and exclusions reads nothing.
 func (c *Client) requireBook(ctx context.Context, id int64) error {
-	if err := c.scope.checkBook(id); err != nil || !c.scope.bound() {
+	if err := c.scope.checkBook(id); err != nil || !c.scope.limited() {
+		return err
+	}
+	if err := c.scope.checkExcluded(bookPrefix, id); err != nil {
 		return err
 	}
 	ok, err := c.bookAllowed(ctx, id)
@@ -328,13 +499,20 @@ type bookRef struct {
 	ChapterID int64 `json:"chapter_id"`
 }
 
+// readChapterRef reads a chapter once as evidence of its book.
+func (c *Client) readChapterRef(ctx context.Context, id int64) (bookRef, error) {
+	var ref bookRef
+	err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission)
+	return ref, err
+}
+
 // chapterBook reads a chapter once and returns its book if the connection reaches that whole book.
 func (c *Client) chapterBook(ctx context.Context, id int64) (int64, error) {
-	if !c.scope.bookWide() {
+	if c.scope.excludesChapter(id) || (c.scope.bound() && !c.scope.bookWide()) {
 		return 0, c.scope.outside(outsideChapter)
 	}
-	var ref bookRef
-	if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission); err != nil {
+	ref, err := c.readChapterRef(ctx, id)
+	if err != nil {
 		return 0, err
 	}
 	ok, err := c.bookAllowed(ctx, ref.BookID)
@@ -347,22 +525,52 @@ func (c *Client) chapterBook(ctx context.Context, id int64) (int64, error) {
 	return ref.BookID, nil
 }
 
-// chapterIn proves that the connection reaches a chapter and its pages: a bound chapter needs no read, any
-// other one its book. book is 0 when no read was needed or the connection is unbound.
+// chapterAllowed reports whether a chapter read with its book lies in the connection: not excluded, and bound
+// itself or in a whole book the connection reaches. A bound chapter is still out of reach in an excluded book.
+func (c *Client) chapterAllowed(ctx context.Context, id, bookID int64) (bool, error) {
+	if c.scope.excludesChapter(id) {
+		return false, nil
+	}
+	if c.scope.hasChapter(id) {
+		excluded, err := c.bookExcluded(ctx, bookID)
+		return !excluded, err
+	}
+	return c.bookAllowed(ctx, bookID)
+}
+
+// chapterIn proves that the connection reaches a chapter and its pages: a bound chapter needs no read unless a
+// book can be excluded, any other one its book. book is the chapter's book when it was read, 0 otherwise.
 func (c *Client) chapterIn(ctx context.Context, id int64) (book int64, err error) {
-	if !c.scope.bound() || c.scope.hasChapter(id) {
+	if !c.scope.limited() {
 		return 0, nil
 	}
-	return c.chapterBook(ctx, id)
+	if c.scope.excludesChapter(id) || (c.scope.bound() && !c.scope.mayReachChapter(id)) {
+		return 0, c.scope.outside(outsideChapter)
+	}
+	if !c.scope.excludesBooks() && (c.scope.hasChapter(id) || !c.scope.bound()) {
+		return 0, nil
+	}
+	ref, err := c.readChapterRef(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	ok, err := c.chapterAllowed(ctx, id, ref.BookID)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, c.scope.outside(outsideChapter)
+	}
+	return ref.BookID, nil
 }
 
 // requireChapterBookWide proves a chapter for a change of the chapter itself, which only a book or a shelf
 // target reaches: a bound chapter grants its pages, not the chapter.
 func (c *Client) requireChapterBookWide(ctx context.Context, id int64, what string) error {
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
-	if !c.scope.bookWide() {
+	if c.scope.bound() && !c.scope.bookWide() {
 		return needsBook(what)
 	}
 	_, err := c.chapterBook(ctx, id)
@@ -370,16 +578,22 @@ func (c *Client) requireChapterBookWide(ctx context.Context, id int64, what stri
 }
 
 // pageAllowed reports whether a page read as ref lies in the connection: the page itself, its chapter, or its
-// whole book is reached.
+// whole book is reached, and neither the page nor its chapter nor its book is excluded.
 func (c *Client) pageAllowed(ctx context.Context, id int64, ref bookRef) (bool, error) {
-	if c.scope.hasPage(id) || (ref.ChapterID > 0 && c.scope.hasChapter(ref.ChapterID)) {
-		return true, nil
+	if c.scope.excludesPage(id) || (ref.ID > 0 && c.scope.excludesPage(ref.ID)) ||
+		(ref.ChapterID > 0 && c.scope.excludesChapter(ref.ChapterID)) {
+		return false, nil
 	}
-	return c.bookAllowed(ctx, ref.BookID)
+	if c.scope.bound() && !c.scope.hasPage(id) && (ref.ChapterID <= 0 || !c.scope.hasChapter(ref.ChapterID)) {
+		return c.bookAllowed(ctx, ref.BookID)
+	}
+	excluded, err := c.bookExcluded(ctx, ref.BookID)
+	return !excluded, err
 }
 
-// pageInScope proves a page by identifier: a bound page needs no read, any other one is read once as evidence
-// of its chapter and book. An unbound connection reads nothing.
+// pageInScope proves a page by identifier: a bound page needs no read unless a chapter or book can be
+// excluded, any other one is read once as evidence of its chapter and book. A connection without targets and
+// exclusions reads nothing.
 func (c *Client) pageInScope(ctx context.Context, id int64) (bool, error) {
 	return c.pageReached(ctx, id, func() (bookRef, error) {
 		var ref bookRef
@@ -388,13 +602,16 @@ func (c *Client) pageInScope(ctx context.Context, id int64) (bool, error) {
 	})
 }
 
-// pageReached is the reach of a page by identifier; evidence reads the page only when the targets alone cannot
-// decide, so a caller that needs more of the page reads it once.
+// pageReached is the reach of a page by identifier; evidence reads the page only when the targets and the
+// exclusions alone cannot decide, so a caller that needs more of the page reads it once.
 func (c *Client) pageReached(ctx context.Context, id int64, evidence func() (bookRef, error)) (bool, error) {
-	if !c.scope.bound() || c.scope.hasPage(id) {
+	if c.scope.excludesPage(id) {
+		return false, nil
+	}
+	if !c.scope.excludesContainers() && (!c.scope.bound() || c.scope.hasPage(id)) {
 		return true, nil
 	}
-	if !c.scope.mayReachPage(id) {
+	if c.scope.bound() && !c.scope.mayReachPage(id) {
 		return false, nil
 	}
 	ref, err := evidence()
@@ -407,7 +624,7 @@ func (c *Client) pageReached(ctx context.Context, id int64, evidence func() (boo
 // requirePageBound proves a page before a change or a read of something on it; the refusal names neither the
 // page nor a target.
 func (c *Client) requirePageBound(ctx context.Context, id string) error {
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
 	n, ok := parseID(id)

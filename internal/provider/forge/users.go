@@ -45,7 +45,7 @@ func userNameOf(field, value string) error {
 // otherPeopleOnly refuses a view of another person on a connection with targets, before any request, without
 // naming the person.
 func (a allowlist) otherPeopleOnly() error {
-	if len(a) != 0 {
+	if a.bound() {
 		return invalidArgument("users and their data reach past any target, so this connection's targets do not " +
 			"allow reading them; use a connection without targets")
 	}
@@ -55,13 +55,13 @@ func (a allowlist) otherPeopleOnly() error {
 // ownAccountOnly allows a view of the account behind the token: without targets, or with a users/NAME target
 // (proved by verifyOwnAccount at run time) and no repository target.
 func (a allowlist) ownAccountOnly() error {
-	if len(a) == 0 {
+	if !a.bound() {
 		return nil
 	}
 	if err := a.accountWide(); err != nil {
 		return err
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == "users" {
 			return nil
 		}

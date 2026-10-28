@@ -25,6 +25,39 @@ type exclusions struct {
 // and checked but not listed here is refused as a whole, so no exclusion is accepted that nothing enforces.
 func excludeKindEnforced(kind string) bool { return kind == kindFolder || kind == kindNotes }
 
+// crossExcludes are the exclusions of one kind seen from the other: the Notes app keeps its notes as files
+// below the notes path, so a folder exclusion hides notes and a notes exclusion hides folders. They are
+// derived from the Notes settings of the identity, which only a read gives, so they are empty until the
+// client has filled them (see Client.deriveCross).
+type crossExcludes struct {
+	folders, notes [][]string
+}
+
+// crossNeeded reports whether the exclusions reach the other kind: a folder exclusion reaches the notes
+// of a connection that binds notes, a notes exclusion the folders of a connection that binds a folder.
+func (s scope) crossNeeded() bool {
+	return len(s.excludes.folders) > 0 && s.notes.bound() || len(s.excludes.notes) > 0 && s.hasFolder
+}
+
+// derive turns the exclusions into their counterpart of the other kind for a notes path relative to the
+// Files root. A folder exclusion on or above the notes path hides every note.
+func (s scope) derive(notesPath []string) crossExcludes {
+	var out crossExcludes
+	root := comparisonSegments(notesPath)
+	for _, f := range s.excludes.folders {
+		switch {
+		case hasPrefix(f, root):
+			out.notes = append(out.notes, f[len(root):])
+		case hasPrefix(root, f):
+			out.notes = append(out.notes, nil)
+		}
+	}
+	for _, n := range s.excludes.notes {
+		out.folders = append(out.folders, append(append([]string{}, root...), n...))
+	}
+	return out
+}
+
 var (
 	errExcludeInvalid = errors.New("a Nextcloud exclusion must be folder/PATH, notes/PATH, calendar/ID, " +
 		"addressbook/ID, deck/ID, or talk/ID, below a target of the same kind, named once, and not nested " +
@@ -89,23 +122,27 @@ func ancestorOf(entries [][]string, path []string) bool {
 // folderExcluded reports whether a folder path relative to the Files root lies on or below an excluded
 // folder.
 func (s scope) folderExcluded(path []string) bool {
-	return onOrBelow(s.excludes.folders, comparisonSegments(path))
+	p := comparisonSegments(path)
+	return onOrBelow(s.excludes.folders, p) || onOrBelow(s.cross.folders, p)
 }
 
 // folderHoldsExcluded reports whether a folder path relative to the Files root is a strict ancestor of an
 // excluded folder, so that something below it is hidden.
 func (s scope) folderHoldsExcluded(path []string) bool {
-	return ancestorOf(s.excludes.folders, comparisonSegments(path))
+	p := comparisonSegments(path)
+	return ancestorOf(s.excludes.folders, p) || ancestorOf(s.cross.folders, p)
 }
 
 // categoryExcluded reports whether a notes category lies on or below an excluded category.
 func (s scope) categoryExcluded(category string) bool {
-	return onOrBelow(s.excludes.notes, normalizeCategory(category))
+	c := normalizeCategory(category)
+	return onOrBelow(s.excludes.notes, c) || onOrBelow(s.cross.notes, c)
 }
 
 // categoryHoldsExcluded reports whether a notes category is a strict ancestor of an excluded category.
 func (s scope) categoryHoldsExcluded(category string) bool {
-	return ancestorOf(s.excludes.notes, normalizeCategory(category))
+	c := normalizeCategory(category)
+	return ancestorOf(s.excludes.notes, c) || ancestorOf(s.cross.notes, c)
 }
 
 // withExcludes reads the exclusions of the connection into the scope. It does not rely on the core
