@@ -169,7 +169,8 @@ var filesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Nextcloud files",
 	Description: "List the immediate children of the fixed root folder, or of one folder below it, of an " +
-		"explicit Nextcloud connection; the listing is one level deep and never reads file content",
+		"explicit Nextcloud connection; the listing is one level deep and never reads file content. Excluded folders " +
+		"are left out, but the size and ETag of a folder still count excluded content",
 	Tags:     []string{"nextcloud", "files", "webdav", "list", "folder"},
 	Risk:     nextcloudReadRisk,
 	Provider: Provider,
@@ -198,7 +199,8 @@ var filesStat = capability.Descriptor{
 	Version: 1,
 	Title:   "Get Nextcloud file metadata",
 	Description: "Read the metadata of exactly one file or folder below the fixed root folder of an " +
-		"explicit Nextcloud connection; file content is never read",
+		"explicit Nextcloud connection; file content is never read. The size and ETag of a folder still count " +
+		"excluded content",
 	Tags:     []string{"nextcloud", "files", "webdav", "stat", "metadata"},
 	Risk:     nextcloudReadRisk,
 	Provider: Provider,
@@ -536,6 +538,9 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list files", "the validated arguments could not be read")
 	}
+	if err := preflight(resolved, "list files", input.Path, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -548,6 +553,9 @@ func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *se
 	var input arguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("stat file", "the validated arguments could not be read")
+	}
+	if err := preflight(resolved, "stat file", input.Path, scope.gateRead); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -568,6 +576,9 @@ func openForContent(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, input, providerError("file operation", "the validated arguments could not be read")
 	}
+	if err := preflight(resolved, "delete file", input.Path, scope.gateSource); err != nil {
+		return nil, input, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	return client, input, err
 }
@@ -579,6 +590,9 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	}
 	if rel, err := splitRelative(input.Path); err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
+	}
+	if err := preflight(resolved, "get file", input.Path, scope.gateRead); err != nil {
+		return nil, err
 	}
 	if input.LocalPath == nil {
 		client, err := Open(ctx, resolved, secrets, red)
@@ -631,6 +645,9 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 		if !validETag(match) {
 			return nil, providerError(op, "etag is not a usable file version")
 		}
+	}
+	if err := preflight(resolved, op, input.Path, uploadGate(create)); err != nil {
+		return nil, err
 	}
 	kind, err := localfile.UploadSource(input.LocalPath, input.Content)
 	if err != nil {
@@ -695,6 +712,9 @@ func invokeFoldersDelete(ctx context.Context, resolved *config.Resolved, secrets
 	if !validETag(input.ETag) {
 		return nil, providerError("delete folder", "etag is not a usable folder version")
 	}
+	if err := preflight(resolved, "delete folder", input.Path, scope.gateSource); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -734,8 +754,10 @@ type Client struct {
 	user string
 	// root are the decoded segments of the fixed root folder below the Files root of that identity.
 	root []string
-	auth string
-	http *http.Client
+	// scope holds the folder exclusions every Files request is checked against.
+	scope scope
+	auth  string
+	http  *http.Client
 }
 
 // Open resolves the identity of one selected connection and returns a client bound to its root folder.
@@ -803,8 +825,11 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	trashbin := append(append([]string{}, install...), trashbinRoot...)
 	trashbin = append(trashbin, userID)
 	client := &Client{origin: origin, prefix: prefix, uploads: uploads, trashbin: trashbin, install: install,
-		user: userID, root: root, auth: header}
+		user: userID, root: root, scope: bound, auth: header}
 	client.http = provider.NoRedirectClient(defaultTimeout, transport)
+	if err := client.deriveCross(ctx); err != nil {
+		return nil, err
+	}
 	return client, nil
 }
 
@@ -1101,6 +1126,10 @@ func (c *Client) ListFiles(ctx context.Context, path string) (*ListResult, error
 		return nil, providerError(op, err.Error())
 	}
 
+	if err := c.scope.gateRead(op, rel); err != nil {
+		return nil, err
+	}
+
 	resources, err := c.propfindAt(ctx, op, c.requestURL(rel), filePropfindBody, depthChildren, false, maxEntries)
 	if err != nil {
 		return nil, err
@@ -1128,7 +1157,7 @@ func (c *Client) ListFiles(ctx context.Context, path string) (*ListResult, error
 		case len(relative) == len(rel)+1 && equalSegments(relative[:len(rel)], rel):
 			// A child whose properties the server refused carries no usable metadata, so it is left out
 			// rather than reported as an entry the caller could act on.
-			if resources[i].failure(op) == nil {
+			if resources[i].failure(op) == nil && !c.scope.relHidden(relative) {
 				entries = append(entries, *c.fileEntryOf(relative, &resources[i], false))
 			}
 		default:
@@ -1154,6 +1183,9 @@ func (c *Client) StatFile(ctx context.Context, path string) (*Entry, error) {
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
+	if err := c.scope.gateRead(op, rel); err != nil {
+		return nil, err
+	}
 	return c.statBody(ctx, op, rel, false, filePropfindBody, true)
 }
 
@@ -1161,6 +1193,9 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	rel, err := splitRelative(path)
 	if err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
+	}
+	if err := c.scope.gateRead("get file", rel); err != nil {
+		return nil, err
 	}
 	body, header, err := c.readInlineDAV(ctx, "get file", c.requestURL(rel),
 		"the Nextcloud file exceeds 4 MiB, use local_path")
@@ -1212,11 +1247,18 @@ func (c *Client) transferClient() *http.Client {
 // putStream sends one PUT with the local file as its body. The result of a failed request is never
 // retried.
 func (c *Client) putStream(ctx context.Context, op string, rel []string, upload *localfile.Upload, create bool, match string) (string, error) {
+	if err := uploadGate(create)(c.scope, op, rel); err != nil {
+		return "", err
+	}
 	var body io.Reader = http.NoBody
 	if upload.Size > 0 {
 		body = upload
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.requestURL(rel), body)
+	target := c.requestURL(rel)
+	if err := c.guardURLs(op, target); err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, target, body)
 	if err != nil {
 		return "", providerError(op, "the request could not be built")
 	}
@@ -1255,6 +1297,9 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 	rel, err := splitRelative(path)
 	if err != nil || len(rel) == 0 {
 		return nil, providerError(op, "a file path below the connection root is required")
+	}
+	if err := c.scope.gateRead(op, rel); err != nil {
+		return nil, err
 	}
 	entry, err := c.stat(ctx, op, rel, false)
 	if err != nil {
@@ -1296,6 +1341,9 @@ func (c *Client) downloadDAVTo(ctx context.Context, op, target string, download 
 
 func (c *Client) downloadFrom(ctx context.Context, op, target string, download *localfile.Download, done *bool,
 	extra http.Header, format errorFormat) (http.Header, error) {
+	if err := c.guardURLs(op, target); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1337,6 +1385,9 @@ func (c *Client) PutFile(ctx context.Context, op, path, encoded string, create b
 	if err != nil || len(rel) == 0 {
 		return "", providerError(op, "a file path below the connection root is required")
 	}
+	if err := uploadGate(create)(c.scope, op, rel); err != nil {
+		return "", err
+	}
 	content, err := base64.StdEncoding.Strict().DecodeString(encoded)
 	if err != nil || len(content) > maxFileBytes {
 		return "", providerError(op, "content_base64 is invalid or exceeds the size limit")
@@ -1364,6 +1415,9 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 	if !validETag(etag) {
 		return providerError("delete file", "etag is not a usable file version")
 	}
+	if err := c.scope.gateSource("delete file", rel); err != nil {
+		return err
+	}
 	entry, err := c.stat(ctx, "delete file", rel, false)
 	if err != nil {
 		return err
@@ -1389,6 +1443,9 @@ func (c *Client) DeleteFolder(ctx context.Context, path, etag string) error {
 	}
 	if !validETag(etag) {
 		return providerError(op, "etag is not a usable folder version")
+	}
+	if err := c.scope.gateSource(op, rel); err != nil {
+		return err
 	}
 	entry, err := c.stat(ctx, op, rel, false)
 	if err != nil {
@@ -1441,6 +1498,9 @@ func (c *Client) restTo(ctx context.Context, op, method, target string, body io.
 
 func (c *Client) sendTo(ctx context.Context, op, method, target string, body io.Reader,
 	condition, value, uncertain string, extra http.Header, format errorFormat) (*http.Response, error) {
+	if err := c.guardURLs(op, target, extra.Get("Destination")); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1618,6 +1678,9 @@ func (c *Client) propfindWith(ctx context.Context, op string, rel []string, dept
 // with one of the fixed property bodies.
 func (c *Client) propfindAt(ctx context.Context, op, target, propBody, depth string, capabilities bool,
 	limit int) ([]resource, error) {
+	if err := c.guardURLs(op, target); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, methodPropfind, target, strings.NewReader(propBody))
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")

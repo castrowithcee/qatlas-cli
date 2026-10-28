@@ -59,7 +59,8 @@ var filesSearch = capability.Descriptor{
 	Title: "Search Nextcloud files",
 	Description: "Search the files and folders below the fixed root folder of a connection with structured filters, " +
 		"at least one of which is required; the filters combine with AND and the root itself is never a hit. " +
-		"The server picks which matches a limit keeps; the result is sorted by path, or in the order of the server with order_by",
+		"The server picks which matches a limit keeps; the result is sorted by path, or in the order of the server with order_by. " +
+		"Excluded folders are left out, but sizes, size filters, and ETags still count excluded content",
 	Tags: []string{"nextcloud", "files", "webdav", "search"}, Provider: Provider,
 	Risk: nextcloudReadRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -385,12 +386,13 @@ func readMultiStatus(op string, response *http.Response, limit int, allowEmpty b
 }
 
 // entriesBelowRoot keeps the answered nodes that lie below the connection root. A node outside it, the
-// root itself, and a node the server refused are dropped, not reported.
+// root itself, a node the server refused, and a node on or below an excluded folder are dropped, not
+// reported, and the dropped ones do not count against the limit.
 func (c *Client) entriesBelowRoot(op string, resources []resource, limit int, search, keepOrder bool) *entryListResult {
 	result := &entryListResult{Entries: []Entry{}}
 	for i := range resources {
 		relative, err := c.relativeOf(op, resources[i].href)
-		if err != nil || len(relative) == 0 || resources[i].failure(op) != nil {
+		if err != nil || len(relative) == 0 || resources[i].failure(op) != nil || c.scope.relHidden(relative) {
 			continue
 		}
 		if len(result.Entries) >= limit {
@@ -477,6 +479,9 @@ func invokeFilesFavorite(ctx context.Context, resolved *config.Resolved, secrets
 	rel, err := splitRelative(input.Path)
 	if err != nil || len(rel) == 0 {
 		return nil, providerError(op, "a path below the connection root is required")
+	}
+	if err := preflight(resolved, op, input.Path, scope.gateRead); err != nil {
+		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {

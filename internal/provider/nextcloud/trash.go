@@ -60,8 +60,8 @@ const trashEntrySchema = `{"type":"object","properties":{` +
 var trashList = capability.Descriptor{
 	ID: Provider + ".files.trash.list", Version: 1,
 	Title: "List the Nextcloud trash bin",
-	Description: "List the deleted items whose original location lies below the fixed root folder of a connection, " +
-		"at most 500 per call; items inside deleted folders are not listed and file content is never read",
+	Description: "List the deleted items whose original location lies below the fixed root folder of a connection and not " +
+		"on or below an excluded folder, at most 500 per call; items inside deleted folders are not listed and file content is never read",
 	Tags: []string{"nextcloud", "trash", "webdav", "list"}, Provider: Provider,
 	Risk:        nextcloudReadRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
@@ -104,13 +104,13 @@ func trashChange(action, done, title, description string, effect capability.Effe
 
 var trashRestore = trashChange("restore", "restored", "Restore a Nextcloud trash item",
 	"Restore exactly one confirmed deleted item to its original location, if its original location lies below "+
-		"the fixed root folder of a connection; there is no other destination",
+		"the fixed root folder of a connection and not on or below an excluded folder; there is no other destination",
 	capability.EffectUpdate, organiseRisk(capability.EffectUpdate))
 
 var trashDelete = func() capability.Descriptor {
 	d := trashChange("delete", "deleted", "Delete a Nextcloud trash item for good",
 		"Permanently delete exactly one confirmed trash item whose original location lies below the fixed root folder "+
-			"of a connection; it cannot be restored afterwards",
+			"of a connection and not on or below an excluded folder; it cannot be restored afterwards",
 		capability.EffectDelete, capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity})
 	// Reachable only through a tools list, never through a profile.
@@ -145,7 +145,7 @@ func (c *Client) trashURL(collection string, id ...string) string {
 }
 
 // trashEntryOf reads one answered node. ok is false for a node whose original location lies outside the
-// connection root; such a node is never reported.
+// connection root or on or below an excluded folder; such a node is never reported.
 func (c *Client) trashEntryOf(res *resource, id string) (trashEntry, bool) {
 	location := strings.Split(strings.TrimPrefix(res.props[propTrashOrigin], "/"), "/")
 	if len(location) > maxSegments {
@@ -160,6 +160,9 @@ func (c *Client) trashEntryOf(res *resource, id string) (trashEntry, bool) {
 		return trashEntry{}, false
 	}
 	relative := location[len(c.root):]
+	if c.scope.relHidden(relative) {
+		return trashEntry{}, false
+	}
 	entry := trashEntry{ID: id, Name: bounded(res.props[propTrashName]), Path: strings.Join(relative, "/"), Type: typeFile}
 	if entry.Name == "" {
 		entry.Name = relative[len(relative)-1]
@@ -261,6 +264,10 @@ func (c *Client) readTrashEntry(ctx context.Context, op, id string) (trashEntry,
 	entry, ok := c.trashEntryOf(&resources[0], id)
 	if !ok {
 		return trashEntry{}, providerError(op, messageTrashNotFound)
+	}
+	// A folder that held an excluded one carries it along, so it is neither restored nor purged.
+	if c.scope.relHolds(strings.Split(entry.Path, "/")) {
+		return trashEntry{}, blockedError(op)
 	}
 	return entry, nil
 }
