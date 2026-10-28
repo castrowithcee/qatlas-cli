@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Gitea
@@ -85,6 +85,41 @@ owner of every answer, not the spelling the caller used, and refuses what lies o
   resolves in the forms `https://HOST/OWNER/REPO`, `.../issues/N`, `.../pulls/N`, and `https://HOST/NAME`; they are
   derived from the `html_url` of API answers and not confirmed by the products' documentation. A first path
   segment the instance reserves is not resolved.
+
+### Exclusions
+
+`exclude` is an optional list beside `targets` that takes content out of what the targets allow.
+
+| Entry | Takes out |
+| --- | --- |
+| `users/NAME`, `orgs/NAME` | the owner with everything it holds |
+| `repos/OWNER/REPO` | one repository |
+
+There is no wildcard. `users/X` and `orgs/X` name the same owner, and names compare without case. An exclusion wins
+over every target. An entry that equals a target is invalid; one that matches nothing is valid and has no effect.
+An exclusion neither binds a connection nor withholds a tool: the tool offer and account-wide checks read the targets
+only.
+
+- Excluded content behaves as for a user without read access. An argument inside an exclusion is refused as
+  `invalid-request` before any request, and reads that prove a repository (by ID, a thread, a counterpart) answer
+  `not-found`, also on a connection without targets. Rows from excluded or undeterminable repositories are dropped.
+  A refusal never names the object or the exclusion. The `parent` of a fork and the cross-references of a timeline
+  drop what an exclusion covers; `commit_ref` and `dependent_issue` keep their identifiers.
+- Changes across the boundary are refused: a repository transfer, fork, generate, create, or rename with an
+  excluded source, owner, or name; creating an organization under an excluded name; deleting or renaming an
+  organization or account that is excluded or holds an exclusion; and dependency changes with an excluded
+  counterpart.
+- Profiles stay visible: users, followers, public keys, organizations, members, teams, and the account behind the
+  token with its settings. Activities drop rows from exclusions.
+
+Limits:
+
+- Exclusions are name-based. A rename done outside Qatlas lifts the exclusion.
+- Settings of an organization or account stay allowed even where they apply to excluded content: organization and
+  account updates, avatars, webhooks, Actions secrets, variables, and runners, labels, teams that include all
+  repositories, team rights and members, badges, quota assignment, cron, and revoking keys and tokens.
+- Aggregated values stay as sums: `X-Total-Count`, `repo_count`, quota totals, `user-heatmap.get`, and
+  `notifications.check-new`.
 
 ## Version and connection test
 

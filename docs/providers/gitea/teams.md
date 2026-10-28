@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-24
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Teams
@@ -32,6 +32,8 @@ differences.
   organization carry no `organization` member in their rows; they are bound by the organization argument.
 - `team-activities.list` keeps only activities whose repository belongs to the team's organization and lies inside the
   targets. Without targets all activities the instance shows are kept.
+- Exclusions ([Targets](README.md#exclusions)): `team-repositories.list` drops excluded repositories, and checking,
+  adding, or removing one is refused. Teams, members, and team rights stay allowed.
 - `username` of the member tools is one user name and is not checked against the targets; the answer concerns the
   team.
 

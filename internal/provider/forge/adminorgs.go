@@ -98,6 +98,12 @@ var adminOrgsCreate = &tool{
 		if !validName(name) {
 			return nil, invalidArgument("organization must be an organization name")
 		}
+		if allowed.excludedOwner(owner) {
+			return nil, unavailable("username")
+		}
+		if allowed.excludedOwner(name) {
+			return nil, unavailable("organization")
+		}
 		body, err := orgBody(p, given)
 		if err != nil {
 			return nil, err
@@ -149,6 +155,9 @@ var adminRepositoriesCreate = &tool{
 		if err := userNameOf("username", a.Username); err != nil {
 			return nil, err
 		}
+		if err := allowed.checkNewName(a.Username, a.Name); err != nil {
+			return nil, err
+		}
 		body, err := a.repositoryCreateOptions.body()
 		if err != nil {
 			return nil, err
@@ -165,7 +174,7 @@ var adminRepositoriesCreate = &tool{
 				return nil, unsure(provider.InvalidResponse(op, c.product.name+
 					" returned another repository than the one asked for"))
 			}
-			return project(p, repositoryMembers, created), nil
+			return project(p, repositoryMembers, allowed.hideExcludedParent(created)), nil
 		}, nil
 	},
 }

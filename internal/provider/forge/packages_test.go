@@ -326,3 +326,84 @@ func TestPackageDeletesAreListedOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestPackagesOfAnExcludedOwnerAreRefusedBeforeIO(t *testing.T) {
+	cases := []struct {
+		tl        *tool
+		arguments string
+	}{
+		{packagesList, `{"owner":"orgs/other"}`},
+		{packagesGet, `{"owner":"users/Other","type":"npm","name":"n","version":"1"}`},
+		{packageFilesList, `{"owner":"orgs/other","type":"npm","name":"n","version":"1"}`},
+		{packagesLink, `{"owner":"orgs/other","type":"npm","name":"n","repo_name":"widget"}`},
+		{packagesUnlink, `{"owner":"orgs/other","type":"npm","name":"n"}`},
+		// A repository under the owner of the call that an exclusion takes out cannot be linked.
+		{packagesLink, `{"owner":"orgs/acme","type":"npm","name":"n","repo_name":"Gadget"}`},
+	}
+	for _, p := range products {
+		for _, c := range cases {
+			e := newEnvironment(t, p, packageServer(p, nil))
+			_, err := e.invoke(t, c.tl, "exclude", c.arguments)
+			if err == nil || !isInvalidRequest(err) || len(*e.calls) != 0 || *e.reads != 0 ||
+				strings.Contains(strings.ToLower(err.Error()), "/other") || strings.Contains(err.Error(), "adget") ||
+				strings.Contains(err.Error(), "exclu") {
+				t.Errorf("%s %s %s: err=%v calls=%v reads=%d", p.id, c.tl.action, c.arguments, err, *e.calls, *e.reads)
+			}
+		}
+		// An exclusion of another owner leaves the owner and the link of an unrelated repository alone.
+		e := newEnvironment(t, p, packageServer(p, nil))
+		if _, err := e.invoke(t, packagesLink, "exclude", `{"owner":"orgs/acme","type":"npm","name":"n","repo_name":"widget"}`); err != nil {
+			t.Errorf("%s: link to a reachable repository: %v", p.id, err)
+		}
+	}
+}
+
+func TestPackagesDropAnExcludedRepositoryLinkAndParent(t *testing.T) {
+	linked := func(repository string) string {
+		return `{"id":5,"name":"lib","type":"npm","version":"1.0.0","owner":{"id":2,"login":"acme"},"repository":` +
+			repository + `}`
+	}
+	for _, p := range products {
+		for name, tc := range map[string]struct {
+			repository string
+			want       bool
+			parent     bool
+		}{
+			"reachable":             {`{"id":9,"name":"widget","full_name":"acme/widget"}`, true, false},
+			"excluded":              {`{"id":9,"name":"gadget","full_name":"Acme/Gadget"}`, false, false},
+			"without a name":        {`{"id":9,"name":"widget"}`, false, false},
+			"excluded fork parent":  {`{"id":9,"name":"widget","full_name":"acme/widget","parent":{"id":4,"full_name":"other/up"}}`, true, false},
+			"reachable fork parent": {`{"id":9,"name":"widget","full_name":"acme/widget","parent":{"id":4,"full_name":"zed/up"}}`, true, true},
+		} {
+			row := linked(tc.repository)
+			e := newEnvironment(t, p, packageServer(p, func(c call) *http.Response {
+				switch c.path {
+				case "/api/v1/packages/acme":
+					return jsonResponse(200, `[`+row+`]`)
+				case "/api/v1/packages/acme/npm/lib/1.0.0":
+					return jsonResponse(200, row)
+				}
+				return nil
+			}))
+			list, err := e.invoke(t, packagesList, "exclude", `{"owner":"orgs/acme"}`)
+			got, err2 := e.invoke(t, packagesGet, "exclude", `{"owner":"orgs/acme","type":"npm","name":"lib","version":"1.0.0"}`)
+			if err != nil || err2 != nil || len(rowsOf(t, list, "packages")) != 1 {
+				t.Fatalf("%s %s: %v %v %v", p.id, name, list, err, err2)
+			}
+			for what, shown := range map[string]map[string]any{"list": rowsOf(t, list, "packages")[0], "get": got} {
+				repository, has := shown["repository"].(map[string]any)
+				if has != tc.want {
+					t.Errorf("%s %s %s: repository shown = %t", p.id, name, what, has)
+				}
+				if has {
+					if _, parent := repository["parent"]; parent != tc.parent {
+						t.Errorf("%s %s %s: parent shown = %t", p.id, name, what, parent)
+					}
+				}
+				if shown["name"] != "lib" {
+					t.Errorf("%s %s %s: the package vanished: %v", p.id, name, what, shown)
+				}
+			}
+		}
+	}
+}

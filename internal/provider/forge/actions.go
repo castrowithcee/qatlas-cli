@@ -262,9 +262,12 @@ func repoLevel(repo target) actionsLevel {
 
 // namesActionsOwner reports whether the list admits the owner by an owner target of the same kind.
 func (a allowlist) namesActionsOwner(owner target) bool {
-	if a.excludedOwner(owner.owner) {
-		return false
-	}
+	return !a.excludedOwner(owner.owner) && a.admitsActionsOwner(owner)
+}
+
+// admitsActionsOwner is namesActionsOwner for the settings of an owner, which stay reachable when an exclusion
+// takes out its content: only the targets decide.
+func (a allowlist) admitsActionsOwner(owner target) bool {
 	if !a.bound() {
 		return true
 	}
@@ -281,11 +284,13 @@ func chooseActionsLevel(p *product, allowed allowlist, repository, owner string)
 	if owner != "" && p != gitea {
 		return actionsLevel{}, invalidArgument("owner is a Gitea argument; " + p.name + " lists the runs of one repository")
 	}
-	return actionsLevelOf(allowed, repository, owner)
+	return actionsLevelOf(allowed, repository, owner, false)
 }
 
-// actionsLevelOf reads exactly one of repository and owner, on any product.
-func actionsLevelOf(allowed allowlist, repository, owner string) (actionsLevel, error) {
+// actionsLevelOf reads exactly one of repository and owner, on any product. With settings, an owner that an
+// exclusion takes out stays reachable, since its secrets, variables, and runners are settings of the owner;
+// a repository never is.
+func actionsLevelOf(allowed allowlist, repository, owner string, settings bool) (actionsLevel, error) {
 	if owner == "" {
 		repo, err := allowed.chooseRepository(repository)
 		if err != nil {
@@ -300,13 +305,20 @@ func actionsLevelOf(allowed allowlist, repository, owner string) (actionsLevel, 
 	if err != nil {
 		return actionsLevel{}, err
 	}
+	if settings && allowed.admitsActionsOwner(parsed) {
+		return ownerLevel(parsed), nil
+	}
 	if !allowed.namesActionsOwner(parsed) {
 		return actionsLevel{}, allowed.outsideOwner("owner", parsed.owner)
 	}
+	return ownerLevel(parsed), nil
+}
+
+func ownerLevel(parsed target) actionsLevel {
 	if parsed.scope == "orgs" {
-		return actionsLevel{base: "/orgs/" + escape(parsed.owner) + "/actions", name: parsed.String(), owner: parsed.owner}, nil
+		return actionsLevel{base: "/orgs/" + escape(parsed.owner) + "/actions", name: parsed.String(), owner: parsed.owner}
 	}
-	return actionsLevel{base: "/user/actions", name: parsed.String(), owner: parsed.owner, login: parsed.owner}, nil
+	return actionsLevel{base: "/user/actions", name: parsed.String(), owner: parsed.owner, login: parsed.owner}
 }
 
 // verify is the evidence read of the user level: /user/actions acts on the account behind the token, so the

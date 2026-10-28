@@ -94,6 +94,8 @@ func newAdminEnvironment(t *testing.T, p *product, v string, api func(call) *htt
 		cfg.Connections[name] = config.Connection{Service: "forge", Credential: "token", Targets: targets,
 			Tools: ids, ForwardSecrets: []string{releasedRef, twoFieldRef}}
 	}
+	cfg.Connections["admin-exclude"] = config.Connection{Service: "forge", Credential: "token",
+		Exclude: excluding["exclude"].excludes, Tools: ids, ForwardSecrets: []string{releasedRef, twoFieldRef}}
 	core := application.New(registry(t), cfg, resolve, red)
 	audit := &bytes.Buffer{}
 	core.SetAudit(audit)
@@ -625,5 +627,72 @@ func TestActionsAdminDeletesAreListedOnly(t *testing.T) {
 				t.Errorf("%s: %v, %v, %v", p.toolID(tc.tl), result, err, apiMethods(f.environment))
 			}
 		}
+	}
+}
+
+func TestOwnerSettingsStayReachableWhenAnExclusionTakesTheOwnerOut(t *testing.T) {
+	for _, p := range products {
+		e := newAdminEnvironment(t, p, defaultVersion(p), func(c call) *http.Response {
+			switch {
+			case c.path == "/api/v1/user":
+				return jsonResponse(200, `{"id":3,"login":"Other"}`)
+			case c.method == http.MethodGet && strings.HasSuffix(c.path, "/runners"):
+				if p == forgejo {
+					return jsonResponse(200, `[{"id":1,"name":"r"}]`)
+				}
+				return jsonResponse(200, `{"runners":[{"id":1,"name":"r"}]}`)
+			case c.method == http.MethodGet && strings.HasSuffix(c.path, "/variables"):
+				return jsonResponse(200, `[{"name":"V","data":"1"}]`)
+			case c.method == http.MethodGet:
+				return jsonResponse(200, `[{"name":"S"}]`)
+			}
+			return jsonResponse(204, ``)
+		})
+		for _, c := range []struct {
+			tl        *tool
+			arguments string
+			confirmed bool
+		}{
+			{actionsSecretsList, `{"owner":"orgs/other"}`, false},
+			{actionsVariablesList, `{"owner":"orgs/Other"}`, false},
+			{actionsVariablesCreate, `{"owner":"orgs/other","name":"V","value":"1"}`, true},
+			{actionsRunnersList, `{"owner":"orgs/other"}`, false},
+		} {
+			if _, err := e.call(t, c.tl, "admin-exclude", c.arguments, c.confirmed); err != nil {
+				t.Errorf("%s %s %s: %v", p.id, c.tl.group, c.tl.action, err)
+			}
+		}
+		// The user level is proven by the account behind the token, whose own settings stay reachable.
+		if _, err := e.call(t, actionsVariablesList, "admin-exclude", `{"owner":"users/other"}`, false); p == gitea && err != nil {
+			t.Errorf("%s: user level of an excluded account: %v", p.id, err)
+		}
+		// A repository inside an exclusion stays refused before any request.
+		before := len(*e.calls)
+		for _, tl := range []*tool{actionsSecretsList, actionsVariablesList, actionsRunnersList} {
+			_, err := e.call(t, tl, "admin-exclude", `{"repository":"acme/gadget"}`, false)
+			if err == nil || !isInvalidRequest(err) || len(*e.calls) != before {
+				t.Errorf("%s %s of an excluded repository: %v", p.id, tl.group, err)
+			}
+		}
+	}
+}
+
+func TestRunnerJobsOfAnOwnerLevelDropExcludedRepositories(t *testing.T) {
+	e := newAdminEnvironment(t, forgejo, defaultVersion(forgejo), func(call) *http.Response {
+		return jsonResponse(200, `[{"id":1,"html_url":"https://forge.example.test/acme/widget/actions/runs/1/jobs/1"},`+
+			`{"id":2,"html_url":"https://forge.example.test/acme/gadget/actions/runs/1/jobs/2"},`+
+			`{"id":3,"html_url":"https://forge.example.test/other/x/actions/runs/1/jobs/3"},{"id":4,"repo_id":5}]`)
+	})
+	kept, err := e.call(t, actionsRunnerJobsSearch, "admin-exclude", `{"owner":"orgs/acme"}`, false)
+	if rows := rowsOf(t, kept, "jobs"); err != nil || len(rows) != 1 || rows[0]["id"] != float64(1) {
+		t.Errorf("jobs of a reachable organization: %v, %v", kept, err)
+	}
+	none, err := e.call(t, actionsRunnerJobsSearch, "admin-exclude", `{"owner":"orgs/other"}`, false)
+	if err != nil || len(rowsOf(t, none, "jobs")) != 0 {
+		t.Errorf("jobs of an excluded organization: %v, %v", none, err)
+	}
+	all, err := e.call(t, actionsRunnerJobsSearch, "admin-org", `{"owner":"orgs/acme"}`, false)
+	if err != nil || len(rowsOf(t, all, "jobs")) != 4 {
+		t.Errorf("jobs without exclusions: %v, %v", all, err)
 	}
 }

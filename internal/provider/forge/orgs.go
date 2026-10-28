@@ -67,10 +67,30 @@ func (a allowlist) organizationOf(value string) (string, error) {
 	if !validName(value) {
 		return "", invalidArgument("organization must be an organization name")
 	}
-	if !a.namesOwnerOfScope("orgs", value) {
+	if !a.admitsOwnerOfScope("orgs", value) {
 		return "", outsideTargets("organization")
 	}
 	return value, nil
+}
+
+// carriesExclusion reports whether an exclusion lies on the owner or on a repository under it. Deleting or
+// renaming such an owner would take out or move excluded content, which no tool of this connection may do.
+func (a allowlist) carriesExclusion(name string) bool {
+	for _, entry := range a.excludes {
+		if strings.EqualFold(entry.owner, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// refuseCarrier refuses, before any request, a change of the owner NAME as a whole when an exclusion lies on it
+// or under it. The refusal names neither the owner nor the exclusion.
+func (a allowlist) refuseCarrier(what, name string) error {
+	if a.carriesExclusion(name) {
+		return unavailable(what)
+	}
+	return nil
 }
 
 func orgPath(name string) string { return "/orgs/" + escape(name) }
@@ -201,7 +221,7 @@ func newOrgList(s orgList) *tool {
 					}
 					// Every row is checked against the targets; without targets all are allowed.
 					name, _ := row.text("name")
-					if allowed.bound() && (name == "" || !allowed.namesOwnerOfScope("orgs", name)) {
+					if allowed.bound() && (name == "" || !allowed.admitsOwnerOfScope("orgs", name)) {
 						continue
 					}
 					organizations = append(organizations, project(p, orgMembers, row))
@@ -414,6 +434,9 @@ var orgsCreate = &tool{
 		if err != nil {
 			return nil, err
 		}
+		if allowed.excludedOwner(name) {
+			return nil, unavailable("organization")
+		}
 		body, err := orgBody(p, given)
 		if err != nil {
 			return nil, err
@@ -525,13 +548,19 @@ var orgsRename = &tool{
 		if !validName(a.NewName) {
 			return nil, invalidArgument("new_name must be an organization name")
 		}
+		if err := allowed.refuseCarrier("organization", name); err != nil {
+			return nil, err
+		}
+		if err := allowed.refuseCarrier("new_name", a.NewName); err != nil {
+			return nil, err
+		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			body := map[string]any{"new_name": a.NewName}
 			if err := c.change(ctx, "rename organization", http.MethodPost, orgPath(name)+"/rename", body, nil); err != nil {
 				return nil, err
 			}
 			result := map[string]any{"renamed": true, "reachable": false}
-			if allowed.namesOwnerOfScope("orgs", a.NewName) {
+			if allowed.admitsOwnerOfScope("orgs", a.NewName) {
 				result["reachable"] = true
 				result["organization"] = a.NewName
 			}
@@ -544,10 +573,12 @@ var orgsRename = &tool{
 type orgAction struct {
 	group, action, title, text string
 	listed                     bool
-	effect                     capability.Effect
-	idempotency                capability.Idempotency
-	suffix, op, key            string
-	tags                       []string
+	// removes marks a tool that ends the organization, which an exclusion on or under it forbids.
+	removes         bool
+	effect          capability.Effect
+	idempotency     capability.Idempotency
+	suffix, op, key string
+	tags            []string
 }
 
 func newOrgAction(s orgAction) *tool {
@@ -584,6 +615,11 @@ func newOrgAction(s orgAction) *tool {
 			if err != nil {
 				return nil, err
 			}
+			if s.removes {
+				if err := allowed.refuseCarrier("organization", name); err != nil {
+					return nil, err
+				}
+			}
 			return func(ctx context.Context, c *Client) (any, error) {
 				if err := c.change(ctx, s.op, http.MethodDelete, orgPath(name)+s.suffix, nil, nil); err != nil {
 					return nil, err
@@ -595,7 +631,7 @@ func newOrgAction(s orgAction) *tool {
 }
 
 var orgsDelete = newOrgAction(orgAction{
-	group: "orgs", action: "delete", listed: true,
+	group: "orgs", action: "delete", listed: true, removes: true,
 	title: "Delete a %s organization",
 	text: "Delete one organization the connection's targets name as orgs/NAME for good. The instance refuses while " +
 		"the organization still owns a repository or a package; this tool deletes neither.",
