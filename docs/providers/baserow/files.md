@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # Files
@@ -13,7 +13,7 @@ The table boundary is in [the README](README.md#scope) and the bounds in [Bounds
 
 ## Files
 
-Files are addressed only by table (inside the targets), row, and the name of a field of type `file`; the field must
+Files are addressed only by table (reachable), row, and the name of a field of type `file`; the field must
 exist in the table's schema (one field read), and an upload also needs it to be writable. No message quotes a field
 name.
 
