@@ -136,6 +136,9 @@ func invokeFoldersCreate(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil || len(rel) == 0 {
 		return nil, providerError(op, "a folder path below the connection root is required")
 	}
+	if err := gateOpen(resolved, op, func(s scope) error { return s.gateCreate(op, rel) }); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -165,6 +168,15 @@ func invokeTransfer(ctx context.Context, resolved *config.Resolved, secrets *sec
 	}
 	source, destination, err := transferPaths(op, input)
 	if err != nil {
+		return nil, err
+	}
+	// The source is gated first, so a hidden source is answered as missing whatever the destination is.
+	if err := gateOpen(resolved, op, func(s scope) error {
+		if err := s.gateSource(op, source); err != nil {
+			return err
+		}
+		return s.gateDestination(op, destination)
+	}); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
