@@ -34,6 +34,8 @@ func TestExcludeConfigurationIsCheckedByTheCore(t *testing.T) {
 		{"[calendar, addressbook, deck]", "[calendar/work, addressbook/book, deck/42]"},
 		{"[talk]", "[talk/abcd1234]"},
 		{"[folder/Team, talk]", "[folder/Team/Private, talk/abcd1234]"},
+		{"[account]", "[folder/Private, notes/Secret, calendar/work, addressbook/book, deck/42, talk/abcd1234]"},
+		{"[folder/Team, account]", "[folder/Team/Private, calendar/work]"},
 	} {
 		if _, err := config.Decode(strings.NewReader(document(c[0], c[1])), reg); err != nil {
 			t.Errorf("targets %s exclude %s: %v", c[0], c[1], err)

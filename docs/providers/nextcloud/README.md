@@ -70,11 +70,12 @@ selection, not a role: only the ticked `tools` are saved, and a saved connection
 `exclude` takes `folder/PATH` and `notes/PATH` entries that take a folder, or a notes category, with everything
 below it out of what the targets reach, and `calendar/URI`, `addressbook/URI`, `deck/BOARD_ID`, and `talk/TOKEN` entries that take
 one calendar, address book, board, or conversation out of the kind alone. A path entry must lie strictly below a `folder` or `notes`
-target of its own kind; an ID entry needs the kind alone as target, never an ID target. Entries must not repeat or
+target of its own kind; an ID entry needs the kind alone as target, never an ID target. With an `account`
+target every kind is in reach of its account-wide tools, so an entry needs no target of its kind; where the
+connection holds one, the rules above still apply. Entries must not repeat or
 nest in another, and at most 100 are allowed per kind; Qatlas reads them like targets and refuses a connection whose
 entry it cannot enforce. The scheduling and trash collections of the calendar home and the system address book are
-outside the reach of the kind alone, so an entry naming one is invalid. Any exclusion on a connection with an
-`account` target is refused as not supported. An exclusion beats a target and removes no tool from the offer; the
+outside the reach of the kind alone, so an entry naming one is invalid. An exclusion beats a target and removes no tool from the offer; the
 tools that create a calendar, address book, board, or conversation stay available, as their IDs are generated.
 
 - Entries are compared after Unicode normalisation and case folding, so `ü`, `u` plus a combining mark, and `Ü`
@@ -86,10 +87,10 @@ tools that create a calendar, address book, board, or conversation stay availabl
   answer names the object or the exclusion. A refusal that needs no read is raised before any credential access.
   An excluded calendar, address book, or conversation answers as one that does not exist, an excluded board as a
   board the connection is not bound to. Lists leave excluded objects out and do not count them.
-- Notes live as files below the notes path of the identity. A connection that binds both a folder and notes
-  therefore carries each kind of exclusion over to the other: a folder exclusion below the notes path hides the
+- Notes live as files below the notes path of the identity. A connection that binds both a folder and notes,
+  or the `account` target, therefore carries each kind of exclusion over to the other: a folder exclusion below the notes path hides the
   notes of that category, one on or above the notes path hides every note, and a notes exclusion hides the folder `NOTES_PATH/CATEGORY`
-  in the Files and Shares tools. The notes path is read from the Notes settings on every call that needs it; if
+  in the Files and Shares tools and in the account-wide tools. The notes path is read from the Notes settings on every call that needs it; if
   that read fails, the call is refused.
 - Conversations that belong to something else are excluded with it; see [talk](talk.md#exclusions).
 - Totals Nextcloud keeps, such as the size and ETag of a folder and the quota, still count excluded content; see

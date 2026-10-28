@@ -246,8 +246,9 @@ func TestInvalidExclusionsFailClosedWithoutQuotingValues(t *testing.T) {
 		"talk without target":         {folder, []string{"talk/SECRET"}},
 		"talk repeated by case":       {[]string{"talk"}, []string{"talk/SECRET", "talk/secret"}},
 		"talk with slash":             {[]string{"talk"}, []string{"talk/SECRET/x"}},
-		"folder beside account":       {[]string{"folder/Team", "account"}, []string{"folder/Team/SECRET"}},
-		"notes beside account":        {[]string{"notes", "account"}, []string{"notes/SECRET"}},
+		"account kind alone":          {[]string{"account"}, []string{"folder/"}},
+		"account equal to target":     {[]string{"folder/Team", "account"}, []string{"folder/Team"}},
+		"account notes equal target":  {[]string{"notes/Work", "account"}, []string{"notes/Work"}},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -305,7 +306,7 @@ func TestExclusionsOutOfReachAreInvalid(t *testing.T) {
 	}
 }
 
-func TestTalkExclusionsAreValidAndTheAccountLockStays(t *testing.T) {
+func TestTalkExclusionsAreValidAndAccountTakesThem(t *testing.T) {
 	for _, tc := range []struct{ targets, excludes []string }{
 		{[]string{"talk"}, []string{"talk/token1"}},
 		{[]string{"talk"}, []string{"talk/token1", "talk/Token2"}},
@@ -323,9 +324,63 @@ func TestTalkExclusionsAreValidAndTheAccountLockStays(t *testing.T) {
 		{[]string{"calendar", "account"}, []string{"calendar/A"}},
 		{[]string{"talk", "account"}, []string{"talk/token1"}},
 	} {
-		if _, err := excluding(t, tc.targets, tc.excludes); err != errExcludeBesideKind {
+		if _, err := excluding(t, tc.targets, tc.excludes); err != nil {
 			t.Errorf("%v beside account = %v", tc.targets, err)
 		}
+	}
+}
+
+func TestAccountTakesEveryExclusionKindWithoutATargetOfThatKind(t *testing.T) {
+	s, err := excluding(t, []string{"account"}, []string{"folder/A/B", "notes/Work", "calendar/Work", "addressbook/Book",
+		"deck/07", "talk/Token1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.account || s.hasFolder || s.notes.bound() || s.calendars.bound() || s.addressbooks.bound() || s.talks.bound() || s.decks.bound() {
+		t.Errorf("exclusions changed what the targets bind: %+v", s)
+	}
+	if !s.crossNeeded() {
+		t.Error("folder and notes exclusions reach each other through the account tools")
+	}
+	if !s.feedActive() || !s.talkHides("TOKEN1") || !s.folderExcluded([]string{"a", "B", "x"}) || !s.categoryExcluded("work/sub") {
+		t.Errorf("exclusions do not take effect: %+v", s.excludes)
+	}
+	// With a target of the kind, the exclusion still lies strictly below it.
+	for _, tc := range []struct {
+		targets, excludes []string
+		valid             bool
+	}{
+		{[]string{"account", "folder/Team"}, []string{"folder/Team/A"}, true},
+		{[]string{"account", "folder/Team"}, []string{"folder/Team"}, false},
+		{[]string{"account", "folder/Team"}, []string{"folder/Other"}, false},
+		{[]string{"account", "notes/Work"}, []string{"notes/Work"}, false},
+		{[]string{"account", "notes/Work"}, []string{"notes/Work/A"}, true},
+		{[]string{"account", "calendar/x"}, []string{"calendar/y"}, false},
+		{[]string{"account", "deck/1"}, []string{"deck/2"}, false},
+		{[]string{"account", "talk/abcd1234"}, []string{"talk/other"}, false},
+		{[]string{"account"}, []string{"folder"}, false},
+		{[]string{"account"}, []string{"account"}, false},
+		{[]string{"account"}, []string{"calendar/inbox"}, false},
+		{[]string{"account"}, []string{"addressbook/" + systemAddressbook}, false},
+		{[]string{"account"}, []string{"folder/A", "folder/A/B"}, false},
+		{[]string{"account"}, []string{"deck/7", "deck/07"}, false},
+		{[]string{"account"}, []string{"deck/x"}, false},
+	} {
+		_, err := excluding(t, tc.targets, tc.excludes)
+		if (err == nil) != tc.valid || err != nil && (err != errExcludeInvalid || strings.Contains(err.Error(), "Team")) {
+			t.Errorf("%v with %v = %v, want valid %t", tc.targets, tc.excludes, err, tc.valid)
+		}
+	}
+	many := make([]string, 0, 101)
+	for i := 0; i <= 100; i++ {
+		many = append(many, "folder/"+strings.Repeat("x", i+1))
+	}
+	if _, err := excluding(t, []string{"account"}, many); err != errExcludeTooMany {
+		t.Errorf("too many = %v", err)
+	}
+	// A connection without the account target keeps the rule of a target of the kind.
+	if _, err := excluding(t, []string{"folder"}, []string{"calendar/A"}); err != errExcludeInvalid {
+		t.Errorf("without account = %v", err)
 	}
 }
 
