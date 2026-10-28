@@ -17,6 +17,8 @@ Profile `calendar` reads events and tasks; `events` adds creating events and rep
 `confirm`, deleting and sharing a tools list. Writing tasks, calendar management and sharing, and `calendar.trash.*` are
 in no profile. A task is replaced only if Qatlas can write all of it. The trash covers bound calendars only: another
 calendar's entry is neither listed nor counted, and refused like a missing one; whole calendars are not restored.
+An excluded calendar is neither listed nor reachable (events, tasks, shares, and changes answer as for a missing
+calendar), and its trash entries are treated like those of an unbound one; see [Exclusions](README.md#exclusions).
 Sharing gives one user or group access to an own calendar, never by link, e-mail, or team; Nextcloud ignores an
 unknown recipient, so check `shares` of `calendar.calendars.list`.
 `calendar.events.list` reports the same fields per event as `calendar.events.get`, with the limits and the `overrides`
