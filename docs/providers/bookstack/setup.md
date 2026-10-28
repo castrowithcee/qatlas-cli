@@ -160,8 +160,8 @@ Some tools read more than the one thing you asked for, and fail when that read i
 
 - A tool that changes content permissions, roles, or users may first read the role list to find the guest role.
   Without `user-roles-manage` it changes nothing and says that the guest role could not be determined.
-- On a connection with targets, Qatlas reads the object once to prove it is inside the targets. A refusal of
-  that read fails the call.
+- On a connection with targets or exclusions, Qatlas reads the object once to prove it is inside the targets and
+  outside the exclusions. A refusal of that read fails the call.
 
 ## Fixing errors
 
@@ -195,8 +195,9 @@ is under [Errors](README.md#errors).
 | `permission` on users, roles, the audit log, or the recycle bin | Missing system permission | Add the permissions of [Administration](#administration). |
 | Content permission, role, or user change fails with "the guest role (public access) of the instance could not be determined" | Qatlas could not read the role list; the class follows the failed read | Add `user-roles-manage`. Nothing was changed. |
 | `not-found`: BookStack does not hold this resource or does not show it to this token | The identifier is wrong, **or** the user may not view it. BookStack answers both the same | Check the identifier. Then give a role of the user the view permission for that shelf, book, chapter, or page, and check for a restriction on that item. |
-| `invalid-request` naming the targets | The shelf, book, chapter, or page is outside the connection's targets | Not a permission problem. Pass an item the connection allows, or add it; see [Targets](README.md#targets). |
-| `invalid-request`: a page included in the export is outside the targets, or the export includes more pages than one call checks | A page of the export includes (`{{@ID}}`) a page outside the connection, or its includes reach too many pages to check | Remove the include in BookStack, add the included page's book to the targets, or export single pages. |
+| `invalid-request` saying the item is outside the targets or the bound targets | The shelf, book, chapter, or page is not reached by the connection: outside its targets, or taken out of them by an exclusion. The message names neither | Not a permission problem. Pass an item the connection reaches, or change the targets or exclusions; see [Targets](README.md#targets). |
+| The connection is invalid and the message points to `exclude` | An exclusion is not `shelf/ID`, `book/ID`, `chapter/ID`, or `page/ID` with a positive integer, repeats another, or equals a target | Correct or remove the entry; see [Exclusions](README.md#exclusions). |
+| `invalid-request`: a page included in the export is outside the connection's reach, or the export includes more pages than one call checks | A page of the export includes (`{{@ID}}`) a page outside the connection, or its includes reach too many pages to check | Remove the include in BookStack, add the included page's book to the targets or remove its exclusion, or export single pages. |
 | `rate-limited`: BookStack rate-limited the operation | HTTP 429 | Wait and retry. A change is never retried by Qatlas. |
 | `provider-error`: BookStack rejected the input (HTTP 422), with `invalid: ...` | BookStack refused the value of the named argument | Correct the named argument; see the page of the tool group. |
 | Error text ending "this change may have taken effect, read the current state in BookStack before repeating it" | A timeout, a lost connection, or a 5xx answer after the request was sent | Read the current state in BookStack before you repeat the change. |

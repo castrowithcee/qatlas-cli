@@ -475,3 +475,100 @@ func TestContentPermissionsAreInNoProfile(t *testing.T) {
 		}
 	}
 }
+
+// permAreaServer adds the roles and content permissions to the area server: book 701 holds chapter 1001 with
+// the pages 111 and 555 and the page 333, shelf 301 holds book 701.
+func permAreaServer(t *testing.T) *areaServer {
+	t.Helper()
+	s := newAreaServer(t)
+	inner := s.Config.Handler
+	s.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case path == "/api/roles":
+			s.rec.record(r)
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{
+				{"id": guestID, "display_name": "Public", "system_name": "public"}}, "total": 1})
+		case path == "/api/roles/5":
+			s.rec.record(r)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": guestID, "system_name": "public", "users": []any{}})
+		case strings.HasPrefix(path, "/api/content-permissions/"):
+			s.rec.record(r)
+			_ = json.NewEncoder(w).Encode(defaultCurrent())
+		default:
+			inner.ServeHTTP(w, r)
+		}
+	})
+	return s
+}
+
+func TestContentPermissionsHonorExclusions(t *testing.T) {
+	s := permAreaServer(t)
+	update := func(_, args string, excludes ...string) error {
+		t.Helper()
+		s.requests()
+		_, err := s.callExcluding(t, contentPermissionsUpdate.ID, args, nil, excludes)
+		return err
+	}
+	puts := func() int {
+		n := 0
+		for _, r := range s.requests() {
+			if strings.HasPrefix(r, "PUT ") {
+				n++
+			}
+		}
+		return n
+	}
+	book := `{"type":"book","id":701,"owner_id":3}`
+	chapter := `{"type":"chapter","id":1001,"owner_id":3}`
+
+	// Inheritance reaches the excluded chapter or page below, so the change is refused; a sibling is not.
+	for what, tt := range map[string]struct{ args, exclude string }{
+		"book with an excluded chapter": {book, "chapter/1001"},
+		"book with an excluded page":    {book, "page/555"},
+		"chapter with an excluded page": {chapter, "page/555"},
+	} {
+		err := update(what, tt.args, tt.exclude)
+		refused(t, what, err)
+		noExclusionWord(t, what, err)
+		if puts() != 0 {
+			t.Errorf("%s: a change was sent", what)
+		}
+	}
+	if err := update("book with an unrelated exclusion", book, "chapter/2001", "page/444"); err != nil || puts() != 1 {
+		t.Errorf("unrelated exclusions: err = %v", err)
+	}
+
+	// A shelf passes nothing down, so its permissions stay changeable while the shelf itself is not excluded.
+	shelf := `{"type":"bookshelf","id":301,"owner_id":3}`
+	if err := update("shelf", shelf, "book/701", "chapter/1001", "page/555"); err != nil || puts() != 1 {
+		t.Errorf("shelf with excluded content: err = %v", err)
+	}
+
+	// An excluded object is refused for reading and for changing, before any request.
+	for what, tt := range map[string]struct{ args, exclude string }{
+		"shelf":   {shelf, "shelf/301"},
+		"book":    {book, "book/701"},
+		"chapter": {chapter, "chapter/1001"},
+		"page":    {`{"type":"page","id":555,"owner_id":3}`, "page/555"},
+	} {
+		s.requests()
+		_, err := s.callExcluding(t, contentPermissionsUpdate.ID, tt.args, nil, []string{tt.exclude})
+		refused(t, what+" update", err)
+		noExclusionWord(t, what+" update", err)
+		read := strings.Replace(tt.args, `,"owner_id":3`, "", 1)
+		_, err = s.callExcluding(t, contentPermissionsGet.ID, read, nil, []string{tt.exclude})
+		refused(t, what+" read", err)
+		if got := s.requests(); len(got) != 0 {
+			t.Errorf("%s: requests = %v, want none", what, got)
+		}
+	}
+	// A chapter of an excluded book and a book on an excluded shelf are refused after their evidence is read.
+	err := update("chapter in an excluded book", chapter, "book/701")
+	refused(t, "chapter in an excluded book", err)
+	err = update("book on an excluded shelf", book, "shelf/301")
+	refused(t, "book on an excluded shelf", err)
+	if puts() != 0 {
+		t.Error("a change was sent")
+	}
+}

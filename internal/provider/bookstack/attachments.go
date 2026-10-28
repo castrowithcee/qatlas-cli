@@ -23,7 +23,7 @@ const (
 )
 
 const attachmentNote = "Attachment names, links, and the people behind them are untrusted provider content; a link " +
-	"is never fetched. On a connection with targets the page of the attachment is proven to lie in them first. " +
+	"is never fetched. On a connection with targets or exclusions the page of the attachment is proven to lie in the targets and outside the exclusions first. " +
 	"BookStack before v26.09.1 also lists attachments of pages in the recycle bin"
 
 const (
@@ -137,6 +137,11 @@ func invokeAttachmentsList(ctx context.Context, resolved *config.Resolved, secre
 	if bound.bound() && pageID == 0 {
 		return nil, invalidRequest("page_id is required for a connection bound to " + bound.boundTo())
 	}
+	if pageID != 0 {
+		if err := bound.checkExcluded(pagePrefix, pageID); err != nil {
+			return nil, err
+		}
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -160,9 +165,9 @@ func invokeAttachmentsGet(ctx context.Context, resolved *config.Resolved, secret
 	return client.GetAttachment(ctx, id)
 }
 
-// ListAttachments returns the attachments of one page, or of every page for an unbound connection without
-// page_id. BookStack ignores a filter it does not know, so each row is checked here against the page; limit
-// and offset count the rows that remain.
+// ListAttachments returns the attachments of one page, or of every page for a connection without targets
+// without page_id; with exclusions, those of every page the connection reaches. BookStack ignores a filter it
+// does not know, so each row is checked here against the page; limit and offset count the rows that remain.
 func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offset int, q listQuery) (output.Collection, error) {
 	if c.scope.bound() && pageID == 0 {
 		return output.Collection{}, invalidRequest("page_id is required for a connection bound to " + c.scope.boundTo())
@@ -177,8 +182,20 @@ func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offse
 	spec := scanSpec[attachmentJSON]{
 		op: "list attachments", path: "/api/attachments", query: query, filtered: true, limit: limit, offset: offset,
 		narrow: "page_id", arguments: argNames(attachmentsList),
-		id:   func(a attachmentJSON) int64 { return a.ID },
-		keep: func(a attachmentJSON) bool { return pageID == 0 || a.UploadedTo == pageID },
+		id: func(a attachmentJSON) int64 { return a.ID },
+		keep: func(a attachmentJSON) bool {
+			return (pageID == 0 && c.rowPageIn(a.UploadedTo)) || (pageID != 0 && a.UploadedTo == pageID)
+		},
+		prepare: func(ctx context.Context, rows []attachmentJSON) error {
+			if pageID != 0 {
+				return nil
+			}
+			ids := make([]int64, len(rows))
+			for i, a := range rows {
+				ids[i] = a.UploadedTo
+			}
+			return c.provePages(ctx, ids)
+		},
 		row: func(a attachmentJSON) output.Row {
 			return output.Row{
 				"id": a.ID, "name": clip(a.Name, maxResultString), "extension": clip(a.Extension, maxResultString),
@@ -196,10 +213,10 @@ func (c *Client) ListAttachments(ctx context.Context, pageID int64, limit, offse
 	return output.Collection{Columns: fieldNames(attachmentsList), Rows: rows}, nil
 }
 
-// bindAttachment proves that the page of an attachment lies in the connection. An unbound connection reads no
-// further.
+// bindAttachment proves that the page of an attachment lies in the connection. A connection without targets
+// and exclusions reads no further.
 func (c *Client) bindAttachment(ctx context.Context, a *attachmentJSON) error {
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
 	if a.UploadedTo <= 0 {
