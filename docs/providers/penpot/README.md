@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Penpot
@@ -93,6 +93,27 @@ connections:
   team and a file that reports another project are dropped.
 
 The tools of each area add their own binding rules on their pages.
+
+### Exclusions
+
+`exclude` takes projects and files out of what the targets reach: `project/PROJECT_ID` and `file/FILE_ID` entries,
+UUIDs, spelled like targets but apart from them. `team/TEAM_ID` is not valid, nor is a repeated entry or one equal
+to a target. The provider checks the list on every call, before a secret is read, and never quotes a value.
+An exclusion is no target: it blocks no tool, changes in no way which tools a binding reaches, adds no allow-list
+(a connection with only exclusions is not narrowed) and wins over every target. An excluded project and every file
+in it is excluded, also when a `file/` target names the file.
+
+An excluded project or file behaves like an object of a team the account is not a member of. `projects.list` and
+`files.list` leave its row out; every tool that names it refuses it before the credential is resolved and
+without a request, without naming the object or the exclusion; `libraries.list` counts an excluded library in
+`outside_targets` only. Creating or importing into an excluded project, moving a file out of or into one,
+linking an excluded library, and restoring or permanently deleting an excluded deleted file are refused the same way.
+Deleting a project or a team that holds an excluded object is refused too; the proof is in
+[Projects and files](projects-and-files.md#projects-and-files) and [Teams and members](teams-and-members.md).
+
+Objects of the team itself are unchanged: members, webhooks, `teams.list`, `teams.create`, and `projects.create`
+([Webhooks](webhooks.md) names the one boundary this leaves). Lists that span the team's files, such as shared
+files, recently opened files, or the team's comments, are offered by no tool; a tool for them would have to filter.
 
 ## Choosing targets
 
