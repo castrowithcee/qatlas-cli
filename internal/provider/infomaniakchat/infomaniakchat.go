@@ -466,7 +466,7 @@ func (c *Client) verifyChannelScope(ctx context.Context, op, channelID string) e
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/channels/"+url.PathEscape(channelID), nil, nil, &ch, false); err != nil {
 		return err
 	}
-	if ch.ID != channelID {
+	if ch.ID != channelID || c.scope.excludes(ch.ID) {
 		return invalidRequest(channelOutOfScope)
 	}
 	if ch.Type != channelDirect && ch.Type != channelGroup {
@@ -502,7 +502,7 @@ func (c *Client) boundChannel(ctx context.Context, op, channelID string) (*chann
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/channels/"+url.PathEscape(channelID), nil, nil, &ch, false); err != nil {
 		return nil, err
 	}
-	if ch.ID != channelID || !c.scope.allowsTeam(ch.TeamID) {
+	if ch.ID != channelID || !c.scope.allowsTeam(ch.TeamID) || c.scope.excludes(ch.ID) {
 		return nil, invalidRequest(channelOutOfScope)
 	}
 	return &ch, nil
@@ -562,7 +562,8 @@ func Register(reg *capability.Registry) error {
 				"token can reach, and every direct or group channel with their members only, is reachable. A " +
 				"channel_id or root_id argument outside a configured allow-list, or outside that boundary, is " +
 				"refused locally or against the live instance before the matching request, and a message is " +
-				"refused before it is ever sent",
+				"refused before it is ever sent. An exclusion channel/CHANNEL_ID takes a team, direct, or group " +
+				"channel out of what the targets reach, like a private channel without membership; it always wins",
 			Kinds: []config.TargetKind{{
 				Name:        "team",
 				Description: "one kChat team this connection may reach; required, and may be listed more than once",
@@ -571,8 +572,9 @@ func Register(reg *capability.Registry) error {
 				Name: "channel",
 				Description: "one channel of a bound team, or one direct or group channel whose other " +
 					"participants are members of them; optional, and may be listed more than once",
-				Forms:   []string{"channel/CHANNEL_ID"},
-				Parents: []string{"team"},
+				Forms:      []string{"channel/CHANNEL_ID"},
+				Parents:    []string{"team"},
+				Excludable: true,
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },

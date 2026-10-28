@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Infomaniak kChat teams
@@ -19,6 +19,7 @@ The teams tools of the [Infomaniak kChat provider](README.md). The effects and t
 - `insights.top` with `team_members` ranks nothing: it lists the team members who joined in the time range,
   and its `total` is kChat's count before unreachable users are left out. Ranked channels carry no `team_id`;
   the envelope's `team_id` names the one team read.
+- `insights.top` with `reactions` ranks emoji over the whole team, so excluded channels count in it.
 - Thread authors and new members outside the bound teams are dropped, or reduced to their ID where the thread
   itself stays. A thread shows its root message only while that message is not deleted.
 

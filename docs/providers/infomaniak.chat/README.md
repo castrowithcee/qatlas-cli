@@ -1,13 +1,14 @@
 ---
 description: >
-  Describes the Infomaniak kChat provider: the service and credential, the team and channel allow-list, the
-  binding of direct and group channels, posts, files, and users, the instance-wide connection form, the local file
-  contracts, pagination, the confirmed changes and their unclear-result contract, redirect handling, and the
-  boundary to kDrive, Mail, and CalDAV/CardDAV. The tool groups are described on their own pages.
+  Describes the Infomaniak kChat provider: the service and credential, the team and channel allow-list and
+  its exclusions, the binding of direct and group channels, posts, files, and users, the instance-wide
+  connection form, the local file contracts, pagination, the confirmed changes and their unclear-result
+  contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV. The tool groups are
+  described on their own pages.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Infomaniak kChat
@@ -62,6 +63,27 @@ connections:
     credential: kchat-bot
     targets: [team/abcdEfgh12345678901234ab, channel/chanIdEfgh1234567890abcd]
 ```
+
+An optional `exclude` list takes channels out of what the targets reach:
+
+```yaml
+    exclude: [channel/chanIdEfgh1234567890abcd]
+```
+
+An exclusion is a `channel/CHANNEL_ID` of a team, direct, or group channel. An excluded channel behaves like a
+private channel without membership: it is left out of every list, search, and ranking, and a `channel_id`, a
+`post_id`, a `hook_id`, or a category change that reaches it is refused, naming nothing. An exclusion always
+wins over what the targets reach; a `team/` exclusion, a repeated one, and one equal to a target are
+invalid and refuse the connection without quoting the value. Exclusions never remove a tool: the tools tied to
+`channel/` targets (see [Choosing targets](#choosing-targets)) stay tied to those alone.
+
+- A `channel_id` is refused before any secret is read. A channel found by name, a `post_id`, or a `hook_id` is
+  refused after the read that proves it, with no further request.
+- A category shows no excluded `channel_ids`, `categories.create` and `.update` refuse one, and `.update`
+  writes the excluded channels it holds back unchanged, like any channel outside the targets.
+- Team-wide settings (team roles, slash commands, bots, emoji) stay available and may concern an excluded
+  channel. The opening of direct and group channels is on [messages](messages.md), the webhooks on
+  [integrations](integrations.md), the reaction ranking on [teams](teams.md).
 
 Without a `channel/CHANNEL_ID` target, every channel of the bound teams the token can reach is reachable,
 and so is every direct or group channel whose other participants are all members of a bound team. With one
@@ -248,8 +270,9 @@ returned.
 
 A live test against a real kChat instance checks, in order:
 
-- Listings match the allow-lists and the token's teams and channels; searches and `insights.top` show nothing
-  from a channel outside the allow-list, a direct message, or another team.
+- Listings match the allow-lists, the exclusions, and the token's teams and channels; searches and
+  `insights.top` show nothing from a channel outside the allow-list, an excluded channel, a direct message, or
+  another team.
 - Channel create and update work only without a channel allow-list; member tools refuse a user only in
   another team. A disposable channel switches to private, is archived, shows in `archived-channels.list`,
   and is restored; the default channel's refusal is a provider error class.
