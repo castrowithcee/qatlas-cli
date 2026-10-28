@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Set up SeaTable Base
@@ -150,5 +150,6 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 | `timeout`: SeaTable did not answer in time | The server was too slow | Retry. After a change, read the affected objects first; see [Shared boundaries](README.md#shared-boundaries). |
 | `unreachable` or `tls` in the connection test | The server does not answer or its certificate fails | Check the service address, the network, and the server's certificate. |
 | A message that a service needs a usable `https` origin, must use `https`, or must be a bare origin | The service address has a wrong scheme, a path, a user, a query, or a fragment | Use `https://HOST` only. |
+| A test or call fails after an excluded table or view was renamed, with a message that an exclusion names a table or view the base does not hold | An exclusion by name no longer finds its table or view, so Qatlas cannot tell what to keep out and refuses every call that reads the base metadata | Not a token problem. Change the exclusion to the new name, or use the `id:TABLEID` form so a rename does not break it. |
 | A message that a connection needs at least one table, or that the table is outside the allow-list | The connection's targets do not name the table | Not a token problem. Add the table to the targets or use a table the connection allows; see [Choosing targets](README.md#choosing-targets). |
 | A tool is not offered, or `confirmation-required` | The connection's `effects` or `tools` do not include the tool, or `confirm` is missing | Not a token problem. Add the effect or the tool to the connection, and pass `confirm` for a change. |

@@ -116,8 +116,9 @@ type BatchUpdate struct {
 	Values map[string]json.RawMessage `json:"values"`
 }
 
-// openForTable settles the connection's own table boundary before the credential is resolved: a table
-// outside the allow-list is refused without a secret lookup and without provider access.
+// openForTable settles the connection's own table boundary by the table's spelling before the credential is
+// resolved: a table outside the allow-list, or one an exclusion names in the same spelling, is refused
+// without a secret lookup and without provider access.
 func openForTable(ctx context.Context, op string, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, table string) (*Client, error) {
 	if resolved == nil {
