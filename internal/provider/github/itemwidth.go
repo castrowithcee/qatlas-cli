@@ -466,7 +466,7 @@ func (v *fieldValueJSON) widthValue(allowed allowlist) (ItemFieldValue, bool) {
 		}
 	}
 	out.Labels, out.LabelsTotalCount, out.LabelsTruncated = pageItems(v.Labels, (*gqlLabelRaw).project)
-	out.PullRequests, out.PullRequestsTotal, out.PullRequestsCut = pageItems(v.PullRequests, (*gqlReferenceRaw).project)
+	out.PullRequests, out.PullRequestsTotal, out.PullRequestsCut = pageItems(v.PullRequests, referencesIn(allowed))
 	out.Reviewers, out.ReviewersTotalCount, out.ReviewersTruncated = pageItems(v.Reviewers, (*itemReviewerRaw).project)
 	out.Users, out.UsersTotalCount, out.UsersTruncated = pageItems(v.Users, (*gqlAccountRaw).project)
 	return out, true

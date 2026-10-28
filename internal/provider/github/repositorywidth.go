@@ -880,12 +880,16 @@ func (r *gqlRepositoryTopicRaw) project() *GraphQLRepositoryTopic {
 		Links: gqlLinks(gqlResourceLinkKeys, r.ResourcePath)}
 }
 
-func (r *gqlPinnedIssueRaw) project() *GraphQLPinnedIssue {
+func (r *gqlPinnedIssueRaw) project(allowed allowlist) *GraphQLPinnedIssue {
 	if r == nil {
 		return nil
 	}
+	issue := r.Issue.projectIn(allowed)
+	if r.Issue != nil && issue == nil {
+		return nil
+	}
 	return &GraphQLPinnedIssue{ID: gqlName(r.ID), DatabaseID: r.DatabaseID, FullDatabaseID: r.FullDatabaseID,
-		Issue: r.Issue.project(), PinnedBy: r.PinnedBy.project()}
+		Issue: issue, PinnedBy: r.PinnedBy.project()}
 }
 
 func (r *gqlPinnedDiscussionRaw) project() *GraphQLPinnedDiscussion {
@@ -1120,7 +1124,7 @@ func (r *repositoryWidthRaw) width(allowed allowlist) RepositoryWidth {
 	w.RepositoryTopics, w.RepositoryTopicsTotalCount, w.RepositoryTopicsTruncated = pageItems(r.RepositoryTopics,
 		(*gqlRepositoryTopicRaw).project)
 	w.PinnedIssues, w.PinnedIssuesTotalCount, w.PinnedIssuesTruncated = pageItems(r.PinnedIssues,
-		(*gqlPinnedIssueRaw).project)
+		func(p *gqlPinnedIssueRaw) *GraphQLPinnedIssue { return p.project(allowed) })
 	w.PinnedDiscussions, w.PinnedDiscussionsTotalCount, w.PinnedDiscussionsTruncated = pageItems(r.PinnedDiscussions,
 		(*gqlPinnedDiscussionRaw).project)
 	w.PinnedEnvironments, w.PinnedEnvironmentsTotalCount, w.PinnedEnvironmentsTruncated = pageItems(r.PinnedEnvironments,

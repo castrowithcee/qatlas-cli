@@ -496,6 +496,27 @@ func (r *gqlReferenceRaw) project() *GraphQLReference {
 	return ref
 }
 
+// projectIn is project for a connection that may exclude: a reference whose repository an exclusion covers, or
+// cannot be determined, is left out altogether, as GitHub leaves out what a token cannot see.
+func (r *gqlReferenceRaw) projectIn(allowed allowlist) *GraphQLReference {
+	if r == nil {
+		return nil
+	}
+	repository := ""
+	if r.Repository != nil && r.Repository.NameWithOwner != nil {
+		repository = *r.Repository.NameWithOwner
+	}
+	if allowed.dropsRow(repository) {
+		return nil
+	}
+	return r.project()
+}
+
+// referencesIn is projectIn as the projection function the list helpers take.
+func referencesIn(allowed allowlist) func(*gqlReferenceRaw) *GraphQLReference {
+	return func(r *gqlReferenceRaw) *GraphQLReference { return r.projectIn(allowed) }
+}
+
 var gqlReferenceSchema = objectSchema(`"id":{"type":"string"},"number":{"type":"integer"},` +
 	`"title":{"type":"string"},"state":{"type":"string"},"url":{"type":"string"},"repository":{"type":"string"}`)
 
