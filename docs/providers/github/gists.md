@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # GitHub gists
@@ -54,6 +54,9 @@ users it names: `username` of the list must be one of them, the list without `us
 account behind the token among them (checked with one read of the account), and `get`, `update`, and `delete`
 read the gist first and answer `not-found`, without a change, for a gist whose owner is no named user, or an
 anonymous one. An organization owner target does not count, since a gist belongs to a user.
+
+An [exclusion](README.md#targets) of a user drops that user's gists from lists and makes `get`, `update`, and
+`delete` answer `not-found`; `github.gists.create` is refused when the account behind the token is excluded.
 
 Every change is sent once and is never retried, see [confirmed changes](README.md#confirmed-changes). A create
 is not idempotent; an update sets the named state and leaves the same state when repeated; GitHub documents no

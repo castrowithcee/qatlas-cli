@@ -658,3 +658,54 @@ func TestExclusionsPinGraphQLRepositoryLookups(t *testing.T) {
 		t.Errorf("a client without exclusions changed the document: %s", got)
 	}
 }
+
+func TestExclusionsAreDeclaredAndValidated(t *testing.T) {
+	reg := registry(t)
+	metadata, _ := reg.ProviderMetadata(Provider)
+	if !metadata.Target.Excludes() {
+		t.Fatal("github declares no exclusions")
+	}
+	for _, kind := range metadata.Target.Kinds {
+		if !kind.Excludable {
+			t.Errorf("kind %s is not excludable", kind.Name)
+		}
+	}
+	targets := []string{"repos/octo/app"}
+	for name, tc := range map[string]struct {
+		excludes []string
+		valid    bool
+	}{
+		"repository":         {[]string{"repos/octo/other"}, true},
+		"repository pattern": {[]string{"repos/octo/*"}, true},
+		"user":               {[]string{"users/alice"}, true},
+		"organization":       {[]string{"orgs/octo"}, true},
+		"user project":       {[]string{"users/alice/projects/3"}, true},
+		"org project":        {[]string{"orgs/octo/projects/3"}, true},
+		"project pattern":    {[]string{"orgs/octo/projects/*"}, true},
+		"wildcard":           {[]string{"*"}, false},
+		"owner wildcard":     {[]string{"repos/*/app"}, false},
+		"login wildcard":     {[]string{"orgs/*"}, false},
+		"project owner star": {[]string{"users/*/projects/3"}, false},
+		"is target":          {[]string{"repos/octo/app"}, false},
+		"duplicate":          {[]string{"users/alice", "users/alice"}, false},
+	} {
+		if got := metadata.Target.CheckExcludes(tc.excludes, targets); (len(got) == 0) != tc.valid {
+			t.Errorf("%s: findings = %+v, valid %t", name, got, tc.valid)
+		}
+	}
+	yamlConfig := `version: 1
+services:
+  gh: {provider: github}
+credentials:
+  gh-reader: {type: env, values: {token: GH_TOKEN}}
+connections:
+  ex:
+    service: gh
+    credential: gh-reader
+    targets: [repos/octo/*]
+    exclude: [repos/octo/secret]
+`
+	if _, err := config.Decode(strings.NewReader(yamlConfig), reg); err != nil {
+		t.Errorf("connection with exclude = %v", err)
+	}
+}

@@ -107,6 +107,8 @@ type fakeGitHub struct {
 	searchRateLimited bool
 	// searchHasNextPage makes every search route announce a following page through the Link header.
 	searchHasNextPage bool
+	// searchBodies replaces the answer of a search route, keyed by the route below /search/.
+	searchBodies map[string]string
 	// issueTypes are the issue types octo-org declares.
 	issueTypes []fakeIssueType
 	// issueTypesForbidden refuses the organization issue type list like GitHub does for a token without read:org.
@@ -311,7 +313,12 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if f.searchHasNextPage {
 			w.Header().Set("Link", `<https://example.invalid/next>; rel="next"`)
 		}
-		switch strings.TrimPrefix(r.URL.Path, "/api/v3/search/") {
+		route := strings.TrimPrefix(r.URL.Path, "/api/v3/search/")
+		if body, ok := f.searchBodies[route]; ok {
+			fmt.Fprint(w, body)
+			return
+		}
+		switch route {
 		case "repositories":
 			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"full_name":"octo-org/example",`+
 				`"description":"An example","visibility":"public","language":"Go","stargazers_count":3,"fork":false,`+

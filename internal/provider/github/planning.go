@@ -307,13 +307,48 @@ type planningNodes struct {
 
 type planningItemJSON struct {
 	ID         string `json:"id"`
+	Type       string `json:"type"`
 	IsArchived bool   `json:"isArchived"`
 	Project    *struct {
 		ID string `json:"id"`
 	} `json:"project"`
 	Content *struct {
-		ID string `json:"id"`
+		ID         string `json:"id"`
+		Repository *struct {
+			NameWithOwner string `json:"nameWithOwner"`
+		} `json:"repository"`
 	} `json:"content"`
+}
+
+// hidden reports whether the item's content lies in an exclusion. The type and the repository are selected
+// only while the connection excludes anything, and a non-draft item without a readable repository counts as
+// excluded.
+func (item *planningItemJSON) hidden(allowed allowlist) bool {
+	repository := ""
+	if item.Content != nil && item.Content.Repository != nil {
+		repository = item.Content.Repository.NameWithOwner
+	}
+	return allowed.hidesContent(item.Type, repository)
+}
+
+// planningItemSelection selects an item and, while the connection excludes anything, the type and the
+// repository of its content, which the one proving read of a change needs; the draft id is selected for a
+// draft change.
+func (c *Client) planningItemSelection(draft bool) string {
+	var content []string
+	if draft {
+		content = append(content, "... on DraftIssue{id}")
+	}
+	selection := "id isArchived project{id}"
+	if len(c.allowed.excludes) > 0 {
+		selection += " type"
+		content = append(content, "... on Issue{repository{nameWithOwner}}",
+			"... on PullRequest{repository{nameWithOwner}}")
+	}
+	if len(content) > 0 {
+		selection += " content{" + strings.Join(content, " ") + "}"
+	}
+	return selection
 }
 
 type planningJSON struct {
@@ -367,17 +402,18 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	body := `owner:` + c.target.ownerField() + `(login:$owner){projectV2(number:$number){` + selection + `}` +
 		teams + `}`
 	if request.item != "" {
-		content := ""
-		if request.draft {
-			content = " content{... on DraftIssue{id}}"
-		}
 		declarations += ",$item:ID!"
-		body += ` item:node(id:$item){... on ProjectV2Item{id isArchived project{id}` + content + `}}`
+		body += ` item:node(id:$item){... on ProjectV2Item{` + c.planningItemSelection(request.draft) + `}}`
 		variables["item"] = request.item
 	}
 	if request.after != "" {
 		declarations += ",$after:ID!"
-		body += ` after:node(id:$after){... on ProjectV2Item{id project{id}}}`
+		afterSelection := "id project{id}"
+		if len(c.allowed.excludes) > 0 {
+			afterSelection += " type content{... on Issue{repository{nameWithOwner}} " +
+				"... on PullRequest{repository{nameWithOwner}}}"
+		}
+		body += ` after:node(id:$after){... on ProjectV2Item{` + afterSelection + `}}`
 		variables["after"] = request.after
 	}
 	if request.statusUpdate != "" {
@@ -418,6 +454,9 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	if request.item != "" && !answer.Item.belongs(request.item, info) {
 		return nil, nodes, notFound(op, subject{in: c.target, what: "this item"})
 	}
+	if request.item != "" && answer.Item.hidden(c.allowed) {
+		return nil, nodes, notFound(op, subject{in: c.target, what: "this item"})
+	}
 	nodes.archived = request.item != "" && answer.Item.IsArchived
 	if request.draft {
 		if answer.Item.Content == nil || answer.Item.Content.ID == "" {
@@ -426,7 +465,7 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 		}
 		nodes.draft = answer.Item.Content.ID
 	}
-	if request.after != "" && !answer.After.belongs(request.after, info) {
+	if request.after != "" && (!answer.After.belongs(request.after, info) || answer.After.hidden(c.allowed)) {
 		return nil, nodes, notFound(op, subject{in: c.target, what: "the item after_id names"})
 	}
 	for i, login := range request.assignees {

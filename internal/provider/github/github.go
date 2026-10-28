@@ -562,19 +562,22 @@ func Register(reg *capability.Registry) error {
 				"a connection reaches whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "repository", Description: "one repository, or with * every repository of one owner",
-				Forms:   []string{"repos/OWNER/REPO", "repos/OWNER/*"},
-				Parents: []string{"owner"},
+				Forms:      []string{"repos/OWNER/REPO", "repos/OWNER/*"},
+				Parents:    []string{"owner"},
+				Excludable: true,
 			}, {
 				Name: "project", Description: "one project of a user or an organization, or with * every project of " +
 					"one owner",
 				Forms: []string{"users/LOGIN/projects/NUMBER", "orgs/LOGIN/projects/NUMBER", "users/LOGIN/projects/*",
 					"orgs/LOGIN/projects/*"},
-				Parents: []string{"owner"},
+				Parents:    []string{"owner"},
+				Excludable: true,
 			}, {
 				Name: "owner", Description: "a user or an organization whose projects and repositories may be " +
 					"listed and in which projects may be created or copied; allows no repository or existing project " +
 					"by itself",
-				Forms: []string{"users/LOGIN", "orgs/LOGIN"},
+				Forms:      []string{"users/LOGIN", "orgs/LOGIN"},
+				Excludable: true,
 			}},
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)
