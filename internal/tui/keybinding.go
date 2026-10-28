@@ -96,8 +96,10 @@ func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
 	// checks against what is shown, not against what was saved.
 	name := key.String()
 	if name == keyOf(actSpace) {
-		// The rules name the space bar by its character, as bindings always have been.
-		name = " "
+		// Check trims a blank key to "", which Info accepts as "no second key", so a space would silently
+		// clear it; refuse it here with the rule's wording for every action.
+		m.fail = "space: space and control characters are no binding"
+		return nil
 	}
 	chosen, err := m.keysOfForm().Check(f.action, name)
 	if err != nil {
