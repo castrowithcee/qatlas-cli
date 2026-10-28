@@ -139,9 +139,14 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil || !result.UpdateAvailable {
 		return result, err
 	}
+	return c.installRelease(ctx, result, release)
+}
+
+// installRelease downloads, verifies, and installs rel, the release named by result.Latest.
+func (c *Client) installRelease(ctx context.Context, result Result, rel release) (Result, error) {
 	goos, goarch := c.platform()
 	archiveName := assetName(result.Latest, goos, goarch)
-	archiveURL, checksumURL, signatureURL, err := releaseURLs(release, archiveName)
+	archiveURL, checksumURL, signatureURL, err := releaseURLs(rel, archiveName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -221,8 +226,10 @@ func writeRelease(dir string, files Release, checksums, signature, archive []byt
 }
 
 type release struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName    string `json:"tag_name"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+	Assets     []struct {
 		Name       string `json:"name"`
 		APIURL     string `json:"url"`
 		BrowserURL string `json:"browser_download_url"`
@@ -257,11 +264,16 @@ func (c *Client) currentVersion() (semver, error) {
 	return parsed, nil
 }
 
-func (c *Client) latest(ctx context.Context) (release, error) {
+func (c *Client) baseURL() string {
 	base := strings.TrimRight(c.BaseURL, "/")
 	if base == "" {
 		base = repositoryAPI
 	}
+	return base
+}
+
+func (c *Client) latest(ctx context.Context) (release, error) {
+	base := c.baseURL()
 	body, err := c.request(ctx, base+"/releases/latest", maxMetadataBytes, "application/vnd.github+json", nil)
 	if err != nil {
 		return release{}, fmt.Errorf("check latest release: %w", err)

@@ -16,7 +16,8 @@ import (
 )
 
 func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
-	var check, yes bool
+	var check, yes, list bool
+	var to string
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update qatlas to the latest stable release",
@@ -34,6 +35,13 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"long as data arrives; one that receives nothing for 30 seconds ends, and nothing is changed.\n" +
 			"Dev builds and symlink installations are not replaced. Use --check to report availability\n" +
 			"without changing files.\n\n" +
+			"--list shows the releases that can be chosen: the ten newest stable releases, every prerelease newer\n" +
+			"than the newest stable one, and the running version, newest first, with prerelease, current, and\n" +
+			"older marked. Only signed releases from v0.30.0 on appear. --to <tag> installs exactly one of them,\n" +
+			"a prerelease included, with the same confirmation, signature check, and vault handling as above;\n" +
+			"the running version is only reported as installed. Installing a version older than the running\n" +
+			"one is not available yet and is refused. --list and --to cannot be combined with each other or\n" +
+			"with --check.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
 			"running qatlas processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +
@@ -50,28 +58,42 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"before anything is touched.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			if (list && (to != "" || check || yes)) || (c.Flags().Changed("to") && (to == "" || check)) {
+				return &UsageError{errors.New("--list, --to <tag>, and --check cannot be combined, and --to needs a tag; " +
+					"--yes only goes with an installation")}
+			}
 			updater := opts.Updater
 			if updater == nil {
 				updater = selfupdate.New(buildVersion)
 			}
-			if !check && !yes && (opts.Agent || !checkInteractive()) {
-				return &UsageError{errors.New("update replaces the installed program and needs a confirmation: " +
-					"run it at a terminal, or pass --yes; an agent runs it only after the user approved the update")}
-			}
-			result, err := updater.Check(c.Context())
-			if err == nil && !check && result.UpdateAvailable {
-				if yes || confirmUpdate(result.Latest) {
-					result, err = replaceProgram(c, opts, updater)
-				} else {
-					fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+			var result selfupdate.Result
+			var err error
+			switch {
+			case list:
+				entries, err := updater.List(c.Context())
+				if err != nil {
+					return updateError(err)
+				}
+				return emit(c, opts, listCollection(entries))
+			case to != "":
+				result, err = updateTo(c, opts, updater, to, yes)
+			default:
+				if !check && !yes && (opts.Agent || !checkInteractive()) {
+					return &UsageError{errors.New(refusal)}
+				}
+				result, err = updater.Check(c.Context())
+				if err == nil && !check && result.UpdateAvailable {
+					if yes || confirmUpdate(result.Latest) {
+						result, err = replaceProgram(c, opts, updater, func(client *selfupdate.Client) (selfupdate.Result, error) {
+							return client.Update(c.Context())
+						})
+					} else {
+						fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+					}
 				}
 			}
 			if err != nil {
-				var unsupported *selfupdate.UnsupportedInstallationError
-				if errors.Is(err, selfupdate.ErrDevelopmentBuild) || errors.As(err, &unsupported) {
-					return &UsageError{err}
-				}
-				return err
+				return updateError(err)
 			}
 			return emit(c, opts, output.Object{Fields: []output.Field{
 				{Name: "current", Value: result.Current},
@@ -84,20 +106,68 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm the update without asking")
 	cmd.Flags().BoolVar(&check, "check", false, "only report whether a newer stable release is available")
+	cmd.Flags().BoolVar(&list, "list", false, "list the signed releases that can be chosen")
+	cmd.Flags().StringVar(&to, "to", "", "install this release, a prerelease included, instead of the latest stable one")
 	return cmd
+}
+
+const refusal = "update replaces the installed program and needs a confirmation: " +
+	"run it at a terminal, or pass --yes; an agent runs it only after the user approved the update"
+
+// updateError makes the errors that come from the request, not from the system, usage errors.
+func updateError(err error) error {
+	var unsupported *selfupdate.UnsupportedInstallationError
+	var target *selfupdate.TargetError
+	if errors.Is(err, selfupdate.ErrDevelopmentBuild) || errors.As(err, &unsupported) || errors.As(err, &target) {
+		return &UsageError{err}
+	}
+	return err
+}
+
+func listCollection(entries []selfupdate.Entry) output.Collection {
+	columns := []string{"version", "prerelease", "current", "older"}
+	rows := make([]output.Row, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, output.Row{"version": e.Version, "prerelease": e.Prerelease, "current": e.Current, "older": e.Older})
+	}
+	return output.Collection{Columns: columns, Rows: rows}
+}
+
+// updateTo installs the release named tag after the confirmation. The running version is reported as
+// installed without asking and without a change.
+func updateTo(c *cobra.Command, opts *Options, updater *selfupdate.Client, tag string, yes bool) (selfupdate.Result, error) {
+	target, err := updater.Target(c.Context(), tag)
+	if err != nil {
+		return selfupdate.Result{}, err
+	}
+	if target.Current {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: %s is already installed, nothing was changed\n", tag)
+		return updater.UpdateTo(c.Context(), target)
+	}
+	if !yes && (opts.Agent || !checkInteractive()) {
+		return selfupdate.Result{}, &UsageError{errors.New(refusal)}
+	}
+	if !yes && !confirmTarget(target) {
+		fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+		return selfupdate.Result{Current: updater.Version, Latest: tag, UpdateAvailable: true}, nil
+	}
+	return replaceProgram(c, opts, updater, func(client *selfupdate.Client) (selfupdate.Result, error) {
+		return client.UpdateTo(c.Context(), target)
+	})
 }
 
 // replaceProgram installs the release. Once the program is replaced, a running vault process no longer
 // passes for it: it refuses every client, a lock included. It is therefore handed over to the new program
 // or locked while it still can be, around the replacement, and only here, after the confirmation.
-func replaceProgram(c *cobra.Command, opts *Options, updater *selfupdate.Client) (selfupdate.Result, error) {
+func replaceProgram(c *cobra.Command, opts *Options, updater *selfupdate.Client,
+	install func(*selfupdate.Client) (selfupdate.Result, error)) (selfupdate.Result, error) {
 	replacement := &vaultReplacement{opts: opts}
 	client := replacement.hooked(updater)
 	progress, endProgress := downloadProgress(c, opts)
 	if progress != nil {
 		client.Progress = progress
 	}
-	result, err := client.Update(c.Context())
+	result, err := install(client)
 	endProgress()
 	printNote(c, replacement.finish())
 	return result, err
@@ -233,5 +303,11 @@ func (r *vaultReplacement) finish() string {
 // read an answer is a no, so nothing is replaced on a guess.
 func confirmUpdate(latest string) bool {
 	ok, err := readVaultConfirm(selfupdate.Question(latest) + "\nContinue? [y/N] ")
+	return err == nil && ok
+}
+
+// confirmTarget is confirmUpdate for a release chosen by version.
+func confirmTarget(t selfupdate.Target) bool {
+	ok, err := readVaultConfirm(selfupdate.TargetQuestion(t.Version, t.Prerelease) + "\nContinue? [y/N] ")
 	return err == nil && ok
 }
