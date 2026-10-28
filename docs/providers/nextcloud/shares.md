@@ -54,7 +54,12 @@ changes rights, expiry, or note of a `user` or `group` share the identity made; 
 `delete` revokes any share the identity made below the root, whatever its type; shares made to it stay untouched.
 
 `update` and `delete` read the share once and refuse without a change a share outside the root, a share that
-is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
+is not the identity's own, and (for `update`) any other type; the refusal names no path.
+
+A remote share is placed by its mount point. One on, below, or above an excluded folder is not listed and `get`
+and `remove` answer like a missing share, except that `remove` still revokes a mount point above an exclusion. A
+mount point that cannot be placed counts as hidden once a folder is excluded. Pending incoming shares and the
+sharee search are not filtered. They then send exactly
 one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
 the change may have been applied and to check the share (`shares.shares.get`, `shares.incoming-shares.pending`, or
 `shares.remote-shares.get`) before repeating; Qatlas never repeats. A refusal by the instance (for example a required

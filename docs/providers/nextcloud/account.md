@@ -34,3 +34,25 @@ against the live list, so an unoffered one is refused without a search. A search
 provider declares it; any other is refused after the provider read, without a search. Hit links are never followed.
 With filters set, `next_cursor` of both lists carries them, and a following page with other filters is refused; a cursor
 from a list without filters stays valid as long as no filter is set. Both are in no profile.
+
+## Exclusions
+
+The rules are in [Exclusions](README.md#exclusions). The `account` target does not accept exclusions yet, so the
+tools below enforce them only where a connection holds both. Account data, status, the tag catalog, and the sharee
+search are not filtered; `account.search.query` hits are not filtered either.
+
+`account.activity.list` and `account.notifications.list` leave out a whole entry when an object it names is
+excluded, and do not count it. An entry names an object by a file path or ID, a calendar or address book URI, a board
+ID, a conversation token, or a note ID, in its object type and ID, its `objects`, the rich objects of subject and
+message, and its links, previews included. A path is compared after the cross-kind rules of README, so an entry below
+`NOTES_PATH/CATEGORY` follows a notes exclusion; when the notes path is needed and unreadable, the call fails.
+A file ID is resolved to its path, a note ID to its category, and a conversation like in [talk](talk.md#exclusions),
+once per page and ID. A card ID without a board counts as excluded, because no single read gives its board. An entry
+whose read fails is left out. An entry that names nothing Qatlas can place stays, which the tool descriptions say.
+
+`next_cursor` of the activity list and the `etag` of the notification list stay the answer of the server, so they
+also reflect hidden entries and a page may hold fewer entries than `limit`. An `object_type` with `object_id` that names
+an excluded board, calendar, address book, or conversation is refused like a missing object before any credential
+access; any other object is read and each entry is checked. `account.notifications.dismiss` answers for a hidden
+notification like a missing one, after the read and without a request that changes anything.
+`account.notifications.dismiss-all` is unchanged and dismisses hidden notifications too.
