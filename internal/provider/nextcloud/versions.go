@@ -178,6 +178,9 @@ func invokeVersionsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -189,6 +192,9 @@ func invokeVersionsGet(ctx context.Context, resolved *config.Resolved, secrets *
 	const op = "get version"
 	input, rel, err := readVersionArguments(op, raw, true)
 	if err != nil {
+		return nil, err
+	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
 		return nil, err
 	}
 	if input.LocalPath == nil {
@@ -220,6 +226,9 @@ func invokeVersionsRestore(ctx context.Context, resolved *config.Resolved, secre
 	const op = "restore version"
 	input, rel, err := readVersionArguments(op, raw, true)
 	if err != nil {
+		return nil, err
+	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
 		return nil, err
 	}
 	if !validETag(input.ETag) {

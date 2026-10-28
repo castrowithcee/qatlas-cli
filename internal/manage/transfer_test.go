@@ -26,7 +26,7 @@ const (
 
 // transferSource has two connections that need one service and credential each, a forward credential, an
 // unrelated service and credential, defaults and a provider note.
-const transferSource = `version: 3
+const transferSource = `version: 4
 services:
     wiki:
         id: ` + idWikiSvc + `
@@ -332,7 +332,7 @@ func TestExportHoldsNoSecretValues(t *testing.T) {
 
 func TestRoundTripIntoEmptyInstallation(t *testing.T) {
 	path, _ := exported(t, ExportSelection{All: true, Defaults: true, ProviderNotes: true})
-	for name, text := range map[string]string{"no file": "", "empty config": "version: 3\n"} {
+	for name, text := range map[string]string{"no file": "", "empty config": "version: 4\n"} {
 		t.Run(name, func(t *testing.T) {
 			dst := newTransferWorld(t, text)
 			plan := mustPlan(t, dst, path, ImportModeCreate)
@@ -378,7 +378,7 @@ func TestRoundTripIntoEmptyInstallation(t *testing.T) {
 }
 
 // targetConfig has a service, credential and connection named like the source's, with other contents.
-const targetConfig = `version: 3
+const targetConfig = `version: 4
 services:
     wiki:
         id: ` + idOther + `
@@ -516,7 +516,7 @@ func TestImportOverwriteNamesConnectionsOutsideTheFile(t *testing.T) {
 func TestImportIDRule(t *testing.T) {
 	path, _ := exported(t, ExportSelection{All: true})
 	// The target already has the file's service id under another name: that id is taken for services only.
-	text := `version: 3
+	text := `version: 4
 services:
     other-name:
         id: ` + idWikiSvc + `

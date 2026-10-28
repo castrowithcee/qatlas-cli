@@ -3,8 +3,10 @@ package manage
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -22,18 +24,23 @@ import (
 // them. Reapproval names the connections that read a credential of an encrypted vault and whose effects the
 // migration narrowed to those of their tools: their approval no longer matches, and each needs approving once
 // ('qatlas vault approve', or in the editor). With a locked vault it lists every such connection, since
-// whether it was approved is unknown. Warning is the redacted failure to log the migration, which never undoes
-// it, and "" otherwise.
+// whether it was approved is unknown. Retargeted names in the same way the connections whose targets or
+// exclusions the migration rewrote into their current form (see config.Config.RetargetedConnections).
+// OutdatedTargets names the connections whose targets their provider could not carry over: they are written as
+// they were, marked, and invalid until a person chooses their targets again. All three hold names only, never
+// a target. Warning is the redacted failure to log the migration, which never undoes it, and "" otherwise.
 type Migration struct {
-	Path        string
-	From        int
-	Backup      string
-	VaultCopies []string
-	VaultIDs    int
-	Pending     bool
-	Renamings   []config.Renaming
-	Reapproval  []string
-	Warning     string
+	Path            string
+	From            int
+	Backup          string
+	VaultCopies     []string
+	VaultIDs        int
+	Pending         bool
+	Renamings       []config.Renaming
+	Reapproval      []string
+	Retargeted      []string
+	OutdatedTargets []string
+	Warning         string
 }
 
 // MigrationError reports a migration that did not happen. Without Backup nothing was changed: the file, the
@@ -68,7 +75,9 @@ var saveMigration = func(save func(*config.Config) error, cfg *config.Config) er
 // read. A file that is missing or already current needs nothing and returns nil, nil, which is also what a
 // second process sees once another one migrated. A file that does not load is left as it is, without a
 // backup. Any failure before the file is written leaves file and vault unchanged and removes the backups it
-// made; the error is then a *MigrationError without Backup.
+// made; the error is then a *MigrationError without Backup. A connection whose targets cannot be carried over
+// does not stop the migration: it is written as it was with its mark (see config.Store.ForMigration), and the
+// file then fails to load until a person chooses its targets again.
 //
 // A vault that is encrypted and locked takes the ids as pending writes, merged on its next unlock; until then
 // entries are matched by name, as they always were. No vault is created, and a vault other than the one
@@ -80,7 +89,7 @@ func (s *Service) MigrateSchema() (*Migration, error) {
 		return nil, nil
 	}
 	for attempt := 0; attempt < migrationAttempts; attempt++ {
-		cfg, rev, err := s.store.LoadVersioned()
+		cfg, rev, err := s.store.ForMigration().LoadVersioned()
 		var notFound *config.NotFoundError
 		switch {
 		case errors.As(err, &notFound):
@@ -106,12 +115,13 @@ func (s *Service) MigrateSchema() (*Migration, error) {
 // migrate runs one attempt on cfg, read at revision rev. The returned Migration has Backup set once the file
 // was written, also when the read-back failed.
 func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, error) {
-	m := &Migration{Path: s.store.Path(), From: cfg.Version, Renamings: cfg.Renamings()}
+	m := &Migration{Path: s.store.Path(), From: cfg.Version, Renamings: cfg.Renamings(),
+		OutdatedTargets: cfg.OutdatedTargets()}
 	v := s.vault()
 	if v != nil && v.Dir() != vault.New(filepath.Dir(s.store.Path())).Dir() {
 		v = nil
 	}
-	err := s.store.Transact(rev, func(save func(*config.Config) error) error {
+	err := s.store.ForMigration().Transact(rev, func(save func(*config.Config) error) error {
 		var copies []string
 		discard := func() {
 			for _, path := range copies {
@@ -130,7 +140,8 @@ func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, 
 			return err
 		}
 
-		m.Reapproval = reapprovalNeeded(cfg, v)
+		m.Reapproval = reapprovalNeeded(cfg, v, cfg.NarrowedEffects())
+		m.Retargeted = reapprovalNeeded(cfg, v, cfg.RetargetedConnections())
 		cfg.AssignIDs()
 		undo := func() error { return nil }
 		if v != nil {
@@ -159,11 +170,10 @@ func (s *Service) migrate(cfg *config.Config, rev config.Revision) (*Migration, 
 	return m, err
 }
 
-// reapprovalNeeded returns the connections whose effects the migration narrows and that an encrypted vault
-// approved or may have approved. It never widens anything and approves nothing.
-func reapprovalNeeded(cfg *config.Config, v *vault.Vault) []string {
-	narrowed := cfg.NarrowedEffects()
-	if v == nil || len(narrowed) == 0 {
+// reapprovalNeeded returns the connections of changed, whose scope the migration changes, that an encrypted
+// vault approved or may have approved. It never widens anything and approves nothing.
+func reapprovalNeeded(cfg *config.Config, v *vault.Vault, changed []string) []string {
+	if v == nil || len(changed) == 0 {
 		return nil
 	}
 	state, err := v.State()
@@ -177,7 +187,7 @@ func reapprovalNeeded(cfg *config.Config, v *vault.Vault) []string {
 		}
 	}
 	var names []string
-	for _, name := range narrowed {
+	for _, name := range changed {
 		if cred, ok := cfg.Credentials[cfg.Connections[name].Credential]; !ok || cred.Type != config.CredentialTypeVault {
 			continue
 		}
@@ -228,9 +238,10 @@ func vaultCredentialIDs(cfg *config.Config) map[string]string {
 	return ids
 }
 
-// readBack loads the file just written and checks that it is in the current schema with the ids of cfg.
+// readBack loads the file just written and checks that it is in the current schema with the ids, targets and
+// exclusions of cfg.
 func (s *Service) readBack(cfg *config.Config) error {
-	loaded, err := s.store.Load()
+	loaded, err := s.store.ForMigration().Load()
 	if err != nil {
 		return err
 	}
@@ -248,8 +259,14 @@ func (s *Service) readBack(cfg *config.Config) error {
 		}
 	}
 	for name, entry := range cfg.Connections {
-		if loaded.Connections[name].ID != entry.ID {
+		got := loaded.Connections[name]
+		switch {
+		case got.ID != entry.ID:
 			return fmt.Errorf("connections.%s.id differs", name)
+		case got.Target != entry.Target || !slices.Equal(got.Targets, entry.Targets) ||
+			!slices.Equal(got.Exclude, entry.Exclude) || got.TargetsOutdated != entry.TargetsOutdated ||
+			!maps.Equal(got.TargetLabels, entry.TargetLabels):
+			return fmt.Errorf("connections.%s: its targets differ", name)
 		}
 	}
 	return nil

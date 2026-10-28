@@ -24,16 +24,19 @@ import (
 
 // Schema versions this build reads. Version 2 adds the stable id of a service, a credential and a
 // connection. Version 3 replaces the two overlapping allow-lists of a connection by either effects or tools
-// and names the effects field "effects"; a file of an older version may still say "permissions".
+// and names the effects field "effects"; a file of an older version may still say "permissions". Version 4
+// writes the targets of a provider whose target forms changed meaning in their current form, with the same
+// reach (see TargetMetadata.MigrateTargets); in a file of an older version they keep their former meaning.
 const (
 	versionNames   = 1
 	versionIDs     = 2
 	versionEffects = 3
+	versionTargets = 4
 )
 
 // Version is the schema version every configuration is written in. A file of an older schema is still read
 // and becomes the current one when it is next saved.
-const Version = versionEffects
+const Version = versionTargets
 
 // Config is the whole configuration file.
 //
@@ -132,10 +135,15 @@ type Connection struct {
 	// Exclude lists entries, spelled like targets, that the connection takes out of what its targets
 	// reach. It is read only by a provider that declares exclusions (see TargetKind.Excludable), never
 	// widens the targets, and is no target: TargetValues, reach and tool offer do not see it.
-	Exclude     []string `yaml:"exclude,omitempty"`
-	Description string   `yaml:"description,omitempty"`
-	Effects     []Effect `yaml:"effects,omitempty"`
-	Tools       []string `yaml:"tools,omitempty"`
+	Exclude []string `yaml:"exclude,omitempty"`
+	// TargetsOutdated marks a connection whose targets and exclusions the migration to schema 4 could not
+	// carry over with the same reach (see TargetMetadata.MigrateTargets). They are kept as they were, in
+	// their former meaning, and the connection is invalid until a person chooses its targets again and
+	// removes the mark; the mark is what keeps the former meaning from being read in the current one.
+	TargetsOutdated bool     `yaml:"targets_outdated,omitempty"`
+	Description     string   `yaml:"description,omitempty"`
+	Effects         []Effect `yaml:"effects,omitempty"`
+	Tools           []string `yaml:"tools,omitempty"`
 	// LegacyPermissions only receives the former name of Effects while a file is read; reading folds it into
 	// Effects and leaves it empty, and it is never written.
 	LegacyPermissions []Effect `yaml:"permissions,omitempty"`
@@ -164,6 +172,9 @@ type Connection struct {
 	bothEffectFields bool
 	// permissionsInCurrent is set when a file of the current schema still names the former permissions field.
 	permissionsInCurrent bool
+	// retargeted is set when reading rewrote the targets or exclusions of a file of an older schema into
+	// their current form, kept for the migration report. It is no configuration.
+	retargeted bool
 }
 
 // foldLegacyEffects moves the former permissions field of every connection into the current model. Alone it
@@ -192,6 +203,73 @@ func (c *Config) foldLegacyEffects() {
 	}
 }
 
+// migrateTargets carries the targets and exclusions of every connection of a file of an older schema over to
+// their current form, through its provider's TargetMetadata.MigrateTargets. A rewritten connection keeps each
+// label on the entry it moved to. A refused one, or one the provider answers for in a shape that does not
+// line up with the former entries, stays as it was and is marked TargetsOutdated, which Validate reports. A
+// file of the current schema is never rewritten: its targets are in their current form already.
+func (c *Config) migrateTargets() {
+	if c.Version >= versionTargets {
+		return
+	}
+	catalog := c.providerCatalog()
+	for _, name := range sortedKeys(c.Connections) {
+		conn := c.Connections[name]
+		service, ok := c.Services[conn.Service]
+		if !ok || conn.TargetsOutdated {
+			continue
+		}
+		metadata, ok := catalog.ProviderMetadata(service.Provider)
+		if !ok || metadata.Target.MigrateTargets == nil {
+			continue
+		}
+		targets, exclude := conn.TargetValues(), conn.ExcludeValues()
+		migrated, ok := metadata.Target.MigrateTargets(slices.Clone(targets), slices.Clone(exclude))
+		switch {
+		case !ok || len(migrated.Targets) != len(targets) || len(migrated.Exclude) < len(exclude):
+			conn.TargetsOutdated = true
+		case slices.Equal(migrated.Targets, targets) && slices.Equal(migrated.Exclude, exclude):
+			continue
+		default:
+			conn.TargetLabels = movedLabels(conn.TargetLabels, append(targets, exclude...),
+				append(slices.Clone(migrated.Targets), migrated.Exclude[:len(exclude)]...))
+			if len(conn.Targets) > 0 {
+				conn.Targets = slices.Clone(migrated.Targets)
+			} else if len(targets) == 1 {
+				conn.Target = migrated.Targets[0]
+			}
+			conn.Exclude = nil
+			if len(migrated.Exclude) > 0 {
+				conn.Exclude = slices.Clone(migrated.Exclude)
+			}
+			conn.retargeted = true
+		}
+		c.Connections[name] = conn
+	}
+}
+
+// movedLabels returns labels with the label of former[i] under current[i]. A label of no former entry stays
+// where it is, so Validate still reports it.
+func movedLabels(labels map[string]string, former, current []string) map[string]string {
+	if len(labels) == 0 {
+		return labels
+	}
+	moved := map[string]string{}
+	for i, key := range former {
+		if label, ok := labels[key]; ok {
+			if _, taken := moved[current[i]]; !taken {
+				moved[current[i]] = label
+			}
+		}
+	}
+	for key, label := range labels {
+		if _, taken := moved[key]; !taken && !slices.Contains(former, key) {
+			moved[key] = label
+		}
+	}
+	return moved
+}
+
 // MarshalYAML preserves the semantic difference between a missing effects or tools field (the provider's
 // default effects) and an explicit empty list (offer nothing). A plain omitempty slice cannot represent both
 // states when a configuration is saved through the TUI.
@@ -203,6 +281,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Target         string            `yaml:"target,omitempty"`
 		Targets        []string          `yaml:"targets,omitempty"`
 		Exclude        []string          `yaml:"exclude,omitempty"`
+		Outdated       bool              `yaml:"targets_outdated,omitempty"`
 		Description    string            `yaml:"description,omitempty"`
 		Effects        *[]Effect         `yaml:"effects,omitempty"`
 		Tools          *[]string         `yaml:"tools,omitempty"`
@@ -225,7 +304,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{ID: c.ID, Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Exclude: c.Exclude, Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
+		Exclude: c.Exclude, Outdated: c.TargetsOutdated, Description: c.Description, Effects: effects, Tools: tools, Paths: c.Paths, Files: c.Files,
 		ForwardSecrets: c.ForwardSecrets, Disabled: c.Disabled, ActiveUntil: activeUntil,
 		TargetLabels: c.TargetLabels}, nil
 }
@@ -402,10 +481,10 @@ func Path(explicit string) (string, error) {
 
 // Load reads and validates the configuration at path.
 func Load(path string, providers ...ProviderCatalog) (*Config, error) {
-	return load(path, Observer{}, providers...)
+	return load(path, Observer{}, false, providers...)
 }
 
-func load(path string, obs Observer, providers ...ProviderCatalog) (*Config, error) {
+func load(path string, obs Observer, keepOutdated bool, providers ...ProviderCatalog) (*Config, error) {
 	data, err := readFile(path, obs)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -414,7 +493,7 @@ func load(path string, obs Observer, providers ...ProviderCatalog) (*Config, err
 		return nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
 
-	cfg, err := Decode(bytes.NewReader(data), providers...)
+	cfg, err := decode(bytes.NewReader(data), keepOutdated, providers...)
 	if err != nil {
 		return nil, &InvalidError{Path: path, Err: err}
 	}
@@ -423,6 +502,12 @@ func load(path string, obs Observer, providers ...ProviderCatalog) (*Config, err
 
 // Decode reads a configuration from r. Unknown keys and duplicate keys are errors.
 func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
+	return decode(r, false, providers...)
+}
+
+// decode is Decode; keepOutdated accepts a configuration whose only problems are connections with outdated
+// targets (see Store.ForMigration).
+func decode(r io.Reader, keepOutdated bool, providers ...ProviderCatalog) (*Config, error) {
 	cfg, err := decodeRaw(r, providers...)
 	if err != nil {
 		return nil, err
@@ -431,7 +516,8 @@ func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	if err := cfg.applyRenames(); err != nil {
 		return nil, err
 	}
-	if err := cfg.Validate(); err != nil {
+	cfg.migrateTargets()
+	if err := cfg.Validate(); err != nil && !(keepOutdated && onlyOutdatedTargets(err)) {
 		return nil, err
 	}
 	// A decoded configuration is directly editable, and an absent section round-trips to the same model
@@ -474,9 +560,9 @@ func decodeRaw(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	return &cfg, nil
 }
 
-const versionWant = "1, 2 or 3"
+const versionWant = "1, 2, 3 or 4"
 
-func knownVersion(v int) bool { return v == versionNames || v == versionIDs || v == versionEffects }
+func knownVersion(v int) bool { return v >= versionNames && v <= versionTargets }
 
 // yamlLine matches the position the YAML library puts in front of a message it can locate.
 var yamlLine = regexp.MustCompile(`^line (\d+): `)
@@ -734,7 +820,16 @@ func (c *Config) Validate() error {
 		}
 		if ok {
 			metadata, known := providers.ProviderMetadata(service.Provider)
-			validateTargets(name, conn, service.Provider, metadata, report)
+			if conn.TargetsOutdated {
+				field := "target"
+				if len(conn.Targets) > 0 {
+					field = "targets"
+				}
+				report(problem(SectionConnections, name, field, CodeTargetsOutdated,
+					"the targets keep a former meaning that the current forms cannot express with the same reach"))
+			} else {
+				validateTargets(name, conn, service.Provider, metadata, report)
+			}
 			if known && conn.Tools != nil {
 				c.validateTools(name, service.Provider, metadata, report)
 			}
@@ -1230,11 +1325,14 @@ func EffectsOfTools(metadata ProviderMetadata, tools []string) []Effect {
 	return effects
 }
 
-// NarrowedEffects names, sorted, the connections of a configuration read from an older schema that list tools
-// and whose former effects (the permissions, or the provider's defaults without them) were broader than the
-// effects the tools derive now. A change of the effective effects changes the approval fingerprint of such a
-// connection. It answers only for a configuration read before the migration that writes the current schema.
+// NarrowedEffects names, sorted, the connections of a configuration read from a schema before 3 that list
+// tools and whose former effects (the permissions, or the provider's defaults without them) were broader than
+// the effects the tools derive now. A change of the effective effects changes the approval fingerprint of such
+// a connection. It answers only for a configuration read before the migration that writes the current schema.
 func (c *Config) NarrowedEffects() []string {
+	if c.Version >= versionEffects {
+		return nil
+	}
 	var names []string
 	for _, name := range sortedKeys(c.Connections) {
 		conn := c.Connections[name]
@@ -1258,6 +1356,42 @@ func (c *Config) NarrowedEffects() []string {
 		}
 	}
 	return names
+}
+
+// RetargetedConnections names, sorted, the connections of a configuration read from a schema before 4 whose
+// targets or exclusions reading rewrote into their current form. Their approval fingerprint changes with them.
+// It answers only for a configuration read before the migration that writes the current schema.
+func (c *Config) RetargetedConnections() []string {
+	var names []string
+	for _, name := range sortedKeys(c.Connections) {
+		if c.Connections[name].retargeted {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// OutdatedTargets names, sorted, the connections marked TargetsOutdated.
+func (c *Config) OutdatedTargets() []string {
+	var names []string
+	for _, name := range sortedKeys(c.Connections) {
+		if c.Connections[name].TargetsOutdated {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// onlyOutdatedTargets reports whether err holds problems and each of them is a connection marked
+// TargetsOutdated.
+func onlyOutdatedTargets(err error) bool {
+	problems := Problems(err)
+	for _, p := range problems {
+		if p.Code != CodeTargetsOutdated {
+			return false
+		}
+	}
+	return len(problems) > 0
 }
 
 // Refusal names why a connection does not offer a tool. The values are stable: discovery publishes them

@@ -1,12 +1,12 @@
 ---
 description: >
   Describes the Nextcloud provider: connection, tool IDs, configuration (https and redirect rule, credential),
-  tool groups, targets, choosing targets, and unclear outcomes. Tool groups are described on separate pages for
+  tool groups, targets, exclusions, choosing targets, and unclear outcomes. Tool groups are described on separate pages for
   files, shares, Deck, Talk, calendar, contacts, notes, account, and administration.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Nextcloud
@@ -64,6 +64,29 @@ then offers exactly those. File content is base64 and never written to audit rec
 binding that holds the kind its call checks; tools that create a calendar, address book, board, or conversation need
 the kind alone. The terminal editor starts a new connection on the setup profile `read`, a visible starting
 selection, not a role: only the ticked `tools` are saved, and a saved connection never follows a profile.
+
+### Exclusions
+
+`exclude` takes `folder/PATH` and `notes/PATH` entries that take a folder, or a notes category, with everything
+below it out of what the targets reach. An entry must lie strictly below a `folder` or `notes` target of its own
+kind, must not repeat or nest in another, and at most 100 are allowed per kind; Qatlas reads them like targets
+and refuses a connection whose entry it cannot enforce. Other kinds, such as `calendar/ID`, `deck/ID`, or
+`talk/ID`, and any exclusion on a connection with an `account` target, or a folder exclusion next to a `talk`
+target, are refused as not supported. An exclusion beats a target and removes no tool from the offer.
+
+- Entries are compared after Unicode normalisation and case folding, so `ü`, `u` plus a combining mark, and `Ü`
+  name one folder, and `ß` meets `SS`. An exclusion may hide more than it names, never less. Targets stay exact.
+- A category is first normalised as the Notes app does before it names a folder (it drops `* | / \ : " < > ?`,
+  leading dots, and surrounding white space), so a category that only matches after that is excluded too.
+- A refused call answers as the server answers for something that does not exist, or with `permission`; no
+  answer names the object or the exclusion. A refusal that needs no read is raised before any credential access.
+- Notes live as files below the notes path of the identity. A connection that binds both a folder and notes
+  therefore carries each kind of exclusion over to the other: a folder exclusion below the notes path hides the
+  notes of that category, one on or above the notes path hides every note, and a notes exclusion hides the folder `NOTES_PATH/CATEGORY`
+  in the Files and Shares tools. The notes path is read from the Notes settings on every call that needs it; if
+  that read fails, the call is refused.
+- Totals Nextcloud keeps, such as the size and ETag of a folder and the quota, still count excluded content; see
+  [files](files.md#exclusions).
 
 ## Choosing targets
 

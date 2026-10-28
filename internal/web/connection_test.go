@@ -691,7 +691,7 @@ func TestCreatedNoticeKeepsTheWarningsOwnPrefix(t *testing.T) {
 func TestGuidedConnectionKeepsStableIDs(t *testing.T) {
 	s, store, _, path := newConnectionTestServer(t, nil)
 	const idSvc, idCred = "00000000000000000000000000000001", "00000000000000000000000000000002"
-	file := "version: 3\nservices:\n  book-cloud:\n    id: " + idSvc + "\n    provider: book\n" +
+	file := "version: 4\nservices:\n  book-cloud:\n    id: " + idSvc + "\n    provider: book\n" +
 		"    base_url: https://books.example.test\ncredentials:\n  book-reader:\n    id: " + idCred +
 		"\n    provider: book\n    type: keyring\n"
 	if err := os.WriteFile(path, []byte(file), 0o600); err != nil {
