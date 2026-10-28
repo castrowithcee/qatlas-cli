@@ -170,7 +170,7 @@ type ProjectRef struct {
 }
 
 // SharedWorkflow is one share of a workflow. Project is a ProjectSummary, or a ProjectRef when the project
-// lies outside this connection's project allow-list.
+// is not reachable: outside this connection's project allow-list, or excluded.
 type SharedWorkflow struct {
 	Role       string `json:"role,omitempty"`
 	WorkflowID string `json:"workflow_id,omitempty"`
@@ -337,8 +337,8 @@ func metaOf(m *workflowMetaJSON) *WorkflowMeta {
 	return &out
 }
 
-// sharedOf maps the shares of a workflow. The project of a share outside this connection's project
-// allow-list is reduced to its identifier; a share whose project cannot be identified reports none.
+// sharedOf maps the shares of a workflow. The project of a share that is not reachable (outside this
+// connection's project allow-list, or excluded) is reduced to its identifier; a share whose project cannot be identified reports none.
 func sharedOf(shared []sharedJSON, s scope) []SharedWorkflow {
 	var out []SharedWorkflow
 	for _, entry := range shared {
@@ -354,7 +354,7 @@ func sharedOf(shared []sharedJSON, s scope) []SharedWorkflow {
 			}
 			switch {
 			case id == "":
-			case len(s.projects) > 0 && !s.allowsProject(id):
+			case s.restrictsProjects() && !s.reachesProject(id):
 				item.Project = ProjectRef{ID: bounded(id)}
 			default:
 				item.Project = summarizeProject(*entry.Project)

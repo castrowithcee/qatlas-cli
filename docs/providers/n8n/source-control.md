@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # n8n source control
@@ -42,3 +42,23 @@ Profile `sourcecontrol-read` holds `n8n.source-control.status`, in none of the o
 - **Results.** Each file may carry n8n's publishing error and a capped list of import policy findings; these
   texts, folder names, and project names are untrusted data, capped, and never part of an error message. Only
   the preview adds the Git path, folder, owner, and policy details; pull and push report the shorter view.
+
+## Exclusions
+
+Where the connection excludes projects or workflows (see [README.md](README.md#exclusions)), a status file
+belongs to the excluded part when it is an excluded workflow or project, or a workflow, credential, data table
+or folder whose reported owner project is excluded. Where a project is excluded, such a file without a reported
+owner cannot be placed and counts as excluded, as does a file of any other type; `tags` and `variables` are
+never excluded, because n8n exports only global variables into the variables file (project variables are
+stubs inside the project file).
+
+- **Status** leaves those files out and counts the rest.
+- **Pull** first reads the status for `pull`; if it contains such a file the pull is refused, before the pull
+  request. Preview and pull are two requests, so what changes in the repository or the instance between them
+  is not covered.
+- **Push** refuses a named excluded object. The owner of a `workflow`, `credential` or `datatable` comes from
+  the status for `push`, which is read only where a project is excluded; an object it does not list cannot be
+  placed and is refused. `folders` is refused where a project is excluded, since the folder file spans every
+  project. `tags` and `variables` are allowed.
+
+The refusals name neither the object nor the exclusion.

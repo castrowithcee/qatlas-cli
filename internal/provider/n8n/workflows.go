@@ -380,8 +380,12 @@ func invokeWorkflowsList(ctx context.Context, resolved *config.Resolved, secrets
 		return nil, providerError("list workflows", "the validated arguments could not be read")
 	}
 	if input.ProjectID != "" {
-		if err := selectProjectFilter(resolved, input.ProjectID); err != nil {
+		excluded, err := selectProjectFilter(resolved, input.ProjectID)
+		if err != nil {
 			return nil, err
+		}
+		if excluded {
+			return &WorkflowsPage{Workflows: []WorkflowRead{}}, nil
 		}
 	}
 	limit := input.Limit
@@ -483,7 +487,10 @@ func (c *Client) fetchWorkflow(ctx context.Context, op, workflowID string) (*wor
 // project allow-list is configured, are refused the same way: an invalid request, never a provider error,
 // and the failure never names the workflow's project.
 func (c *Client) verifyWorkflowScope(workflow *workflowJSON) error {
-	if len(c.scope.projects) == 0 {
+	if !c.scope.allowsWorkflow(workflow.ID) {
+		return invalidRequest("workflow_id is outside the targets of this connection")
+	}
+	if !c.scope.restrictsProjects() {
 		return nil
 	}
 	ids := workflow.projectIDs()
@@ -503,7 +510,7 @@ func (c *Client) verifyWorkflowScope(workflow *workflowJSON) error {
 // invalid request, because the change has already taken effect and this milestone offers no delete tool to
 // undo it; the caller must remove the misplaced workflow directly in n8n.
 func (c *Client) verifyPlacement(op string, workflow *workflowJSON) error {
-	if len(c.scope.projects) == 0 {
+	if !c.scope.restrictsProjects() {
 		return nil
 	}
 	if ids := workflow.projectIDs(); len(ids) == 0 || !c.scope.allowsAnyProject(ids) {
@@ -828,7 +835,8 @@ var workflowsCreate = capability.Descriptor{
 	Arguments: append(workflowWriteArguments("A parameter holding "+withheldPlaceholder+", or a node with "+
 		"parameters_withheld true, is refused: a new workflow has no value to restore"),
 		capability.Argument{Name: "project_id", Description: "Project to create the workflow in; required, " +
-			"and must be inside this connection's project allow-list, when this connection restricts projects; " +
+			"and must be inside this connection's project allow-list, when this connection restricts projects, " +
+			"or excludes any; " +
 			"otherwise optional, defaulting to the API key owner's personal project"},
 	),
 	Fields: workflowDetailFields,
@@ -867,9 +875,12 @@ func invokeWorkflowsCreate(ctx context.Context, resolved *config.Resolved, secre
 		return nil, invalidRequest("this connection restricts projects, so workflows.create requires " +
 			"project_id naming one of the allowed projects")
 	case input.ProjectID != "":
-		if err := selectProjectFilter(resolved, input.ProjectID); err != nil {
+		if err := selectProjectTarget(resolved, input.ProjectID); err != nil {
 			return nil, err
 		}
+	}
+	if err := bound.requireProjectID(input.ProjectID); err != nil {
+		return nil, err
 	}
 	if err := refuseWithheldPlaceholders(input.Nodes); err != nil {
 		return nil, err

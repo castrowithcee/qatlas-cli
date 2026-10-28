@@ -269,13 +269,14 @@ func selectVariables(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// allowsVariable applies the binding: with a project allow-list only variables of those projects, never a
-// global one; without it every variable. Workflow targets were refused by selectVariables.
+// allowsVariable applies the binding: with a project allow-list only variables of its reachable projects,
+// never a global one; without it every variable except those of an excluded project. Workflow targets were
+// refused by selectVariables.
 func (s scope) allowsVariable(projectID string) bool {
 	if len(s.projects) == 0 {
-		return true
+		return !s.excludesProject(projectID)
 	}
-	return projectID != "" && s.allowsProject(projectID)
+	return projectID != "" && s.reachesProject(projectID)
 }
 
 // validVariableKey checks a key by n8n's rule: 1 to 50 characters of letters, digits, and '_'; a new key
@@ -350,6 +351,7 @@ func invokeVariablesList(ctx context.Context, resolved *config.Resolved, secrets
 	if err != nil {
 		return nil, err
 	}
+	excludedFilter := false
 	if input.ProjectID != "" {
 		if !validTargetID(input.ProjectID) {
 			return nil, invalidRequest("project_id must be a usable n8n identifier")
@@ -357,9 +359,13 @@ func invokeVariablesList(ctx context.Context, resolved *config.Resolved, secrets
 		if !bound.allowsProject(input.ProjectID) {
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
+		excludedFilter = bound.excludesProject(input.ProjectID)
 	}
 	if input.State != "" && !slices.Contains(variableStates, input.State) {
 		return nil, invalidRequest("state must be one of " + strings.Join(variableStates, ", "))
+	}
+	if excludedFilter {
+		return &VariablesPage{Variables: []Variable{}}, nil
 	}
 	limit := input.Limit
 	if limit == 0 {
@@ -469,6 +475,9 @@ func invokeVariablesCreate(ctx context.Context, resolved *config.Resolved, secre
 		if !bound.allowsProject(input.ProjectID) {
 			return nil, invalidRequest("project_id is outside the targets of this connection")
 		}
+	}
+	if bound.excludesProject(input.ProjectID) {
+		return nil, invalidRequest("project_id is outside the targets of this connection")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {

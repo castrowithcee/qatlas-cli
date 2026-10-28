@@ -28,8 +28,9 @@ read tools; `manage` additionally offers the six change tools.
 `n8n.workflows.list` is no summary: each listed workflow carries what `n8n.workflows.get` reports, as far as
 n8n sends it in its list. The withheld node parameters below apply to every node of both, including those of
 the active version. `continueOnFail` of a node is deprecated in n8n and not returned; `onError` carries the same
-information. The project of a share outside the connection's project allow-list is reported by its identifier
-only.
+information. The project of a share that is not reachable (outside the connection's project allow-list, or
+excluded) is reported by its identifier only; a workflow shared into a reachable project stays readable, see
+[Exclusions](README.md#exclusions).
 
 ## Changes and their retry contract
 
@@ -89,7 +90,8 @@ Public API version, for example), the result is reported as a **provider error**
 because the request has already reached n8n and this milestone offers no delete tool to remove the
 misplaced workflow; the caller is told to remove it directly in n8n. `workflows.update` cannot move a
 workflow between projects at all (its own schema has no `projectId` field), so no equivalent risk exists
-there; the same re-check still runs defensively after its one `PUT`.
+there; the same re-check still runs defensively after its one `PUT`. On a connection that excludes a project,
+`project_id` is required and an excluded project is refused, see [Exclusions](README.md#exclusions).
 
 ## Pagination and cursors
 
@@ -104,7 +106,10 @@ of the same kind (`project_id` must be inside this connection's project allow-li
 allow-list, `project_id` must be on it and `workflow_id` stays required. Its `started_after` and
 `started_before` are RFC 3339 times sent to n8n in UTC; an inverted range is refused locally. A follow-up call
 with a cursor must pass the same filter values. Every returned page is still defensively re-filtered against
-this connection's own allow-lists after n8n answers, whether or not a matching filter argument was given.
+this connection's own allow-lists and exclusions after n8n answers, whether or not a matching filter
+argument was given. On a connection that excludes a project but has no project target, `n8n.executions.list`
+does not require `workflow_id`; it places each row through its workflow instead, see
+[Exclusions](README.md#exclusions).
 
 ## Executions and their errors
 

@@ -42,6 +42,8 @@ The tools manage the tables only; `get` and `list` report column definitions, no
   checked locally before a secret is read; without an allow-list an omitted `project_id` means the key
   owner's personal project. The `name`, `ids`, and `sort_by` arguments of `list` only narrow and order what n8n
   returns; they never widen the allow-list, which still filters every page.
+- **Exclusions.** A table of an excluded project counts as outside the allow-list for tables, columns and
+  rows; `create` into it, or without `project_id`, is refused, see [Exclusions](README.md#exclusions).
 - **Workflow allow-list.** A connection with a `workflow/` target refuses every data table tool locally: a
   table cannot be tied to a workflow, so the narrower reading applies.
 - **Create** sends the name, an empty column list, and the project; no CSV import field is offered. Names are
