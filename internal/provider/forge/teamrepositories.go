@@ -56,7 +56,7 @@ func proveTeamRepo(ctx context.Context, c *Client, allowed allowlist, id int64, 
 	if err != nil {
 		return err
 	}
-	org, ok := allowlist(nil).teamOrganization(team)
+	org, ok := allowlist{}.teamOrganization(team)
 	if !ok || !strings.EqualFold(org, repo.owner) {
 		return notShown("read team", c.product)
 	}

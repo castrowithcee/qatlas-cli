@@ -112,7 +112,7 @@ var organizationLabels = labelScope{
 func (a allowlist) chooseOrganization(value string) (target, error) {
 	if value == "" {
 		var only []target
-		for _, entry := range a {
+		for _, entry := range a.targets {
 			if entry.kind == kindOwner {
 				only = append(only, entry)
 			}
@@ -130,10 +130,10 @@ func (a allowlist) chooseOrganization(value string) (target, error) {
 	if org.scope != "orgs" {
 		return target{}, invalidArgument("owner must be orgs/NAME for organization labels")
 	}
-	if len(a) == 0 {
+	if a.open() {
 		return org, nil
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == "orgs" && strings.EqualFold(entry.owner, org.owner) {
 			return org, nil
 		}

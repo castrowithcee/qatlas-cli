@@ -114,7 +114,7 @@ func fieldItemDescriptions() []capability.Field {
 		{Name: "fields[].id", Description: "Field identifier"}, {Name: "fields[].name", Description: "Field name, untrusted"},
 		{Name: "fields[].type", Description: "Field type"}, {Name: "fields[].primary", Description: "True for the primary field"},
 		{Name: "fields[].read_only", Description: "True when the field cannot be written"},
-		{Name: "fields[].link_table_id", Description: "Other table of a link field, only when it is inside the targets"},
+		{Name: "fields[].link_table_id", Description: "Other table of a link field, only when it is reachable (inside the targets, not excluded)"},
 		{Name: "fields[].select_options", Description: "Options of a select field with id, value, and color, untrusted"},
 	}
 	for _, property := range fieldProperties {
@@ -263,7 +263,7 @@ type FieldSchema struct {
 
 // fieldGate carries what the target binding decides for one table's field list.
 type fieldGate struct {
-	// formulaOpen is true when formula text and errors may be shown: the connection has the wildcard, or every
+	// formulaOpen is true when formula text and errors may be shown: the connection has the wildcard without exclusions, or every
 	// link field of the table points into the targets. A formula text can name fields of linked tables.
 	formulaOpen bool
 	// throughInScope holds the link fields whose other table is inside the targets.
@@ -276,13 +276,13 @@ func (c *Client) gateFields(raws []fieldJSON) fieldGate {
 		if entry.Type != "link_row" {
 			continue
 		}
-		if entry.LinkRowTableID != nil && c.inScope(*entry.LinkRowTableID) {
+		if entry.LinkRowTableID != nil && c.reaches(*entry.LinkRowTableID) {
 			gate.throughInScope[entry.ID] = true
 		} else {
 			gate.formulaOpen = false
 		}
 	}
-	if c.scope.wildcard {
+	if c.scope.unrestricted() {
 		gate.formulaOpen = true
 	}
 	return gate

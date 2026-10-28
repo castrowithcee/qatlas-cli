@@ -171,7 +171,7 @@ func newOrgList(s orgList) *tool {
 			if err := decodeArguments(raw, &a); err != nil {
 				return nil, err
 			}
-			if s.open && len(allowed) != 0 {
+			if s.open && allowed.bound() {
 				return nil, invalidArgument("this list reaches organizations beyond the connection's targets, so a " +
 					"connection with targets does not offer it; use a connection without targets")
 			}
@@ -201,7 +201,7 @@ func newOrgList(s orgList) *tool {
 					}
 					// Every row is checked against the targets; without targets all are allowed.
 					name, _ := row.text("name")
-					if len(allowed) != 0 && (name == "" || !allowed.namesOwnerOfScope("orgs", name)) {
+					if allowed.bound() && (name == "" || !allowed.namesOwnerOfScope("orgs", name)) {
 						continue
 					}
 					organizations = append(organizations, project(p, orgMembers, row))

@@ -489,7 +489,7 @@ func TestAccountsMeIsRefusedForRepositoryTargets(t *testing.T) {
 
 func TestTargetsParseTheThreeForms(t *testing.T) {
 	list, err := parseAllowlist([]string{"users/alice", "orgs/acme", "repos/acme/widget", "repos/bob/my.repo-1"})
-	if err != nil || len(list) != 4 {
+	if err != nil || len(list.targets) != 4 {
 		t.Fatalf("parseAllowlist = %v, %v", list, err)
 	}
 	for _, raw := range []string{"", "alice", "users/", "users/a/b", "orgs/-acme", "repos/acme", "repos/acme/..",
