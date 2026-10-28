@@ -290,3 +290,49 @@ func TestStarAndWatchRisk(t *testing.T) {
 		}
 	}
 }
+
+func TestExcludedRepositoriesAreAbsentFromStarLists(t *testing.T) {
+	for _, p := range products {
+		status := 200
+		e := newEnvironment(t, p, starServer(&status))
+		for _, c := range []struct {
+			connection, args string
+			want             string
+		}{
+			{"exclude", `{}`, "acme/widget"},
+			{"owner-exclude", `{}`, "acme/widget"},
+			{"exclude", `{"username":"bob"}`, "acme/widget"},
+			{"owner-exclude", `{"username":"acme"}`, "acme/widget"},
+		} {
+			result, err := e.invoke(t, starsList, c.connection, c.args)
+			if err != nil {
+				t.Fatalf("%s %s %s: %v", p.id, c.connection, c.args, err)
+			}
+			var got []string
+			for _, row := range rowsOf(t, result, "repositories") {
+				got = append(got, row["full_name"].(string))
+			}
+			if strings.Join(got, ",") != c.want {
+				t.Errorf("%s %s %s = %v, want %s", p.id, c.connection, c.args, got, c.want)
+			}
+		}
+		for _, args := range []string{`{"username":"other"}`, `{"username":"Other"}`} {
+			*e.calls = (*e.calls)[:0]
+			if _, err := e.invoke(t, starsList, "exclude", args); !isInvalidRequest(err) || len(*e.calls) != 0 ||
+				strings.Contains(strings.ToLower(err.Error()), "exclu") {
+				t.Errorf("%s excluded owner %s: %v, %v", p.id, args, err, e.paths())
+			}
+		}
+		for _, tl := range []*tool{starsCheck, starsAdd, starsRemove} {
+			*e.calls = (*e.calls)[:0]
+			if _, err := e.invoke(t, tl, "exclude", `{"repository":"acme/gadget"}`); !isInvalidRequest(err) ||
+				len(*e.calls) != 0 {
+				t.Errorf("%s %s excluded repository: %v", p.id, tl.action, err)
+			}
+			if _, err := e.invoke(t, tl, "owner-exclude", `{"repository":"Acme/Gadget"}`); !isInvalidRequest(err) ||
+				len(*e.calls) != 0 {
+				t.Errorf("%s %s excluded repository by case: %v", p.id, tl.action, err)
+			}
+		}
+	}
+}

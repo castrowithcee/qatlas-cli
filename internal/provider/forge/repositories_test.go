@@ -310,3 +310,132 @@ func TestUnwrapListReadsTheSearchWrapper(t *testing.T) {
 		t.Error("a wrapper is accepted as a plain list")
 	}
 }
+
+func TestExclusionsKeepExcludedRepositoriesOutOfListsAndReads(t *testing.T) {
+	rows := `[` + repositoryJSON("acme/widget", 1) + `,` + repositoryJSON("other/thing", 2) + `,` +
+		repositoryJSON("ACME/Gadget", 3) + `,` + repositoryJSON("alice/notes", 4) + `,{"id":5}]`
+	answer := "acme/widget"
+	e := newEnvironment(t, gitea, func(c call) *http.Response {
+		switch c.path {
+		case "/api/v1/user/repos", "/api/v1/orgs/acme/repos", "/api/v1/orgs/other/repos":
+			return jsonResponse(http.StatusOK, rows)
+		case "/api/v1/repositories/7", "/api/v1/repos/acme/widget":
+			return jsonResponse(http.StatusOK, repositoryJSON(answer, 7))
+		}
+		return notFoundResponse()
+	})
+	names := func(result map[string]any) []string {
+		var out []string
+		for _, entry := range result["repositories"].([]any) {
+			out = append(out, entry.(map[string]any)["full_name"].(string))
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		connection, arguments string
+		want                  []string
+	}{
+		{"exclude", `{}`, []string{"acme/widget", "alice/notes"}},
+		{"exclude", `{"owner":"orgs/acme"}`, []string{"acme/widget"}},
+		{"owner-exclude", `{}`, []string{"acme/widget"}},
+		{"owner-exclude", `{"owner":"orgs/acme"}`, []string{"acme/widget"}},
+	} {
+		*e.calls = nil
+		result, err := e.invoke(t, repositoriesList, tc.connection, tc.arguments)
+		if err != nil || !slices.Equal(names(result), tc.want) {
+			t.Errorf("%s %s: %v, %v, want %v", tc.connection, tc.arguments, names(result), err, tc.want)
+		}
+	}
+	// An excluded owner or repository is refused before any secret or request, without naming either.
+	for _, tc := range []struct {
+		tl                    *tool
+		connection, arguments string
+	}{
+		{repositoriesList, "exclude", `{"owner":"orgs/other"}`},
+		{repositoriesList, "exclude", `{"owner":"users/OTHER"}`},
+		{repositoriesGet, "exclude", `{"repository":"acme/gadget"}`},
+		{repositoriesGet, "owner-exclude", `{"repository":"ACME/GADGET"}`},
+		{repositoriesGet, "exclude", `{"repository":"other/thing"}`},
+	} {
+		*e.calls = nil
+		reads := *e.reads
+		_, err := e.invoke(t, tc.tl, tc.connection, tc.arguments)
+		if !isInvalidRequest(err) || len(*e.calls) != 0 || *e.reads != reads ||
+			strings.Contains(err.Error(), "gadget") || strings.Contains(err.Error(), "thing") ||
+			strings.Contains(strings.ToLower(err.Error()), "exclu") {
+			t.Errorf("%s %s: %v after %d calls", tc.connection, tc.arguments, err, len(*e.calls))
+		}
+	}
+	// A read by ID, and a name that now answers as an excluded repository, are proven by the canonical name.
+	for _, tc := range []struct {
+		connection, arguments, answer string
+		found                         bool
+	}{
+		{"exclude", `{"id":7}`, "acme/widget", true},
+		{"exclude", `{"id":7}`, "Acme/Gadget", false},
+		{"exclude", `{"id":7}`, "other/secret-name", false},
+		{"owner-exclude", `{"id":7}`, "acme/gadget", false},
+		{"owner-exclude", `{"repository":"acme/widget"}`, "ACME/gadget", false},
+		{"exclude", `{"id":7}`, "elsewhere/widget", true},
+	} {
+		*e.calls = nil
+		answer = tc.answer
+		result, err := e.invoke(t, repositoriesGet, tc.connection, tc.arguments)
+		if tc.found && (err != nil || result["full_name"] != tc.answer) {
+			t.Errorf("%s %s answering %s: %v, %v", tc.connection, tc.arguments, tc.answer, result, err)
+		}
+		if !tc.found && (classOfError(err) != "not-found" || len(*e.calls) != 1 || strings.Contains(err.Error(), "secret-name") ||
+			strings.Contains(err.Error(), "gadget")) {
+			t.Errorf("%s %s answering %s: %v, want not-found after one read", tc.connection, tc.arguments, tc.answer, err)
+		}
+	}
+}
+
+func TestExclusionsHideAnExcludedParentOfAFork(t *testing.T) {
+	parent := "upstream/project"
+	row := func() string {
+		return strings.Replace(repositoryJSON("acme/widget", 7), "upstream/project", parent, 1)
+	}
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response {
+			if strings.HasSuffix(c.path, "/forks") || strings.HasSuffix(c.path, "/repos") {
+				return jsonResponse(http.StatusOK, "["+row()+"]")
+			}
+			return jsonResponse(http.StatusOK, row())
+		})
+		for _, tc := range []struct {
+			parent string
+			shown  bool
+		}{{"upstream/project", true}, {"acme/gadget", false}, {"ACME/Gadget", false}, {"other/place", false}} {
+			parent = tc.parent
+			var results []map[string]any
+			get, err := e.invoke(t, repositoriesGet, "exclude", `{"repository":"acme/widget"}`)
+			if err != nil {
+				t.Fatalf("%s get: %v", p.id, err)
+			}
+			results = append(results, get)
+			forks, err := e.invoke(t, repositoriesListForks, "exclude", `{"repository":"acme/widget"}`)
+			if err != nil {
+				t.Fatalf("%s forks: %v", p.id, err)
+			}
+			results = append(results, rowsOf(t, forks, "repositories")...)
+			listed, err := e.invoke(t, repositoriesList, "exclude", `{"owner":"orgs/acme"}`)
+			if err != nil {
+				t.Fatalf("%s list: %v", p.id, err)
+			}
+			results = append(results, rowsOf(t, listed, "repositories")...)
+			if len(results) != 3 {
+				t.Fatalf("%s: %d repositories", p.id, len(results))
+			}
+			for _, result := range results {
+				shown, _ := result["parent"].(map[string]any)
+				if tc.shown && (len(shown) != 2 || shown["full_name"] != tc.parent) {
+					t.Errorf("%s: parent %s = %v, want identifiers", p.id, tc.parent, result["parent"])
+				}
+				if !tc.shown && (result["parent"] != nil || result["fork"] != true) {
+					t.Errorf("%s: parent %s = %v, want none", p.id, tc.parent, result["parent"])
+				}
+			}
+		}
+	}
+}

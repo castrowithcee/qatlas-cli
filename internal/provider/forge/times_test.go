@@ -399,3 +399,42 @@ func TestTimeToolsRefuseOutsideTargetsBeforeTheToken(t *testing.T) {
 		}
 	}
 }
+
+func TestExclusionsKeepExcludedRowsOutOfMyTimesAndStopwatches(t *testing.T) {
+	for _, p := range products {
+		e := newEnvironment(t, p, func(c call) *http.Response {
+			switch c.path {
+			case "/api/v1/user/times":
+				return jsonResponse(200, `[`+timeEntry(11, "acme/widget")+`,`+timeEntry(12, "other/place")+`,`+
+					`{"id":13,"time":5},`+timeEntry(14, "ACME/Gadget")+`,`+timeEntry(15, "elsewhere/x")+`]`)
+			case "/api/v1/user/stopwatches":
+				return jsonResponse(200, `[{"seconds":1,"issue_index":7,"repo_owner_name":"acme","repo_name":"widget"},`+
+					`{"seconds":5,"issue_index":1,"repo_owner_name":"Other","repo_name":"place"},`+
+					`{"seconds":7,"issue_index":2,"repo_owner_name":"acme","repo_name":"gadget"},{"seconds":6}]`)
+			}
+			return notFoundResponse()
+		})
+		result, err := e.invoke(t, myTimesList, "exclude", `{}`)
+		if times := rowsOf(t, result, "times"); err != nil || len(times) != 2 {
+			t.Errorf("%s times: %v, %v", p.id, result, err)
+		}
+		result, err = e.invoke(t, myStopwatchesList, "exclude", `{}`)
+		if watches := rowsOf(t, result, "stopwatches"); err != nil || len(watches) != 1 {
+			t.Errorf("%s stopwatches: %v, %v", p.id, result, err)
+		}
+		// A change on an excluded repository is refused before any request.
+		*e.calls = nil
+		reads := *e.reads
+		for _, c := range []struct {
+			tl   *tool
+			args string
+		}{{issueTimesList, `{"repository":"other/place","number":7}`},
+			{issueTimesAdd, `{"repository":"acme/gadget","number":7,"time":5}`},
+			{repositoryTimesList, `{"repository":"Acme/Gadget"}`}} {
+			if _, err := e.invoke(t, c.tl, "exclude", c.args); !isInvalidRequest(err) || len(*e.calls) != 0 ||
+				*e.reads != reads {
+				t.Errorf("%s %s: %v, calls %v", p.id, c.tl.action, err, e.paths())
+			}
+		}
+	}
+}

@@ -118,7 +118,8 @@ func readIssue(ctx context.Context, c *Client, allowed allowlist, op, path strin
 		return nil, provider.InvalidResponse(op, c.product.name+" returned an issue without its index")
 	}
 	if !admitted(allowed, issue) {
-		return nil, outsideTargets("repository")
+		name, _ := issueRepository(issue)
+		return nil, allowed.outside(op, c.product, name, "repository")
 	}
 	if isPullRequest(issue) {
 		return nil, invalidArgument("number is the index of a pull request, not of an issue; use the " +
@@ -446,7 +447,7 @@ var issuesSearch = &tool{
 			return nil, invalidArgument("team needs owner")
 		}
 		if arguments.Owner != "" && !allowed.listsOwner(arguments.Owner) {
-			return nil, outsideTargets("owner")
+			return nil, allowed.outsideOwner("owner", arguments.Owner)
 		}
 		filters := arguments.query()
 		for key, value := range map[string]bool{"assigned": arguments.Assigned, "created": arguments.Created,
