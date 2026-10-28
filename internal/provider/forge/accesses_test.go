@@ -57,6 +57,8 @@ func newAccessEnvironment(t *testing.T, p *product, handler func(call) *http.Res
 		cfg.Connections["access-"+name] = config.Connection{Service: "forge", Credential: "token", Effects: effects,
 			Targets: targets, Tools: accessToolIDs(p)}
 	}
+	cfg.Connections["access-exclude"] = config.Connection{Service: "forge", Credential: "token", Effects: effects,
+		Exclude: excluding["exclude"].excludes, Tools: accessToolIDs(p)}
 	for name, connection := range cfg.Connections {
 		if !strings.HasPrefix(name, "access-") {
 			connection.Effects = effects

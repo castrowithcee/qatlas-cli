@@ -81,7 +81,7 @@ func readRunner(allowed allowlist, raw json.RawMessage, withID bool) (runnerArgu
 	if err := decodeArguments(raw, &a); err != nil {
 		return a, actionsLevel{}, err
 	}
-	level, err := actionsLevelOf(allowed, a.Repository, a.Owner)
+	level, err := actionsLevelOf(allowed, a.Repository, a.Owner, true)
 	if err != nil {
 		return a, actionsLevel{}, err
 	}
@@ -337,7 +337,7 @@ var actionsRunnerJobsSearch = &tool{
 			Title: "Search " + p.name + " jobs waiting for a runner",
 			Description: "Search the jobs that wait for a runner" + runnerLevelNote + ", by the labels they ask for, " +
 				"with every member of each job; names and labels are untrusted data. Forgejo answers up to 100 jobs " +
-				"at once and does not page.",
+				"at once and does not page. On an owner level, jobs of a repository inside an exclusion are left out.",
 			Tags:         []string{p.id, "actions", "runners", "jobs", "search"},
 			Risk:         readRisk(p.id + runnersSensitivity),
 			InputSchema:  inputSchema(adminLevelProperties + `,"labels":` + runnerLabelsSchema),
@@ -379,9 +379,18 @@ var actionsRunnerJobsSearch = &tool{
 			}
 			out := make([]map[string]any, 0, len(rows))
 			for _, row := range rows {
-				if row != nil && len(out) < maxRunnerRows {
-					out = append(out, project(p, workflowJobMembers, row))
+				if row == nil || len(out) >= maxRunnerRows {
+					continue
 				}
+				// An owner level shows the jobs of all its repositories; one that an exclusion takes out, or whose
+				// repository is unknown, is left out.
+				if len(allowed.excludes) > 0 && !level.repo {
+					name, named := jobRepository(c.origin, row)
+					if !level.admits(allowed, name, named) {
+						continue
+					}
+				}
+				out = append(out, project(p, workflowJobMembers, row))
 			}
 			result := level.result("jobs", out, nil, "")
 			result["has_more"] = len(rows) > maxRunnerRows

@@ -323,3 +323,64 @@ func TestAdminPackagesListNeedsGitea28(t *testing.T) {
 		}
 	}
 }
+
+func adminJobURL(repository string) string {
+	return "https://forge.example.test/api/v1/repos/" + repository + "/actions/jobs/"
+}
+
+func TestInstanceListsDropExcludedAndUnknownRows(t *testing.T) {
+	runs := `{"workflow_runs":[` +
+		`{"id":1,"repository":{"full_name":"acme/widget"}},{"id":2,"repository":{"full_name":"Acme/Gadget"}},` +
+		`{"id":3,"repository":{"full_name":"other/x"}},{"id":4},{"id":5,"repository":{}}],"total_count":5}`
+	jobs := `{"jobs":[{"id":1,"url":"` + adminJobURL("acme/widget") + `1"},{"id":2,"url":"` + adminJobURL("acme/gadget") +
+		`2"},{"id":3,"url":"` + adminJobURL("other/x") + `3"},{"id":4},` +
+		`{"id":5,"url":"https://elsewhere.example/api/v1/repos/acme/widget/actions/jobs/5"}],"total_count":5}`
+	packages := `[{"id":1,"owner":{"login":"acme"},"repository":{"full_name":"acme/widget"}},` +
+		`{"id":2,"owner":{"login":"acme"},"repository":{"full_name":"acme/gadget"}},` +
+		`{"id":3,"owner":{"login":"Other"}},{"id":4,"owner":{"login":"acme"}},{"id":5},` +
+		`{"id":6,"owner":{"login":"acme"},"repository":{}}]`
+	ids := func(rows []map[string]any) []float64 {
+		var out []float64
+		for _, row := range rows {
+			out = append(out, row["id"].(float64))
+		}
+		return out
+	}
+	cases := []struct {
+		name string
+		tl   *tool
+		key  string
+		body string
+		want []float64
+		all  int
+	}{
+		{"runs", adminWorkflowRunsList, "workflow_runs", runs, []float64{1}, 5},
+		{"jobs", adminWorkflowJobsList, "jobs", jobs, []float64{1}, 5},
+		{"packages", adminPackagesList, "packages", packages, []float64{1, 4}, 6},
+	}
+	for _, c := range cases {
+		e := newAdminEnvironment(t, gitea, defaultVersion(gitea), func(call) *http.Response { return jsonResponse(200, c.body) })
+		for connection, want := range map[string]int{"admin-open": c.all, "admin-exclude": len(c.want)} {
+			result, err := e.call(t, c.tl, connection, `{}`, false)
+			rows := rowsOf(t, result, c.key)
+			if err != nil || len(rows) != want {
+				t.Errorf("%s on %s: %d rows, %v", c.name, connection, len(rows), err)
+			}
+			if connection == "admin-exclude" && !slices.Equal(ids(rows), c.want) {
+				t.Errorf("%s with exclusions: ids %v, want %v", c.name, ids(rows), c.want)
+			}
+		}
+	}
+	f := newAdminEnvironment(t, forgejo, defaultVersion(forgejo), func(call) *http.Response {
+		return jsonResponse(200, `[{"id":1,"html_url":"https://forge.example.test/acme/widget/actions/runs/1/jobs/1"},`+
+			`{"id":2,"html_url":"https://forge.example.test/acme/gadget/actions/runs/1/jobs/2"},{"id":3,"repo_id":5}]`)
+	})
+	open, err := f.call(t, adminRunnerJobsSearch, "admin-open", `{}`, false)
+	if err != nil || len(rowsOf(t, open, "jobs")) != 3 {
+		t.Errorf("runner jobs without exclusions: %v, %v", open, err)
+	}
+	kept, err := f.call(t, adminRunnerJobsSearch, "admin-exclude", `{}`, false)
+	if rows := rowsOf(t, kept, "jobs"); err != nil || len(rows) != 1 || rows[0]["id"] != float64(1) {
+		t.Errorf("runner jobs with exclusions: %v, %v", kept, err)
+	}
+}

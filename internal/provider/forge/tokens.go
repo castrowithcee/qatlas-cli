@@ -44,7 +44,7 @@ func ownLogin(ctx context.Context, c *Client, op string, allowed allowlist) (str
 	if !ok || !validName(login) {
 		return "", provider.InvalidResponse(op, c.product.name+" returned an account without a usable login")
 	}
-	if allowed.bound() && !allowed.namesOwnerOfScope("users", login) {
+	if allowed.bound() && !allowed.admitsOwnerOfScope("users", login) {
 		return "", outsideTargets("account behind the token")
 	}
 	return login, nil
@@ -133,7 +133,7 @@ var accessTokensGetCurrent = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "get current access token"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			var row object
@@ -173,7 +173,7 @@ var accessTokensDeleteCurrent = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "delete current access token"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			if err := c.change(ctx, op, http.MethodDelete, "/token", nil, nil); err != nil {

@@ -72,7 +72,7 @@ var userSettingsGet = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "get user settings"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			var settings object
@@ -177,7 +177,7 @@ var userSettingsUpdate = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "update user settings"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			var settings object
@@ -231,7 +231,7 @@ var userAvatarsUpdate = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "set user avatar"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			if err := c.change(ctx, op, http.MethodPost, "/user/avatar", body, nil); err != nil {
@@ -264,7 +264,7 @@ var userAvatarsDelete = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "delete user avatar"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			if err := c.change(ctx, op, http.MethodDelete, "/user/avatar", nil, nil); err != nil {
@@ -310,7 +310,7 @@ var userEmailsList = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "list user emails"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			var rows []object
@@ -376,7 +376,7 @@ var userEmailsDelete = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "delete user emails"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			if err := c.change(ctx, op, http.MethodDelete, "/user/emails", map[string]any{"emails": a.Emails},
@@ -432,7 +432,7 @@ var userBlocksList = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "list user blocks"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			var rows []object
@@ -486,7 +486,7 @@ var userBlocksCheck = &tool{
 		}
 		return func(ctx context.Context, c *Client) (any, error) {
 			const op = "check user block"
-			if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+			if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 				return nil, err
 			}
 			code, err := c.status(ctx, op, "/user/blocks/"+escape(a.Username))
@@ -557,7 +557,7 @@ func newUserBlockChange(action, key, title, text string, note bool, request func
 			method, path := request(p, a.Username)
 			return func(ctx context.Context, c *Client) (any, error) {
 				op := action + " user block"
-				if err := verifyOwnAccount(ctx, c, op, allowed); err != nil {
+				if err := verifyOwnProfile(ctx, c, op, allowed); err != nil {
 					return nil, err
 				}
 				if _, err := c.changeQuery(ctx, op, method, path, query, nil, nil); err != nil {
