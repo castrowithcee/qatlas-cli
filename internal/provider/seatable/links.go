@@ -298,9 +298,9 @@ func (c *Client) ListLinks(ctx context.Context, input linkInput) (*LinksResult, 
 	if err := checkRowIDs(op, input.RowIDs, 1, maxLinkSourceRows); err != nil {
 		return nil, err
 	}
-	selected, err := c.scope.selectTarget(input.Table)
+	selected, err := c.selectTable(ctx, op, input.Table)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
 	}
 	ref, access, err := c.resolveLink(ctx, op, selected, input.Column)
 	if err != nil {
@@ -353,9 +353,9 @@ func (c *Client) ChangeLinks(ctx context.Context, op, method string, input linkI
 	if err := checkLinkMutationShape(op, input); err != nil {
 		return err
 	}
-	selected, err := c.scope.selectTarget(input.Table)
+	selected, err := c.selectTable(ctx, op, input.Table)
 	if err != nil {
-		return providerError(op, err.Error())
+		return err
 	}
 	ref, access, err := c.resolveLink(ctx, op, selected, input.Column)
 	if err != nil {
