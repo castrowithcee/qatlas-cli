@@ -88,7 +88,7 @@ func timeRows(p *product, allowed allowlist, rows []object) []map[string]any {
 			continue
 		}
 		issue, ok := row.child("issue")
-		if len(allowed) > 0 && (!ok || !admitted(allowed, issue)) {
+		if !allowed.open() && (!ok || !admitted(allowed, issue)) {
 			continue
 		}
 		times = append(times, project(p, trackedTimeMembers, row))
@@ -105,7 +105,7 @@ func stopWatchRows(p *product, allowed allowlist, rows []object) []map[string]an
 		}
 		owner, hasOwner := row.text("repo_owner_name")
 		name, hasName := row.text("repo_name")
-		if len(allowed) > 0 && (!hasOwner || !hasName || owner == "" || name == "" ||
+		if !allowed.open() && (!hasOwner || !hasName || owner == "" || name == "" ||
 			!allowed.allowsRepository(owner, name)) {
 			continue
 		}

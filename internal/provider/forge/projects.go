@@ -149,10 +149,10 @@ func (l projectLevel) ownsRepository(fullName string) bool {
 
 // namesOwner reports whether the list admits the owner by an owner target of the same scope.
 func (a allowlist) namesOwner(owner target) bool {
-	if len(a) == 0 {
+	if a.open() {
 		return true
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == owner.scope && strings.EqualFold(entry.owner, owner.owner) {
 			return true
 		}

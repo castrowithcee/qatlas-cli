@@ -66,10 +66,10 @@ const teamListedNote = " Only a connection whose tools list names it offers this
 // requireOrgTargets refuses, before any secret is read, a tool that acts on a team by its ID or on the account's
 // teams when the targets exist but name no organization: no team could ever lie inside them.
 func (a allowlist) requireOrgTargets() error {
-	if len(a) == 0 {
+	if !a.bound() {
 		return nil
 	}
-	for _, entry := range a {
+	for _, entry := range a.targets {
 		if entry.kind == kindOwner && entry.scope == "orgs" {
 			return nil
 		}
@@ -117,7 +117,7 @@ func readTeam(ctx context.Context, c *Client, allowed allowlist, op string, id i
 	if got, ok := team.integer("id"); !ok || got != id {
 		return nil, "", provider.InvalidResponse(op, c.product.name+" returned another team than the one asked for")
 	}
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return team, "", nil
 	}
 	name, ok := allowed.teamOrganization(team)
@@ -130,7 +130,7 @@ func readTeam(ctx context.Context, c *Client, allowed allowlist, op string, id i
 // proveTeam binds a team ID to the targets before a detail or change follows. It sends one read when targets
 // exist and none without them, and returns the organization of the team, empty without targets.
 func proveTeam(ctx context.Context, c *Client, allowed allowlist, op string, id int64) (string, error) {
-	if len(allowed) == 0 {
+	if allowed.open() {
 		return "", nil
 	}
 	_, name, err := readTeam(ctx, c, allowed, op, id)
@@ -206,7 +206,7 @@ var teamsList = &tool{
 				// The lists of one organization are bound by the organization; the account's list is checked row
 				// by row against the targets.
 				if name == "" {
-					if _, ok := allowed.teamOrganization(row); !ok && len(allowed) != 0 {
+					if _, ok := allowed.teamOrganization(row); !ok && !allowed.open() {
 						continue
 					}
 				}
@@ -700,7 +700,7 @@ var teamActivitiesList = &tool{
 				if row == nil {
 					continue
 				}
-				if len(allowed) != 0 {
+				if !allowed.open() {
 					// An activity without a repository proves nothing about where it belongs; the repository must
 					// be the team's organization's own and inside the targets.
 					inner, ok := row.child("repo")
