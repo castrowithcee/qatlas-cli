@@ -259,6 +259,8 @@ var textEN = map[textID]string{
 	tCmdNoExclusions:                   "this provider declares no exclusions",
 	tTargetExcludedMark:                "[excluded] ",
 	tTargetExceptCount:                 "except %d",
+	tTargetsOutdatedWarning:            "these targets keep a former meaning and are not used: the connection offers no tools until you choose its targets again in this list and save; saving the same list leaves it locked",
+	tTargetsOutdatedCell:               "outdated, choose again",
 	tTargetCannotBeExcluded:            "this %s cannot be excluded",
 	tTargetNewExclusion:                "new exclusion: ",
 	tTargetTakenAsExclusion:            "Entries are taken as exclusions: they stay out of what the targets reach.",
