@@ -48,14 +48,19 @@ type connectionForm struct {
 	Credential, CredName, CredStorage string
 	EnvNames                          map[string]string
 	ConnName, Targets, Description    string
-	FilesRead, FilesWrite             string
-	PermMode                          string
-	Perms                             []string
-	Access                            string
-	Tools                             []string
-	Forward                           []string
+	// Exclude is the comma-separated list of exclusions, beside Targets.
+	Exclude               string
+	FilesRead, FilesWrite string
+	PermMode              string
+	Perms                 []string
+	Access                string
+	Tools                 []string
+	Forward               []string
 	// Labels are the typed target labels by target value; those of a target not in Targets are ignored.
 	Labels map[string]string
+	// Switch are the entries whose row asks to change between reachable and excluded; normalizeSwitches
+	// applies and clears them.
+	Switch []string
 }
 
 // The values of the access radio group: a connection offers by effect or by its selected tools.
@@ -79,8 +84,17 @@ func parseConnectionForm(v url.Values) connectionForm {
 			labels[target] = vals[0]
 		}
 	}
+	var switches []string
+	for key, vals := range v {
+		if value, ok := strings.CutPrefix(key, "switch_"); ok && len(vals) > 0 && vals[0] != "" {
+			switches = append(switches, value)
+		}
+	}
+	sort.Strings(switches)
 	return connectionForm{
 		Labels:      labels,
+		Switch:      switches,
+		Exclude:     v.Get("exclude"),
 		Provider:    v.Get("provider"),
 		Service:     v.Get("service"),
 		SvcName:     v.Get("svcname"),
@@ -131,7 +145,8 @@ func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraf
 		}
 	}
 	d.Targets = splitTargetInput(f.Targets)
-	for _, target := range d.Targets {
+	d.Exclude = splitTargetInput(f.Exclude)
+	for _, target := range slices.Concat(d.Targets, d.Exclude) {
 		if label := strings.TrimSpace(f.Labels[target]); label != "" {
 			if d.TargetLabels == nil {
 				d.TargetLabels = map[string]string{}
@@ -177,6 +192,34 @@ func splitTargetInput(raw string) []string {
 		}
 	}
 	return values
+}
+
+// canExclude reports whether the core accepts value as an exclusion of the provider; the page decides
+// nothing about it.
+func canExclude(t config.TargetMetadata, value string) bool {
+	return t.Excludes() && len(t.CheckExcludes([]string{value}, nil)) == 0
+}
+
+// normalizeSwitches moves each entry whose row asked for it between the targets and the exclusions, then
+// clears the request. It does not judge the result: the core refuses an entry that may not be excluded when
+// the candidate is built.
+func normalizeSwitches(f *connectionForm) {
+	if len(f.Switch) == 0 {
+		return
+	}
+	targets, exclude := splitTargetInput(f.Targets), splitTargetInput(f.Exclude)
+	for _, value := range f.Switch {
+		if i := slices.Index(exclude, value); i >= 0 {
+			exclude = slices.Delete(exclude, i, i+1)
+			if !slices.Contains(targets, value) {
+				targets = append(targets, value)
+			}
+		} else if i := slices.Index(targets, value); i >= 0 {
+			targets = slices.Delete(targets, i, i+1)
+			exclude = append(exclude, value)
+		}
+	}
+	f.Targets, f.Exclude, f.Switch = strings.Join(targets, ", "), strings.Join(exclude, ", "), nil
 }
 
 // splitDirectoryLines reads a files field, one directory per line, into the list a connection stores; blank
@@ -266,6 +309,9 @@ type connectionBuildData struct {
 	Roles       []roleField
 	Form        connectionForm
 	TargetHint  string
+	// Excludes is set only for a provider that declares exclusions; the page then offers the exclusions field
+	// and the row switches.
+	Excludes bool
 	// FilesRead and FilesWrite say whether the provider has a tool that reads, or writes, local files; only
 	// then does the page offer the matching directory field.
 	FilesRead, FilesWrite bool
@@ -292,17 +338,25 @@ type toolOption struct {
 	Unreached string
 }
 
-// labelRow is one target of the build page with its label field.
-type labelRow struct{ Target, Label string }
+// labelRow is one target or exclusion of the build page with its label field. Excluded marks an exclusion;
+// CanSwitch says the row may change between reachable and excluded.
+type labelRow struct {
+	Target, Label       string
+	Excluded, CanSwitch bool
+}
 
-// targetLabelRows lists the targets typed in the form, each with its typed label.
+// targetLabelRows lists the targets, then the exclusions typed in the form, each with its typed label.
 func targetLabelRows(f connectionForm) []labelRow {
 	var rows []labelRow
-	for _, target := range splitTargetInput(f.Targets) {
-		if !slices.ContainsFunc(rows, func(r labelRow) bool { return r.Target == target }) {
-			rows = append(rows, labelRow{target, f.Labels[target]})
+	add := func(values []string, excluded bool) {
+		for _, value := range values {
+			if !slices.ContainsFunc(rows, func(r labelRow) bool { return r.Target == value }) {
+				rows = append(rows, labelRow{Target: value, Label: f.Labels[value], Excluded: excluded})
+			}
 		}
 	}
+	add(splitTargetInput(f.Targets), false)
+	add(splitTargetInput(f.Exclude), true)
 	return rows
 }
 
@@ -314,6 +368,18 @@ func targetsText(conn config.Connection) string {
 			target += " (" + label + ")"
 		}
 		parts = append(parts, target)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// excludeText reads the exclusions of conn with their labels as "value (label)".
+func excludeText(conn config.Connection) string {
+	var parts []string
+	for _, value := range conn.Exclude {
+		if label := conn.TargetLabels[value]; label != "" {
+			value += " (" + label + ")"
+		}
+		parts = append(parts, value)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -389,6 +455,7 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		Roles:       roles,
 		Form:        f,
 		TargetHint:  targetHintFor(metadata),
+		Excludes:    metadata.Target.Excludes(),
 		FilesRead:   metadata.LocalFiles.Read,
 		FilesWrite:  metadata.LocalFiles.Write,
 		Effects:     checkedOptions(permissionNames, f.Perms),
@@ -396,6 +463,10 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		Labels:      targetLabelRows(f),
 		StorageHint: storageHintText,
 		Error:       errText,
+	}
+	for i := range data.Labels {
+		row := &data.Labels[i]
+		row.CanSwitch = row.Excluded || canExclude(metadata.Target, row.Target)
 	}
 	if s.svc != nil && s.svc.CanBrowseTargets(f.Provider) {
 		data.Dialog = newTargetDialogData(metadata.Target, s.csrfValue())
@@ -488,6 +559,9 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		{"effects", effects},
 		{"tools", tools},
 	}
+	if len(conn.Exclude) > 0 {
+		summary = slices.Insert(summary, 5, summaryRow{"exclusions", excludeText(conn)})
+	}
 	bindingNote := ""
 	if len(conn.ForwardSecrets) > 0 {
 		summary = append(summary, summaryRow{"forward_secrets", strings.Join(conn.ForwardSecrets, ", ")})
@@ -533,6 +607,7 @@ func (s *Server) handleConnectionsNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := parseConnectionForm(q)
+	normalizeSwitches(&f)
 	if !q.Has("access") {
 		applyConnectionDefaults(cfg, &f)
 	}
@@ -552,6 +627,7 @@ func (s *Server) handleConnectionReview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	f := parseConnectionForm(r.URL.Query())
+	normalizeSwitches(&f)
 	cand, err := buildConnectionCandidate(cfg, f)
 	if err != nil {
 		s.renderConnectionBuild(w, cfg, f, s.redact(err.Error()))
@@ -668,6 +744,7 @@ func (s *Server) approvalNotice(cand *config.Config, connName string) string {
 // "Test this connection" form and the outcome of the last test run from this page.
 type connectionResultData struct {
 	Name, Provider, Service, Credential, Description, Targets, Effects, Tools string
+	Exclude                                                                   string
 	Files                                                                     string
 	Notice, Error                                                             string
 	CSRF                                                                      string
@@ -737,7 +814,7 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 	provider := cfg.Services[conn.Service].Provider
 	data := connectionResultData{
 		Name: name, Provider: provider, Service: conn.Service, Credential: conn.Credential,
-		Description: conn.Description, Targets: targets,
+		Description: conn.Description, Targets: targets, Exclude: excludeText(conn),
 		Files:   approval.FilesText(conn.Files.Read, conn.Files.Write),
 		Effects: config.FormatEffects(cfg.ConnectionEffects(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
