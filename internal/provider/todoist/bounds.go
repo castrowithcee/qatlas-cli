@@ -2,6 +2,7 @@ package todoist
 
 import (
 	"context"
+	"slices"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -89,12 +90,70 @@ func (c *Client) treeMember(ctx context.Context, op, projectID string) (bool, er
 	return c.below(projectID), nil
 }
 
-// projectAllowed reports whether a project belongs to the connection: a bound project or one in a tree.
-func (c *Client) projectAllowed(ctx context.Context, op, projectID string) (bool, error) {
+// belowExcluded reports whether the projects read so far put a project at or below an excluded tree. A
+// project the read does not show, and a chain that is cut or loops, count as excluded: the exclusion could
+// sit in the part that cannot be followed.
+func (c *Client) belowExcluded(projectID string) bool {
+	seen := map[string]bool{}
+	for current := projectID; ; {
+		if slices.Contains(c.scope.exTrees, current) {
+			return true
+		}
+		parent, known := c.tree.parents[current]
+		if !known || seen[current] {
+			return true
+		}
+		seen[current] = true
+		if parent == "" {
+			return false
+		}
+		current = parent
+	}
+}
+
+// excludedLoaded is projectExcluded for a project whose tree is already read.
+func (c *Client) excludedLoaded(projectID string) bool {
+	return slices.Contains(c.scope.exProjects, projectID) ||
+		(len(c.scope.exTrees) > 0 && c.belowExcluded(projectID))
+}
+
+// projectExcluded reports whether a project is excluded: by its own ID, or at or below an excluded tree. The
+// project tree is read only on a connection that excludes a tree; the archived projects are read when the
+// active ones do not know the project, because only an archived project can be missing there.
+func (c *Client) projectExcluded(ctx context.Context, op, projectID string) (bool, error) {
+	if slices.Contains(c.scope.exProjects, projectID) || slices.Contains(c.scope.exTrees, projectID) {
+		return true, nil
+	}
+	if len(c.scope.exTrees) == 0 {
+		return false, nil
+	}
+	if err := c.loadProjects(ctx, op, false); err != nil {
+		return false, err
+	}
+	if _, known := c.tree.parents[projectID]; !known {
+		if err := c.loadProjects(ctx, op, true); err != nil {
+			return false, err
+		}
+	}
+	return c.belowExcluded(projectID), nil
+}
+
+// projectTargeted reports whether a target reaches a project: a bound project or one in a tree.
+func (c *Client) projectTargeted(ctx context.Context, op, projectID string) (bool, error) {
 	if c.scope.exact(projectID) {
 		return true, nil
 	}
 	return c.treeMember(ctx, op, projectID)
+}
+
+// projectAllowed reports whether a project belongs to the connection: a target reaches it and no exclusion
+// does.
+func (c *Client) projectAllowed(ctx context.Context, op, projectID string) (bool, error) {
+	excluded, err := c.projectExcluded(ctx, op, projectID)
+	if err != nil || excluded {
+		return false, err
+	}
+	return c.projectTargeted(ctx, op, projectID)
 }
 
 // requireProject refuses a named project that does not belong to the connection.
@@ -121,20 +180,36 @@ func (c *Client) noteProject(raw rawProject) {
 	c.tree.parents[raw.ID] = text(raw.ParentID)
 }
 
-// taskAllowed reports whether a task belongs to the connection: its section is bound or its project is.
+// taskAllowed reports whether a task belongs to the connection: its section is bound or its project is, and
+// neither its section nor its project is excluded.
 func (c *Client) taskAllowed(ctx context.Context, op string, raw rawTask) (bool, error) {
+	if raw.SectionID != nil && c.scope.excludesSection(*raw.SectionID) {
+		return false, nil
+	}
+	excluded, err := c.projectExcluded(ctx, op, raw.ProjectID)
+	if err != nil || excluded {
+		return false, err
+	}
 	if raw.SectionID != nil && c.scope.hasSection(*raw.SectionID) {
 		return true, nil
 	}
-	return c.projectAllowed(ctx, op, raw.ProjectID)
+	return c.projectTargeted(ctx, op, raw.ProjectID)
 }
 
-// sectionAllowed reports whether a section belongs to the connection: it is bound or its project is.
+// sectionAllowed reports whether a section belongs to the connection: it is bound or its project is, and
+// neither it nor its project is excluded.
 func (c *Client) sectionAllowed(ctx context.Context, op string, raw rawSection) (bool, error) {
+	if c.scope.excludesSection(raw.ID) {
+		return false, nil
+	}
+	excluded, err := c.projectExcluded(ctx, op, raw.ProjectID)
+	if err != nil || excluded {
+		return false, err
+	}
 	if c.scope.hasSection(raw.ID) {
 		return true, nil
 	}
-	return c.projectAllowed(ctx, op, raw.ProjectID)
+	return c.projectTargeted(ctx, op, raw.ProjectID)
 }
 
 // reaches is the Reaches answer of the Todoist target: which tools a binding to targets serves. A tool
@@ -171,10 +246,12 @@ var targetKinds = []config.TargetKind{{
 		"its subprojects, also those created later; * binds the whole account and stands alone",
 	Forms: []string{projectForm, treeForm, wildcard},
 	// Subprojects are listed below their project.
-	Nested: true,
+	Nested:     true,
+	Excludable: true,
 }, {
 	Name:        "section",
 	Description: "one section of a project, reaching only its tasks and their comments and reminders",
 	Forms:       []string{sectionForm},
 	Parents:     []string{"project"},
+	Excludable:  true,
 }}

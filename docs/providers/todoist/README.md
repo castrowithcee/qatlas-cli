@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the Todoist provider: setup with a personal API token, project and account scope, target choice, the cursor contract, plan-dependent errors, and the boundary to workspace and account administration; the tools, changes, and filters are on their own pages.
+  Describes the Todoist provider: setup with a personal API token, project and account scope, exclusions, target choice, the cursor contract, plan-dependent errors, and the boundary to workspace and account administration; the tools, changes, and filters are on their own pages.
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # Todoist
@@ -60,6 +60,29 @@ An ID is the ID the matching list tool returns (letters and digits). Subprojects
 call from the project list, so no subproject is remembered across calls. An empty target never means the
 whole account. The terminal editor warns whenever `*` is entered.
 
+### Exclusions
+
+`exclude` takes parts out of what the targets reach and wins over every target; `*` plus `exclude` is
+"everything except". Its entries are spelled like targets: `PROJECT_ID` excludes the project with its sections,
+tasks, and comments but not its subprojects, `project/PROJECT_ID` the whole tree, `section/SECTION_ID` one
+section. An entry equal to a target, a repeated entry, and `*` are invalid. An exclusion restricts no tool and
+changes which tools a binding reaches in no way: `*` stays the gate of the account-wide tools.
+
+An excluded object is treated like a project of another user. Lists leave it out, so a batch can hold fewer
+rows than `limit`; a detail read, a change, or a `project_id`, `section_id`, `task_id`, or `parent_id` argument
+that lies in it is refused as outside the connection, naming neither the object nor the exclusion. The
+`parent_id` of a reachable project below an excluded parent stays in the result as a plain ID. A task without
+a place would land in the Inbox, which an exclusion could name, so a connection with exclusions refuses it.
+Todoist archives and deletes a project with everything below it, so `todoist.projects.archive` and
+`todoist.projects.delete` are refused when an excluded project or section lies below the project at any depth.
+
+The project tree is read only on a connection that excludes a project tree, and for completed tasks it includes
+the archived projects. A project the tree does not show counts as excluded, and a tree of more than 25 pages
+of 200 projects is refused unresolved. A `*` connection with exclusions lists reminders without `task_id` by
+resolving the tasks of each page in batches of up to 100; a reminder whose task cannot be resolved is left
+out. Labels, saved filters, and completed tasks have their own limits on [changes](changes.md#exclusions),
+[filters](filters.md#exclusions), and [tools](tools.md).
+
 A binding reaches a tool only where the tool can act inside it; the others are not offered, and the call
 check stays in force:
 
@@ -83,7 +106,7 @@ one section narrows every task request to it at Todoist; a project tree is narro
 A change reads what it concerns first and is refused before anything is sent when it lies outside the
 connection: no task is created in, moved into, or attached below another place, a section must belong to the
 scope, and a comment is changed only when its task or project belongs to it. A new task without a place goes
-to the connection's only target. A `*` connection reads nothing first.
+to the connection's only target. A `*` connection without exclusions reads nothing first.
 
 Structure changes follow the same boundary:
 
@@ -91,7 +114,7 @@ Structure changes follow the same boundary:
   `parent_id` inside a `project/PROJECT_ID` project on any binding but `*`; it joins that tree at once.
 - Todoist archives and deletes a project with all its subprojects. Qatlas reads the project tree first (for a
   delete the archived projects too) and refuses the change when a subproject at any depth lies outside the
-  connection. A tree of more than 25 pages of 200 projects is refused unresolved. Unarchiving restores the
+  connection or is excluded. A tree of more than 25 pages of 200 projects is refused unresolved. Unarchiving restores the
   project alone, as a top-level project.
 - Only personal projects are changed: every project change reads the project first and refuses a workspace
   project, and no project is created in or below one.
@@ -101,7 +124,7 @@ Structure changes follow the same boundary:
 
 A person chooses from the projects of the account, subprojects below their project with the parent chain as
 path, and then from the sections of one project. A chosen project becomes `project/PROJECT_ID`, a section
-`section/SECTION_ID`; an exact `PROJECT_ID` is entered by hand. The connection's targets do not narrow what is
+`section/SECTION_ID`; an exact `PROJECT_ID` is entered by hand. The connection's targets and exclusions do not narrow what is
 offered, and choosing only reads, through no tool and for no agent. Projects and sections are searched by name
 at Todoist, a project search at any depth; names are untrusted and are shortened and cleaned.
 

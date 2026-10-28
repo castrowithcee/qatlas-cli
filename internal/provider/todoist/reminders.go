@@ -163,7 +163,7 @@ func parentTask(raw rawReminder) string {
 	return raw.ItemID
 }
 
-// readReminder reads one reminder and, on a project connection, its task, and refuses a reminder of a task
+// readReminder reads one reminder and, unless the connection is unrestricted, its task, and refuses a reminder of a task
 // outside the connection. It returns the reminder and its task.
 func (c *Client) readReminder(ctx context.Context, op, id string) (rawReminder, string, error) {
 	var raw rawReminder
@@ -177,7 +177,7 @@ func (c *Client) readReminder(ctx context.Context, op, id string) (rawReminder, 
 		return rawReminder{}, "", &provider.Error{Class: provider.ClassNotFound, Op: op, Message: notFoundMessage}
 	}
 	task := parentTask(raw)
-	if c.scope.all {
+	if c.scope.unrestricted() {
 		return raw, task, nil
 	}
 	if !validID(task) {
@@ -271,7 +271,7 @@ func prepareRemindersUpdate(_ scope, arguments struct {
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
 		task := ""
-		if !c.scope.all {
+		if !c.scope.unrestricted() {
 			var err error
 			if _, task, err = c.readReminder(ctx, op, arguments.ReminderID); err != nil {
 				return nil, err
@@ -294,7 +294,7 @@ func prepareRemindersDelete(_ scope, arguments struct {
 		return nil, err
 	}
 	return func(ctx context.Context, c *Client) (any, error) {
-		if !c.scope.all {
+		if !c.scope.unrestricted() {
 			if _, _, err := c.readReminder(ctx, op, arguments.ReminderID); err != nil {
 				return nil, err
 			}

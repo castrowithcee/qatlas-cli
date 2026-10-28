@@ -233,3 +233,88 @@ func TestGistTargetsBindTheToolsToUsers(t *testing.T) {
 		t.Errorf("own delete = %v", err)
 	}
 }
+
+func TestGistExclusionsProveTheOwnerAndDropRows(t *testing.T) {
+	f := &fakeGitHub{}
+	base := &fakeGists{f: f}
+	f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodGet && r.URL.Path == notificationPrefix+"/gists" {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, "[%s,%s,%s]", gistBody("aa11", "octocat"), gistBody("bb22", "Hubot"), gistBody("dd44", ""))
+			return true
+		}
+		return base.route(w, r)
+	}
+	cfg := coreConfig(serve(t, f))
+	all5 := []string{gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID}
+	add := func(name string, excludes []string) {
+		cfg.Connections[name] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader",
+			Exclude: excludes}, config.Effects(), all5)
+	}
+	add("ex-hubot", []string{"users/hubot"})
+	add("ex-me", []string{"orgs/Octocat"})
+	add("ex-repo", []string{"repos/octo-org/*"})
+	red := &redact.Redactor{}
+	reads := 0
+	core := application.New(registry(t), cfg, resolver(red, &reads), red)
+
+	// Exclusions alone leave the gist tools usable and drop the rows of an excluded owner.
+	out, err := invoke(t, core, gistsList.ID, "ex-hubot", `{}`, false)
+	if err != nil || !strings.Contains(string(out), `"aa11"`) || strings.Contains(string(out), `"bb22"`) {
+		t.Errorf("list with an excluded owner in the rows = %s, %v", out, err)
+	}
+	if _, err := invoke(t, core, gistsCreate.ID, "ex-hubot", `{"files":[{"filename":"n.md","content":"hi"}]}`, true); err != nil {
+		t.Errorf("create with only exclusions = %v", err)
+	}
+	if _, err := invoke(t, core, gistsGet.ID, "ex-repo", `{"gist_id":"bb22"}`, false); err != nil {
+		t.Errorf("get on a connection whose exclusions touch no gist owner = %v", err)
+	}
+
+	// A gist of an excluded owner is read once as proof and answers not-found; nothing changes.
+	for _, tool := range []struct{ id, arguments string }{
+		{gistsGet.ID, `{"gist_id":"bb22"}`}, {gistsUpdate.ID, `{"gist_id":"bb22","description":"x"}`},
+		{gistsDelete.ID, `{"gist_id":"bb22"}`},
+	} {
+		before := len(f.recorded())
+		_, err := invoke(t, core, tool.id, "ex-hubot", tool.arguments, true)
+		if classOf(err) != provider.ClassNotFound {
+			t.Errorf("%s of an excluded owner's gist = %v, want not-found", tool.id, err)
+		}
+		if requests := sent(f, before); len(requests) != 1 || requests[0].method != http.MethodGet {
+			t.Errorf("%s sent %+v, want only the proof read", tool.id, requests)
+		}
+	}
+	// An own gist of a connection with only exclusions is proven as well and then changes.
+	before := len(f.recorded())
+	if _, err := invoke(t, core, gistsDelete.ID, "ex-hubot", `{"gist_id":"aa11"}`, true); err != nil {
+		t.Errorf("delete of an own gist = %v", err)
+	}
+	if requests := sent(f, before); len(requests) != 2 || requests[0].method != http.MethodGet ||
+		requests[1].method != http.MethodDelete {
+		t.Errorf("delete sent %+v, want the proof read and the delete", requests)
+	}
+
+	// An excluded own account refuses create and the own list, and an excluded username, before a secret.
+	for _, call := range []struct{ tool, arguments string }{
+		{gistsCreate.ID, `{"files":[{"filename":"n.md","content":"hi"}]}`},
+		{gistsList.ID, `{}`}, {gistsList.ID, `{"username":"octocat"}`},
+	} {
+		reads = 0
+		before := len(f.recorded())
+		_, err := invoke(t, core, call.tool, "ex-me", call.arguments, true)
+		if !isInvalidRequest(err) {
+			t.Errorf("%s %s with an excluded own account = %v, want an invalid request", call.tool, call.arguments, err)
+		}
+		for _, request := range sent(f, before) {
+			if request.method != http.MethodGet || request.path != notificationPrefix+"/user" {
+				t.Errorf("%s sent %+v", call.tool, request)
+			}
+		}
+		if call.arguments == `{"username":"octocat"}` && (reads != 0 || len(sent(f, before)) != 0) {
+			t.Errorf("an excluded username reached the credential or GitHub")
+		}
+	}
+	if _, err := invoke(t, core, gistsGet.ID, "ex-me", `{"gist_id":"aa11"}`, false); classOf(err) != provider.ClassNotFound {
+		t.Errorf("get of a gist of the excluded own account = %v, want not-found", err)
+	}
+}
