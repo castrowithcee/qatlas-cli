@@ -321,3 +321,229 @@ func TestPlanningProfileTicksTheItemTools(t *testing.T) {
 		}
 	}
 }
+
+// exclusionItems are a project's items: one in an excluded repository, one in a repository outside the
+// targets that nothing excludes, a draft issue, and one inside the targets.
+func exclusionItems() []fakeItem {
+	return []fakeItem{
+		{id: "PVTI_secret", kind: "ISSUE", title: "Secret plan", repo: "octo-org/secret", number: 5, status: "Todo",
+			body: bodyCanary, assignees: []string{"octocat"}, labels: []string{"bug"}},
+		{id: "PVTI_outside", kind: "PULL_REQUEST", title: "Outside work", repo: "acme/outside", number: 6,
+			status: "Todo", assignees: []string{"octocat"}, labels: []string{"bug"}},
+		{id: "PVTI_draft", kind: "DRAFT_ISSUE", title: "An idea", status: "Todo"},
+		{id: "PVTI_inside", kind: "ISSUE", title: "Inside work", repo: "octo-org/example", number: 7, status: "Todo",
+			body: bodyCanary},
+	}
+}
+
+func exclusionItemsCore(t *testing.T, f *fakeGitHub, reads *int) *application.Core {
+	t.Helper()
+	cfg := coreConfig(serve(t, f))
+	tools := append([]string{itemsList.ID, itemsGet.ID, itemsUpdate.ID, itemsArchive.ID, itemsAdd.ID,
+		projectIssuesCreate.ID}, itemTools...)
+	cfg.Connections["ex"] = connectionOf(config.Connection{Service: "gh", Credential: "gh-reader",
+		Targets: planningTargets, Exclude: []string{"repos/octo-org/secret", "orgs/hidden"}}, config.Effects(), tools)
+	red := &redact.Redactor{}
+	return application.New(registry(t), cfg, resolver(red, reads), red)
+}
+
+// An item whose content lies in an excluded repository is listed and read as redacted, with nothing but its
+// id and type; an item outside the targets that nothing excludes, and a draft issue, stay as they are.
+func TestProjectItemsRedactContentOfExclusions(t *testing.T) {
+	f := &fakeGitHub{items: exclusionItems()}
+	core := exclusionItemsCore(t, f, nil)
+
+	raw, err := invoke(t, core, itemsList.ID, "ex", `{}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list struct {
+		Items []json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &list); err != nil || len(list.Items) != 4 {
+		t.Fatalf("list = %s, %v", raw, err)
+	}
+	if got := string(list.Items[0]); got != `{"id":"PVTI_secret","type":"redacted"}` {
+		t.Errorf("redacted item = %s", got)
+	}
+	for _, leak := range []string{"Secret plan", "octo-org/secret", bodyCanary, "/issues/5", "octocat"} {
+		if strings.Contains(string(list.Items[0]), leak) {
+			t.Errorf("redacted item leaks %q: %s", leak, list.Items[0])
+		}
+	}
+	for i, wants := range [][]string{{`"title":"Outside work"`, `"repository":"acme/outside"`}, {`"title":"An idea"`},
+		{`"title":"Inside work"`, `"repository":"octo-org/example"`}} {
+		for _, want := range wants {
+			if !strings.Contains(string(list.Items[i+1]), want) {
+				t.Errorf("item %d = %s, want %s", i+1, list.Items[i+1], want)
+			}
+		}
+	}
+
+	raw, err = invoke(t, core, itemsGet.ID, "ex", `{"item_id":"PVTI_secret"}`, false)
+	if err != nil || !strings.Contains(string(raw), `"type":"redacted"`) {
+		t.Fatalf("get = %s, %v", raw, err)
+	}
+	for _, leak := range []string{"Secret plan", "octo-org/secret", bodyCanary, "octocat"} {
+		if strings.Contains(string(raw), leak) {
+			t.Errorf("redacted get leaks %q: %s", leak, raw)
+		}
+	}
+	raw, err = invoke(t, core, itemsGet.ID, "ex", `{"item_id":"PVTI_outside"}`, false)
+	if err != nil || !strings.Contains(string(raw), `"repository":"acme/outside"`) ||
+		!strings.Contains(string(raw), `"title":"Outside work"`) {
+		t.Errorf("get of an item outside the targets = %s, %v, want it unchanged", raw, err)
+	}
+}
+
+// A change of an item in an exclusion is read once to prove it, then refused as missing without a change; the
+// same changes reach items outside the exclusions.
+func TestProjectItemChangesRefuseExclusionsAfterOneRead(t *testing.T) {
+	f := &fakeGitHub{items: exclusionItems()}
+	core := exclusionItemsCore(t, f, nil)
+	for _, tt := range []struct{ name, operation, arguments string }{
+		{"update", itemsUpdate.ID, `{"item_id":"PVTI_secret","fields":{"Priority":"P1"}}`},
+		{"archive", itemsArchive.ID, `{"item_id":"PVTI_secret"}`},
+		{"unarchive", itemsUnarchive.ID, `{"item_id":"PVTI_secret"}`},
+		{"delete", itemsDelete.ID, `{"item_id":"PVTI_secret"}`},
+		{"move", itemsMove.ID, `{"item_id":"PVTI_secret"}`},
+		{"move after", itemsMove.ID, `{"item_id":"PVTI_inside","after_id":"PVTI_secret"}`},
+		{"draft change", draftsUpdate.ID, `{"item_id":"PVTI_secret","title":"x"}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			before := len(f.recorded())
+			_, err := invoke(t, core, tt.operation, "ex", tt.arguments, true)
+			if classOf(err) != provider.ClassNotFound {
+				t.Fatalf("err = %v, want not-found", err)
+			}
+			requests := f.recorded()[before:]
+			if len(requests) != 1 || strings.HasPrefix(strings.TrimSpace(requests[0].document), "mutation") {
+				t.Errorf("requests = %+v, want exactly one read", requests)
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Errorf("the refusal names the excluded repository: %v", err)
+			}
+		})
+	}
+	before := len(f.recorded())
+	if _, err := invoke(t, core, itemsArchive.ID, "ex", `{"item_id":"PVTI_outside"}`, true); err != nil {
+		t.Errorf("archive of an item outside the targets = %v, want it allowed", err)
+	}
+	if len(f.recorded())-before != 2 {
+		t.Errorf("requests = %d, want the proving read and the mutation", len(f.recorded())-before)
+	}
+}
+
+// An item added, created, or converted into an excluded repository is refused before a secret or a request.
+func TestProjectItemTargetsRefuseExcludedRepositories(t *testing.T) {
+	f := &fakeGitHub{items: exclusionItems()}
+	reads := 0
+	core := exclusionItemsCore(t, f, &reads)
+	for _, tt := range []struct{ operation, arguments string }{
+		{itemsAdd.ID, `{"repository":"octo-org/secret","number":5}`},
+		{itemsAdd.ID, `{"repository":"Hidden/anything","number":5}`},
+		{projectIssuesCreate.ID, `{"repository":"octo-org/SECRET","title":"x"}`},
+		{draftsConvert.ID, `{"item_id":"PVTI_draft","repository":"octo-org/secret"}`},
+	} {
+		before := len(f.recorded())
+		_, err := invoke(t, core, tt.operation, "ex", tt.arguments, true)
+		if !isInvalidRequest(err) || reads != 0 || len(f.recorded()) != before {
+			t.Errorf("%s %s = %v (reads %d), want an invalid request before any I/O", tt.operation,
+				tt.arguments, err, reads)
+		}
+	}
+}
+
+func referenceNode(repository, title string) string {
+	repo := "null"
+	if repository != "" {
+		repo = `{"nameWithOwner":"` + repository + `"}`
+	}
+	return `{"id":"I_` + title + `","number":3,"title":"` + title + `","state":"OPEN","url":"https://github.com/x/y/pull/3",` +
+		`"repository":` + repo + `}`
+}
+
+// The pull requests of a project item's field value drop a reference from an excluded repository or without a
+// repository, keep one outside the targets, and count as GitHub counted; without exclusions nothing is dropped.
+func TestProjectItemFieldValueReferencesHonourExclusions(t *testing.T) {
+	node := `{"id":"PVTI_refs","type":"DRAFT_ISSUE","fieldValues":{"totalCount":1,"nodes":[` +
+		`{"__typename":"ProjectV2ItemFieldPullRequestValue","field":{"id":"F_pr"},"pullRequests":{"totalCount":4,"nodes":[` +
+		referenceNode("octo-org/secret", "SecretRef") + `,` + referenceNode("acme/outside", "OutsideRef") + `,` +
+		referenceNode("", "LooseRef") + `,` + referenceNode("hidden/any", "OwnerRef") + `]}}]},` +
+		`"content":{"__typename":"DraftIssue","id":"DI_refs","title":"t"}}`
+	f := &fakeGitHub{items: []fakeItem{{id: "PVTI_refs", kind: "DRAFT_ISSUE", node: node}}}
+	core := exclusionItemsCore(t, f, nil)
+
+	raw, err := invoke(t, core, itemsGet.ID, "ex", `{"item_id":"PVTI_refs"}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{"SecretRef", "LooseRef", "OwnerRef", "octo-org/secret", "hidden"} {
+		if strings.Contains(string(raw), leak) {
+			t.Errorf("get leaks %q: %s", leak, raw)
+		}
+	}
+	if !strings.Contains(string(raw), "OutsideRef") || !strings.Contains(string(raw), `"pull_requests_total_count":4`) {
+		t.Errorf("get = %s, want the outside reference and the counted total", raw)
+	}
+
+	raw, err = invoke(t, core, itemsGet.ID, "planning", `{"item_id":"PVTI_refs"}`, false)
+	if err != nil || strings.Count(string(raw), `"number":3`) != 4 {
+		t.Errorf("get without exclusions = %s, %v, want all four references", raw, err)
+	}
+}
+
+// Issue references (parent, duplicate, linked, closing, tracked, pending suggestions) and pinned issues are
+// left out under the same rule as the project item references.
+func TestIssueAndPinnedReferencesHonourExclusions(t *testing.T) {
+	ref := func(repository, title string) string { return referenceNode(repository, title) }
+	connection := func(nodes ...string) string {
+		return `{"totalCount":` + fmt.Sprint(len(nodes)) + `,"pageInfo":{"hasNextPage":false},"nodes":[` +
+			strings.Join(nodes, ",") + `]}`
+	}
+	issue := `{"parent":` + ref("octo-org/secret", "SecretParent") + `,"duplicateOf":` + ref("acme/outside", "OutsideDup") +
+		`,"closedByPullRequestsReferences":` + connection(ref("octo-org/secret", "SecretClosing"), ref("acme/outside", "OutsideClosing")) +
+		`,"relatesTo":` + connection(ref("hidden/x", "SecretRelates"), ref("", "LooseRelates")) +
+		`,"trackedInIssues":` + connection(ref("octo-org/secret", "SecretIn")) +
+		`,"trackedIssues":` + connection(ref("octo-org/secret", "SecretTracked"), ref("acme/outside", "OutsideTracked")) +
+		`,"pendingSuggestions":[{"__typename":"PendingCloseSuggestion","duplicateOf":` + ref("octo-org/secret", "SecretSuggested") + `}]}`
+	var node issueNodeRaw
+	if err := json.Unmarshal([]byte(issue), &node); err != nil {
+		t.Fatal(err)
+	}
+	pinned := `{"nodes":[{"id":"PI_1","issue":` + ref("octo-org/secret", "SecretPinned") + `},{"id":"PI_2","issue":` +
+		ref("acme/outside", "OutsidePinned") + `}],"totalCount":2}`
+	var pins gqlNodes[gqlPinnedIssueRaw]
+	if err := json.Unmarshal([]byte(pinned), &pins); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name    string
+		allowed allowlist
+		dropped bool
+	}{
+		{"excluded", mustAllowlist(t, []string{"repos/octo-org/example"}, []string{"repos/octo-org/secret", "orgs/hidden"}), true},
+		{"not excluded", mustAllowlist(t, []string{"repos/octo-org/example"}, nil), false},
+		{"open", allowlist{}, false},
+	} {
+		width, _ := json.Marshal(node.width(tt.allowed))
+		list, _, _ := pageItems(&pins, func(p *gqlPinnedIssueRaw) *GraphQLPinnedIssue { return p.project(tt.allowed) })
+		listed, _ := json.Marshal(list)
+		all := string(width) + string(listed)
+		for _, title := range []string{"SecretParent", "SecretClosing", "SecretRelates", "LooseRelates", "SecretIn", "SecretTracked",
+			"SecretSuggested", "SecretPinned"} {
+			if got := strings.Contains(all, title); got == tt.dropped {
+				t.Errorf("%s: %s present = %v, want %v", tt.name, title, got, !tt.dropped)
+			}
+		}
+		for _, title := range []string{"OutsideDup", "OutsideClosing", "OutsideTracked", "OutsidePinned"} {
+			if !strings.Contains(all, title) {
+				t.Errorf("%s: %s was dropped, want it kept", tt.name, title)
+			}
+		}
+		if !strings.Contains(string(width), `"tracked_issues_total_count":2`) {
+			t.Errorf("%s: the counted total changed: %s", tt.name, width)
+		}
+	}
+}

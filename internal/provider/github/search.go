@@ -36,6 +36,11 @@ import (
 // connection without targets, since no qualifier restricts which organizations a search may return to one
 // target the way org: does for users.
 //
+// A connection that only excludes forces no positive qualifier and leaves OR and parentheses allowed. Its
+// exclusions are enforced by filtering result rows; negated qualifiers added to the query only save GitHub
+// from returning rows that would be dropped, and a positive qualifier naming an excluded repository or owner
+// is refused.
+//
 // Every batch reports GitHub's total_count and incomplete_results alongside its compact, untrusted results,
 // and pages by the same cursor contract as the other lists, bound to the tool, the forced qualifiers, and
 // the exact terms.
@@ -140,12 +145,101 @@ func searchScope(allowed allowlist) (string, error) {
 			parts = append(parts, qualifier+entry.owner)
 		}
 	}
-	if len(parts) == 0 {
+	if len(parts) == 0 && allowed.bound() {
 		return "", invalidRequest("this connection's targets do not narrow a search: a project target alone " +
 			"names no repository or owner qualifier a search could force; add a repository or an owner target, " +
 			"or use a connection without targets")
 	}
-	return strings.Join(parts, " "), nil
+	return strings.Join(append(parts, allowed.searchNegations()...), " "), nil
+}
+
+// maxSearchNegations bounds the negated qualifiers a search carries for the connection's exclusions. They only
+// save GitHub from returning rows the row filter drops anyway, so a long exclusion list must not bloat every
+// query toward GitHub's query limits; the row filter alone is the guarantee, and the owner entries come first
+// because one of them covers many repositories.
+const maxSearchNegations = 10
+
+// searchNegations returns the negated qualifiers for the exclusions, at most maxSearchNegations: -user: or
+// -org: for an owner by the scope it was written with, both for a repository pattern, which records no scope,
+// then -repo: for each single repository. A project exclusion has no qualifier.
+func (a allowlist) searchNegations() []string {
+	var owners, repos []string
+	seen := map[string]bool{}
+	add := func(list *[]string, qualifier string) {
+		key := strings.ToLower(qualifier)
+		if !seen[key] {
+			seen[key] = true
+			*list = append(*list, qualifier)
+		}
+	}
+	for _, entry := range a.excludes {
+		switch {
+		case entry.kind == kindOwner && entry.scope == "orgs":
+			add(&owners, "-org:"+entry.owner)
+		case entry.kind == kindOwner:
+			add(&owners, "-user:"+entry.owner)
+		case entry.kind == kindRepository && entry.repo == "*":
+			add(&owners, "-user:"+entry.owner)
+			add(&owners, "-org:"+entry.owner)
+		case entry.kind == kindRepository:
+			add(&repos, "-repo:"+entry.owner+"/"+entry.repo)
+		}
+	}
+	all := append(owners, repos...)
+	if len(all) > maxSearchNegations {
+		all = all[:maxSearchNegations]
+	}
+	return all
+}
+
+// dropsRow reports whether a search row of a repository must not be shown: with exclusions, a row whose
+// repository an exclusion covers, or that cannot be told apart from one, since the forced negations are only
+// an optimization. Without exclusions nothing is dropped.
+func (a allowlist) dropsRow(repository string) bool {
+	if len(a.excludes) == 0 {
+		return false
+	}
+	parsed, err := parseArgument(kindRepository, repository)
+	return err != nil || a.excluded(parsed)
+}
+
+// checkExcludedQualifiers refuses a positive repo:, org:, user:, or owner: qualifier that names an excluded
+// repository or owner, for a connection that only excludes: OR and parentheses stay allowed there, since the
+// row filter protects. The refusal never names the object or the exclusion.
+func checkExcludedQualifiers(terms string, allowed allowlist) error {
+	if len(allowed.excludes) == 0 {
+		return nil
+	}
+	for _, token := range strings.Fields(terms) {
+		token = strings.Trim(token, "()")
+		lower := strings.ToLower(token)
+		for _, qualifier := range foreignScopeQualifiers {
+			if !strings.HasPrefix(lower, qualifier) {
+				continue
+			}
+			for _, value := range strings.Split(strings.Trim(token[len(qualifier):], `"`), ",") {
+				value = strings.Trim(value, `"`)
+				if excludedQualifierValue(allowed, qualifier == "repo:", value) {
+					return invalidRequest("terms may not use this " + qualifier + " qualifier: its value is not " +
+						"available on this connection; pass another one")
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// excludedQualifierValue reports whether the value of a positive qualifier hits an exclusion. A value that is
+// no plain name, such as one with a wildcard, is judged by its owner part alone.
+func excludedQualifierValue(allowed allowlist, repository bool, value string) bool {
+	owner, name, _ := strings.Cut(value, "/")
+	if !repository {
+		return allowed.excludedOwner(value)
+	}
+	if allowed.excludedOwner(owner) {
+		return true
+	}
+	return name != "" && allowed.excluded(target{kind: kindRepository, owner: owner, repo: name})
 }
 
 // issuesSearchScope adds the fixed is:issue qualifier ahead of searchScope's target-derived qualifiers, so
@@ -204,10 +298,13 @@ var searchTermsArgument = capability.Argument{Name: "terms", Required: true, Des
 	"GitHub qualifiers, such as language:go or is:merged; a connection whose targets narrow the search " +
 	"refuses a repo:, org:, user:, or owner: qualifier here, since Qatlas already adds the one the targets " +
 	"allow, and refuses the OR operator and parentheses, since either could widen or rearrange it; a negated " +
-	"qualifier, such as -repo:, stays allowed"}
+	"qualifier, such as -repo:, stays allowed; a connection that only excludes forces no qualifier, filters " +
+	"out excluded rows itself, allows OR and parentheses, and refuses a positive qualifier naming an excluded " +
+	"repository or owner"}
 
 var searchCountFields = []capability.Field{
-	{Name: "total_count", Description: "How many results GitHub counts in total, ahead of this batch's limit"},
+	{Name: "total_count", Description: "How many results GitHub counts in total, ahead of this batch's limit; " +
+		"with exclusions it may also count results the connection withholds"},
 	{Name: "incomplete_results", Description: "True when GitHub timed out scoring every result; the count and " +
 		"this batch may be incomplete"},
 }
@@ -692,6 +789,9 @@ func checkSearchArguments(tool, forced string, restricted bool, a *searchArgumen
 	if err := checkForeignQualifiers(a.Terms, restricted); err != nil {
 		return err
 	}
+	if err := checkExcludedQualifiers(a.Terms, a.allowed); err != nil {
+		return err
+	}
 	limit, err := normalizeLimit(a.Limit)
 	if err != nil {
 		return err
@@ -742,10 +842,12 @@ func searchHandler(tool string, scopeOf func(allowlist) (string, error),
 		if err != nil {
 			return nil, err
 		}
-		if err := checkSearchArguments(tool, forced, !allowed.open(), &arguments); err != nil {
+		arguments.allowed = allowed
+		// The account searches keep refusing every scope qualifier and operator for any non-open connection.
+		restricted := allowed.bound() || (!allowed.open() && (tool == usersSearch.ID || tool == organizationsSearch.ID))
+		if err := checkSearchArguments(tool, forced, restricted, &arguments); err != nil {
 			return nil, err
 		}
-		arguments.allowed = allowed
 		client, err := Open(ctx, resolved, secrets, red)
 		if err != nil {
 			return nil, err
@@ -872,6 +974,9 @@ func (c *Client) searchRepositories(ctx context.Context, a *searchArguments) (*R
 		TotalCount: raw.TotalCount, IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
 		compact := &item.compact
+		if a.allowed.dropsRow(compact.FullName) {
+			continue
+		}
 		if !validRepository(compact.FullName) {
 			return nil, invalidEntry(op, "a repository")
 		}
@@ -970,6 +1075,9 @@ func (c *Client) searchCode(ctx context.Context, a *searchArguments) (*CodeSearc
 		IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
 		compact, more := &item.compact, &item.more
+		if a.allowed.dropsRow(compact.Repository.FullName) {
+			continue
+		}
 		if compact.Path == "" || !validRepository(compact.Repository.FullName) {
 			return nil, invalidEntry(op, "a code match")
 		}
@@ -1102,6 +1210,9 @@ func (c *Client) searchIssues(ctx context.Context, a *searchArguments) (*IssueSe
 	result.LexicalFallbackReason, result.LexicalFallbackReasonTruncated = capped(reasons)
 	for _, item := range raw.Items {
 		repository, ok := item.repository()
+		if a.allowed.dropsRow(repository) {
+			continue
+		}
 		if item.Number < 1 || !ok {
 			return nil, invalidEntry(op, "an issue")
 		}
@@ -1186,6 +1297,9 @@ func (c *Client) searchPullRequests(ctx context.Context, a *searchArguments) (*P
 	result.LexicalFallbackReason, result.LexicalFallbackReasonTruncated = capped(reasons)
 	for _, item := range raw.Items {
 		repository, ok := item.repository()
+		if a.allowed.dropsRow(repository) {
+			continue
+		}
 		if item.Number < 1 || !ok {
 			return nil, invalidEntry(op, "a pull request")
 		}
@@ -1271,6 +1385,9 @@ func (c *Client) searchCommits(ctx context.Context, a *searchArguments) (*Commit
 		IncompleteResults: raw.Incomplete}
 	for _, item := range raw.Items {
 		compact := &item.compact
+		if a.allowed.dropsRow(compact.Repository.FullName) {
+			continue
+		}
 		if compact.SHA == "" || !validRepository(compact.Repository.FullName) {
 			return nil, invalidEntry(op, "a commit")
 		}

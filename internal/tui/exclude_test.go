@@ -165,9 +165,26 @@ func TestSpaceSwitchesATargetRowBetweenReachableAndExcluded(t *testing.T) {
 	}
 }
 
+// plainRegistry is excluderRegistry without any excludable kind.
+func plainRegistry(t *testing.T) *capability.Registry {
+	t.Helper()
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "plain", Name: "Plain",
+		SecretRoles: []config.SecretRole{{Name: "token", Description: "token"}},
+		Target: config.TargetMetadata{Label: "repository", Required: true, Multiple: true,
+			Kinds: []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO"}}}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
 func TestNoSwitchWithoutAnExclusionDeclaration(t *testing.T) {
-	m, _, _ := plainTargetsModel(t)
-	openConnection(t, m, "gh")
+	m, _ := toolsModel(t, plainRegistry(t), map[string]config.Connection{
+		"plain": {Service: "wiki", Credential: "reader", Targets: []string{"repos/o/a", "repos/o/b"}}})
+	openConnection(t, m, "plain")
 	openTargetList(t, m)
 	press(t, m, " ")
 	if len(m.targetExcluded) != 0 || m.status != "" || strings.Contains(screenOf(m), "exclu") || strings.Contains(screenOf(m), "space switch") {
