@@ -20,7 +20,7 @@ func excluderRegistry(t *testing.T) *capability.Registry {
 		ID: "excluder", Name: "Excluder",
 		SecretRoles: []config.SecretRole{{Name: "token", Description: "token"}},
 		Target: config.TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
-			Kinds: []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true}},
+			Kinds: []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}}},
 			Validate: func(target string) error {
 				if target == "*" || strings.HasPrefix(target, "repos/") {
 					return nil
@@ -104,7 +104,7 @@ func oneTargetRegistry(t *testing.T) *capability.Registry {
 	err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: "solo", Name: "Solo",
 		Target: config.TargetMetadata{Label: "folder", Wildcard: "*",
-			Kinds: []config.TargetKind{{Name: "folder", Forms: []string{"f/NAME", "f/NAME/PATH"}, Excludable: true}}},
+			Kinds: []config.TargetKind{{Name: "folder", Forms: []string{"f/NAME", "f/NAME/PATH"}, ExcludeForms: []string{"f/NAME", "f/NAME/PATH"}}}},
 	}, nil)
 	if err != nil {
 		t.Fatal(err)

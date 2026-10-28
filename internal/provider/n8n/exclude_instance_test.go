@@ -69,7 +69,7 @@ func TestCoreAcceptsOnlyValidExclusions(t *testing.T) {
 	}
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, kind := range metadata.Target.Kinds {
-		if !kind.Excludable {
+		if !(len(kind.ExcludeForms) > 0) {
 			t.Fatalf("kind %s is not excludable", kind.Name)
 		}
 	}

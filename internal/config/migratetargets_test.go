@@ -34,7 +34,7 @@ func shelfCatalog(migrate func([]string, []string) (TargetMigration, bool)) Prov
 		ID: "shelf", Name: "Shelf", DefaultBaseURL: "https://shelf.example.test",
 		SecretRoles: []SecretRole{{Name: "token"}},
 		Target: TargetMetadata{Label: "box", Multiple: true, MigrateTargets: migrate,
-			Kinds: []TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, Excludable: true}}},
+			Kinds: []TargetKind{{Name: "box", Forms: []string{"box/NAME", "box/NAME/*"}, ExcludeForms: []string{"box/NAME", "box/NAME/*"}}}},
 		Tools: []ToolMetadata{{ID: "shelf.boxes.list", Effect: EffectRead}},
 	}}
 }

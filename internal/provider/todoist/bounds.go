@@ -246,12 +246,12 @@ var targetKinds = []config.TargetKind{{
 		"its subprojects, also those created later; * binds the whole account and stands alone",
 	Forms: []string{projectForm, treeForm, wildcard},
 	// Subprojects are listed below their project.
-	Nested:     true,
-	Excludable: true,
+	Nested:       true,
+	ExcludeForms: []string{projectForm, treeForm},
 }, {
-	Name:        "section",
-	Description: "one section of a project, reaching only its tasks and their comments and reminders",
-	Forms:       []string{sectionForm},
-	Parents:     []string{"project"},
-	Excludable:  true,
+	Name:         "section",
+	Description:  "one section of a project, reaching only its tasks and their comments and reminders",
+	Forms:        []string{sectionForm},
+	Parents:      []string{"project"},
+	ExcludeForms: []string{sectionForm},
 }}

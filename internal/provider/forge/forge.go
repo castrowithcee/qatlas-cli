@@ -120,10 +120,14 @@ func metadata(p *product) config.ProviderMetadata {
 				"whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "owner", Description: "a user or an organization and everything it owns",
-				Forms: []string{"users/NAME", "orgs/NAME"}, Excludable: true,
+				Forms:        []string{"users/NAME", "orgs/NAME"},
+				ExcludeForms: []string{"users/NAME", "orgs/NAME"},
 			}, {
 				Name: "repository", Description: "one repository",
-				Forms: []string{"repos/OWNER/REPO"}, Parents: []string{"owner"}, Top: true, Excludable: true,
+				Forms:        []string{"repos/OWNER/REPO"},
+				Parents:      []string{"owner"},
+				Top:          true,
+				ExcludeForms: []string{"repos/OWNER/REPO"},
 			}},
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)

@@ -18,7 +18,7 @@ func TestExclusionsAreDeclaredForEveryKind(t *testing.T) {
 		t.Fatalf("excludes = %t, kinds = %d", meta.Target.Excludes(), len(meta.Target.Kinds))
 	}
 	for _, kind := range meta.Target.Kinds {
-		if !kind.Excludable {
+		if !(len(kind.ExcludeForms) > 0) {
 			t.Errorf("kind %s is not excludable", kind.Name)
 		}
 	}

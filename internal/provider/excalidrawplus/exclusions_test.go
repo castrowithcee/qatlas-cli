@@ -234,7 +234,7 @@ func TestRegisterDeclaresExclusionsAndChecksThem(t *testing.T) {
 		t.Fatal("the provider does not declare exclusions")
 	}
 	for _, kind := range meta.Target.Kinds {
-		if !kind.Excludable {
+		if !(len(kind.ExcludeForms) > 0) {
 			t.Errorf("kind %s is not excludable", kind.Name)
 		}
 	}

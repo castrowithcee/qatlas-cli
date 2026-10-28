@@ -716,8 +716,8 @@ func TestExcludedSizesAreWarnedAboutInTheToolDescriptions(t *testing.T) {
 func TestExcludeIsDeclaredForDrivesAndFilesOnly(t *testing.T) {
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, kind := range metadata.Target.Kinds {
-		if want := kind.Name != "account"; kind.Excludable != want {
-			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, kind.Excludable, want)
+		if want := kind.Name != "account"; (len(kind.ExcludeForms) > 0) != want {
+			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, (len(kind.ExcludeForms) > 0), want)
 		}
 	}
 }

@@ -133,7 +133,7 @@ type Connection struct {
 	Target     string   `yaml:"target,omitempty"`
 	Targets    []string `yaml:"targets,omitempty"`
 	// Exclude lists entries, spelled like targets, that the connection takes out of what its targets
-	// reach. It is read only by a provider that declares exclusions (see TargetKind.Excludable), never
+	// reach. It is read only by a provider that declares exclusions (see TargetKind.ExcludeForms), never
 	// widens the targets, and is no target: TargetValues, reach and tool offer do not see it.
 	Exclude []string `yaml:"exclude,omitempty"`
 	// TargetsOutdated marks a connection whose targets and exclusions the migration to schema 4 could not

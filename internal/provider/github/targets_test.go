@@ -666,7 +666,7 @@ func TestExclusionsAreDeclaredAndValidated(t *testing.T) {
 		t.Fatal("github declares no exclusions")
 	}
 	for _, kind := range metadata.Target.Kinds {
-		if !kind.Excludable {
+		if !(len(kind.ExcludeForms) > 0) {
 			t.Errorf("kind %s is not excludable", kind.Name)
 		}
 	}

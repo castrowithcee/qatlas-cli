@@ -155,7 +155,7 @@ func TestExclusionsAreDeclaredAndValidatedByTheCore(t *testing.T) {
 			t.Fatalf("%s declares no exclusions", p.id)
 		}
 		for _, kind := range target.Kinds {
-			if !kind.Excludable {
+			if !(len(kind.ExcludeForms) > 0) {
 				t.Errorf("%s: kind %s is not excludable", p.id, kind.Name)
 			}
 		}

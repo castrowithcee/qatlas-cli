@@ -18,7 +18,7 @@ var excluderMetadata = config.ProviderMetadata{
 	SupportedEffects: []config.Effect{config.EffectRead},
 	SecretRoles:      []config.SecretRole{{Name: "token", Description: "the token"}},
 	Target: config.TargetMetadata{Label: "repository", Required: true, Multiple: true, Wildcard: "*",
-		Kinds: []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, Excludable: true}}},
+		Kinds: []config.TargetKind{{Name: "repo", Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}, ExcludeForms: []string{"repos/OWNER/REPO", "repos/OWNER/*"}}}},
 	Tools: []config.ToolMetadata{{ID: "ex.read", Title: "Read", Effect: config.EffectRead}},
 }
 
@@ -27,7 +27,7 @@ var soloMetadata = config.ProviderMetadata{
 	SupportedEffects: []config.Effect{config.EffectRead},
 	SecretRoles:      []config.SecretRole{{Name: "token", Description: "the token"}},
 	Target: config.TargetMetadata{Label: "folder", Wildcard: "*",
-		Kinds: []config.TargetKind{{Name: "folder", Forms: []string{"f/NAME"}, Excludable: true}}},
+		Kinds: []config.TargetKind{{Name: "folder", Forms: []string{"f/NAME"}, ExcludeForms: []string{"f/NAME"}}}},
 	Tools: []config.ToolMetadata{{ID: "solo.read", Title: "Read", Effect: config.EffectRead}},
 }
 
@@ -183,5 +183,17 @@ func TestTargetListMarksExcludableEntries(t *testing.T) {
 	got = targetListResponse{}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || len(got.Entries) != 1 || got.Entries[0].Excludable {
 		t.Fatalf("book entries = %+v (%v), want none excludable", got.Entries, err)
+	}
+}
+
+func TestOnlyEntriesOfAnExcludableFormOfferTheSwitch(t *testing.T) {
+	meta := config.TargetMetadata{Wildcard: "*", Kinds: []config.TargetKind{
+		{Name: "site", Forms: []string{"site", "site/ID"}, ExcludeForms: []string{"site/ID"}}}}
+	if canExclude(meta, "site") || !canExclude(meta, "site/7") {
+		t.Fatalf("canExclude(site) = %t, canExclude(site/7) = %t", canExclude(meta, "site"), canExclude(meta, "site/7"))
+	}
+	got := targetEntries([]config.TargetEntry{{Target: "site", Kind: "site"}, {Target: "site/7", Kind: "site"}}, meta)
+	if got[0].Excludable || !got[1].Excludable {
+		t.Fatalf("entries = %+v, want only site/7 excludable", got)
 	}
 }
