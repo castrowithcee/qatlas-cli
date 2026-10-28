@@ -441,18 +441,23 @@ func requireTalk(resolved *config.Resolved) (selection, error) {
 	if !s.talks.bound() {
 		return selection{}, &provider.Error{Class: provider.ClassPermission, Op: "open", Message: messageTalkNotBound}
 	}
-	return s.talks, nil
+	return s.talks.excluding(s.excludes.talks, false), nil
 }
 
 // requireTalkToken additionally refuses a conversation the connection does not bind. The answer is the same
-// for a token that exists and one that does not, and never repeats the token.
-func requireTalkToken(resolved *config.Resolved, token string) error {
+// for a token that exists and one that does not, and never repeats the token. An excluded conversation
+// answers like a missing one with the message missing, which is the one the tool gives for a conversation
+// Nextcloud does not find.
+func requireTalkToken(resolved *config.Resolved, op, missing, token string) error {
 	talks, err := requireTalk(resolved)
 	if err != nil {
 		return err
 	}
 	if !validTalkToken(token) || !talks.covers(token) {
 		return &provider.Error{Class: provider.ClassPermission, Op: "open", Message: messageTalkForeign}
+	}
+	if talks.hides(token) {
+		return talkMissing(op, missing)
 	}
 	return nil
 }
@@ -583,7 +588,12 @@ func (c *Client) ListRooms(ctx context.Context, talks selection, modifiedSince *
 	}
 	result := &RoomsResult{Rooms: []Room{}}
 	for _, item := range items {
-		if !validTalkToken(item.Token) || !talks.covers(item.Token) {
+		if !validTalkToken(item.Token) || !talks.covers(item.Token) || talks.hides(item.Token) {
+			continue
+		}
+		if hidden, err := c.roomExcluded(ctx, op, item.ObjectType, string(item.ObjectID)); err != nil {
+			return nil, err
+		} else if hidden {
 			continue
 		}
 		if len(result.Rooms) == maxRooms {
@@ -614,6 +624,9 @@ func (c *Client) GetRoom(ctx context.Context, token string) (*Room, error) {
 	if err := json.Unmarshal(data, &raw); err != nil || raw.Token != token {
 		return nil, invalidResponse(op, "the Nextcloud conversation could not be read")
 	}
+	if err := c.roomGate(ctx, op, messageTalkNoRoom, raw.ObjectType, string(raw.ObjectID)); err != nil {
+		return nil, err
+	}
 	room := roomDetailOf(raw, false)
 	return &room, nil
 }
@@ -624,6 +637,9 @@ func (c *Client) ListParticipants(ctx context.Context, token string, withStatus 
 	const op = "list talk participants"
 	if !validTalkToken(token) {
 		return nil, providerError(op, "a conversation token is unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoRoom); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featureConversations); err != nil {
 		return nil, err
@@ -668,6 +684,9 @@ func (c *Client) ListMessages(ctx context.Context, token string, limit int, curs
 	}
 	if limit < 1 || limit > maxMessagesPerPage || cursor != "" && (len(cursor) > maxCursorLength || !digitsOnly(cursor)) {
 		return nil, providerError(op, "the message arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoRoom); err != nil {
+		return nil, err
 	}
 	if err := c.talkFeature(ctx, op, featureChat); err != nil {
 		return nil, err
@@ -1103,7 +1122,7 @@ func talkInvoke(ctx context.Context, op string, resolved *config.Resolved, secre
 	if err := decoder.Decode(&input); err != nil {
 		return nil, input, providerError(op, "the validated arguments could not be read")
 	}
-	if err := requireTalkToken(resolved, input.Token); err != nil {
+	if err := requireTalkToken(resolved, op, messageTalkNoRoom, input.Token); err != nil {
 		return nil, input, err
 	}
 	client, err := open(ctx, resolved, secrets, red, false)
