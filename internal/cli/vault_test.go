@@ -92,7 +92,7 @@ func connectionScope(t *testing.T, dir, name string) vault.Scope {
 }
 
 const vaultCredentialConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack
@@ -518,7 +518,7 @@ func TestVaultDecryptNeedsConfirmFlag(t *testing.T) {
 
 // keyringVaultMigrationConfig has one keyring credential whose secrets a legacy credentials.yaml holds.
 const keyringVaultMigrationConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack
@@ -548,7 +548,7 @@ func migrationFixture(t *testing.T) string {
 
 func writeLegacyCredentials(t *testing.T, dir string, allowPlaintext bool) {
 	t.Helper()
-	body := fmt.Sprintf("version: 3\nallow_plaintext: %t\ncredentials:\n  wiki-reader:\n    token-id: %s\n"+
+	body := fmt.Sprintf("version: 4\nallow_plaintext: %t\ncredentials:\n  wiki-reader:\n    token-id: %s\n"+
 		"    token-secret: %s\n", allowPlaintext, canaryVault, "second-"+canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -758,7 +758,7 @@ func TestVaultMigrateRerunKeepsTheKeyringValueInTheVault(t *testing.T) {
 func TestVaultMigrateRerunAddsAStillMissingRole(t *testing.T) {
 	dir := migrationFixture(t)
 	// The first run only ever sees token-id.
-	body := fmt.Sprintf("version: 3\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
+	body := fmt.Sprintf("version: 4\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
 		canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -906,7 +906,7 @@ func vaultFiles(t *testing.T, dir string) map[string][]byte {
 func TestVaultMigrateCarriesOverAKeyringOnlyRole(t *testing.T) {
 	dir := migrationFixture(t)
 	// credentials.yaml only ever names token-id; token-secret sits in the keyring alone.
-	body := fmt.Sprintf("version: 3\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
+	body := fmt.Sprintf("version: 4\nallow_plaintext: true\ncredentials:\n  wiki-reader:\n    token-id: %s\n",
 		canaryVault)
 	if err := os.WriteFile(filepath.Join(dir, "credentials.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatalf("write legacy credentials.yaml: %v", err)
@@ -1003,7 +1003,7 @@ func TestVaultMigrateWarnsWhenTheKeyringCannotBeChecked(t *testing.T) {
 // 'vault encrypt' or 'vault credential set' fixture can be extended into a report with more than one open
 // connection at a time.
 const twoConnectionVaultConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack
@@ -1299,7 +1299,7 @@ func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
 }
 
 const approveListsConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack
@@ -1475,7 +1475,7 @@ const (
 )
 
 const approveOriginConfig = `
-version: 3
+version: 4
 services:
   wiki:
     provider: bookstack

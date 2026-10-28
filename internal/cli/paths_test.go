@@ -23,7 +23,7 @@ func TestBoundConnectionsFollowTheWorkingDirectory(t *testing.T) {
 		}
 	}
 	absent := filepath.Join(t.TempDir(), "absent")
-	cfg := writeConfig(t, fmt.Sprintf(`version: 3
+	cfg := writeConfig(t, fmt.Sprintf(`version: 4
 services:
   wiki:
     provider: bookstack

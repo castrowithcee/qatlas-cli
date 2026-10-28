@@ -60,6 +60,7 @@ const (
 	CodeInvalidTarget                = "invalid-target"
 	CodeInvalidTargetSet             = "invalid-target-set"
 	CodeWildcardNotAlone             = "wildcard-not-alone"
+	CodeTargetsOutdated              = "targets-outdated"
 	CodeExcludeUnsupported           = "exclude-unsupported"
 	CodeEmptyExclude                 = "empty-exclude"
 	CodeDuplicateExclude             = "duplicate-exclude"
@@ -133,6 +134,7 @@ var hints = map[string]string{
 	CodeInvalidTarget:                "Correct the target to the form the provider accepts.",
 	CodeInvalidTargetSet:             "Correct the list of targets to the combination the provider accepts.",
 	CodeWildcardNotAlone:             "Keep only the wildcard as target, or list explicit targets without it.",
+	CodeTargetsOutdated:              "Choose the targets and exclusions again in their current form, then remove targets_outdated.",
 	CodeExcludeUnsupported:           "Remove the exclusions; the provider does not support them.",
 	CodeEmptyExclude:                 "Fill in the exclusion, or remove the entry.",
 	CodeDuplicateExclude:             "Remove the repeated exclusion.",

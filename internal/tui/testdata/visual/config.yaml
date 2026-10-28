@@ -1,4 +1,4 @@
-version: 3
+version: 4
 services:
   wiki:
     id: 000000000000000000000000a11ce001
