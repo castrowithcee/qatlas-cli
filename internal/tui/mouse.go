@@ -851,9 +851,10 @@ const fragmentWindow = 200 * time.Millisecond
 
 // bracketHold is how long a "[" that may open the rest of a report, alt+[ or a "[" after an escape, waits
 // for it before it counts as the key it is. The text field types it, so it cannot be let through first and
-// taken back. The input reader reports the "[" only after it waited for the rest itself, so the rest is
-// later here than at the terminal.
-const bracketHold = 100 * time.Millisecond
+// taken back. It is as long as fragmentWindow: a head the filter would still take as the rest must find the
+// "[" still held, or the "[" is typed and the rest dropped. The input reader reports the "[" only after it
+// waited for the rest itself, so the rest is later here than at the terminal.
+const bracketHold = fragmentWindow
 
 // fragmentTail matches what a mouse report of the SGR form can still lack: the rest of its parameters and the
 // final M or m.
@@ -884,8 +885,8 @@ const fragmentEsc = "esc"
 // once, so an escape byte the reader already gave up on still reaches the model as esc.
 // On the way it gives keys the names stored key bindings know (see legacyKey and linuxFunctionKey).
 type fragmentFilter struct {
-	now     func() time.Time
-	program *tea.Program
+	now  func() time.Time
+	send func(tea.Msg) // delivers heldKeyMsg to the event loop; without it nothing is held back
 
 	state string // fragmentEsc or "[" when that key came last, "tail" while a report lacks its end
 	at    time.Time
@@ -919,6 +920,11 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 		}
 		key := *f.held
 		f.held = nil
+		// The hold is over: a head arriving now is text, whatever the window says, so no race remains
+		// between this timer and the window comparison.
+		if f.state == "[" {
+			f.state = ""
+		}
 		return key
 	}
 	if unknown, ok := unknownSequence(msg); ok && (reportStart.MatchString(unknown) || unknown == "\x1b[[") {
@@ -982,12 +988,12 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	case isPaste:
 	case key.Code == tea.KeyEscape && key.Mod == 0:
 		f.state, f.at = fragmentEsc, at
-	case f.program != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == fragmentEsc && text == "["):
+	case f.send != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == fragmentEsc && text == "["):
 		f.state, f.at = "[", at
 		f.held = &key
 		f.id++
-		id, program := f.id, f.program
-		time.AfterFunc(bracketHold, func() { program.Send(heldKeyMsg{id}) })
+		id, send := f.id, f.send
+		time.AfterFunc(bracketHold, func() { send(heldKeyMsg{id}) })
 		if held != nil {
 			return keysMsg{*held}
 		}
