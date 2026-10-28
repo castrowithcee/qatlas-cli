@@ -96,8 +96,11 @@ func TestBrowseFolderLevelListsEveryFolderWithSubfolderEntries(t *testing.T) {
 	if got := byTarget["folder/Kunden/A/2026"]; got.Name != "2026" || got.Path != "/Kunden/A" || got.Kind != "folder" {
 		t.Errorf("subfolder entry = %+v", got)
 	}
-	if got := byTarget["folder/Kunden/A/*"]; got.Name != "A (with subfolders)" || got.Path != "/Kunden" {
-		t.Errorf("tree entry = %+v", got)
+	if got := byTarget["folder/Kunden/A"]; got.Name != "A (with subfolders)" || got.Path != "/Kunden" {
+		t.Errorf("folder entry = %+v", got)
+	}
+	if got := byTarget["folder/Kunden/A/*"]; got.Name != "A (subfolders only)" || got.Path != "/Kunden" {
+		t.Errorf("subfolders entry = %+v", got)
 	}
 	if got := byTarget["folder/INBOX"]; got.Name != "INBOX" || got.Path != "/" {
 		t.Errorf("top-level entry = %+v", got)
@@ -190,8 +193,14 @@ func TestFolderEntriesDelimiters(t *testing.T) {
 	if _, ok := got["folder/Kunde/*"]; ok {
 		t.Error("a folder without a delimiter got a subfolder entry")
 	}
-	if e := got["folder/Kunden/*"]; e.Name != "Kunden (with subfolders)" {
-		t.Errorf("tree entry = %+v", e)
+	if e := got["folder/Kunden"]; e.Name != "Kunden (with subfolders)" {
+		t.Errorf("folder entry = %+v", e)
+	}
+	if e := got["folder/Kunden/*"]; e.Name != "Kunden (subfolders only)" {
+		t.Errorf("subfolders entry = %+v", e)
+	}
+	if e := got["folder/Solo"]; e.Name != "Solo" {
+		t.Errorf("folder without subfolders = %+v", e)
 	}
 	// The slash is no delimiter of its own when the server uses another one.
 	slashed := folderEntries([]Folder{{Name: "a/b", Delimiter: "."}})

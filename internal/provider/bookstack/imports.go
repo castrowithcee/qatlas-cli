@@ -428,6 +428,32 @@ func checkImportParent(importType string, parentType *string, parentID *int64) e
 	return invalidRequest("the type of the import is not book, chapter, or page")
 }
 
+// checkExcludedParent refuses a parent excluded by its own identifier before any secret or request. The type
+// of the import is not known yet, so it only looks at a parent that is given in full.
+func checkExcludedParent(resolved *config.Resolved, parentType *string, parentID *int64) error {
+	if parentType == nil || parentID == nil || *parentID < 1 {
+		return nil
+	}
+	switch *parentType {
+	case "book":
+		return boundExcluded(resolved, bookPrefix, *parentID)
+	case "chapter":
+		return boundExcluded(resolved, chapterPrefix, *parentID)
+	}
+	return nil
+}
+
+// requireImportParent proves the book or chapter an import runs into: not excluded itself, through its
+// shelf, or through its book. The check reads the parent, so a parent that cannot be proven ends the call
+// before the run request.
+func (c *Client) requireImportParent(ctx context.Context, parentType string, parentID int64) error {
+	if parentType == "book" {
+		return c.requireBook(ctx, parentID)
+	}
+	_, err := c.chapterIn(ctx, parentID)
+	return err
+}
+
 func invokeImportsRun(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var in struct {
@@ -444,6 +470,9 @@ func invokeImportsRun(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := checkID(in.ID, "id"); err != nil {
 		return nil, err
 	}
+	if err := checkExcludedParent(resolved, in.ParentType, in.ParentID); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -458,6 +487,9 @@ func invokeImportsRun(ctx context.Context, resolved *config.Resolved, secrets *s
 	}
 	var body map[string]any
 	if pending.Type != "book" {
+		if err := client.requireImportParent(ctx, *in.ParentType, *in.ParentID); err != nil {
+			return nil, err
+		}
 		body = map[string]any{"parent_type": *in.ParentType, "parent_id": *in.ParentID}
 	}
 	var created struct {
