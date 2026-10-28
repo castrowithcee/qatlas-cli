@@ -37,21 +37,24 @@ from a list without filters stays valid as long as no filter is set. Both are in
 
 ## Exclusions
 
-The rules are in [Exclusions](README.md#exclusions). The `account` target does not accept exclusions yet, so the
-tools below enforce them only where a connection holds both. Account data, status, the tag catalog, and the sharee
-search are not filtered; `account.search.query` hits are not filtered either.
+The rules are in [Exclusions](README.md#exclusions). A connection with the `account` target takes an exclusion of
+every kind, with or without a target of that kind; the tools below enforce them, and no exclusion removes a tool.
+Account data, status, the tag catalog, and the sharee search are not filtered.
 
-`account.activity.list` and `account.notifications.list` leave out a whole entry when an object it names is
-excluded, and do not count it. An entry names an object by a file path or ID, a calendar or address book URI, a board
+`account.activity.list`, `account.notifications.list`, and `account.search.query` leave out a whole entry or hit
+when an object it names is excluded, and do not count it. An entry names an object by a file path or ID, a calendar or address book URI, a board
 ID, a conversation token, or a note ID, in its object type and ID, its `objects`, the rich objects of subject and
-message, and its links, previews included. A path is compared after the cross-kind rules of README, so an entry below
+message, and its links, previews included. A search hit names it by its `path`, `fileId`, or `conversation`
+attribute and by its link: a folder or file address, a note, a board or card, a conversation, a calendar object, or a
+contact, whichever the provider uses. A path is compared after the cross-kind rules of README, so an entry below
 `NOTES_PATH/CATEGORY` follows a notes exclusion; when the notes path is needed and unreadable, the call fails.
 A file ID is resolved to its path, a note ID to its category, and a conversation like in [talk](talk.md#exclusions),
 once per page and ID. A card ID without a board counts as excluded, because no single read gives its board. An entry
-whose read fails is left out. An entry that names nothing Qatlas can place stays, which the tool descriptions say.
+whose read fails is left out. An entry or hit that names nothing Qatlas can place stays, so its title, subtitle, or
+text may still mention excluded content; the tool descriptions say so.
 
-`next_cursor` of the activity list and the `etag` of the notification list stay the answer of the server, so they
-also reflect hidden entries and a page may hold fewer entries than `limit`. An `object_type` with `object_id` that names
+`next_cursor` of the activity list and the search, and the `etag` of the notification list, stay the answer of the
+server, so they also reflect hidden entries and a page may hold fewer entries than `limit`. An `object_type` with `object_id` that names
 an excluded board, calendar, address book, or conversation is refused like a missing object before any credential
 access; any other object is read and each entry is checked. `account.notifications.dismiss` answers for a hidden
 notification like a missing one, after the read and without a request that changes anything.

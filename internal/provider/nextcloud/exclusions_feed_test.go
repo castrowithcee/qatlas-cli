@@ -22,6 +22,7 @@ type feedRoutes struct {
 	notes                   map[string]string // id -> category; absent fails
 	notesPath               string
 	settingsStatus          int
+	search                  map[string]string // provider id -> data of its search answer
 }
 
 func feedServer(t *testing.T, c *Client, f feedRoutes) *[]call {
@@ -30,6 +31,15 @@ func feedServer(t *testing.T, c *Client, f feedRoutes) *[]call {
 	calls = serve(t, func(r *http.Request) (*http.Response, error) {
 		p := r.URL.Path
 		switch {
+		case strings.HasSuffix(p, "/search/providers"):
+			var list []string
+			for id := range f.search {
+				list = append(list, `{"id":"`+id+`","name":"x"}`)
+			}
+			return ocsResponse(200, ocsData("["+strings.Join(list, ",")+"]")), nil
+		case strings.Contains(p, "/search/providers/"):
+			id := strings.TrimSuffix(p[strings.Index(p, "/search/providers/")+len("/search/providers/"):], "/search")
+			return ocsResponse(200, ocsData(f.search[id])), nil
 		case strings.HasSuffix(p, "/activity/filters"):
 			return ocsResponse(200, ocsData(`[]`)), nil
 		case strings.HasSuffix(p, "/api/v2/activity") || strings.HasSuffix(p, "/activity/filter"):
@@ -106,16 +116,14 @@ func remoteByID(list, id string) string {
 	return "{}"
 }
 
-// feedClient is a client whose scope is built from targets and exclusions, with the account target added
-// directly because configuration does not yet allow exclusions next to it.
+// feedClient is a client whose scope is built from targets and exclusions, with the account target added.
 func feedClient(t *testing.T, targets []string, excludes ...string) *Client {
 	t.Helper()
 	c, _ := client(t)
-	s, err := parseScopeExcluding(targets, excludes)
+	s, err := parseScopeExcluding(append(slices.Clone(targets), "account"), excludes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.account = true
 	c.scope = s
 	return c
 }

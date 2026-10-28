@@ -193,8 +193,8 @@ var subIssuesList = capability.Descriptor{
 	Title:   "List GitHub sub-issues",
 	Description: "List one bounded batch of the sub-issues of one issue of a repository an explicit " +
 		"connection allows, in their priority order; a sub-issue may live in another repository, named in " +
-		"full when it does; when the connection's targets name any, a sub-issue outside them is withheld " +
-		"and counted in withheld instead of being listed",
+		"full when it does; when the connection's targets name any, a sub-issue outside them or in an excluded " +
+		"repository is withheld and counted in withheld instead of being listed",
 	Tags:        []string{"github", "issues", "subissues", "list"},
 	Risk:        readRisk,
 	Provider:    Provider,

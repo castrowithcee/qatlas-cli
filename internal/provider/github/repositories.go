@@ -71,7 +71,7 @@ var repositoriesCreate = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "owner", Description: "Organization to create the repository in, as orgs/LOGIN; left out " +
 			"creates it under the token's own account; must be an organization the connection names as an " +
-			"owner target when it lists any targets"},
+			"owner target when it lists any targets, and not an excluded owner"},
 		{Name: "name", Description: "Repository name, 1 to 100 characters", Required: true},
 		{Name: "description", Description: "Short description, at most 350 characters"},
 		{Name: "private", Description: "false makes the repository public; true (the default) keeps it private"},
@@ -112,7 +112,7 @@ var repositoriesFork = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "organization", Description: "Organization to fork into, as orgs/LOGIN; left out forks into the " +
 			"token's own account; must be an organization the connection names as an owner target when it " +
-			"lists any targets"},
+			"lists any targets, and not an excluded owner"},
 		{Name: "name", Description: "New name of the fork; the source repository's name when left out"},
 		{Name: "default_branch_only", Description: "true forks only the default branch; false (the default) " +
 			"forks every branch"},
