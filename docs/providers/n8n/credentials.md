@@ -36,9 +36,13 @@ without a field for it, so a stored value never reaches a result or an error, wh
   response carries the project as its `id` (with `name` and `role`); the single read has no `shared`. Only
   that `id` is read for the binding; an entry without one never matches. A connection with a workflow
   allow-list refuses every credential tool locally, as for data tables and variables.
-- **Sharing.** Shares of a credential in projects outside the project allow-list appear only with id and role,
-  so a credential shared into an allowed project does not disclose the name or times of a foreign one. Without
-  an allow-list every share is complete.
+- **Sharing.** Shares of a credential in projects that are not reachable (outside the project allow-list, or
+  excluded) appear only with id and role, so a credential shared into a reachable project does not disclose
+  the name or times of another one. Without an allow-list and exclusions every share is complete.
+- **Exclusions.** An excluded project counts as outside the allow-list: a credential is readable through a
+  share in a reachable project, and `create` or `transfer` into an excluded project is refused before the
+  request. `create` without `project_id` is refused on a connection that excludes a project, see
+  [Exclusions](README.md#exclusions).
 - **Test.** `credentials.test` makes n8n use the stored secret against the third-party service, so it is
   effect `execute`, idempotent, open-world, and always needs confirmation. It sends exactly one request and is
   never retried. The result is `status` and a capped `message`, untrusted data, never part of an error. It has

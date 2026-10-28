@@ -301,7 +301,7 @@ func selectProjectMutation(resolved *config.Resolved, projectID string) error {
 	if len(bound.projects) == 0 {
 		return invalidRequest("this connection has no project allow-list, so it cannot change or delete projects")
 	}
-	if !bound.allowsProject(projectID) {
+	if !bound.reachesProject(projectID) {
 		return invalidRequest("project_id is outside the targets of this connection")
 	}
 	return nil
@@ -363,7 +363,7 @@ func (c *Client) ListProjects(ctx context.Context, cursor string, limit int) (*P
 	}
 	summaries := make([]ProjectSummary, 0, len(page.Data))
 	for _, p := range page.Data {
-		if !c.scope.allowsProject(p.ID) {
+		if !c.scope.reachesProject(p.ID) {
 			continue
 		}
 		summaries = append(summaries, summarizeProject(p))
@@ -473,8 +473,62 @@ func invokeProjectsDelete(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
+	if err := client.refuseOwnedExcludedWorkflows(ctx, op, input.ProjectID); err != nil {
+		return nil, err
+	}
 	deleted, err := client.DeleteProject(ctx, input.ProjectID)
 	return deleted, projectError(err)
+}
+
+// workflowEditorRole is the role of a workflow that is only shared into a project; every other role, an
+// unknown one included, is read as ownership.
+const workflowEditorRole = "workflow:editor"
+
+// ownerProjectIDs returns the projects that own the workflow: every share with a role other than editor. An
+// owner share without a project ID cannot be placed, so placed is false then, as it is without any owner.
+func (w workflowJSON) ownerProjectIDs() (ids []string, placed bool) {
+	placed = true
+	owner := false
+	for _, entry := range w.Shared {
+		id := entry.ProjectID
+		if id == "" && entry.Project != nil {
+			id = entry.Project.ID
+		}
+		if entry.Role == workflowEditorRole {
+			continue
+		}
+		owner = true
+		if id == "" {
+			placed = false
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, placed && owner
+}
+
+// refuseOwnedExcludedWorkflows stops the deletion of a reachable project that owns an excluded workflow: the
+// deletion removes every workflow the project owns, and this tool has no transfer target to move it to. Each
+// excluded workflow is read once. One that n8n does not know cannot be owned; one that cannot be read, or
+// reports no owner at all, cannot be placed and refuses the deletion. The refusal names neither workflow.
+func (c *Client) refuseOwnedExcludedWorkflows(ctx context.Context, op, projectID string) error {
+	for _, workflowID := range c.scope.excludedWorkflows {
+		workflow, err := c.fetchWorkflow(ctx, op, workflowID)
+		if err != nil {
+			if failure, ok := err.(*provider.Error); ok && failure.Class == provider.ClassNotFound {
+				continue
+			}
+			return err
+		}
+		owners, placed := workflow.ownerProjectIDs()
+		owned := contains(owners, projectID)
+		owner := placed
+		if owned || !owner {
+			return invalidRequest("the project owns objects outside the targets of this connection, so it " +
+				"cannot be deleted")
+		}
+	}
+	return nil
 }
 
 // DeleteProject sends the one changing DELETE /projects/{id} request, without a query: the public handler

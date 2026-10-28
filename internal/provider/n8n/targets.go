@@ -23,20 +23,50 @@ const (
 
 // scope is the project and workflow boundary of one connection: independently, either every project of the
 // bound instance (an empty project allow-list) or only the projects explicitly listed, and either every
-// workflow or only the workflows explicitly listed.
+// workflow or only the workflows explicitly listed. The exclusions are kept apart from the targets: they
+// remove objects but never change which tools are offered, so instanceWide, requireInstanceScope, reaches
+// and the gates that read projects or workflows read the targets only. A reachable project is one the
+// targets allow and the exclusions do not name.
 type scope struct {
 	projects  []string
 	workflows []string
+	// excluded* win over every target: an excluded workflow is out even when it is shared into a reachable
+	// project.
+	excludedProjects  []string
+	excludedWorkflows []string
+}
+
+// excludesProject and excludesWorkflow report a configured exclusion of exactly that ID.
+func (s scope) excludesProject(projectID string) bool { return contains(s.excludedProjects, projectID) }
+func (s scope) excludesWorkflow(workflowID string) bool {
+	return contains(s.excludedWorkflows, workflowID)
+}
+
+// restrictsProjects reports whether a project can make an object unreachable, by a target or an exclusion.
+// It decides where project membership must be proven; the target-only gates keep reading len(projects).
+func (s scope) restrictsProjects() bool { return len(s.projects) > 0 || len(s.excludedProjects) > 0 }
+
+// hasExclusions reports whether the connection excludes any project or workflow.
+func (s scope) hasExclusions() bool {
+	return len(s.excludedProjects) > 0 || len(s.excludedWorkflows) > 0
+}
+
+// reachesProject reports whether a project ID is allowed by the targets and not excluded. It does not
+// treat an empty ID specially; callers that must fail closed on an unknown project check for it.
+func (s scope) reachesProject(projectID string) bool {
+	return s.allowsProject(projectID) && !s.excludesProject(projectID)
 }
 
 // allowsWorkflow reports whether a workflow belongs to this connection's local workflow boundary. It says
 // nothing about a project allow-list; that is checked separately, live, against the instance's own report of
 // project membership, see (*Client).verifyWorkflowScope.
 func (s scope) allowsWorkflow(workflowID string) bool {
-	if len(s.workflows) == 0 {
-		return true
-	}
-	return contains(s.workflows, workflowID)
+	return !s.excludesWorkflow(workflowID) && s.targetsWorkflow(workflowID)
+}
+
+// targetsWorkflow is the targets-only part of allowsWorkflow.
+func (s scope) targetsWorkflow(workflowID string) bool {
+	return len(s.workflows) == 0 || contains(s.workflows, workflowID)
 }
 
 // allowsProject reports whether a single project ID belongs to this connection's local project boundary. It
@@ -49,16 +79,16 @@ func (s scope) allowsProject(projectID string) bool {
 	return contains(s.projects, projectID)
 }
 
-// allowsAnyProject reports whether at least one of a workflow's reported projects is inside this
-// connection's project allow-list. An empty allow-list admits everything, including a workflow that reports
-// no project at all. A non-empty allow-list never admits a workflow that reports no project: there is
+// allowsAnyProject reports whether at least one of a workflow's reported projects is reachable. Without a
+// project allow-list and without a project exclusion it admits everything, including a workflow that
+// reports no project at all. Otherwise a workflow that reports no project is never admitted: there is
 // nothing to compare it against, so it is treated as outside the scope rather than let through.
 func (s scope) allowsAnyProject(projectIDs []string) bool {
-	if len(s.projects) == 0 {
+	if !s.restrictsProjects() {
 		return true
 	}
 	for _, id := range projectIDs {
-		if contains(s.projects, id) {
+		if id != "" && s.reachesProject(id) {
 			return true
 		}
 	}
@@ -74,16 +104,16 @@ func contains(values []string, want string) bool {
 	return false
 }
 
-// scopeOf reads the bound project and workflow allow-lists of one connection.
+// scopeOf reads the bound project and workflow allow-lists and the exclusions of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := provider.TargetsOf(resolved)
-	return parseScope(values)
+	return parseScope(provider.TargetsOf(resolved), provider.ExcludesOf(resolved)...)
 }
 
 // parseScope reads the configured targets of one connection: zero or more project/PROJECT_ID entries and
-// zero or more workflow/WORKFLOW_ID entries, none named twice within its own kind. No error ever quotes a
-// configured value.
-func parseScope(values []string) (scope, error) {
+// zero or more workflow/WORKFLOW_ID entries, none named twice within its own kind. The optional exclusions
+// use the same two forms, each named once and never equal to a target; the checks do not rely on the core
+// validation, so an invalid exclusion fails closed here too. No error ever quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
 	var bound scope
 	seenProjects, seenWorkflows := map[string]bool{}, map[string]bool{}
 	for _, raw := range values {
@@ -106,7 +136,31 @@ func parseScope(values []string) (scope, error) {
 			bound.workflows = append(bound.workflows, id)
 		}
 	}
+	if err := bound.parseExcludes(excludes); err != nil {
+		return scope{}, err
+	}
 	return bound, nil
+}
+
+// parseExcludes reads the exclusions into the scope, which already holds the targets.
+func (s *scope) parseExcludes(excludes []string) error {
+	invalid := errors.New("an n8n exclusion must be project/PROJECT_ID or workflow/WORKFLOW_ID, named once " +
+		"and different from every target")
+	for _, raw := range excludes {
+		kind, id, err := parseTarget(strings.TrimSpace(raw))
+		if err != nil {
+			return invalid
+		}
+		excluded, targets := &s.excludedProjects, s.projects
+		if kind == "workflow" {
+			excluded, targets = &s.excludedWorkflows, s.workflows
+		}
+		if contains(*excluded, id) || contains(targets, id) {
+			return invalid
+		}
+		*excluded = append(*excluded, id)
+	}
+	return nil
 }
 
 // validateTarget checks the form of one configured target in isolation, before configuration validation
@@ -164,37 +218,77 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// selectWorkflow checks a workflow_id argument against the connection's local workflow allow-list before
-// any secret is resolved and before any request is sent. A workflow outside a configured allow-list is
-// refused as an invalid request, never as a provider failure, because the connection's own configuration
-// decided against it. Whether the workflow also belongs to an allowed project is checked separately, live,
-// see (*Client).verifyWorkflowScope.
+// selectWorkflow checks a workflow_id argument against the connection's local workflow allow-list and
+// exclusions before any secret is resolved and before any request is sent. A workflow outside a configured
+// allow-list, or an excluded one, is refused as an invalid request, never as a provider failure, because
+// the connection's own configuration decided against it; the message names neither. Whether the workflow
+// also belongs to a reachable project is checked separately, live, see (*Client).verifyWorkflowScope.
 func selectWorkflow(resolved *config.Resolved, workflowID string) error {
-	bound, err := boundScope(resolved)
+	excluded, err := selectWorkflowFilter(resolved, workflowID)
 	if err != nil {
 		return err
 	}
-	if !validTargetID(workflowID) {
-		return invalidRequest("workflow_id must be a usable n8n identifier")
-	}
-	if !bound.allowsWorkflow(workflowID) {
+	if excluded {
 		return invalidRequest("workflow_id is outside the targets of this connection")
 	}
 	return nil
 }
 
-// selectProjectFilter checks a project_id argument a caller supplies directly (workflows.list's filter)
-// against the connection's local project allow-list before any request is sent.
-func selectProjectFilter(resolved *config.Resolved, projectID string) error {
+// selectWorkflowFilter is selectWorkflow for a workflow_id that only filters a list: it reports an excluded
+// workflow instead of refusing it, so the list can answer with an empty page.
+func selectWorkflowFilter(resolved *config.Resolved, workflowID string) (excluded bool, err error) {
 	bound, err := boundScope(resolved)
+	if err != nil {
+		return false, err
+	}
+	if !validTargetID(workflowID) {
+		return false, invalidRequest("workflow_id must be a usable n8n identifier")
+	}
+	if !bound.targetsWorkflow(workflowID) {
+		return false, invalidRequest("workflow_id is outside the targets of this connection")
+	}
+	return bound.excludesWorkflow(workflowID), nil
+}
+
+// selectProjectFilter checks a project_id argument a caller supplies directly (a list filter) against the
+// connection's local project allow-list before any request is sent. An excluded project is reported, not
+// refused, so the list can answer with an empty page; see selectProjectTarget for a project that receives
+// an object.
+func selectProjectFilter(resolved *config.Resolved, projectID string) (excluded bool, err error) {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return false, err
+	}
+	if !validTargetID(projectID) {
+		return false, invalidRequest("project_id must be a usable n8n identifier")
+	}
+	if !bound.allowsProject(projectID) {
+		return false, invalidRequest("project_id is outside the targets of this connection")
+	}
+	return bound.excludesProject(projectID), nil
+}
+
+// selectProjectTarget is selectProjectFilter for a project that receives an object: an excluded project is
+// refused like one outside the targets, before any request.
+func selectProjectTarget(resolved *config.Resolved, projectID string) error {
+	excluded, err := selectProjectFilter(resolved, projectID)
 	if err != nil {
 		return err
 	}
-	if !validTargetID(projectID) {
-		return invalidRequest("project_id must be a usable n8n identifier")
-	}
-	if !bound.allowsProject(projectID) {
+	if excluded {
 		return invalidRequest("project_id is outside the targets of this connection")
+	}
+	return nil
+}
+
+// requireProjectID is the create gate for a connection that excludes a project: without project_id n8n
+// places the object in the personal project of the key owner, which Qatlas cannot name through the Public
+// API and so cannot prove reachable. The narrower reading demands an explicit project_id. Targets are not
+// involved; the target gates of each create tool stay as they are.
+func (s scope) requireProjectID(projectID string) error {
+	if projectID == "" && len(s.excludedProjects) > 0 {
+		return invalidRequest("project_id is required on this connection: without it n8n would use the " +
+			"personal project of the API key owner, which cannot be checked")
 	}
 	return nil
 }

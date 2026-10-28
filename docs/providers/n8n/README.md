@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-26
+updated: 2026-10-28
 ---
 
 # n8n
@@ -98,6 +98,41 @@ then fails the check closed instead of guessing, and the refusal says so.
 
 `workflows.create` applies the same boundary to a workflow that does not exist yet, see
 [workflows.md](workflows.md#workflowscreate-under-a-project-or-workflow-restriction).
+
+### Exclusions
+
+`exclude` takes projects and workflows out of what the targets reach. Its entries are spelled like targets but
+stand apart from them: `project/PROJECT_ID` and `workflow/WORKFLOW_ID`. A repeated entry, an entry equal to a
+target, and any other form are invalid; the provider checks the list on every call, before a secret is read, and
+never quotes a value. An exclusion is no target: it restricts no tool, changes which tools a binding reaches in
+no way, and wins over every target. A tool that needs a connection without project or workflow targets stays
+available on a connection that only excludes.
+
+A reachable project is one the targets allow and the exclusions do not name. An excluded project behaves like
+a project the key owner has no relation to; an excluded workflow is excluded even when it is shared into a
+reachable project. Shared objects follow n8n's own rights model: a workflow or credential is readable as soon as
+one of its shares lies in a reachable project, and the other project then shows only as an ID. A credential is
+changed, transferred or deleted only when its owning project is reachable.
+
+- Lists (`workflows`, `executions`, `credentials`, `variables`, `data-tables`, `projects`) leave excluded rows
+  out. A filter on an excluded project or workflow gives an empty page without a request.
+- Tools that name an excluded object (`workflows.*`, `executions.get`, `.retry`, `.stop`, `credentials.*`,
+  project variables, `data-tables`, columns and rows, `projects.update`, `.delete`, `project-members.*`) refuse
+  it as outside the targets, without naming the object or the exclusion.
+- `executions.list` without `workflow_id` places each row through its workflow, with one read per distinct
+  workflow and call; a row whose workflow n8n does not return drops out. Any other failure ends the call.
+- A `project_id` or transfer target in an excluded project is refused before the request. Without `project_id`
+  n8n would use the key owner's personal project, which the Public API does not name; on a connection that
+  excludes a project, `workflows.create`, `credentials.create` and `data-tables.create` therefore require
+  `project_id`.
+- `projects.delete` of a reachable project that owns an excluded workflow is refused, because the tool moves
+  nothing elsewhere and the deletion would remove the workflow.
+- The instance-wide tools filter or refuse single calls: `users.delete`, `audit.generate` and
+  `source-control.*` are described in [users-and-audit.md](users-and-audit.md#exclusions-for-user-deletion) and
+  [source-control.md](source-control.md#exclusions). Totals that n8n computes over the whole instance still
+  count excluded objects.
+- Global variables, `n8n.tags.*` (names and counts can come from excluded workflows) and a node parameter that
+  names an excluded sub-workflow are returned as stored.
 
 ## Choosing targets
 
