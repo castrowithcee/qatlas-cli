@@ -233,6 +233,9 @@ type field struct {
 	// labels belong to a target list: the label of a target by its value. They are part of what the row
 	// holds, so a changed label counts as an unsaved change and retires the problems shown under the row.
 	labels map[string]string
+	// excluded belongs to a target list too: the entries that are exclusions, not targets. An entry not in it
+	// is reachable. It is part of what the row holds like the labels are.
+	excluded map[string]bool
 	// action identifies which vault action a fieldVaultAction row runs on enter (see vaultsettings.go).
 	action string
 	// stored marks the masked row of a payload field that already has a value: left empty, it keeps it.
@@ -360,6 +363,9 @@ func (f field) value() string {
 		for _, key := range slices.Sorted(maps.Keys(f.labels)) {
 			value += "\x00" + key + "\x00" + f.labels[key]
 		}
+		for _, key := range slices.Sorted(maps.Keys(f.excluded)) {
+			value += "\x01" + key
+		}
 		return value
 	}
 	if f.kind == fieldMasked {
@@ -469,10 +475,14 @@ type Model struct {
 	// targetLabels are the labels of the open target screen, labelInput the label being typed for the
 	// selected target while labelEdit is set. They reach the row only when the list is kept.
 	targetLabels map[string]string
-	labelInput   textinput.Model
-	labelEdit    bool
-	targetEdit   int
-	targetRemove bool
+	// targetExcluded are the entries of the open target screen that are exclusions. targetAsExclusion says that
+	// the entries added next are taken as exclusions.
+	targetExcluded    map[string]bool
+	targetAsExclusion bool
+	labelInput        textinput.Model
+	labelEdit         bool
+	targetEdit        int
+	targetRemove      bool
 	// targetAdd is the menu that adds a target, with its builder, while it is open.
 	targetAdd *targetAdd
 	// pathList, pathInput, pathEdit and pathRemove do for the path list of a connection what the target
@@ -2198,6 +2208,9 @@ func (m *Model) providerTargetDetail(provider string) string {
 	if !metadata.Target.Multiple {
 		hint += tr(tFormOneAtMost, metadata.Target.Label)
 	}
+	if metadata.Target.Excludes() {
+		hint += tr(tFormExcludable)
+	}
 	return hint
 }
 
@@ -2283,7 +2296,7 @@ func (m *Model) toolText(id string) string {
 			text += "  " + tr(tFormListedOnly)
 		}
 		if target := m.field(targetsLabel); target != nil {
-			if reached, hint := metadata.Target.Reach(id, target.entries); !reached {
+			if reached, hint := metadata.Target.Reach(id, target.reachable()); !reached {
 				text += "  " + tr(tFormOutsideTargets)
 				if hint != "" {
 					text += ": " + hint
@@ -3056,7 +3069,7 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(tr(tFormConnectionServiceHint)).withDetail(tr(tFormConnectionServiceDetail)),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
 				withHint(tr(tFormConnectionCredentialHint)).withDetail(tr(tFormConnectionCredentialDetail)),
-			targetsField(conn.TargetValues()).withLabels(conn.TargetLabels),
+			targetsFieldOf(conn),
 			pathsField(conn.Paths).withHint(tr(tFormPathsHint)).withDetail(tr(tFormPathsDetail)),
 			filesField(filesReadLabel, conn.Files.Read),
 			filesField(filesWriteLabel, conn.Files.Write),
@@ -3215,7 +3228,11 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 				return err
 			}
 		}
-		target, targets := manage.SplitTargets(targetEntries(m.fields))
+		var reachable, exclude []string
+		if row := targetRowOf(m.fields); row != nil {
+			reachable, exclude = row.reachable(), excludesOf(row.entries, row.excluded)
+		}
+		target, targets := manage.SplitTargets(reachable)
 		// No paths are written as none at all: an empty list would be refused.
 		var paths []string
 		if entries := pathEntries(m.fields); len(entries) > 0 {
@@ -3237,20 +3254,6 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		// SetConnection drops the labels of targets the list no longer holds.
 		labels := targetLabelsOf(m.fields)
-		// The form does not edit exclusions: they carry over from the connection it was opened on (the
-		// original also when renamed or copied), with their labels. Dropping them would widen the connection.
-		var exclude []string
-		if source, ok := m.cfg.Connections[m.formSource()]; ok {
-			exclude = source.ExcludeValues()
-			for _, value := range exclude {
-				if label, ok := source.TargetLabels[value]; ok {
-					if labels == nil {
-						labels = map[string]string{}
-					}
-					labels[value] = label
-				}
-			}
-		}
 		return cfg.SetConnection(name, config.Connection{
 			Exclude:        exclude,
 			Service:        m.fieldValue("service"),
@@ -4058,7 +4061,8 @@ func (m *Model) leaveSubject() string {
 		case m.targetAdd != nil || m.targetEdit >= 0:
 			return tr(tLeaveTypedTarget)
 		}
-		if slices.Equal(m.targetList.all, m.fields[m.focus].entries) {
+		if slices.Equal(m.targetList.all, m.fields[m.focus].entries) &&
+			sameExcluded(m.targetExcluded, m.fields[m.focus].excluded) {
 			return tr(tLeaveTargetLabels)
 		}
 		return tr(tLeaveTargetList)
@@ -4925,7 +4929,7 @@ func (m *Model) describe(name string) string {
 	}
 	// The column shows a label instead of its target, and a count instead of several; both are found.
 	conn := m.cfg.Connections[name]
-	for _, target := range conn.TargetValues() {
+	for _, target := range append(conn.TargetValues(), conn.Exclude...) {
 		text += columnGap + target + columnGap + m.logText(conn.TargetLabels[target])
 	}
 	return text
@@ -4983,6 +4987,12 @@ func (m *Model) cells(name string) []string {
 			}
 		case len(values) > 1:
 			targets = tr(tFormTargets, len(values))
+		}
+		if len(conn.Exclude) > 0 {
+			if len(values) == 0 {
+				targets = tr(tLogAll)
+			}
+			targets += " · " + tr(tTargetExceptCount, len(conn.Exclude))
 		}
 		description := m.logText(conn.Description)
 		if description == "" && m.needsDescription(name) {

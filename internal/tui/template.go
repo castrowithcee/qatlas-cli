@@ -401,7 +401,9 @@ func (m *Model) setupPrefill(step int, page []field) {
 			case "name":
 				page[i].input.SetValue(freeCopyName(w.template, taken))
 			case targetsLabel:
-				page[i].entries = slices.Clone(conn.TargetValues())
+				// A copy is never broader than its template: the exclusions come along.
+				page[i] = targetsFieldOf(conn).withHint(page[i].hint).withDetail(page[i].detail).inSection(page[i].section)
+				page[i].labels = nil
 			case "description":
 				page[i].input.SetValue(conn.Description)
 			}

@@ -88,6 +88,15 @@ func (m *Model) commands() []command {
 			run:         func(m *Model) tea.Cmd { m.askSetupTemplate(); return nil },
 		},
 		command{
+			name:    "add exclusion",
+			desc:    tr(tCmdAddExclusion),
+			aliases: []string{"exclude", "exclusion"},
+			// Only the target list carries it, so the empty line of other screens does not list it.
+			hidden:      true,
+			unavailable: func(m *Model) string { return m.addExclusionUnavailable() },
+			run:         func(m *Model) tea.Cmd { m.setAsExclusion(true); return nil },
+		},
+		command{
 			name:    "renames",
 			desc:    tr(tCmdRenames),
 			aliases: []string{"adopt", "rename leftovers"},
