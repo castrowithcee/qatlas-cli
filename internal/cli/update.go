@@ -9,14 +9,18 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
-func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
-	var check, yes, list bool
+func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion string) *cobra.Command {
+	var check, yes, list, restoreBackup bool
 	var to string
 	cmd := &cobra.Command{
 		Use:   "update",
@@ -39,9 +43,19 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"than the newest stable one, and the running version, newest first, with prerelease, current, and\n" +
 			"older marked. Only signed releases from v0.30.0 on appear. --to <tag> installs exactly one of them,\n" +
 			"a prerelease included, with the same confirmation, signature check, and vault handling as above;\n" +
-			"the running version is only reported as installed. Installing a version older than the running\n" +
-			"one is not available yet and is refused. --list and --to cannot be combined with each other or\n" +
-			"with --check.\n\n" +
+			"the running version is only reported as installed. --list and --to cannot be combined with each\n" +
+			"other or with --check.\n\n" +
+			"--to also installs a version older than the running one, a rollback. It is checked first: the\n" +
+			"older program, verified like any release, runs 'config validate' on a copy of the configuration\n" +
+			"in a private temporary directory, and the real file is not touched. If it reads the file, the\n" +
+			"rollback goes on and the file stays as it is. If it does not, it checks the backups beside the\n" +
+			"configuration, newest first, and offers the newest it reads. Only --restore-backup (or y to the\n" +
+			"question at a terminal) restores it: the current file is saved as a new backup first, so\n" +
+			"changes made since the backup are missing in the older version but kept in that backup. --yes\n" +
+			"confirms the change of program only. Without a readable backup, or without that confirmation,\n" +
+			"nothing is changed. A rollback always locks a running vault process before it replaces the\n" +
+			"program, whatever the update behaviour says, and never touches the vault's files. If the\n" +
+			"replacement fails, the configuration it replaced is put back.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
 			"running qatlas processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +
@@ -62,6 +76,9 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 				return &UsageError{errors.New("--list, --to <tag>, and --check cannot be combined, and --to needs a tag; " +
 					"--yes only goes with an installation")}
 			}
+			if restoreBackup && to == "" {
+				return &UsageError{errors.New("--restore-backup only goes with --to <tag>")}
+			}
 			updater := opts.Updater
 			if updater == nil {
 				updater = selfupdate.New(buildVersion)
@@ -76,7 +93,7 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 				}
 				return emit(c, opts, listCollection(entries))
 			case to != "":
-				result, err = updateTo(c, opts, updater, to, yes)
+				result, err = updateTo(c, opts, reg, updater, to, yes, restoreBackup)
 			default:
 				if !check && !yes && (opts.Agent || !checkInteractive()) {
 					return &UsageError{errors.New(refusal)}
@@ -105,9 +122,11 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm the update without asking")
+	cmd.Flags().BoolVar(&restoreBackup, "restore-backup", false,
+		"with --to <older version>, restore the newest backup that version reads when it does not read the configuration")
 	cmd.Flags().BoolVar(&check, "check", false, "only report whether a newer stable release is available")
 	cmd.Flags().BoolVar(&list, "list", false, "list the signed releases that can be chosen")
-	cmd.Flags().StringVar(&to, "to", "", "install this release, a prerelease included, instead of the latest stable one")
+	cmd.Flags().StringVar(&to, "to", "", "install this release, a prerelease or an older version included, instead of the latest stable one")
 	return cmd
 }
 
@@ -134,8 +153,9 @@ func listCollection(entries []selfupdate.Entry) output.Collection {
 }
 
 // updateTo installs the release named tag after the confirmation. The running version is reported as
-// installed without asking and without a change.
-func updateTo(c *cobra.Command, opts *Options, updater *selfupdate.Client, tag string, yes bool) (selfupdate.Result, error) {
+// installed without asking and without a change. An older version is a rollback (see rollbackTo).
+func updateTo(c *cobra.Command, opts *Options, reg *capability.Registry, updater *selfupdate.Client, tag string,
+	yes, restoreBackup bool) (selfupdate.Result, error) {
 	target, err := updater.Target(c.Context(), tag)
 	if err != nil {
 		return selfupdate.Result{}, err
@@ -151,9 +171,81 @@ func updateTo(c *cobra.Command, opts *Options, updater *selfupdate.Client, tag s
 		fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
 		return selfupdate.Result{Current: updater.Version, Latest: tag, UpdateAvailable: true}, nil
 	}
+	if target.Older {
+		return rollbackTo(c, opts, reg, updater, target, yes, restoreBackup)
+	}
 	return replaceProgram(c, opts, updater, func(client *selfupdate.Client) (selfupdate.Result, error) {
 		return client.UpdateTo(c.Context(), target)
 	})
+}
+
+// rollbackTo installs the older release target once its program was checked against the configuration (see
+// manage.Service.CheckRollback), and restores a backup only when it was confirmed with --restore-backup or,
+// at a terminal without --yes, with y: --yes confirms the change of program, not the restore.
+func rollbackTo(c *cobra.Command, opts *Options, reg *capability.Registry, updater *selfupdate.Client,
+	target selfupdate.Target, yes, restoreBackup bool) (selfupdate.Result, error) {
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return selfupdate.Result{}, err
+	}
+	svc := manage.New(config.NewStore(path, reg), nil, connlog.SurfaceCLI, opts.Redactor)
+
+	replacement := &vaultReplacement{opts: opts, lock: true}
+	client := replacement.hooked(updater)
+	progress, endProgress := downloadProgress(c, opts)
+	if progress != nil {
+		client.Progress = progress
+	}
+	prepared, err := client.Prepare(c.Context(), target)
+	endProgress()
+	if err != nil {
+		return selfupdate.Result{}, err
+	}
+	check, err := svc.CheckRollback(c.Context(), prepared)
+	if err != nil {
+		return selfupdate.Result{}, fmt.Errorf("could not check whether %s reads the configuration, nothing was changed: %w",
+			target.Version, err)
+	}
+	restore := false
+	if !check.Reads {
+		if check.Offer == nil {
+			return selfupdate.Result{}, fmt.Errorf("%s does not read the configuration, and none of its backups it reads "+
+				"was found; nothing was changed", target.Version)
+		}
+		restore = restoreBackup || (!yes && confirmRestore(target.Version, *check.Offer))
+		if !restore {
+			if yes || opts.Agent || !checkInteractive() {
+				return selfupdate.Result{}, &UsageError{errors.New(restoreOffer(target.Version, *check.Offer) +
+					" Run again with --restore-backup to restore it; nothing was changed.")}
+			}
+			fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+			return selfupdate.Result{Current: updater.Version, Latest: target.Version, UpdateAvailable: true}, nil
+		}
+	}
+	result, err := svc.Rollback(c.Context(), client, prepared, check, restore)
+	printNote(c, replacement.finish())
+	if err == nil && restore {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: the configuration was restored from the backup %s; the configuration "+
+			"it replaced is saved in the backups directory\n", check.Offer.Name)
+	}
+	return result, err
+}
+
+// restoreOffer names the backup a rollback would restore and what that means.
+func restoreOffer(version string, b config.Backup) string {
+	return fmt.Sprintf("%s does not read the current configuration. The newest backup it reads is %s from %s. "+
+		"Restoring it saves the current configuration as a new backup first; changes made since then are missing "+
+		"in %s but kept in that backup.", version, b.Name, b.Time.Format("2006-01-02 15:04:05 UTC"), version)
+}
+
+// confirmRestore asks whether to restore b for version. Anything but y, an unreadable answer included, is
+// a no. Without a terminal there is nobody to ask.
+func confirmRestore(version string, b config.Backup) bool {
+	if !checkInteractive() {
+		return false
+	}
+	ok, err := readVaultConfirm(restoreOffer(version, b) + "\nRestore this backup? [y/N] ")
+	return err == nil && ok
 }
 
 // replaceProgram installs the release. Once the program is replaced, a running vault process no longer
@@ -207,6 +299,8 @@ type vaultReplacement struct {
 	opts     *Options
 	handover *vaultproc.Handover
 	note     string
+	// lock locks the vault process whatever the update behaviour says: an older program cannot take it over.
+	lock bool
 }
 
 // hooked returns a copy of base that runs the replacement's hooks, ahead of base's own.
@@ -241,7 +335,9 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 		return
 	}
 	why := "before qatlas was replaced"
-	if !vaultHandoverPlatform {
+	if r.lock {
+		why = "because an older version cannot take over an unlocked vault, before qatlas was replaced"
+	} else if !vaultHandoverPlatform {
 		// Windows has no handover, so neither the update behaviour nor the signature matters here: the vault
 		// process is locked.
 		why = "because Windows locks the vault process instead of handing it over, before qatlas was replaced"
@@ -308,6 +404,6 @@ func confirmUpdate(latest string) bool {
 
 // confirmTarget is confirmUpdate for a release chosen by version.
 func confirmTarget(t selfupdate.Target) bool {
-	ok, err := readVaultConfirm(selfupdate.TargetQuestion(t.Version, t.Prerelease) + "\nContinue? [y/N] ")
+	ok, err := readVaultConfirm(selfupdate.TargetQuestion(t.Version, t.Prerelease, t.Older) + "\nContinue? [y/N] ")
 	return err == nil && ok
 }

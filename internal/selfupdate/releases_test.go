@@ -273,7 +273,6 @@ func TestTargetRefusals(t *testing.T) {
 	tests := map[string]struct{ tag, want string }{
 		"unsigned":      {"v0.41.0", "not signed"},
 		"below minimum": {"v0.29.0", "oldest version"},
-		"older":         {"v0.34.0", "not available yet"},
 		"draft":         {"v0.42.0", "does not exist"},
 		"missing":       {"v0.99.0", "look up release"},
 		"not a version": {"latest", "not a release version"},
@@ -294,12 +293,29 @@ func TestTargetRefusals(t *testing.T) {
 			assertFile(t, executable, "old-binary")
 		})
 	}
-	// The refusal of an older version names no setting.
-	client, _ := newTargetClient(t, server, signer, "v0.35.0")
-	_, err := client.Target(context.Background(), "v0.34.0")
-	if err == nil || strings.Contains(strings.ToLower(err.Error()), "config") {
-		t.Errorf("older refusal = %v", err)
+}
+
+func TestTargetMarksAnOlderVersionAndUpdateToRefusesIt(t *testing.T) {
+	signer := releasetest.NewSigner(t)
+	server := multiReleaseServer(t, signer, []fixture{{tag: "v0.34.0"}, {tag: "v0.36.0"}}, nil)
+	client, executable := newTargetClient(t, server, signer, "v0.35.0")
+	client.BeforeReplace = func(context.Context, Release) error {
+		t.Error("BeforeReplace ran although nothing is replaced")
+		return nil
 	}
+	older, err := client.Target(context.Background(), "v0.34.0")
+	if err != nil || !older.Older || older.Current {
+		t.Fatalf("Target(v0.34.0) = %+v, %v", older, err)
+	}
+	newer, err := client.Target(context.Background(), "v0.36.0")
+	if err != nil || newer.Older {
+		t.Fatalf("Target(v0.36.0) = %+v, %v", newer, err)
+	}
+	var refused *TargetError
+	if _, err := client.UpdateTo(context.Background(), older); !errors.As(err, &refused) {
+		t.Fatalf("UpdateTo(older) error = %v, want a TargetError", err)
+	}
+	assertFile(t, executable, "old-binary")
 }
 
 func TestTargetOfTheRunningVersionChangesNothing(t *testing.T) {
@@ -337,4 +353,46 @@ func TestUpdateToRefusesAnInvalidSignatureWithoutChanges(t *testing.T) {
 		t.Fatalf("UpdateTo() error = %v", err)
 	}
 	assertFile(t, executable, "old-binary")
+}
+
+func TestPrepareVerifiesWithoutInstallingAndInstallPreparedInstalls(t *testing.T) {
+	signer := releasetest.NewSigner(t)
+	server := multiReleaseServer(t, signer, []fixture{{tag: "v0.34.0"}, {tag: "v0.41.0", badSignature: true}, {tag: "v0.35.0"}}, nil)
+	client, executable := newTargetClient(t, server, signer, "v0.35.0")
+	var before, after int
+	client.BeforeReplace = func(context.Context, Release) error { before++; return nil }
+	client.AfterReplace = func(context.Context, Release) { after++ }
+
+	bad, err := client.Target(context.Background(), "v0.41.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Prepare(context.Background(), bad); err == nil || !strings.Contains(err.Error(), "signature is invalid") {
+		t.Fatalf("Prepare() with a bad signature error = %v", err)
+	}
+	current, _ := client.Target(context.Background(), "v0.35.0")
+	if _, err := client.Prepare(context.Background(), current); err == nil {
+		t.Fatal("Prepare() of the running version succeeded")
+	}
+
+	older, err := client.Target(context.Background(), "v0.34.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := client.Prepare(context.Background(), older)
+	if err != nil || prepared.Version() != "v0.34.0" {
+		t.Fatalf("Prepare() = %+v, %v", prepared, err)
+	}
+	assertFile(t, executable, "old-binary")
+	if before != 0 || after != 0 {
+		t.Fatalf("hooks ran during Prepare: %d, %d", before, after)
+	}
+	result, err := client.InstallPrepared(context.Background(), prepared)
+	if err != nil || !result.Updated || !result.Signed || result.Latest != "v0.34.0" || result.Current != "v0.35.0" {
+		t.Fatalf("InstallPrepared() = %+v, %v", result, err)
+	}
+	assertFile(t, executable, "new-binary")
+	if before != 1 || after != 1 {
+		t.Fatalf("hooks = %d, %d", before, after)
+	}
 }

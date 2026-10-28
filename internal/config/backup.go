@@ -35,16 +35,23 @@ func (s *Store) backupDir() string { return filepath.Join(filepath.Dir(s.path), 
 // backupBeforeReplace saves the bytes now in the configuration file as a new backup and then rotates. A
 // missing file has nothing to save. Any failure is returned so the caller leaves the file unchanged.
 func (s *Store) backupBeforeReplace() error {
+	_, err := s.backupCurrent()
+	return err
+}
+
+// backupCurrent is backupBeforeReplace that also returns the path of the new backup, or "" when there was
+// nothing to save.
+func (s *Store) backupCurrent() (string, error) {
 	// A directory in the place of the file is not something to back up; the replacement reports it.
 	if fi, err := os.Stat(s.path); err == nil && fi.IsDir() {
-		return nil
+		return "", nil
 	}
 	data, err := readFile(s.path, s.observe)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil
+			return "", nil
 		}
-		return fmt.Errorf("cannot read %s to back it up: %w", s.path, err)
+		return "", fmt.Errorf("cannot read %s to back it up: %w", s.path, err)
 	}
 
 	prefix, suffix := "config", ".yaml"
@@ -55,11 +62,12 @@ func (s *Store) backupBeforeReplace() error {
 			prefix = "config-first-hand"
 		}
 	}
-	if _, err := s.writeBackup(prefix, suffix, data); err != nil {
-		return err
+	path, err := s.writeBackup(prefix, suffix, data)
+	if err != nil {
+		return "", err
 	}
 	s.rotateBackups()
-	return nil
+	return path, nil
 }
 
 // isHandVersion reports whether data differs from what Qatlas would write for it. Renamed provider or tool
