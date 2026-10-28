@@ -207,7 +207,7 @@ func invokeBaseOperations(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	if !bound.wildcard {
+	if !bound.wholeBase() {
 		return nil, providerError(op, "the operation log covers the whole base and needs a connection with the * wildcard")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -266,12 +266,7 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 		if document, err = c.metadata(ctx, op); err != nil {
 			return err
 		}
-		for i := range document.Metadata.Tables {
-			if matchesTable(selected, document.Metadata.Tables[i]) {
-				current = &document.Metadata.Tables[i]
-				break
-			}
-		}
+		current = findTable(document, selected)
 		loaded = true
 		return nil
 	}
@@ -293,7 +288,7 @@ func (c *Client) RowActivities(ctx context.Context, options ActivitiesOptions) (
 	}
 	items = kept
 	var mask *linkMask
-	if !c.scope.wildcard && len(items) > 0 {
+	if !c.scope.wholeBase() && len(items) > 0 {
 		if err := load(); err != nil {
 			return nil, err
 		}
@@ -324,7 +319,7 @@ func (c *Client) BaseOperations(ctx context.Context, options OperationsOptions) 
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	if !c.scope.wildcard {
+	if !c.scope.wholeBase() {
 		return nil, providerError(op, "the operation log covers the whole base and needs a connection with the * wildcard")
 	}
 	access, err := c.access(ctx, op)
