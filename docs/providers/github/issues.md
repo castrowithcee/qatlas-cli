@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-28
 ---
 
 # GitHub issues
@@ -76,7 +76,7 @@ permanently and is offered only where a connection's `tools` list names it, as `
 ## Issue search
 
 `github.issues.search` searches issues, never pull requests: it forces `is:issue` ahead of `terms`, next to the
-target qualifiers described under [Search](README.md#search). Its filters are arguments of their own, never
+target qualifiers described under [Search](search.md). Its filters are arguments of their own, never
 part of `terms`. With `advanced_search` or `search_type` set, GitHub reads the query differently, so every match
 is also checked against the connection's targets, and an answer outside them is refused as an invalid response.
 

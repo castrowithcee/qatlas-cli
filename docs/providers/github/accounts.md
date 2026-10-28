@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # GitHub accounts
@@ -27,7 +27,7 @@ repository under the token's own account applies the same guard, see
 [repository lifecycle](repositories.md#repository-lifecycle-and-collaborators).
 
 The terminal editor's setup profile `discovery` selects `github.accounts.me`, `github.teams.list`,
-`github.team-members.list`, `github.stars.list`, and the seven [search tools](README.md#search); it changes
+`github.team-members.list`, `github.stars.list`, and the seven [search tools](search.md); it changes
 nothing. It is not the recommended profile, which stays `read`, unchanged. The profile `stars` is described
 under [stars](repositories.md#stars).
 
@@ -55,7 +55,7 @@ The token rights are listed under [Accounts and search](setup.md#accounts-and-se
 | `github.users.search` | personal accounts, never organizations |
 | `github.organizations.search` | organizations, never personal accounts |
 
-Both read GitHub's own search index with `terms`, under the rules described in [Search](README.md#search). What
-the targets force or refuse for them is described under [target scoping](README.md#target-scoping). The
+Both read GitHub's own search index with `terms`, under the rules described in [Search](search.md). What
+the targets force or refuse for them is described under [target scoping](search.md#target-scoping). The
 repository search is described with the [repositories](repositories.md#search), the code and commit search
 with the [code](code.md#search).
