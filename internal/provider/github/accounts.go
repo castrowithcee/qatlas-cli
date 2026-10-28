@@ -32,7 +32,7 @@ var accountsMe = capability.Descriptor{
 	Title:   "Get the GitHub account behind this connection",
 	Description: "Read the login, display name, account type, and billing plan of the user GitHub " +
 		"authenticates the connection's token as; offered only by a connection whose targets name no " +
-		"repository and no project",
+		"repository and no project; profile counts include repositories the connection excludes",
 	Tags:        []string{"github", "account", "discovery", "get"},
 	Risk:        readRisk,
 	Provider:    Provider,

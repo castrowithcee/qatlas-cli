@@ -422,3 +422,239 @@ func TestIssueListDropsTheStateAFilterFixes(t *testing.T) {
 		}
 	}
 }
+
+func mustAllowlist(t *testing.T, targets, excludes []string) allowlist {
+	t.Helper()
+	list, err := parseAllowlistExcluding(targets, excludes)
+	if err != nil {
+		t.Fatalf("parseAllowlistExcluding(%v, %v) = %v", targets, excludes, err)
+	}
+	return list
+}
+
+// An exclusion wins over every target: an owner against its own pattern, a project number against a project
+// pattern, a repository against a repository pattern; users/X and orgs/X are one login, and names ignore case.
+func TestExclusionsWinOverTargets(t *testing.T) {
+	repo := func(owner, name string) target { return target{kind: kindRepository, owner: owner, repo: name} }
+	project := func(scope, owner string, number int) target {
+		return target{kind: kindProject, scope: scope, owner: owner, number: number}
+	}
+	owner := func(scope, login string) target { return target{kind: kindOwner, scope: scope, owner: login} }
+	for _, tt := range []struct {
+		name              string
+		targets, excludes []string
+		allowed           []target
+		refused           []target
+	}{
+		{"owner against a repository pattern", []string{"repos/octo-org/*"}, []string{"orgs/octo-org"},
+			nil, []target{repo("octo-org", "a"), repo("OCTO-ORG", "b")}},
+		{"user spelling excludes the same login", []string{"repos/octo-org/*"}, []string{"users/Octo-Org"},
+			nil, []target{repo("octo-org", "a"), owner("orgs", "octo-org"), owner("users", "octo-org")}},
+		{"owner against a project pattern", []string{"orgs/octo-org/projects/*"}, []string{"users/octo-org"},
+			nil, []target{project("orgs", "octo-org", 3)}},
+		{"project against a project pattern", []string{"orgs/octo-org/projects/*"},
+			[]string{"orgs/octo-org/projects/3"},
+			[]target{project("orgs", "octo-org", 4)}, []target{project("orgs", "OCTO-ORG", 3)}},
+		{"repository against an owner target", []string{"orgs/octo-org", "repos/octo-org/*"},
+			[]string{"repos/octo-org/Secret"},
+			[]target{repo("octo-org", "open"), owner("orgs", "octo-org")}, []target{repo("octo-org", "secret")}},
+		{"repository pattern as an exclusion", []string{"orgs/octo-org", "repos/other/x"},
+			[]string{"repos/octo-org/*"}, []target{repo("other", "x")}, []target{repo("octo-org", "a")}},
+		{"project pattern as an exclusion leaves repositories", nil, []string{"orgs/octo-org/projects/*"},
+			[]target{repo("octo-org", "a"), owner("orgs", "octo-org")}, []target{project("orgs", "octo-org", 1)}},
+		{"only exclusions leave the rest open", nil, []string{"repos/octo-org/a"},
+			[]target{repo("octo-org", "b"), repo("hubot", "a"), project("users", "hubot", 1)},
+			[]target{repo("octo-org", "a")}},
+		{"an exclusion that matches nothing is harmless", []string{"repos/octo-org/*"}, []string{"orgs/nobody"},
+			[]target{repo("octo-org", "a")}, nil},
+	} {
+		list := mustAllowlist(t, tt.targets, tt.excludes)
+		for _, ok := range tt.allowed {
+			if !list.allows(ok) {
+				t.Errorf("%s: allows(%v) = false, want true", tt.name, ok)
+			}
+		}
+		for _, no := range tt.refused {
+			if list.allows(no) {
+				t.Errorf("%s: allows(%v) = true, want false", tt.name, no)
+			}
+		}
+	}
+}
+
+func TestExclusionValidity(t *testing.T) {
+	for _, tt := range []struct {
+		name              string
+		targets, excludes []string
+		ok                bool
+	}{
+		{"star alone", nil, []string{"*"}, false},
+		{"star at a placeholder", nil, []string{"repos/*/x"}, false},
+		{"star as owner", nil, []string{"repos/*/*"}, false},
+		{"star as login", nil, []string{"users/*"}, false},
+		{"star project owner", nil, []string{"orgs/*/projects/1"}, false},
+		{"equals a target", []string{"repos/octo-org/a"}, []string{"repos/OCTO-ORG/a"}, false},
+		{"owner equals a target in the other scope", []string{"orgs/octo-org"}, []string{"users/octo-org"}, false},
+		{"pattern equals a pattern target", []string{"repos/octo-org/*"}, []string{"repos/octo-org/*"}, false},
+		{"duplicate", nil, []string{"repos/octo-org/a", "repos/octo-org/A"}, false},
+		{"repository pattern", nil, []string{"repos/octo-org/*"}, true},
+		{"project pattern", nil, []string{"users/octocat/projects/*", "orgs/octo-org/projects/*"}, true},
+		{"matches nothing", []string{"repos/octo-org/a"}, []string{"repos/hubot/b"}, true},
+		{"narrower than a target", []string{"repos/octo-org/*"}, []string{"repos/octo-org/a"}, true},
+	} {
+		_, err := parseAllowlistExcluding(tt.targets, tt.excludes)
+		if (err == nil) != tt.ok {
+			t.Errorf("%s: error = %v, want ok=%t", tt.name, err, tt.ok)
+		}
+		if err != nil {
+			for _, value := range append(append([]string{}, tt.targets...), tt.excludes...) {
+				if strings.Contains(err.Error(), value) && len(value) > 1 {
+					t.Errorf("%s: error quotes %q: %v", tt.name, value, err)
+				}
+			}
+		}
+	}
+}
+
+// Exclusions never withhold a tool: only targets decide the account-wide check and the kinds a list names.
+func TestExclusionsLeaveTheToolOfferAlone(t *testing.T) {
+	list := mustAllowlist(t, nil, []string{"orgs/octo-org", "repos/hubot/a", "orgs/x/projects/1"})
+	if err := accountWideAllowed(list); err != nil {
+		t.Errorf("accountWideAllowed with only exclusions = %v", err)
+	}
+	if list.names(kindRepository) || list.names(kindProject) || list.names(kindOwner) || list.bound() || list.open() {
+		t.Errorf("exclusions counted as targets: %+v", list)
+	}
+
+	f := &fakeGitHub{}
+	cfg := coreConfig(serve(t, f))
+	all := config.Effects()
+	cfg.Connections["plain"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all}
+	cfg.Connections["excl"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+		Exclude: []string{"orgs/octo-org", "repos/hubot/a", "users/hubot/projects/*"}}
+	cfg.Connections["owners"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+		Targets: []string{"orgs/octo-org", "users/octocat"}}
+	cfg.Connections["owners-excl"] = config.Connection{Service: "gh", Credential: "gh-reader", Effects: all,
+		Targets: []string{"orgs/octo-org", "users/octocat"}, Exclude: []string{"repos/octo-org/*", "users/hubot"}}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	listing := func(connection string) string {
+		tools, err := core.Tools(application.SearchRequest{Provider: Provider, Connection: connection})
+		if err != nil {
+			t.Fatalf("tools of %s = %v", connection, err)
+		}
+		tools.Connections = nil
+		encoded, _ := json.Marshal(tools)
+		return string(encoded)
+	}
+	for _, pair := range [][2]string{{"plain", "excl"}, {"owners", "owners-excl"}} {
+		if a, b := listing(pair[0]), listing(pair[1]); a != b {
+			t.Errorf("%s and %s offer different tools", pair[0], pair[1])
+		}
+	}
+}
+
+// A default target that an exclusion covers is refused, and so is an explicit one, without quoting it.
+func TestExclusionsRefuseTheChosenTarget(t *testing.T) {
+	list := mustAllowlist(t, []string{"repos/octo-org/a"}, []string{"orgs/octo-org"})
+	if _, err := list.choose(kindRepository, ""); !isInvalidRequest(err) {
+		t.Errorf("default repository = %v, want an invalid request", err)
+	}
+	list = mustAllowlist(t, nil, []string{"repos/octo-org/secret", "orgs/hidden/projects/*", "users/hubot"})
+	for _, call := range []struct {
+		kind  targetKind
+		value string
+	}{{kindRepository, "Octo-Org/SECRET"}, {kindProject, "orgs/hidden/projects/2"}, {kindRepository, "hubot/x"}} {
+		_, err := list.choose(call.kind, call.value)
+		if !isInvalidRequest(err) || strings.Contains(err.Error(), "ecret") || strings.Contains(err.Error(), "hidden") ||
+			strings.Contains(err.Error(), "hubot") {
+			t.Errorf("choose(%v) = %v, want an invalid request without the name", call.value, err)
+		}
+	}
+	if _, err := list.choose(kindRepository, "octo-org/other"); err != nil {
+		t.Errorf("choose of a free repository = %v", err)
+	}
+	for _, value := range []string{"users/hubot", "orgs/hubot", "users/HUBOT"} {
+		if _, err := list.chooseOwner(kindOwner, value); !isInvalidRequest(err) {
+			t.Errorf("chooseOwner(%s) = %v, want an invalid request", value, err)
+		}
+		if _, err := list.chooseOwner(kindRepository, value); !isInvalidRequest(err) {
+			t.Errorf("chooseOwner(%s, repositories) = %v, want an invalid request", value, err)
+		}
+	}
+	// An owner whose projects alone are excluded stays usable for repositories.
+	list = mustAllowlist(t, nil, []string{"orgs/octo-org/projects/*"})
+	if _, err := list.chooseOwner(kindRepository, "orgs/octo-org"); err != nil {
+		t.Errorf("chooseOwner with a project pattern excluded = %v", err)
+	}
+	// The selectors share the check and refuse before any secret access.
+	resolved := resolvedConnection("gh", "https://example.invalid", "")
+	resolved.Exclude = []string{"orgs/octo-org", "repos/hubot/*"}
+	for _, raw := range []string{`{"owner":"orgs/octo-org"}`} {
+		if _, err := selectOwner(resolved, kindOwner, json.RawMessage(raw)); !isInvalidRequest(err) {
+			t.Errorf("selectOwner = %v", err)
+		}
+		if _, err := selectOrganization(resolved, json.RawMessage(raw)); !isInvalidRequest(err) {
+			t.Errorf("selectOrganization = %v", err)
+		}
+	}
+	if _, err := selectTarget(resolved, kindRepository, json.RawMessage(`{"repository":"hubot/x"}`)); !isInvalidRequest(err) {
+		t.Errorf("selectTarget = %v", err)
+	}
+	bound, _ := parseArgument(kindRepository, "octocat/main")
+	if _, err := selectSecondaryRepository(resolved, bound, "octo-org/x"); !isInvalidRequest(err) {
+		t.Errorf("selectSecondaryRepository = %v", err)
+	}
+	if _, err := selectSecondaryRepository(resolved, bound, "octocat/free"); err != nil {
+		t.Errorf("selectSecondaryRepository of a free repository = %v", err)
+	}
+}
+
+// While a connection excludes anything, every GraphQL lookup of a repository stops following renames; without
+// an exclusion the documents stay as written.
+func TestExclusionsPinGraphQLRepositoryLookups(t *testing.T) {
+	f := &fakeGitHub{}
+	cfg := coreConfig(serve(t, f))
+	cfg.Connections["plain"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget}
+	cfg.Connections["ex"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
+		Exclude: []string{"repos/octo-org/other"}}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	for connection, want := range map[string]bool{"plain": false, "ex": true} {
+		before := len(f.recorded())
+		if _, err := invoke(t, core, issuesList.ID, connection, `{}`, false); err != nil {
+			t.Fatalf("issues list on %s = %v", connection, err)
+		}
+		documents := 0
+		for _, request := range f.recorded()[before:] {
+			if request.document == "" {
+				continue
+			}
+			documents++
+			if got := strings.Contains(request.document, "repository(owner:$owner,name:$name,followRenames:false)"); got != want {
+				t.Errorf("%s: followRenames:false = %t, want %t in %s", connection, got, want, request.document)
+			}
+			if !want && strings.Contains(request.document, "followRenames") {
+				t.Errorf("%s: document changed: %s", connection, request.document)
+			}
+		}
+		if documents == 0 {
+			t.Errorf("%s: no GraphQL document was sent", connection)
+		}
+	}
+
+	// Every lookup shape of the package is rewritten, also one split over lines or spaced out.
+	client := &Client{allowed: mustAllowlist(t, nil, []string{"repos/octo-org/other"})}
+	for in, out := range map[string]string{
+		"{repository(owner:$owner,name:$name){id}}":            "{repository(owner:$owner,name:$name,followRenames:false){id}}",
+		"{repository(owner:$repoOwner,\n name:$repoName){id}}": "{repository(owner:$repoOwner,\n name:$repoName,followRenames:false){id}}",
+		"{node(id:$id){id}}":                                   "{node(id:$id){id}}",
+	} {
+		if got := client.pinRepositories(in); got != out {
+			t.Errorf("pinRepositories(%q) = %q, want %q", in, got, out)
+		}
+	}
+	if got := (&Client{}).pinRepositories("{repository(owner:$owner,name:$name){id}}"); strings.Contains(got, "followRenames") {
+		t.Errorf("a client without exclusions changed the document: %s", got)
+	}
+}
