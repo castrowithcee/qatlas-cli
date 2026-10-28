@@ -72,8 +72,9 @@ var targetKinds = []config.TargetKind{{
 	Name: kindFolder,
 	Description: "the Files folder this connection may access; optional, at most one; the kind alone binds the " +
 		"whole Files root of the identity, and PATH may have several segments such as Team/Reports",
-	Forms:  []string{kindFolder, kindFolder + "/PATH"},
-	Nested: true,
+	Forms:      []string{kindFolder, kindFolder + "/PATH"},
+	Nested:     true,
+	Excludable: true,
 }, {
 	Name:        kindCalendar,
 	Description: "all calendars of the identity, or one calendar by its URI; optional, and may be listed more than once",
@@ -95,8 +96,9 @@ var targetKinds = []config.TargetKind{{
 	Name: kindNotes,
 	Description: "all notes of the identity, or the notes of one category, which may be a sub-folder such as " +
 		"Work/Plans; optional, and may be listed more than once",
-	Forms:  []string{kindNotes, kindNotes + "/PATH"},
-	Nested: true,
+	Forms:      []string{kindNotes, kindNotes + "/PATH"},
+	Nested:     true,
+	Excludable: true,
 }, {
 	Name: kindAccount,
 	Description: "the account-wide and instance-wide reach of the identity: notifications, activity, search, " +
@@ -140,6 +142,7 @@ type scope struct {
 	account      bool
 	admin        bool
 	excludes     exclusions
+	cross        crossExcludes
 }
 
 // scopeOf reads the targets of a resolved connection. The single target field keeps its old meaning, the

@@ -261,6 +261,9 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	limit, offset := defaultCommentLimit, 0
 	if input.Limit != nil {
 		limit = *input.Limit
@@ -292,6 +295,9 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -305,6 +311,9 @@ func invokeCommentsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
+		return nil, err
+	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
@@ -316,6 +325,9 @@ func invokeCommentsDelete(ctx context.Context, resolved *config.Resolved, secret
 	const op = "delete file comment"
 	input, rel, err := readCommentArguments(op, raw, true, false)
 	if err != nil {
+		return nil, err
+	}
+	if err := preflightRel(resolved, op, rel, scope.gateRead); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)

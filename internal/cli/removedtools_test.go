@@ -35,7 +35,7 @@ func removedToolsConfig(c int, tools string) string {
 	if tc.targets != "" {
 		targets = "\n    targets: " + tc.targets
 	}
-	return fmt.Sprintf(`version: 3
+	return fmt.Sprintf(`version: 4
 services:
   svc:
     provider: %s%s
