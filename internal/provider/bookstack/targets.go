@@ -567,10 +567,10 @@ func (c *Client) chapterIn(ctx context.Context, id int64) (book int64, err error
 // requireChapterBookWide proves a chapter for a change of the chapter itself, which only a book or a shelf
 // target reaches: a bound chapter grants its pages, not the chapter.
 func (c *Client) requireChapterBookWide(ctx context.Context, id int64, what string) error {
-	if !c.scope.bound() {
+	if !c.scope.limited() {
 		return nil
 	}
-	if !c.scope.bookWide() {
+	if c.scope.bound() && !c.scope.bookWide() {
 		return needsBook(what)
 	}
 	_, err := c.chapterBook(ctx, id)

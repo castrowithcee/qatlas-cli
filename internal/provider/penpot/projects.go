@@ -137,16 +137,22 @@ func (c *Client) locateProject(ctx context.Context, op, projectID string) error 
 
 // locateProjectAs is locateProject for an argument with another name.
 func (c *Client) locateProjectAs(ctx context.Context, op, field, projectID string) error {
+	_, err := c.locateProjectTeam(ctx, op, field, projectID)
+	return err
+}
+
+// locateProjectTeam is locateProjectAs that also returns the bound team the project lies in.
+func (c *Client) locateProjectTeam(ctx context.Context, op, field, projectID string) (string, error) {
 	for _, teamID := range c.scope.teams {
 		projects, err := c.projectsOf(ctx, op, teamID)
 		if err != nil {
-			return err
+			return "", err
 		}
 		for _, project := range projects {
 			if project.ID == projectID {
-				return nil
+				return teamID, nil
 			}
 		}
 	}
-	return invalidRequest(field + " is outside the targets of this connection")
+	return "", invalidRequest(field + " is outside the targets of this connection")
 }
