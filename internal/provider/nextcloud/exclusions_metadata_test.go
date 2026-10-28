@@ -1,6 +1,7 @@
 package nextcloud
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -8,10 +9,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
-func TestExclusionsAreDeclaredForFolderAndNotesOnly(t *testing.T) {
+func TestExclusionsAreDeclaredForTheEnforcedKindsOnly(t *testing.T) {
 	meta, _ := registry(t).ProviderMetadata(Provider)
 	for _, kind := range meta.Target.Kinds {
-		if want := kind.Name == kindFolder || kind.Name == kindNotes; kind.Excludable != want {
+		want := slices.Contains([]string{kindFolder, kindNotes, kindCalendar, kindAddressbook, kindDeck}, kind.Name)
+		if kind.Excludable != want {
 			t.Errorf("kind %s: Excludable = %t, want %t", kind.Name, kind.Excludable, want)
 		}
 	}
@@ -29,16 +31,16 @@ func TestExcludeConfigurationIsCheckedByTheCore(t *testing.T) {
 	for _, c := range [][2]string{
 		{"[folder/Team, notes/Work]", "[folder/Team/Private, notes/Work/Secret]"},
 		{"[folder, notes]", "[folder/Private, notes/Secret/Deep]"},
+		{"[calendar, addressbook, deck]", "[calendar/work, addressbook/book, deck/42]"},
 	} {
 		if _, err := config.Decode(strings.NewReader(document(c[0], c[1])), reg); err != nil {
 			t.Errorf("targets %s exclude %s: %v", c[0], c[1], err)
 		}
 	}
 	for _, c := range [][2]string{
-		{"[folder/Team, calendar]", "[calendar/work]"},
-		{"[folder/Team, deck]", "[deck/42]"},
 		{"[folder/Team, talk]", "[talk/abcd1234]"},
-		{"[folder/Team, addressbook]", "[addressbook/book]"},
+		{"[calendar]", "[calendar]"},
+		{"[deck]", "[deck/abc]"},
 		{"[folder/Team, account]", "[account]"},
 		{"[folder/Team]", "[folder/Team]"},
 		{"[folder/Team]", "[folder/Team/*]"},
