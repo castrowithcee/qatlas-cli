@@ -225,6 +225,9 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	}
 	result := &FilesResult{Files: []File{}}
 	for _, file := range files {
+		if client.scope.excludesFile(file.ID) {
+			continue
+		}
 		if len(result.Files) >= maxFilesListed {
 			result.Truncated = true
 			break
