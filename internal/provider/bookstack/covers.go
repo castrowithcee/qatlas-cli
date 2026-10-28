@@ -79,6 +79,9 @@ func invokeBooksSetCover(ctx context.Context, resolved *config.Resolved, secrets
 	if err := bound.checkBook(id); err != nil {
 		return nil, err
 	}
+	if err := bound.checkExcluded(bookPrefix, id); err != nil {
+		return nil, err
+	}
 	upload, err := openUpload(ctx, resolved, localPath)
 	if err != nil {
 		return nil, err
@@ -111,6 +114,9 @@ func invokeShelvesSetCover(ctx context.Context, resolved *config.Resolved, secre
 		return nil, err
 	}
 	if err := checkShelfID(id); err != nil {
+		return nil, err
+	}
+	if err := boundExcluded(resolved, shelfPrefix, id); err != nil {
 		return nil, err
 	}
 	if _, err := checkImageFile(localPath, ""); err != nil {
