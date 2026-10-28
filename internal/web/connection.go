@@ -372,6 +372,9 @@ func targetsText(conn config.Connection) string {
 	return strings.Join(parts, ", ")
 }
 
+// outdatedTargetsText stands in the targets row of a connection marked as outdated.
+const outdatedTargetsText = "Outdated: the stored targets keep a former meaning and are not used. The connection offers no tools until its targets are chosen again in qatlas tui (Connections) and saved."
+
 // excludeText reads the exclusions of conn with their labels as "value (label)".
 func excludeText(conn config.Connection) string {
 	var parts []string
@@ -802,7 +805,12 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 // page (see handleTestConnection); each is "" when there is nothing of that kind to show.
 func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Config, name string,
 	conn config.Connection, notice, testResult string) {
-	targets := targetsText(conn)
+	targets, exclude := targetsText(conn), excludeText(conn)
+	if conn.TargetsOutdated {
+		// The former targets are not what the connection reaches, so the page does not list them. Targets
+		// are chosen again in the terminal editor; this page only reads a connection.
+		targets, exclude = outdatedTargetsText, ""
+	}
 	tools := "every tool of its effects"
 	switch {
 	case conn.Tools == nil:
@@ -814,7 +822,7 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 	provider := cfg.Services[conn.Service].Provider
 	data := connectionResultData{
 		Name: name, Provider: provider, Service: conn.Service, Credential: conn.Credential,
-		Description: conn.Description, Targets: targets, Exclude: excludeText(conn),
+		Description: conn.Description, Targets: targets, Exclude: exclude,
 		Files:   approval.FilesText(conn.Files.Read, conn.Files.Write),
 		Effects: config.FormatEffects(cfg.ConnectionEffects(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,

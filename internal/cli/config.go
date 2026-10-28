@@ -72,6 +72,11 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			if err != nil {
 				return classifyUserError(err)
 			}
+			// Load tolerates a connection with outdated targets, which locks only itself; validation still
+			// reports it.
+			if err := cfg.Validate(); err != nil {
+				return classifyUserError(&config.InvalidError{Path: path, Err: err})
+			}
 			// A connection that offers no tool is valid, so it only warns: the file stays usable, and the
 			// warning goes to stderr so stdout keeps its answer.
 			for _, name := range sortedConnections(cfg) {

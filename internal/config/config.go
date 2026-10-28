@@ -138,7 +138,7 @@ type Connection struct {
 	Exclude []string `yaml:"exclude,omitempty"`
 	// TargetsOutdated marks a connection whose targets and exclusions the migration to schema 4 could not
 	// carry over with the same reach (see TargetMetadata.MigrateTargets). They are kept as they were, in
-	// their former meaning, and the connection is invalid until a person chooses its targets again and
+	// their former meaning, and the connection offers no tool until a person chooses its targets again, which
 	// removes the mark; the mark is what keeps the former meaning from being read in the current one.
 	TargetsOutdated bool     `yaml:"targets_outdated,omitempty"`
 	Description     string   `yaml:"description,omitempty"`
@@ -481,10 +481,10 @@ func Path(explicit string) (string, error) {
 
 // Load reads and validates the configuration at path.
 func Load(path string, providers ...ProviderCatalog) (*Config, error) {
-	return load(path, Observer{}, false, providers...)
+	return load(path, Observer{}, providers...)
 }
 
-func load(path string, obs Observer, keepOutdated bool, providers ...ProviderCatalog) (*Config, error) {
+func load(path string, obs Observer, providers ...ProviderCatalog) (*Config, error) {
 	data, err := readFile(path, obs)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -493,7 +493,7 @@ func load(path string, obs Observer, keepOutdated bool, providers ...ProviderCat
 		return nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
 
-	cfg, err := decode(bytes.NewReader(data), keepOutdated, providers...)
+	cfg, err := decode(bytes.NewReader(data), providers...)
 	if err != nil {
 		return nil, &InvalidError{Path: path, Err: err}
 	}
@@ -502,12 +502,12 @@ func load(path string, obs Observer, keepOutdated bool, providers ...ProviderCat
 
 // Decode reads a configuration from r. Unknown keys and duplicate keys are errors.
 func Decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
-	return decode(r, false, providers...)
+	return decode(r, providers...)
 }
 
-// decode is Decode; keepOutdated accepts a configuration whose only problems are connections with outdated
-// targets (see Store.ForMigration).
-func decode(r io.Reader, keepOutdated bool, providers ...ProviderCatalog) (*Config, error) {
+// decode is Decode. A configuration whose only problems are connections marked TargetsOutdated loads: such a
+// connection locks itself (see RefusalTargetsOutdated), and Validate still reports it.
+func decode(r io.Reader, providers ...ProviderCatalog) (*Config, error) {
 	cfg, err := decodeRaw(r, providers...)
 	if err != nil {
 		return nil, err
@@ -517,7 +517,7 @@ func decode(r io.Reader, keepOutdated bool, providers ...ProviderCatalog) (*Conf
 		return nil, err
 	}
 	cfg.migrateTargets()
-	if err := cfg.Validate(); err != nil && !(keepOutdated && onlyOutdatedTargets(err)) {
+	if err := cfg.Validate(); err != nil && !onlyOutdatedTargets(err) {
 		return nil, err
 	}
 	// A decoded configuration is directly editable, and an absent section round-trips to the same model
@@ -1371,6 +1371,27 @@ func (c *Config) RetargetedConnections() []string {
 	return names
 }
 
+// sameReach reports whether c and other hold the same targets and exclusions, regardless of order and of
+// the single or list spelling.
+func (c Connection) sameReach(other Connection) bool {
+	same := func(a, b []string) bool {
+		a, b = slices.Sorted(slices.Values(a)), slices.Sorted(slices.Values(b))
+		return slices.Equal(a, b)
+	}
+	return same(c.TargetValues(), other.TargetValues()) && same(c.Exclude, other.Exclude)
+}
+
+// WithoutOutdatedTargets returns c for a copy that starts from it: a connection marked TargetsOutdated gives
+// up its targets, exclusions and their labels, as they keep a former meaning that a new connection must not
+// inherit. Any other connection is returned as it is.
+func (c Connection) WithoutOutdatedTargets() Connection {
+	if !c.TargetsOutdated {
+		return c
+	}
+	c.Target, c.Targets, c.Exclude, c.TargetLabels, c.TargetsOutdated = "", nil, nil, nil, false
+	return c
+}
+
 // OutdatedTargets names, sorted, the connections marked TargetsOutdated.
 func (c *Config) OutdatedTargets() []string {
 	var names []string
@@ -1415,6 +1436,9 @@ const (
 	RefusalOtherProvider Refusal = "other-provider"
 	// RefusalOutsideTargets: the connection's targets do not reach the tool, which the provider judges.
 	RefusalOutsideTargets Refusal = "outside-targets"
+	// RefusalTargetsOutdated: the connection's targets keep a former meaning (Connection.TargetsOutdated), so
+	// it offers no tool until they are chosen again.
+	RefusalTargetsOutdated Refusal = "connection-targets-outdated"
 	// RefusalDisabled: the connection is switched off or past its active_until, and would offer the tool
 	// otherwise.
 	RefusalDisabled Refusal = "connection-disabled"
@@ -1439,6 +1463,10 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata, now time.Time
 // selectionRefusal is the refusal by the connection's selection alone, ignoring whether it is disabled, so a
 // disabled connection reports connection-disabled only for a tool it would otherwise offer.
 func (c *Config) selectionRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
+	// Judged first and without the stored targets and exclusions, which no longer mean what they say.
+	if conn.TargetsOutdated {
+		return RefusalTargetsOutdated
+	}
 	if refusal := c.listRefusal(conn, name, tool); refusal != "" {
 		return refusal
 	}
@@ -1487,9 +1515,10 @@ func (c *Config) ConnectionAllows(name string, tool ToolMetadata, now time.Time)
 // secret, and is the same wherever it is shown.
 func (c *Config) IdleWarning(name string) string {
 	conn, ok := c.Connections[name]
-	if !ok || conn.Disabled {
-		// A disabled connection is switched off on purpose, which is no problem to warn about. A connection
-		// past its active_until is judged by its selection alone, as it is not idle for being expired.
+	if !ok || conn.Disabled || conn.TargetsOutdated {
+		// A connection with outdated targets is reported by Validate. A disabled connection is switched off
+		// on purpose, which is no problem to warn about. A connection past its active_until is judged by its
+		// selection alone, as it is not idle for being expired.
 		return ""
 	}
 	// A provider this build registers no tool for leaves nothing to judge the connection by.

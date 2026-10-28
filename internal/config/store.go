@@ -115,8 +115,6 @@ type Store struct {
 	marshal func(any) ([]byte, error)
 	// observe receives measurement events; the zero value observes nothing.
 	observe Observer
-	// keepOutdated is set on the store of a schema migration; see ForMigration.
-	keepOutdated bool
 }
 
 // NewStore returns a store for the configuration file at path.
@@ -132,15 +130,6 @@ func (s *Store) Observed(obs Observer) *Store {
 	return &out
 }
 
-// ForMigration returns a store like s that loads and saves a configuration whose only problems are
-// connections marked TargetsOutdated. The schema migration uses it to write the file in the current schema with
-// such a connection as it was; every other store keeps refusing that file. s itself is unchanged.
-func (s *Store) ForMigration() *Store {
-	out := *s
-	out.keepOutdated = true
-	return &out
-}
-
 // Path returns the file this store writes.
 func (s *Store) Path() string { return s.path }
 
@@ -148,7 +137,7 @@ func (s *Store) Path() string { return s.path }
 func (s *Store) New() *Config { return New(s.providers) }
 
 // Load reads the configuration through the same loader the CLI uses.
-func (s *Store) Load() (*Config, error) { return load(s.path, s.observe, s.keepOutdated, s.providers) }
+func (s *Store) Load() (*Config, error) { return load(s.path, s.observe, s.providers) }
 
 // HasCurrentSchema reports from the top-level version line alone, without decoding the file, whether the
 // configuration is already in the current schema. It is the cheap check every start makes before it would
@@ -173,7 +162,7 @@ func (s *Store) HasCurrentSchema() bool {
 // Save takes no cross-process lock and checks no revision, so it is not a transaction: a change based on an
 // earlier read can overwrite a concurrent change. Use Update or LoadVersioned with SaveIfUnchanged for that.
 func (s *Store) Save(cfg *Config) error {
-	if err := cfg.Validate(); err != nil && !(s.keepOutdated && onlyOutdatedTargets(err)) {
+	if err := cfg.Validate(); err != nil && !onlyOutdatedTargets(err) {
 		return &InvalidError{Path: s.path, Err: err}
 	}
 
@@ -182,7 +171,7 @@ func (s *Store) Save(cfg *Config) error {
 		return &InvalidError{Path: s.path, Err: fmt.Errorf("the configuration could not be encoded: %w", err)}
 	}
 	// What is written must load back, so an encoding defect can never reach the target file.
-	if _, err := decode(bytes.NewReader(data), s.keepOutdated, s.providers); err != nil {
+	if _, err := decode(bytes.NewReader(data), s.providers); err != nil {
 		return &InvalidError{Path: s.path, Err: fmt.Errorf("the encoded configuration is not loadable: %w", err)}
 	}
 
@@ -328,8 +317,14 @@ func (c *Config) SetConnection(name string, conn Connection) error {
 		return errors.New("a connection name must not be empty")
 	}
 	c.ensure()
+	old, has := c.Connections[name]
 	if conn.ID == "" {
-		conn.ID = c.Connections[name].ID
+		conn.ID = old.ID
+	}
+	// Outdated targets stay marked until the targets or exclusions are chosen anew; any other change to the
+	// connection keeps them as they are and never reads them in their current meaning.
+	if has {
+		conn.TargetsOutdated = old.TargetsOutdated && conn.sameReach(old)
 	}
 	conn.Description = normalizeDescription(conn.Description)
 	conn.TargetLabels = conn.PruneTargetLabels()

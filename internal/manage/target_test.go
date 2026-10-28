@@ -495,3 +495,55 @@ func TestNestedKindListsBelowItsParentKindAndItsOwnEntries(t *testing.T) {
 		t.Errorf("kept = %+v", kept)
 	}
 }
+
+// A browse or URL read for a marked connection is given none of its stored targets and exclusions, which keep a
+// former meaning; an unmarked connection keeps handing them over. The approval scope still carries the stored values.
+func TestTargetReadsOfAMarkedConnectionGetNoStoredTargets(t *testing.T) {
+	for _, marked := range []bool{true, false} {
+		f := newBrowseFixture(t, nil)
+		f.list = func(config.TargetListRequest) (config.TargetPage, error) { return config.TargetPage{}, nil }
+		f.url = func(string, string) ([]config.TargetEntry, error) { return nil, nil }
+		store := config.NewStore(f.path, browseCatalog{})
+		cfg, err := store.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn := cfg.Connections["docs"]
+		conn.Targets, conn.Exclude, conn.TargetsOutdated = []string{"spaces/A", "spaces/B"}, []string{"spaces/A/pages/1"}, true
+		if !marked {
+			// The wiki accepts one target and no exclusion once the mark no longer skips the check.
+			conn.Targets, conn.Exclude, conn.TargetsOutdated = nil, nil, false
+			conn.Target = "spaces/A"
+		}
+		cfg.Connections["docs"] = conn
+		if err := store.Save(cfg); err != nil {
+			t.Fatal(err)
+		}
+		ctx := context.Background()
+		reads := map[string]func() error{
+			"list": func() error {
+				_, _, err := f.svc.ListTargets(ctx, AdminProof{}, "docs", config.TargetListRequest{Kind: "space"})
+				return err
+			},
+			"url": func() error {
+				_, _, err := f.svc.ResolveTargetURL(ctx, AdminProof{}, "docs", "https://wiki.example.test/spaces/A")
+				return err
+			},
+		}
+		for name, read := range reads {
+			f.resolved = nil
+			if err := read(); err != nil || f.resolved == nil {
+				t.Fatalf("marked %v, %s: err = %v, resolved %v", marked, name, err, f.resolved)
+			}
+			r := f.resolved
+			got := len(r.Targets) + len(r.Exclude) + len(r.Target)
+			if marked && (got != 0 || !r.TargetsOutdated) || !marked && r.Target != "spaces/A" {
+				t.Errorf("marked %v, %s: resolved targets %v exclude %v target %q", marked, name, r.Targets, r.Exclude, r.Target)
+			}
+			if scope := secret.ScopeOf(r); marked && (len(scope.Targets) != 2 || len(scope.Exclude) != 1) ||
+				!marked && len(scope.Targets) != 1 {
+				t.Errorf("marked %v, %s: scope targets %v exclude %v, want the stored values", marked, name, scope.Targets, scope.Exclude)
+			}
+		}
+	}
+}

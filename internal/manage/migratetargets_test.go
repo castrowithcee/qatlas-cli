@@ -1,7 +1,6 @@
 package manage
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -134,7 +134,7 @@ func newShelfWorld(t *testing.T, file string) migrateWorld {
 	if err := w.v.Set("vault-reader", "token", "synthetic-token", offer); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := config.NewStore(w.path, shelfCatalog{}).ForMigration().Load()
+	cfg, err := config.NewStore(w.path, shelfCatalog{}).Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestMigrationWritesARefusedConnectionAsItWas(t *testing.T) {
 		t.Error("the backup is not the file as it was")
 	}
 
-	cfg, err := config.NewStore(w.path, shelfCatalog{}).ForMigration().Load()
+	cfg, err := config.NewStore(w.path, shelfCatalog{}).Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,12 +262,15 @@ func TestMigrationWritesARefusedConnectionAsItWas(t *testing.T) {
 		t.Errorf("exact = %+v, want it migrated", exact)
 	}
 	for range 2 {
-		_, err := config.Load(w.path, shelfCatalog{})
-		var invalid *config.InvalidError
+		loaded, err := config.Load(w.path, shelfCatalog{})
+		if err != nil || !loaded.Connections["mixed"].TargetsOutdated {
+			t.Fatalf("Load() = %v, want the file to load with mixed marked", err)
+		}
+		err = loaded.Validate()
 		problems := config.Problems(err)
-		if !errors.As(err, &invalid) || len(problems) != 1 || problems[0].Code != config.CodeTargetsOutdated ||
+		if len(problems) != 1 || problems[0].Code != config.CodeTargetsOutdated ||
 			problems[0].Location() != "connections.mixed.targets" || strings.Contains(err.Error(), "box/") {
-			t.Fatalf("Load() = %v, want the outdated targets of mixed", err)
+			t.Fatalf("Validate() = %v, want the outdated targets of mixed", err)
 		}
 	}
 	if again, err := svc.MigrateSchema(); again != nil || err != nil {
@@ -284,5 +287,54 @@ func TestMigrationWithALockedVaultNamesEveryRewrittenVaultConnection(t *testing.
 
 	if err != nil || m == nil || !m.Pending || !slices.Equal(m.Retargeted, []string{"exact"}) {
 		t.Fatalf("MigrateSchema() = %+v, %v", m, err)
+	}
+}
+
+// Saving new targets for a marked connection removes the mark and needs its approval again like any target
+// change; a save that leaves its targets as they are keeps the mark and the approval it has.
+func TestSavingNewTargetsLiftsTheMarkAndNeedsApproval(t *testing.T) {
+	w := newShelfWorld(t, shelfFile(3, true))
+	svc := w.shelfService()
+	if m, err := svc.MigrateSchema(); err != nil || m == nil {
+		t.Fatalf("MigrateSchema() = %+v, %v", m, err)
+	}
+	cfg, rev, err := svc.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pending := func(cfg *config.Config) bool {
+		t.Helper()
+		report, err := approval.Pending(cfg, w.v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(report.Open, func(c approval.Change) bool { return c.Connection == "mixed" })
+	}
+
+	same := cfg.Clone()
+	conn := same.Connections["mixed"]
+	conn.TargetsOutdated, conn.Description = false, "renamed"
+	if err := same.SetConnection("mixed", conn); err != nil {
+		t.Fatal(err)
+	}
+	if !same.Connections["mixed"].TargetsOutdated || pending(same) {
+		t.Fatalf("a save with the same targets: marked %v, approval open %v", same.Connections["mixed"].TargetsOutdated, pending(same))
+	}
+
+	chosen := cfg.Clone()
+	conn = chosen.Connections["mixed"]
+	conn.TargetsOutdated, conn.Targets = false, []string{"box/eps"}
+	if err := chosen.SetConnection("mixed", conn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SaveConfig(cfg, chosen, rev); err != nil {
+		t.Fatalf("SaveConfig() = %v", err)
+	}
+	loaded, err := config.Load(w.path, shelfCatalog{})
+	if err != nil || loaded.Validate() != nil || loaded.Connections["mixed"].TargetsOutdated {
+		t.Fatalf("reloaded mixed = %+v, %v; want it valid and unmarked", loaded.Connections["mixed"], err)
+	}
+	if !pending(loaded) {
+		t.Error("the new targets need no approval")
 	}
 }

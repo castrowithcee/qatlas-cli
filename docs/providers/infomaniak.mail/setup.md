@@ -149,23 +149,22 @@ provider answer (untrusted, not written by qatlas):
 
 ### Connection invalid after an update: choose the folders again
 
-**You see:** Qatlas no longer loads its configuration. Every command that reads it fails, `qatlas tui` does not open
-either, and `qatlas config validate` names one of your mail connections and says that its targets keep a former
-meaning.
+**You see:** one of your mail connections offers no tools, and a call through it is refused with
+`connection-targets-outdated`. `qatlas config validate` names the connection and says that its targets keep a former
+meaning. The rest of your configuration, and your other connections, keep working.
 
 **Why:** the two folder forms now mean something different from when this connection was written (see
 [Configurations of an older schema](README.md#configurations-of-an-older-schema)). Qatlas carried your other
 connections over on its own. For this one it could not keep exactly the same folders, so it left the connection as
-it was and marked it, rather than guess and give it more or fewer folders.
+it was and locked it, rather than guess and give it more or fewer folders.
 
-**What to do:** correct the connection by hand in the configuration file, `config.yaml`, with a text editor:
+**What to do:** choose the folders again in `qatlas tui`:
 
-1. Find the connection the message names.
-2. Delete its line `targets_outdated: true`.
-3. Choose its folders again in `targets`, and where needed in `exclude`: `folder/NAME` for a folder with its
-   subfolders, `folder/NAME/*` for its subfolders only, and for exactly one folder the target `folder/NAME` together
-   with the exclusion `folder/NAME/*`. Check the folder entries already in `exclude` as well: they mean the same as
-   in `targets`. See [Scope](README.md#scope).
-4. Run `qatlas config validate`. It says the configuration is valid once the connection is correct.
-5. If your vault is encrypted, the changed connection needs its approval again: run `qatlas vault approve`, or open
+1. Open Connections and the connection the message names. Its Targets row says that the targets are outdated.
+2. Choose its folders again in the Targets list and save. Check the folder entries already marked as exclusions as
+   well: they mean the same as the targets. See [Scope](README.md#scope) for the forms.
+3. Run `qatlas config validate`. It says the configuration is valid once the connection is correct.
+4. If your vault is encrypted, the changed connection needs its approval again: run `qatlas vault approve`, or open
    Access > Approvals in `qatlas tui`.
+
+Saving the same folders again does not unlock the connection; the choice has to differ from the stored one.

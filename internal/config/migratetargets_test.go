@@ -139,33 +139,19 @@ func TestDecodeLeavesTheTargetsOfTheCurrentSchema(t *testing.T) {
 	}
 }
 
-// A refused connection stays as it was, and its mark keeps the file invalid on every later load until a person
-// chooses its targets again. No message quotes a target.
-func TestARefusedConnectionStaysAndKeepsItsProblem(t *testing.T) {
+// A refused connection stays as it was and loads, marked, in every store; Validate keeps reporting it without
+// quoting a target. Any other problem next to the mark keeps the file unloadable.
+func TestARefusedConnectionStaysMarkedAndLoads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(shelfFile+mixedConnection), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	catalog := shelfCatalog(shelfMigrate)
-	checkProblem := func(err error) {
-		t.Helper()
-		problems := Problems(err)
-		if len(problems) != 1 || problems[0].Code != CodeTargetsOutdated || problems[0].Location() != "connections.mixed.targets" ||
-			problems[0].Hint() == "" {
-			t.Fatalf("problems = %+v, want the outdated targets of mixed alone", problems)
-		}
-		if text := err.Error() + problems[0].Hint(); strings.Contains(text, "box/") {
-			t.Errorf("the problem quotes a target: %s", text)
-		}
-	}
+	store := NewStore(path, catalog)
 
-	_, err := NewStore(path, catalog).Load()
-	checkProblem(err)
-
-	migrating := NewStore(path, catalog).ForMigration()
-	cfg, err := migrating.Load()
+	cfg, err := store.Load()
 	if err != nil {
-		t.Fatalf("ForMigration().Load() = %v", err)
+		t.Fatalf("Load() = %v", err)
 	}
 	mixed := cfg.Connections["mixed"]
 	if !mixed.TargetsOutdated || !slices.Equal(mixed.Targets, []string{"box/eps", "box/eps/*"}) || mixed.Exclude != nil ||
@@ -175,28 +161,69 @@ func TestARefusedConnectionStaysAndKeepsItsProblem(t *testing.T) {
 	if got := cfg.OutdatedTargets(); !slices.Equal(got, []string{"mixed"}) {
 		t.Errorf("OutdatedTargets() = %v", got)
 	}
-	if err := NewStore(path, catalog).Save(cfg); err == nil {
-		t.Fatal("a plain store saved a configuration with outdated targets")
+	err = cfg.Validate()
+	problems := Problems(err)
+	if len(problems) != 1 || problems[0].Code != CodeTargetsOutdated || problems[0].Location() != "connections.mixed.targets" ||
+		problems[0].Hint() == "" {
+		t.Fatalf("problems = %+v, want the outdated targets of mixed alone", problems)
 	}
-	if err := migrating.Save(cfg); err != nil {
-		t.Fatalf("ForMigration().Save() = %v", err)
+	if text := err.Error() + problems[0].Hint(); strings.Contains(text, "box/") {
+		t.Errorf("the problem quotes a target: %s", text)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("Save() = %v", err)
 	}
 	data, _ := os.ReadFile(path)
 	if !strings.Contains(string(data), "version: 4") || !strings.Contains(string(data), "targets_outdated: true") {
 		t.Errorf("written file:\n%s", data)
 	}
+	if again, err := store.Load(); err != nil || !again.Connections["mixed"].TargetsOutdated {
+		t.Errorf("reload = %v, want the mark kept", err)
+	}
 
-	_, err = NewStore(path, catalog).Load()
-	checkProblem(err)
-
-	// Another problem next to it is not accepted even for the migration.
+	// Another problem next to the mark is not accepted.
 	broken := strings.Replace(string(data), "credential: key", "credential: nobody", 1)
 	if err := os.WriteFile(path, []byte(broken), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var invalid *InvalidError
-	if _, err := migrating.Load(); !errors.As(err, &invalid) {
-		t.Errorf("ForMigration().Load() = %v, want the other problem", err)
+	if _, err := store.Load(); !errors.As(err, &invalid) {
+		t.Errorf("Load() = %v, want the other problem", err)
+	}
+}
+
+// A mark stays through any save that
+// leaves the targets and exclusions as they are; new ones remove it.
+func TestSetConnectionKeepsTheMarkUntilTheTargetsChange(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(shelfFile+mixedConnection), shelfCatalog(shelfMigrate))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := cfg.Connections["mixed"]
+
+	renamed := conn
+	renamed.TargetsOutdated = false
+	renamed.Description = "other"
+	renamed.Targets = []string{"box/eps/*", "box/eps"}
+	if err := cfg.SetConnection("mixed", renamed); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Connections["mixed"].TargetsOutdated {
+		t.Error("a save with the same targets removed the mark")
+	}
+
+	chosen := cfg.Connections["mixed"]
+	chosen.Targets = []string{"box/eps"}
+	if err := cfg.SetConnection("mixed", chosen); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Connections["mixed"].TargetsOutdated {
+		t.Error("new targets kept the mark")
+	}
+
+	copied := conn.WithoutOutdatedTargets()
+	if copied.TargetsOutdated || copied.TargetValues() != nil || copied.Exclude != nil || copied.TargetLabels != nil {
+		t.Errorf("copy = %+v, want no targets and no mark", copied)
 	}
 }
 
@@ -212,7 +239,11 @@ func TestAMisshapenMigrationIsARefusal(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Decode(strings.NewReader(shelfFile), shelfCatalog(migrate))
+			cfg, err := Decode(strings.NewReader(shelfFile), shelfCatalog(migrate))
+			if err != nil {
+				t.Fatalf("Decode() = %v", err)
+			}
+			err = cfg.Validate()
 			problems := Problems(err)
 			if !onlyOutdatedTargets(err) || !slices.ContainsFunc(problems, func(p Problem) bool {
 				return p.Location() == "connections.tree.targets"
@@ -228,9 +259,12 @@ func TestTheOutdatedProblemSitsAtTheSingleTarget(t *testing.T) {
 	file := strings.Replace(shelfFile, "version: 3", "version: 4", 1)
 	file = strings.Replace(file, "    target: box/alpha\n", "    target: box/alpha\n    targets_outdated: true\n", 1)
 
-	_, err := Decode(strings.NewReader(file), shelfCatalog(shelfMigrate))
+	cfg, err := Decode(strings.NewReader(file), shelfCatalog(shelfMigrate))
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
 
-	problems := Problems(err)
+	problems := Problems(cfg.Validate())
 	if len(problems) != 1 || problems[0].Location() != "connections.exact.target" {
 		t.Errorf("problems = %+v", problems)
 	}

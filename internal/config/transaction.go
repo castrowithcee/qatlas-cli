@@ -90,7 +90,7 @@ func (s *Store) readVersioned() (*Config, Revision, error) {
 		return nil, RevisionAbsent, fmt.Errorf("cannot read %s: %w", s.path, err)
 	}
 	rev := revisionOf(data)
-	cfg, err := decode(bytes.NewReader(data), s.keepOutdated, s.providers)
+	cfg, err := decode(bytes.NewReader(data), s.providers)
 	if err != nil {
 		return nil, rev, &InvalidError{Path: s.path, Err: err}
 	}

@@ -267,7 +267,7 @@ connections:
 	for _, want := range []string{
 		"to configuration schema 4: the targets of providers whose target forms changed meaning are now written in their current form\n",
 		"vault approval once more ('qatlas vault approve' or 'qatlas tui'): exact\n",
-		"is invalid until its targets are chosen again and its targets_outdated mark is removed: mixed\n",
+		"offers no tool until its targets are chosen again ('qatlas tui'); the rest of the configuration stays usable: mixed\n",
 		"connections.mixed.targets",
 	} {
 		if !strings.Contains(text, want) {

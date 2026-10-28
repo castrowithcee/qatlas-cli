@@ -3057,6 +3057,9 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
+		if source != "" {
+			conn = conn.WithoutOutdatedTargets()
+		}
 		// The provider is not stored on a connection: its service already names one. It stands here
 		// because it decides what the two rows below may offer, and a route that mixes two systems is a
 		// route that cannot work.
@@ -4822,6 +4825,9 @@ func (m *Model) fieldWarning(f field) string {
 	if f.kind != fieldTargets {
 		return ""
 	}
+	if m.section == sectionConnections && m.editing != "" && m.cfg.Connections[m.editing].TargetsOutdated {
+		return tr(tTargetsOutdatedWarning)
+	}
 	provider := m.cfg.Services[m.fieldValue("service")].Provider
 	if m.wizard != nil {
 		provider = m.wizard.provider
@@ -4994,6 +5000,10 @@ func (m *Model) cells(name string) []string {
 			}
 			targets += " · " + tr(tTargetExceptCount, len(conn.Exclude))
 		}
+		if conn.TargetsOutdated {
+			// The former targets are not what the connection reaches; the row must not read as if they were.
+			targets = tr(tTargetsOutdatedCell)
+		}
 		description := m.logText(conn.Description)
 		if description == "" && m.needsDescription(name) {
 			description = tr(tFormUndescribedMarker)
@@ -5086,7 +5096,7 @@ func Run(opts Options) error {
 	fragments := newFragmentFilter(time.Now)
 	program := tea.NewProgram(model, tea.WithInput(opts.In), tea.WithOutput(legacyKeys{opts.Out}),
 		tea.WithFilter(fragments.filter), tea.WithColorProfile(toColorprofile(currentProfile())))
-	fragments.program = program
+	fragments.send = program.Send
 	_, err = program.Run()
 	return err
 }

@@ -179,7 +179,7 @@ Exit code 2 is a problem of the request or the configuration:
 - unknown-connection: the named connection is not configured, or it is bound to the paths of another project; 'qatlas connections <provider>' lists the ones this project can use.
 - connection-ambiguous: several connections offer the tool; one JSON line follows that lists the candidates, choose one and pass it with --connection.
 - unknown-operation: no tool has this ID or version; find it with 'qatlas tools <provider>'.
-- unsupported-capability: the connection does not offer the tool; one JSON line follows with the connection and the reason (effect-not-permitted, requires-tool-allow-list, not-in-tools-list, no-local-files, outside-targets, connection-disabled, or other-provider). 'qatlas describe <tool-id>' names the connections that do, and only a person changes a connection, in 'qatlas tui'.
+- unsupported-capability: the connection does not offer the tool; one JSON line follows with the connection and the reason (effect-not-permitted, requires-tool-allow-list, not-in-tools-list, no-local-files, outside-targets, connection-targets-outdated, connection-disabled, or other-provider). 'qatlas describe <tool-id>' names the connections that do, and only a person changes a connection, in 'qatlas tui'.
 - missing-secret: the credential of the connection yields no secret; only a person stores it.
 - confirmation-required: the tool changes data and runs only with --confirm; a tool with local files also needs it before it replaces an existing local file.
 - policy-denied: local policy refuses the call.

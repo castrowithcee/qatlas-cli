@@ -381,6 +381,7 @@ func (m *Model) setupPrefill(step int, page []field) {
 	if !ok {
 		return
 	}
+	conn = conn.WithoutOutdatedTargets()
 	switch step {
 	case stepService:
 		if slices.Contains(page[0].choices, conn.Service) {
