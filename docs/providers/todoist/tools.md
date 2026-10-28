@@ -63,6 +63,10 @@ The structure changes:
 | `todoist.labels.reorder` | `update` | same state | `*` only | the position of one label in the label list |
 | `todoist.labels.delete` | `delete`, listed only | same state | `*` only | deletes one label and removes it from every task |
 
+Labels belong to the account, not to a project: `todoist.labels.list` lists them whatever the connection
+excludes. Renaming or deleting a label is checked against the exclusions as described under
+[changes](changes.md#exclusions).
+
 "Any" means every binding that reaches the tool, see [Scope](README.md#scope). A tool marked listed only takes more
 than itself with it, so it is offered only by a connection whose `tools` list names it, whatever its
 `effects`; a connection that selects by `effects` never offers it.

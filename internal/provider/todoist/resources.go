@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -783,10 +784,10 @@ func (c *Client) getTask(ctx context.Context, id string) (*Task, error) {
 	return &task, nil
 }
 
-// listComments reads one page of comments of one task or one project. A task of a project connection is
-// read first, so the comments of a task outside it are never requested.
+// listComments reads one page of comments of one task or one project. A task of a connection that is not
+// unrestricted is read first, so the comments of a task outside it are never requested.
 func (c *Client) listComments(ctx context.Context, call listCall, taskID, projectID string) (*CommentList, error) {
-	if taskID != "" && !c.scope.all {
+	if taskID != "" && !c.scope.unrestricted() {
 		if _, err := c.readTask(ctx, call.op, taskID); err != nil {
 			return nil, err
 		}
@@ -826,16 +827,17 @@ func commentOf(raw rawComment) Comment {
 	return comment
 }
 
-// listReminders reads one page of reminders. A project connection always names a task, which is read
-// first, so the reminders of a task outside it are never requested.
+// listReminders reads one page of reminders. A connection that is not unrestricted names a task, which is
+// read first, so the reminders of a task outside it are never requested. An account connection with
+// exclusions may list without a task; each reminder is then held to its task, resolved in batches.
 func (c *Client) listReminders(ctx context.Context, call listCall, taskID string) (*ReminderList, error) {
-	if !c.scope.all {
-		if taskID == "" {
-			return nil, invalidRequest(reminderTaskRequired)
-		}
+	switch {
+	case taskID != "" && !c.scope.unrestricted():
 		if _, err := c.readTask(ctx, call.op, taskID); err != nil {
 			return nil, err
 		}
+	case taskID == "" && !c.scope.all:
+		return nil, invalidRequest(reminderTaskRequired)
 	}
 	entries, more, err := c.run(ctx, call)
 	if err != nil {
@@ -844,6 +846,12 @@ func (c *Client) listReminders(ctx context.Context, call listCall, taskID string
 	raws, err := decodeEach(call.op, entries, func(r rawReminder) string { return r.ID })
 	if err != nil {
 		return nil, err
+	}
+	var reachable map[string]bool
+	if taskID == "" && c.scope.hasExcludes() {
+		if reachable, err = c.reachableTasks(ctx, call.op, raws); err != nil {
+			return nil, err
+		}
 	}
 	result := &ReminderList{Reminders: []Reminder{}, Continuation: more}
 	for _, raw := range raws {
@@ -859,9 +867,52 @@ func (c *Client) listReminders(ctx context.Context, call listCall, taskID string
 		if parent == "" {
 			parent = taskID
 		}
+		if reachable != nil && !reachable[parent] {
+			continue
+		}
 		result.Reminders = append(result.Reminders, reminderOf(raw, parent))
 	}
 	return result, nil
+}
+
+// reminderTaskBatch is the number of task IDs one batch read resolves; Todoist takes at most this many.
+const reminderTaskBatch = 100
+
+// reachableTasks resolves the tasks the reminders of one page belong to and returns those that belong to the
+// connection. A task Todoist does not return, an unusable task ID and a task beyond the first answer page of
+// a batch are not reachable, so their reminders drop out of the list.
+func (c *Client) reachableTasks(ctx context.Context, op string, reminders []rawReminder) (map[string]bool, error) {
+	var ids []string
+	seen := map[string]bool{}
+	for _, raw := range reminders {
+		if id := parentTask(raw); !raw.IsDeleted && validID(id) && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	reachable := map[string]bool{}
+	for start := 0; start < len(ids); start += reminderTaskBatch {
+		batch := ids[start:min(start+reminderTaskBatch, len(ids))]
+		entries, _, err := c.page(ctx, op, "/tasks", url.Values{"ids": {strings.Join(batch, ",")}}, reminderTaskBatch, "")
+		if err != nil {
+			return nil, err
+		}
+		tasks, err := decodeEach(op, entries, func(t rawTask) string { return t.ID })
+		if err != nil {
+			return nil, err
+		}
+		for _, task := range tasks {
+			if task.IsDeleted || !slices.Contains(batch, task.ID) {
+				continue
+			}
+			ok, err := c.taskAllowed(ctx, op, task)
+			if err != nil {
+				return nil, err
+			}
+			reachable[task.ID] = ok
+		}
+	}
+	return reachable, nil
 }
 
 func reminderOf(raw rawReminder, taskID string) Reminder {
