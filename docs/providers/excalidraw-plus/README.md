@@ -1,7 +1,7 @@
 ---
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection and scene
-  targets, choosing them, pagination, the rate limit, the errors, and the boundary; the tool groups are on their own
+  targets and their exclusions, choosing them, pagination, the rate limit, the errors, and the boundary; the tool groups are on their own
   pages.
 type: knowledge
 edit: shared
@@ -61,6 +61,28 @@ Collection and scene targets together form one allow-list: a scene is reachable 
 is allowed. A connection without a scene target behaves as a pure collection binding. An identifier is limited to
 ASCII letters, digits, hyphen, and underscore, at most 64 characters.
 
+### Exclusions
+
+`exclude` takes `collection/COLLECTION_ID` and `scene/SCENE_ID` entries out of what the targets reach; "everything
+except" is `*` plus `exclude`. An exclusion needs a target, may not be `*`, and may not equal a target. It names an
+identifier, so one that matches nothing is valid and has no effect. An exclusion wins over every target: a listed
+scene in an excluded collection is not reachable. An excluded collection or scene behaves like one the key does not
+see; no tool is withdrawn for it.
+
+- `collections.list` and `scenes.list` leave out excluded collections and scenes (a scene of an excluded collection
+  too), and `has_next_page` stays the API's value. The name filter of `scenes.list` applies after that.
+- A `collection_id` or `scene_id` that is excluded is refused before any secret is read or request is sent.
+- A scene in an excluded collection is refused after its metadata read, so its content is not requested and nothing
+  is changed. This holds for reading, renaming, moving, patching, replacing, and deleting it.
+- No scene is created in or moved to an excluded collection; moving a reachable scene elsewhere stays allowed.
+- The refusal is the same as for any other target outside the connection and names neither the identifier nor the
+  exclusion.
+- The user tools only name scenes by identifier and are unchanged. The activity log is unchanged as well, see
+  [Activity log](activity-log.md). Element links and embeddables are plain strings in the content and are not
+  followed or filtered.
+
+### Targets
+
 - A `collection_id` outside the targets is refused before any secret is read or request is sent, without naming the
   collection.
 - A scene is bound through its own metadata: `scenes.get` and `scenes.content` first read it and continue only when
@@ -72,7 +94,8 @@ ASCII letters, digits, hyphen, and underscore, at most 64 characters.
   collections; a listed scene of another collection is not listed.
 - A connection bound to scenes only does not reach the tools on collections and the workspace: `collections.list`,
   `scenes.list`, `scenes.create`, `collections.delete`, the activity log, and the user tools. They are not offered
-  and refused at the call; moving a scene needs an allowed target collection.
+  and refused at the call; moving a scene needs an allowed target collection. Exclusions do not change which tools
+  a binding reaches.
 
 ## Choosing targets
 

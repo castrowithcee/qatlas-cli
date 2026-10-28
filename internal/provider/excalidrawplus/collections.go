@@ -169,7 +169,7 @@ func (c *Client) ListCollections(ctx context.Context, input pageArgs) (*Collecti
 		}
 	}
 	for _, item := range page.Data {
-		if item.IsDeleted || !validID(item.ID) || !c.scope.allows(item.ID) {
+		if item.IsDeleted || !validID(item.ID) || !c.scope.permits(item.ID) {
 			continue
 		}
 		result.Collections = append(result.Collections, Collection{ID: item.ID, Name: boundedValue(item.Name),

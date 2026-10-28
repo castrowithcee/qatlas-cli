@@ -3,11 +3,13 @@ package excalidrawplus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -119,8 +121,32 @@ func invokeCollectionsDelete(ctx context.Context, resolved *config.Resolved, sec
 	if collection.IsDefault {
 		return nil, invalidRequest("the default collection is not deleted by this tool")
 	}
+	if err := client.requireNoExcludedScene(ctx, op, input.CollectionID); err != nil {
+		return nil, err
+	}
 	if err := client.send(ctx, op, http.MethodDelete, path, nil, nil); err != nil {
 		return nil, err
 	}
 	return &Deleted{ID: input.CollectionID, Deleted: true}, nil
+}
+
+// requireNoExcludedScene refuses to delete a collection that holds a scene the connection excludes, in the
+// trash too: deleting the collection would delete that scene. It reads the metadata of each excluded scene
+// once; a scene Excalidraw+ does not know is not in the collection. The refusal names neither scene nor exclusion.
+func (c *Client) requireNoExcludedScene(ctx context.Context, op, collectionID string) error {
+	for _, sceneID := range c.scope.excludedScenes {
+		var entry sceneEntryJSON
+		err := c.get(ctx, op, "/scenes/"+url.PathEscape(sceneID), nil, &entry, maxResponseBytes)
+		var providerErr *provider.Error
+		if errors.As(err, &providerErr) && providerErr.Class == provider.ClassNotFound {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if entry.Metadata.Collection == collectionID {
+			return invalidRequest("collection_id is outside the targets of this connection")
+		}
+	}
+	return nil
 }

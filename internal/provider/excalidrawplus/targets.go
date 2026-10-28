@@ -2,6 +2,7 @@ package excalidrawplus
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -24,6 +25,10 @@ type scope struct {
 	wildcard    bool
 	collections []string
 	scenes      []string
+	// excludedCollections and excludedScenes are exclusions. They are never targets: an excluded collection or
+	// scene behaves like one the key cannot see, and an exclusion always wins over every target.
+	excludedCollections []string
+	excludedScenes      []string
 }
 
 // sceneOnly reports an allow-list of scenes without any collection: nothing at collection level is part of it.
@@ -38,15 +43,33 @@ func (s scope) listsScene(sceneID string) bool {
 	return false
 }
 
-// allowsScene is the check of a scene read with its own collection: the collection is allowed or the scene
-// itself is listed.
+// excludesCollection and excludesScene report an exclusion of exactly that identifier.
+func (s scope) excludesCollection(collectionID string) bool {
+	return slices.Contains(s.excludedCollections, collectionID)
+}
+
+func (s scope) excludesScene(sceneID string) bool { return slices.Contains(s.excludedScenes, sceneID) }
+
+// permits is allows without what an exclusion takes out; allows itself never sees exclusions.
+func (s scope) permits(collectionID string) bool {
+	return s.allows(collectionID) && !s.excludesCollection(collectionID)
+}
+
+// allowsScene is the check of a scene read with its own collection: neither is excluded, and the collection
+// is allowed or the scene itself is listed.
 func (s scope) allowsScene(sceneID, collectionID string) bool {
+	if s.excludesScene(sceneID) || s.excludesCollection(collectionID) {
+		return false
+	}
 	return s.allows(collectionID) || s.listsScene(sceneID)
 }
 
 // mayReachScene is the local check before any request: with no collection or wildcard only a listed scene can
-// belong to the connection, so any other scene needs no proof request.
+// belong to the connection, so any other scene needs no proof request. An excluded scene is never reachable.
 func (s scope) mayReachScene(sceneID string) bool {
+	if s.excludesScene(sceneID) {
+		return false
+	}
 	return s.wildcard || len(s.collections) > 0 || s.listsScene(sceneID)
 }
 
@@ -91,14 +114,16 @@ func validID(raw string) bool {
 
 // parseScope reads the configured targets: the single wildcard, or one or more collection/COLLECTION_ID and
 // scene/SCENE_ID entries, none named twice. The wildcard already covers every scene, so it may not be combined
-// with a scene target. No error quotes a configured value.
-func parseScope(values []string) (scope, error) {
+// with a scene target. Each exclusion is a collection/COLLECTION_ID or scene/SCENE_ID, named once and not
+// equal to a target; it does not rely on the core validation, so an invalid exclusion fails closed here too.
+// No error quotes a configured value.
+func parseScope(values []string, excludes ...string) (scope, error) {
 	if len(values) == 0 {
 		return scope{}, errors.New("an Excalidraw+ connection needs at least one collection/COLLECTION_ID or " +
 			"scene/SCENE_ID target or the * wildcard")
 	}
 	if len(values) == 1 && strings.TrimSpace(values[0]) == wildcard {
-		return scope{wildcard: true}, nil
+		return parseExcludes(scope{wildcard: true}, excludes)
 	}
 	var bound scope
 	seen := map[string]bool{}
@@ -119,6 +144,26 @@ func parseScope(values []string) (scope, error) {
 			bound.scenes = append(bound.scenes, id)
 		} else {
 			bound.collections = append(bound.collections, id)
+		}
+	}
+	return parseExcludes(bound, excludes)
+}
+
+// parseExcludes adds the exclusions to a scope that holds the targets.
+func parseExcludes(bound scope, excludes []string) (scope, error) {
+	seen := map[string]bool{}
+	for _, raw := range excludes {
+		kind, id, err := parseTarget(raw)
+		if err != nil || strings.TrimSpace(raw) != raw || seen[raw] ||
+			(kind == "scene" && bound.listsScene(id)) || (kind == "collection" && slices.Contains(bound.collections, id)) {
+			return scope{}, errors.New("an Excalidraw+ exclusion must be collection/COLLECTION_ID or " +
+				"scene/SCENE_ID, named once and not equal to a target")
+		}
+		seen[raw] = true
+		if kind == "scene" {
+			bound.excludedScenes = append(bound.excludedScenes, id)
+		} else {
+			bound.excludedCollections = append(bound.excludedCollections, id)
 		}
 	}
 	return bound, nil
@@ -161,7 +206,7 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 		return scope{}, providerError("open", "no connection was selected")
 	}
 	values := provider.TargetsOf(resolved)
-	bound, err := parseScope(values)
+	bound, err := parseScope(values, provider.ExcludesOf(resolved)...)
 	if err != nil {
 		return scope{}, providerError("open", err.Error())
 	}
@@ -181,7 +226,7 @@ func selectCollection(resolved *config.Resolved, collectionID string) error {
 	if bound.sceneOnly() {
 		return errSceneOnly
 	}
-	if !bound.allows(collectionID) {
+	if !bound.permits(collectionID) {
 		return invalidRequest("collection_id is outside the targets of this connection")
 	}
 	return nil

@@ -30,6 +30,10 @@ repeated.
 - `collections.delete` checks the `collection_id` against the targets before any secret is read or request is sent,
   then reads the collection once. The `private` collection is never deletable, and the default collection is refused
   (`is_default`); both are narrower than the API requires.
+- A collection that holds an excluded scene, in the trash too, is not deleted: the tool reads the metadata of each
+  excluded scene once and refuses before any `DELETE` when one reports this collection. A scene Excalidraw+ answers
+  with 404 counts as not in it; any other failed read stops the deletion. An excluded collection is refused locally.
+  See [Exclusions](README.md#exclusions).
 - The answer is `id` and `deleted: true`; the response body of Excalidraw+ is not read. An uncertain outcome is
   reported as for scene changes, with idempotency `unknown`.
 
