@@ -101,6 +101,9 @@ func (c *Client) AddParticipant(ctx context.Context, token, participant, source 
 	if !validTalkToken(token) || !validParticipant(participant, source) {
 		return nil, providerError(op, "the participant arguments are unusable")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoTarget); err != nil {
+		return nil, err
+	}
 	if err := c.talkFeature(ctx, op, featureConversations); err != nil {
 		return nil, err
 	}
@@ -150,6 +153,9 @@ func (c *Client) RemoveParticipant(ctx context.Context, token, id string) (*Remo
 	if !validTalkToken(token) || !validAttendeeID(id) {
 		return nil, providerError(op, "the participant arguments are unusable")
 	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoRoom); err != nil {
+		return nil, err
+	}
 	item, err := c.attendee(ctx, op, token, id)
 	if err != nil {
 		return nil, err
@@ -170,6 +176,9 @@ func (c *Client) SetModerator(ctx context.Context, token, id string, moderator b
 	const op = "set talk moderator"
 	if !validTalkToken(token) || !validAttendeeID(id) {
 		return nil, providerError(op, "the participant arguments are unusable")
+	}
+	if err := c.talkGate(ctx, op, token, messageTalkNoRoom); err != nil {
+		return nil, err
 	}
 	item, err := c.attendee(ctx, op, token, id)
 	if err != nil {
@@ -266,7 +275,7 @@ var talkParticipantsModerator = capability.Descriptor{
 func invokeTalkParticipantsAdd(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "add talk participant"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoTarget, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +292,7 @@ func invokeTalkParticipantsAdd(ctx context.Context, resolved *config.Resolved, s
 func invokeTalkParticipantsRemove(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "remove talk participant"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoRoom, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +309,7 @@ func invokeTalkParticipantsRemove(ctx context.Context, resolved *config.Resolved
 func invokeTalkParticipantsModerator(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "set talk moderator"
-	input, err := readTalkWrite(op, resolved, raw)
+	input, err := readTalkWrite(op, messageTalkNoRoom, resolved, raw)
 	if err != nil {
 		return nil, err
 	}
