@@ -3057,6 +3057,9 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
+		if source != "" {
+			conn = conn.WithoutOutdatedTargets()
+		}
 		// The provider is not stored on a connection: its service already names one. It stands here
 		// because it decides what the two rows below may offer, and a route that mixes two systems is a
 		// route that cannot work.

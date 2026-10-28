@@ -94,7 +94,11 @@ func TestMigrationRefusesAFolderBelowAnExactOne(t *testing.T) {
     target_labels:
       folder/Kunde: Customer
 `
-	_, err := config.Decode(strings.NewReader(file), registry(t))
+	cfg, err := config.Decode(strings.NewReader(file), registry(t))
+	if err != nil {
+		t.Fatalf("Decode() = %v, want the file to load", err)
+	}
+	err = cfg.Validate()
 	problems := config.Problems(err)
 	if len(problems) != 1 || problems[0].Code != config.CodeTargetsOutdated ||
 		problems[0].Location() != "connections.mixed.targets" {
