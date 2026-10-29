@@ -2430,14 +2430,18 @@ func sectionViews(m *Model) string {
 	return b.String()
 }
 
-// View hands the drawing to render unchanged, inline below the prompt.
+// View hands the drawing to render unchanged, on the alternate screen.
 func TestViewWrapsRender(t *testing.T) {
 	m, _, _ := newModel(t)
 	view := m.View()
 	if got, want := view.Content, m.render(); got != want {
 		t.Fatalf("View differs from render:\n%q\n%q", got, want)
 	}
-	if view.AltScreen {
-		t.Error("the view asks for the alternate screen")
+	if !view.AltScreen {
+		t.Error("the view does not ask for the alternate screen")
+	}
+	m.quitting = true
+	if !m.View().AltScreen {
+		t.Error("the quitting view leaves the alternate screen")
 	}
 }

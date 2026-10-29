@@ -35,6 +35,12 @@ var ansiSequence = regexp.MustCompile(`\x1b(\[[0-9;?]*[ -/]*[@-~]|\][^\x07]*\x07
 // mouseOn is the sequence that turns on the cell motion mouse mode of the terminal.
 const mouseOn = "\x1b[?1002h"
 
+// altScreenOn and altScreenOff switch the terminal to and from its alternate screen.
+const (
+	altScreenOn  = "\x1b[?1049h"
+	altScreenOff = "\x1b[?1049l"
+)
+
 // The editor asks the terminal for its background colour before it starts, an OSC 11 query followed by a
 // primary device attributes query that every terminal answers. A real terminal answers both; left unanswered,
 // every start would wait for Lip Gloss's timeout, once on the input and once on the output.
@@ -285,6 +291,13 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	if got := strings.Count(r.bytes(), mouseOn); got < 2 {
 		t.Errorf("the mouse mode was turned on %d times, want once per run", got)
 	}
+	// Each run enters the alternate screen once, and the last one leaves it.
+	if got := strings.Count(r.bytes(), altScreenOn); got != 2 {
+		t.Errorf("the alternate screen was entered %d times, want once per run", got)
+	}
+	if out := r.bytes(); !strings.Contains(out[strings.LastIndex(out, altScreenOn):], altScreenOff) {
+		t.Error("the alternate screen was not left at the end")
+	}
 }
 
 // The mouse mode is on by default and off where tui.yaml says so: the terminal is told only what the
@@ -345,6 +358,10 @@ func TestTUIKeepsTheMouseAfterAFailedRestart(t *testing.T) {
 			}
 			if got := strings.Count(r.bytes(), mouseOn); got != c.want {
 				t.Errorf("the mouse mode was turned on %d times, want %d", got, c.want)
+			}
+			// The screen comes back with the editor: the alternate screen is entered again.
+			if got := strings.Count(r.bytes(), altScreenOn); got != 2 {
+				t.Errorf("the alternate screen was entered %d times, want 2 (start and restore)", got)
 			}
 			r.typeKeys("q")
 		})
