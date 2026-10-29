@@ -358,7 +358,7 @@ func (m *Model) pane(width, rows int) string {
 	if len(lines) > rows {
 		// A pane of one row has no room for the position line and cuts.
 		lines = slices.Clone(lines[:rows])
-		lines[rows-1] = truncateDots(lines[rows-1]+" ...", inner)
+		lines[rows-1] = truncateDots(lines[rows-1]+" …", inner)
 	}
 	for i, l := range lines {
 		lines[i] = styles.hint.Render(l)
@@ -366,18 +366,18 @@ func (m *Model) pane(width, rows int) string {
 	return strings.Join(panel(title, lines, inner, rows, panelOpts{}), "\n")
 }
 
-// truncateDots cuts text to width cells, ending in "..." when it was cut.
+// truncateDots cuts text to width cells, ending in "…" when it was cut.
 func truncateDots(text string, width int) string {
 	if lipgloss.Width(text) <= width {
 		return text
 	}
-	if width <= 3 {
-		return strings.Repeat(".", max(width, 0))
+	if width <= 1 {
+		return strings.Repeat("…", max(width, 0))
 	}
-	return strings.TrimRight(ansi.Truncate(text, width-3, ""), " ") + "..."
+	return strings.TrimRight(ansi.Truncate(text, width-1, ""), " ") + "…"
 }
 
-// hintLine is the one-line hint under the focused row: cut to the workspace with "..." at its right and,
+// hintLine is the one-line hint under the focused row: cut to the workspace with "…" at its right and,
 // where the pane is not shown, ending in the info mark when a longer explanation is behind the info key.
 func (m *Model) hintLine(hint string, more bool) string {
 	indent, width := m.fit(m.hintIndent())
