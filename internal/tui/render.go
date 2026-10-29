@@ -291,11 +291,7 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldMultiChoice:
 		parts := make([]string, len(f.choices))
 		for i, choice := range f.choices {
-			mark := " "
-			if f.selected[choice] {
-				mark = "x"
-			}
-			parts[i] = "[" + mark + "] " + valueText(f.label, choice)
+			parts[i] = tickBox(f.selected[choice]) + " " + valueText(f.label, choice)
 		}
 		// A box is never split from its value: the row breaks between the values only.
 		var lines []string
