@@ -1268,7 +1268,7 @@ var textEN = map[textID]string{
 	footerID("right open"):                                 "right open",
 	footerID("left back"):                                  "left back",
 	footerID("tab mark"):                                   "tab mark",
-	footerID("ctrl+t next kind"):                           "ctrl+t next kind",
+	footerID("{nextkind} next kind"):                       "{nextkind} next kind",
 	footerID("esc clear marks"):                            "esc clear marks",
 	footerID("enter store in system keyring"):              "enter store in system keyring",
 	footerID("enter store in the vault"):                   "enter store in the vault",

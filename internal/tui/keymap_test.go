@@ -33,7 +33,7 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 		actSetup: "g", actCopy: "c", actNew: "n", actApproveAll: "A", actEdit: "e", actRename: "r", actReveal: "V",
 		actSummary: "s", actFilter: "f", actRevert: "B", actSessions: "M", actLogs: "o", actDuplicate: "p",
 		actTest: "t", actUpdate: "U", actWrite: "W",
-		actRemoveField: "ctrl+d", actSuggestPrev: "ctrl+p", actSuggestNext: "ctrl+n", actNextKind: "ctrl+t",
+		actRemoveField: "ctrl+d", actSuggestPrev: "ctrl+p", actSuggestNext: "ctrl+n", actNextKind: "ctrl+y",
 		actReload: "ctrl+r",
 	}
 	if len(keymap) != len(want) {
@@ -53,14 +53,14 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 }
 
 func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
-	rebind(t, actHelp, "ctrl+g")
+	rebind(t, actHelp, "ctrl+x")
 	rebind(t, actCommand, "ctrl+k")
 	rebind(t, actSave, "f5")
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 
 	view := m.render()
-	if !strings.Contains(flatText(view), "ctrl+k cmds ctrl+g help") || strings.Contains(view, "? help") || strings.Contains(view, ": cmds") {
+	if !strings.Contains(flatText(view), "ctrl+k cmds ctrl+x help") || strings.Contains(view, "? help") || strings.Contains(view, ": cmds") {
 		t.Fatalf("the footer does not follow the keymap:\n%s", view)
 	}
 	press(t, m, "?")
@@ -76,14 +76,14 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 		t.Fatalf("the new command key left screen %v", m.screen)
 	}
 	press(t, m, "esc")
-	m.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
 	if m.screen != screenHelp {
 		t.Fatalf("the new help key left screen %v", m.screen)
 	}
-	if !strings.Contains(m.render(), "esc/ctrl+g close") {
+	if !strings.Contains(m.render(), "esc/ctrl+x close") {
 		t.Errorf("the help footer does not follow the keymap:\n%s", m.render())
 	}
-	m.Update(tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	m.Update(tea.KeyPressMsg{Code: 'x', Mod: tea.ModCtrl})
 	if m.screen == screenHelp {
 		t.Fatal("the new help key does not close the help")
 	}
@@ -155,7 +155,7 @@ func TestNoTwoActionsOfALevelShareAKey(t *testing.T) {
 	if keyOf(actDelete) != keyOf(actDiscard) || actDelete == actDiscard || keyOf(actNew) != keyOf(actNo) || actNew == actNo {
 		t.Error("delete and discard, new and no should share a key on different levels")
 	}
-	applyKeys(uiprefs.Keys{Info: "f3", Save: "f4", Help: "ctrl+g", Command: "ctrl+o", Lock: "ctrl+x"})
+	applyKeys(uiprefs.Keys{Info: "f3", Save: "f4", Help: "ctrl+x", Command: "ctrl+l", Lock: "f6"})
 	assertNoCollisions(t)
 }
 
@@ -226,16 +226,16 @@ func TestCheckRefusesTheKeysOfTheTable(t *testing.T) {
 			}
 		}
 	}
-	if _, err := uiprefs.DefaultKeys().Check(uiprefs.ActionHelp, "ctrl+g"); err != nil {
+	if _, err := uiprefs.DefaultKeys().Check(uiprefs.ActionHelp, "ctrl+x"); err != nil {
 		t.Errorf("a free key is refused: %v", err)
 	}
 	// The table itself, not a copy of the rules, decides: a key it newly gives away is refused.
 	keyDefs = append(keyDefs, keyDefs[0])
 	keyDefs[len(keyDefs)-1].act = "probe"
 	keymap["probe"] = keymap[actInfo]
-	setKeys("probe", "ctrl+o")
+	setKeys("probe", "ctrl+x")
 	t.Cleanup(func() { keyDefs = keyDefs[:len(keyDefs)-1]; delete(keymap, "probe") })
-	if _, err := uiprefs.DefaultKeys().Check(uiprefs.ActionHelp, "ctrl+o"); err == nil || !strings.Contains(err.Error(), "probe") {
+	if _, err := uiprefs.DefaultKeys().Check(uiprefs.ActionHelp, "ctrl+x"); err == nil || !strings.Contains(err.Error(), "probe") {
 		t.Errorf("Check does not consult the table: %v", err)
 	}
 	// A key of a rebindable action stays free for another one to take when it is not in the form.
@@ -370,5 +370,27 @@ func TestVimLettersMoveOnlyWhereNothingIsTyped(t *testing.T) {
 	}
 	if got := m.moveKey(k); !keyIs(got, actUp) || got.String() != "up" {
 		t.Errorf("k became %q on a screen without text, want up", got.String())
+	}
+}
+
+// No default key lies on a key that tmux, GNU screen, zellij, or the VS Code terminal take. The control keys
+// of text lines that sit beside an arrow key are the allowed second way.
+func TestNoDefaultKeyLiesOnAMultiplexerKey(t *testing.T) {
+	keepKeys(t)
+	taken := map[string]bool{
+		"ctrl+s": true, "ctrl+q": true, "ctrl+z": true, "ctrl+b": true, "ctrl+a": true, "ctrl+g": true,
+		"ctrl+o": true, "ctrl+t": true, "ctrl+f": true, "ctrl+k": true,
+		"alt+f": true, "alt+n": true, "alt+i": true, "alt+o": true, "alt+p": true, "alt+h": true,
+		"alt+j": true, "alt+k": true, "alt+l": true, "alt+left": true, "alt+right": true, "alt+up": true,
+		"alt+down": true, "f1": true, "f5": true, "f10": true, "f11": true, "f12": true,
+		"ctrl+i": true, "ctrl+m": true, "ctrl+h": true,
+	}
+	secondWay := map[action]bool{actSuggestPrev: true, actSuggestNext: true}
+	for _, d := range keyDefs {
+		for _, k := range d.keys {
+			if (taken[k] || strings.HasPrefix(k, "alt+") && len(k) == 5 && k[4] >= '0' && k[4] <= '9') && !secondWay[d.act] {
+				t.Errorf("%s is bound to %s but a multiplexer or terminal takes it", k, d.act)
+			}
+		}
 	}
 }

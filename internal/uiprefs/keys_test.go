@@ -25,7 +25,10 @@ func TestCheckRejectsWithReason(t *testing.T) {
 		{ActionInfo, "f21", "F1 to F20"},
 		{ActionInfo, "ctrl+a", "text lines, the terminal, or a screen"},
 		{ActionLock, "ctrl+r", "text lines, the terminal, or a screen"},
-		{ActionSave, "ctrl+t", "text lines, the terminal, or a screen"},
+		{ActionSave, "ctrl+y", "text lines, the terminal, or a screen"},
+		{ActionSave, "ctrl+g", "free are ctrl+l and x"},
+		{ActionSave, "ctrl+o", "free are ctrl+l and x"},
+		{ActionSave, "ctrl+b", "free are ctrl+l and x"},
 		{ActionInfo, "j", "acts on text lines"},
 		{ActionInfo, "!", "acts on text lines"},
 		{ActionInfo, ".", "acts on text lines"},
@@ -43,8 +46,8 @@ func TestCheckRejectsWithReason(t *testing.T) {
 
 func TestCheckAccepts(t *testing.T) {
 	d := DefaultKeys()
-	for _, c := range [][2]string{{ActionInfo, "F3"}, {ActionInfo, ""}, {ActionSave, "f4"}, {ActionHelp, "ctrl+g"},
-		{ActionCommand, "ctrl+O"}, {ActionSave, "f13"}} {
+	for _, c := range [][2]string{{ActionInfo, "F3"}, {ActionInfo, ""}, {ActionSave, "f4"}, {ActionHelp, "ctrl+x"},
+		{ActionCommand, "ctrl+X"}, {ActionSave, "f13"}} {
 		if _, err := d.Check(c[0], c[1]); err != nil {
 			t.Errorf("Check(%s, %q) = %v, want it accepted", c[0], c[1], err)
 		}
@@ -112,24 +115,24 @@ func TestSaveRefusesInvalidKeys(t *testing.T) {
 
 func TestFileSwapIsValidAsAWhole(t *testing.T) {
 	path := Path(t.TempDir())
-	if err := os.WriteFile(path, []byte("keys:\n  save: ctrl+l\n  lock: ctrl+o\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("keys:\n  save: ctrl+l\n  lock: ctrl+x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
-	if got.Keys.Save != "ctrl+l" || got.Keys.Lock != "ctrl+o" || len(warnings) != 0 {
+	if got.Keys.Save != "ctrl+l" || got.Keys.Lock != "ctrl+x" || len(warnings) != 0 {
 		t.Fatalf("keys = %+v, warnings %v; want the swap kept", got.Keys, warnings)
 	}
 }
 
-// ctrl+t and ctrl+r were free keys once, so a file can still hold them: they are the target picker's now, and the
+// ctrl+y and ctrl+r were free keys once, so a file can still hold them: they are the target picker's now, and the
 // action keeps its standard with a warning that names the reason, as for any other key that breaks a rule.
 func TestFileWithPickerKeysFallsBackToTheStandard(t *testing.T) {
 	path := Path(t.TempDir())
-	if err := os.WriteFile(path, []byte("keys:\n  lock: ctrl+r\n  save: ctrl+t\n  help: ctrl+g\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("keys:\n  lock: ctrl+r\n  save: ctrl+y\n  help: ctrl+x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, warnings := Load(path)
-	if got.Keys.Lock != DefaultKeys().Lock || got.Keys.Save != DefaultKeys().Save || got.Keys.Help != "ctrl+g" {
+	if got.Keys.Lock != DefaultKeys().Lock || got.Keys.Save != DefaultKeys().Save || got.Keys.Help != "ctrl+x" {
 		t.Fatalf("keys = %+v, want the standard for lock and save and the valid help key kept", got.Keys)
 	}
 	if len(warnings) != 2 || !strings.Contains(warnings[0], "keys.save") || !strings.Contains(warnings[1], "keys.lock") {
@@ -154,5 +157,17 @@ func TestFileCollisionFallsBackConflictFree(t *testing.T) {
 	}
 	if got.Keys.Save != "f2" && got.Keys.Save != "f3" {
 		t.Fatalf("keys = %+v", got.Keys)
+	}
+}
+
+// ctrl+g and ctrl+o were free keys once: an old file that holds them keeps the standard and warns.
+func TestFileWithMultiplexerKeysFallsBackToTheStandard(t *testing.T) {
+	path := Path(t.TempDir())
+	if err := os.WriteFile(path, []byte("keys:\n  help: ctrl+g\n  command: ctrl+o\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if got.Keys.Help != DefaultKeys().Help || got.Keys.Command != DefaultKeys().Command || len(warnings) != 2 {
+		t.Fatalf("keys = %+v, warnings %v; want the standard and two warnings", got.Keys, warnings)
 	}
 }
