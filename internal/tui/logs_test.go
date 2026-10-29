@@ -885,7 +885,7 @@ func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
 	press(t, m, "M")
 	view := m.render()
 	assertViewFits(t, view, 60, 18)
-	if !strings.Contains(view, "... ") || !strings.Contains(view, "more") || strings.Contains(view, "wiki.tool111") {
+	if !strings.Contains(view, "… ") || !strings.Contains(view, "more") || strings.Contains(view, "wiki.tool111") {
 		t.Fatalf("a long summary does not say what it leaves out:\n%s", view)
 	}
 	press(t, m, "end")

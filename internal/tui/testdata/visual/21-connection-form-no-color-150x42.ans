@@ -5,7 +5,7 @@
                                                                                                                                                       
 [2m╭─[m[1m[m[2m──────────────────────╮[m ╔═[1m[m═══════════════════════════════════════════════════════════════════════════════╗  [2m╭─[m[1m Help [m[2m───────────────────────────────╮[m
 [2m│[m [1;7m> 1 General          [m [2m│[m ║ [1mGeneral[m                                                                        ║  [2m│[m [2moptional; what an agent uses this[m    [2m│[m
-[2m│[m   2 Service           [2m│[m ║ [2mA connection is the route an agent takes: one service with one credential,...[m  ║  [2m│[m [2mroute for, e.g. 'customer records,[m   [2m│[m
+[2m│[m   2 Service           [2m│[m ║ [2mA connection is the route an agent takes: one service with one credential, an…[m ║  [2m│[m [2mroute for, e.g. 'customer records,[m   [2m│[m
 [2m│[m   3 Credential        [2m│[m ║                                                                                ║  [2m│[m [2mread and create'. discovery[m          [2m│[m
 [2m│[m   4 Targets           [2m│[m ║               [2m╭─[m[1m[m[2m─────────────────────────────────────────────────────────────╮[m ║  [2m│[m [2mpublishes it, so it must never carry[m [2m│[m
 [2m│[m   5 Tools             [2m│[m ║   provider    [2m│[m BookStack (bookstack)                                      ▾ [2m│[m ║  [2m│[m [2ma secret or personal data[m            [2m│[m
