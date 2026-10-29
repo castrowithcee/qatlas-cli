@@ -781,16 +781,20 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	}
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
+	m.list.stops = true
 	m.picker = newFilterList(m.choiceShown)
 	m.templateList = newFilterList(m.templateText)
 	m.templateList.input.Placeholder = "Type to search"
 	m.versionList = newFilterList(m.versionText)
+	m.versionList.stops = true
 	m.versionList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target + " " + m.targetLabels[target] })
+	m.targetList.stops = true
 	m.targetInput = textField("", "", false).input
 	m.labelInput = textField("", "", false).input
 	m.pathList = newFilterList(func(path string) string { return path })
+	m.pathList.stops = true
 	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView(time.Now())
 	// The editor opens on the tab line, with the Overview already shown below it.

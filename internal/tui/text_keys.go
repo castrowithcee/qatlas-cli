@@ -881,7 +881,6 @@ const (
 	tTargetNothingToChooseTypeA              textID = "TargetNothingToChooseTypeA"
 	tPickTheProviderSListCannot              textID = "PickTheProviderSListCannot"
 	tPickTheProviderFoundNoEntry             textID = "PickTheProviderFoundNoEntry"
-	tPickMarksCleared                        textID = "PickMarksCleared"
 	tPickNothingLiesBelowThisEntry           textID = "PickNothingLiesBelowThisEntry"
 	tPickAlreadyOnTheTopLevel                textID = "PickAlreadyOnTheTopLevel"
 	tPickThisProviderTakesOneOnly            textID = "PickThisProviderTakesOneOnly"

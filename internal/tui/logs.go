@@ -312,6 +312,7 @@ func newLogView(now time.Time) *logView {
 		table: table{columns: logColumns, rows: map[string][]string{}},
 	}
 	lv.list = newFilterList(lv.searchText)
+	lv.list.stops = true
 	lv.list.input.Placeholder = tr(tLogSearchPlaceholder)
 	return lv
 }
@@ -665,10 +666,6 @@ func (m *Model) updateLogs(key tea.KeyPressMsg) tea.Cmd {
 			m.openLogDateDialog()
 		case logFocusTabs:
 			return m.setLogTab(logTab(min(max(int(lv.tab())+by, 0), int(logTabCount)-1)))
-		default:
-			if by < 0 {
-				m.focusNav()
-			}
 		}
 	case keyIs(key, actSummary):
 		lv.stats, lv.sessions, lv.heat = !lv.stats, false, false

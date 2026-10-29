@@ -177,7 +177,7 @@ func (v *viewSet) forms() {
 		typeText(t, m, "login")
 		press(t, m, "enter")
 		v.walkRows(m)
-		m.Update(ctrlD())
+		m.Update(keyF8())
 		v.see(m)
 	}
 	m = formsBase(t, navWidth, navHeight)

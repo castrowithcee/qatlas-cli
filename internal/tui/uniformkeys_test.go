@@ -484,3 +484,86 @@ func TestFootersNameTheHelpAndCommandsWhereTheyWork(t *testing.T) {
 	press(t, lm, "down", "enter")
 	want(lm, "the log detail", "1-8 section", ": cmds", "? help")
 }
+
+func TestLeftOnTheActivityRowsDoesNotGoBack(t *testing.T) {
+	m := sizedModel(heatModel(t, activityLog(t)), 120, 40)
+	m.logs.heat = false
+	m.logs.focus = logFocusRows
+	m.screen = screenLogs
+	m.setLogTab(logTabTable)
+	press(t, m, "left")
+	if m.screen != screenLogs || m.logs.focus != logFocusRows {
+		t.Fatalf("left on the rows = screen %v focus %v, want the rows unchanged", m.screen, m.logs.focus)
+	}
+	press(t, m, "esc")
+	if m.screen != screenNav {
+		t.Fatalf("esc on the rows = screen %v, want the tab line", m.screen)
+	}
+}
+
+func TestTabLinesWrapAtTheirEnds(t *testing.T) {
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m.screen = screenNav
+	m.section = sectionOverview
+	press(t, m, "left")
+	if m.section.area() != area(areaCount-1) {
+		t.Fatalf("left on the first area = area %v, want the last", m.section.area())
+	}
+	press(t, m, "right")
+	if m.section.area() != 0 {
+		t.Fatalf("right on the last area = area %v, want the first", m.section.area())
+	}
+}
+
+func TestListsStopAndChoiceListsWrapAtTheirEnds(t *testing.T) {
+	t.Run("a list of records stops", func(t *testing.T) {
+		m, _, _ := newModel(t)
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+		seedServices(t, m, "a-one", "b-two", "c-three")
+		m.screen, m.section = screenList, sectionServices
+		m.list.reset(m.entryNames(m.section))
+		press(t, m, "down", "down", "down", "down")
+		if name := selectedName(t, m); name != "c-three" {
+			t.Fatalf("down past the end selected %q, want the last entry", name)
+		}
+		m.list.move(1)
+		if name := selectedName(t, m); name != "c-three" {
+			t.Fatalf("move past the end selected %q, want it to stop", name)
+		}
+		m.list.move(-5)
+		if name := selectedName(t, m); name != "a-one" {
+			t.Fatalf("move past the start selected %q, want it to stop", name)
+		}
+	})
+	t.Run("a choice list wraps", func(t *testing.T) {
+		l := newFilterList(func(s string) string { return s })
+		l.reset([]string{"a", "b", "c"})
+		l.move(-1)
+		if name, _ := l.selected(); name != "c" {
+			t.Fatalf("up on the first choice selected %q, want the last", name)
+		}
+		l.move(1)
+		if name, _ := l.selected(); name != "a" {
+			t.Fatalf("down on the last choice selected %q, want the first", name)
+		}
+		l.jump(-5)
+		if l.cursor != 0 {
+			t.Fatalf("a page key left the first choice for %d", l.cursor)
+		}
+	})
+}
+
+func TestTabNeverMeansBackOrTicking(t *testing.T) {
+	src := &listSource{list: pickPage(group("a"), group("b"))}
+	m := pickerModel(t, src, "g/a")
+	openPicker(t, m)
+	pump(t, m, "tab", "tab", "tab")
+	if len(m.targetPick.marks) != 0 || m.targetPick == nil {
+		t.Fatalf("tab marked %v or closed the picker", m.targetPick.marks)
+	}
+	pump(t, m, "left")
+	if m.targetPick == nil || len(m.targetPick.levels) != 1 {
+		t.Fatal("left closed the picker or changed its level")
+	}
+}
