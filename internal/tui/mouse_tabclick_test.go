@@ -3,6 +3,8 @@ package tui
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // atSettingsBar reports whether the click on the Settings tab went through: the tab line has the focus on it.
@@ -87,6 +89,7 @@ func TestTabClickDoesNothingWhileAsked(t *testing.T) {
 	}
 
 	m, _ = lockedVaultModel(t)
+	m.prefs.Icons = uiprefs.IconsNone
 	sizedModel(m, 160, 40)
 	openSectionByName(t, m, sectionGeneral)
 	focusKeyRow(t, m, "info key")
