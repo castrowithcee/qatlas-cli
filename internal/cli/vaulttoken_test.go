@@ -87,11 +87,11 @@ func TestVaultTokenCommands(t *testing.T) {
 		t.Errorf("list after renaming the vorbild = %q, want the warning", stdout)
 	}
 
-	code, stdout, _ = runWithInput(t, &Options{}, "", "vault", "token", "revoke", "kunde-a", "--config", configIn(dir))
+	code, stdout, _ = runWithInput(t, &Options{}, "", "vault", "token", "revoke", "kunde-a", "--yes", "--config", configIn(dir))
 	if code != exitOK || stdout != "revoked agent token kunde-a\n" {
 		t.Fatalf("revoke: exit %d, stdout %q", code, stdout)
 	}
-	if code, _, _ := run("vault", "token", "revoke", "kunde-a"); code != exitUsage {
+	if code, _, _ := run("vault", "token", "revoke", "kunde-a", "--yes"); code != exitUsage {
 		t.Errorf("revoke twice: exit %d, want usage", code)
 	}
 
@@ -228,5 +228,55 @@ func TestVaultHandoverCommandNeedsAdminAndEncryption(t *testing.T) {
 	code, _, stderr = runWithInput(t, &Options{}, "", "vault", "handover", "lock", "--config", configIn(plain))
 	if code != exitUsage || !strings.Contains(stderr, "run 'qatlas vault encrypt' first") {
 		t.Errorf("unencrypted vault: exit %d, stderr %q, want the encryption named", code, stderr)
+	}
+}
+
+// Revoking asks first: y revokes, n keeps, --yes skips the question, and no terminal stays admin-required.
+func TestVaultTokenRevokeConfirmation(t *testing.T) {
+	dir := encryptedTokenFixture(t)
+	createAgentToken(t, dir, "kunde-a", "wiki")
+	revoke := func(extra ...string) (int, string, string) {
+		t.Helper()
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		args := append([]string{"vault", "token", "revoke", "kunde-a", "--config", configIn(dir)}, extra...)
+		return runWithInput(t, &Options{}, "", args...)
+	}
+	listed := func() bool {
+		t.Helper()
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		_, stdout, _ := runWithInput(t, &Options{}, "", "vault", "token", "list", "--config", configIn(dir))
+		return strings.Contains(stdout, "kunde-a")
+	}
+
+	var asked string
+	withVaultConfirm(t, func(q string) (bool, error) { asked = q; return false, nil })
+	code, stdout, _ := revoke()
+	if code != exitOK || !strings.Contains(stdout, "kept") || !strings.Contains(asked, "kunde-a") || !listed() {
+		t.Errorf("n: exit %d, stdout %q, asked %q, listed %v, want kept", code, stdout, asked, listed())
+	}
+
+	withVaultConfirm(t, func(q string) (bool, error) { return true, nil })
+	if code, _, stderr := revoke(); code != exitOK || listed() {
+		t.Fatalf("y: exit %d, stderr %q, want the token revoked", code, stderr)
+	}
+
+	createAgentToken(t, dir, "kunde-a", "wiki")
+	asked = ""
+	withVaultConfirm(t, func(q string) (bool, error) { asked = q; return false, nil })
+	if code, _, _ := revoke("--yes"); code != exitOK || asked != "" || listed() {
+		t.Errorf("--yes: exit %d, asked %q, want revoked without a question", code, asked)
+	}
+
+	createAgentToken(t, dir, "kunde-a", "wiki")
+	withInteractive(t, false)
+	for _, extra := range [][]string{nil, {"--yes"}} {
+		code, _, stderr := revoke(extra...)
+		if code != exitUsage || !strings.Contains(stderr, "admin-required") {
+			t.Errorf("no terminal %v: exit %d, stderr %q, want admin-required", extra, code, stderr)
+		}
+	}
+	withInteractive(t, true)
+	if !listed() {
+		t.Error("no terminal: the token is gone")
 	}
 }

@@ -88,7 +88,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 
 	// A revoked token stops at once, in the running process too.
 	withInteractive(t, true)
-	if code, _, stderr := runWithInput(t, &Options{}, "", "vault", "token", "revoke", "kunde-a", "--config",
+	if code, _, stderr := runWithInput(t, &Options{}, "", "vault", "token", "revoke", "kunde-a", "--yes", "--config",
 		configIn(dir)); code != exitOK {
 		t.Fatalf("revoke: exit %d, stderr %q", code, stderr)
 	}

@@ -208,7 +208,7 @@ func TestCredentialCommandsExplainALockedKeyring(t *testing.T) {
 		t.Errorf("set: stderr = %q, want the secret kept out", stderr)
 	}
 
-	code, _, stderr = runWithInput(t, opts, "", "credential", "delete", "vault-reader", "token-id",
+	code, _, stderr = runWithInput(t, opts, "", "credential", "delete", "vault-reader", "token-id", "--yes",
 		"--config", configIn(dir))
 	if code == exitOK {
 		t.Fatalf("delete: exit %d, want a failure while the keyring is locked", code)
@@ -323,7 +323,7 @@ func TestCredentialDelete(t *testing.T) {
 	writeLegacyPlaintext(t, dir, "vault-reader", "token-secret", canaryPlaintext)
 
 	code, stdout, stderr := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir))
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir))
 
 	if code != exitOK || stdout != "" || stderr != "" {
 		t.Errorf("exit %d, stdout %q, stderr %q; want a silent success", code, stdout, stderr)
@@ -333,13 +333,13 @@ func TestCredentialDelete(t *testing.T) {
 	}
 
 	if code, _, _ := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir)); code != exitUsage {
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir)); code != exitUsage {
 		t.Errorf("deleting nothing: exit code = %d, want %d", code, exitUsage)
 	}
 
 	// The last plaintext entry takes the file with it.
 	if code, _, stderr := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-secret", "--config", configIn(dir)); code != exitOK {
+		"credential", "delete", "vault-reader", "token-secret", "--yes", "--config", configIn(dir)); code != exitOK {
 		t.Fatalf("delete: exit code = %d (stderr: %s)", code, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(dir, secret.FileName)); !os.IsNotExist(err) {
@@ -364,7 +364,7 @@ func TestCredentialDeleteNamesTheStoreItSkipped(t *testing.T) {
 	writeLegacyPlaintext(t, dir, "vault-reader", "token-id", canaryPlaintext)
 
 	code, stdout, stderr := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir))
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir))
 
 	if code != exitOK || stdout != "" {
 		t.Errorf("exit %d, stdout %q; want a success with an empty stdout", code, stdout)
@@ -383,7 +383,7 @@ func TestCredentialDeleteNamesTheStoreItSkipped(t *testing.T) {
 		t.Fatalf("set: exit code = %d (stderr: %s)", code, stderr)
 	}
 	if code, _, stderr := runWithInput(t, plain, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir)); code != exitOK || stderr != "" {
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir)); code != exitOK || stderr != "" {
 		t.Errorf("exit %d, stderr %q; want a silent success when the store was cleared", code, stderr)
 	}
 }
@@ -530,7 +530,7 @@ func TestCredentialDeleteReportsARetainedEntry(t *testing.T) {
 	}
 
 	code, stdout, stderr := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir))
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir))
 
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
@@ -556,7 +556,7 @@ func TestCredentialDeleteReportsARetainedEntry(t *testing.T) {
 		t.Fatalf("Chmod() = %v", err)
 	}
 	if code, _, stderr := runWithInput(t, opts, "",
-		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir)); code != exitOK {
+		"credential", "delete", "vault-reader", "token-id", "--yes", "--config", configIn(dir)); code != exitOK {
 		t.Fatalf("delete after the fix: exit %d (stderr %q)", code, stderr)
 	}
 	if _, err := os.Stat(fallback); !os.IsNotExist(err) {
@@ -798,5 +798,68 @@ func TestCredentialSetAcceptsTheRolesOfTheNamedProvider(t *testing.T) {
 				t.Errorf("secret stored = %v, want %v", stored, tt.wantExit == exitOK)
 			}
 		})
+	}
+}
+
+// Deleting asks first: y deletes, n keeps, --yes skips the question, and no terminal stays admin-required.
+func TestCredentialDeleteConfirmation(t *testing.T) {
+	dir := keyringFixture(t)
+	store := secret.NewMemoryStore()
+	opts := testOptionsIn(t, dir, store)
+	key := secret.StoreKey("vault-reader", "token-id")
+	del := func(extra ...string) (int, string, string) {
+		t.Helper()
+		args := append([]string{"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir)}, extra...)
+		return runWithInput(t, opts, "", args...)
+	}
+	storeSecret := func() {
+		t.Helper()
+		if code, _, stderr := runWithInput(t, opts, canaryStored,
+			"credential", "set", "vault-reader", "token-id", "--config", configIn(dir)); code != exitOK {
+			t.Fatalf("set: exit %d (stderr: %s)", code, stderr)
+		}
+	}
+	answer := func(ok bool, asked *string) {
+		withVaultConfirm(t, func(q string) (bool, error) { *asked = q; return ok, nil })
+	}
+
+	storeSecret()
+	var asked string
+	answer(false, &asked)
+	code, stdout, _ := del()
+	if code != exitOK || !strings.Contains(stdout, "kept") || !strings.Contains(asked, "vault-reader token-id") {
+		t.Errorf("n: exit %d, stdout %q, asked %q, want kept and the question naming the entry", code, stdout, asked)
+	}
+	if _, err := store.Get(context.Background(), key); err != nil {
+		t.Errorf("n: the entry is gone: %v", err)
+	}
+
+	answer(true, &asked)
+	if code, _, stderr := del(); code != exitOK {
+		t.Fatalf("y: exit %d (stderr: %s)", code, stderr)
+	}
+	if _, err := store.Get(context.Background(), key); err == nil {
+		t.Error("y: the entry is still stored")
+	}
+
+	storeSecret()
+	asked = ""
+	if code, _, _ := del("--yes"); code != exitOK || asked != "" {
+		t.Errorf("--yes: exit %d, asked %q, want no question", code, asked)
+	}
+	if _, err := store.Get(context.Background(), key); err == nil {
+		t.Error("--yes: the entry is still stored")
+	}
+
+	storeSecret()
+	withInteractive(t, false)
+	for _, extra := range [][]string{nil, {"--yes"}} {
+		code, _, stderr := del(extra...)
+		if code != exitUsage || !strings.Contains(stderr, "admin-required") {
+			t.Errorf("no terminal %v: exit %d, stderr %q, want admin-required", extra, code, stderr)
+		}
+	}
+	if _, err := store.Get(context.Background(), key); err != nil {
+		t.Errorf("no terminal: the entry is gone: %v", err)
 	}
 }

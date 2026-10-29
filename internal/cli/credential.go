@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/connlog"
@@ -82,6 +83,7 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		},
 	}
 
+	var assumeYes bool
 	remove := &cobra.Command{
 		Use:   "delete <credential> <role>",
 		Short: "Remove the secret of one credential role",
@@ -91,12 +93,16 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"and from a vault process that holds the vault unlocked.\n" +
 			"An environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
 			"is locked or cannot be reached, the command says so and what to do, and never reports a secret\n" +
-			"as removed that may still be stored.",
+			"as removed that may still be stored.\n" +
+			"The command first asks \"delete the secret of <credential> <role>? [y/N]\" at the terminal and\n" +
+			"removes nothing unless the answer is y or yes. --yes answers it in advance; without a terminal the\n" +
+			"command still fails as admin-required.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
-			return deleteCredential(c, opts, reg, args[0], args[1])
+			return deleteCredential(c, opts, reg, args[0], args[1], assumeYes)
 		},
 	}
+	remove.Flags().BoolVar(&assumeYes, "yes", false, "answer the confirmation question with yes")
 
 	cmd.AddCommand(set, remove)
 	return cmd
@@ -186,13 +192,23 @@ func offerVaultPassphrase(prompt string) (string, error) {
 	return passphrase, nil
 }
 
-func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string) error {
+func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string, yes bool) error {
 	if err := requireAdmin(opts); err != nil {
 		return err
 	}
 	cfg, cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err
+	}
+	if !yes {
+		confirmed, err := confirmDelete(fmt.Sprintf("delete the secret of %s %s? [y/N] ", name, role))
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Fprintf(c.OutOrStdout(), "kept the secret of %s %s\n", name, role)
+			return nil
+		}
 	}
 	secrets, err := opts.resolver()
 	if err != nil {
@@ -302,4 +318,14 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// confirmDelete asks a destructive question once the admin check has passed. A terminal that vanishes
+// between the two is the same refusal as none at all.
+func confirmDelete(question string) (bool, error) {
+	confirmed, err := readVaultConfirm(question)
+	if errors.Is(err, vault.ErrNoTerminal) {
+		return false, &UsageError{&application.AdminRequiredError{}}
+	}
+	return confirmed, err
 }

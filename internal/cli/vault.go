@@ -33,9 +33,10 @@ import (
 // opening a real one; a real run always leaves it at vault.ReadPassphrase.
 var readVaultPassphrase vault.PassphraseFunc = vault.ReadPassphrase
 
-// readVaultConfirm is the terminal prompt a destructive, non-passphrase question is asked with: 'vault
-// decrypt' and 'vault migrate' both go through it before they remove anything. Like readVaultPassphrase it
-// is a seam for a test.
+// readVaultConfirm is the terminal prompt a yes-or-no question is asked with, mainly before something is
+// removed: 'vault migrate', 'credential delete', 'vault token revoke', and the update, rename and config
+// transfer commands go through it. 'vault decrypt' does not: it takes --confirm instead. Like
+// readVaultPassphrase it is a seam for a test.
 var readVaultConfirm = vault.ReadConfirm
 
 // vaultProcessSupported reports whether 'vault unlock' hands the unlocked vault to a vault process on this
