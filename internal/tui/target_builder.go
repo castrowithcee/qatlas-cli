@@ -555,6 +555,13 @@ func (m *Model) addView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.addRow(i) + "\n")
 	}
+	a := m.targetAdd
+	m.hitRows(m.hitTop(header), m.usable(0), start, end, m.addRow, func(i int) tea.Cmd {
+		if m.screen != screenTargets || m.targetAdd != a || i >= len(a.choices.matches) {
+			return nil
+		}
+		return markOrAct(&a.choices.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+	})
 	b.WriteString(footer)
 	return b.String()
 }

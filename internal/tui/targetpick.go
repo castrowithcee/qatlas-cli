@@ -220,7 +220,7 @@ func freshProof() manage.AdminProof {
 func (m *Model) pickLoad(lv *pickLevel, cursor string) tea.Cmd {
 	// The proof is taken here because the session is not safe for concurrent use. Without an active session
 	// the core answers admin-required for an encrypted vault, which offers the login (see pickLoaded).
-	proof, _ := m.admin.Authorize(m.cfg.VaultAdminTimeout())
+	proof, _ := m.admin.Authorize(m.adminTimeout())
 	return m.pickRead(lv, cursor, proof, false)
 }
 
@@ -792,6 +792,13 @@ func (m *Model) pickView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.pickRow(i) + "\n")
 	}
+	p := m.targetPick
+	m.hitRows(m.hitTop(header), m.usable(0), start, end, m.pickRow, func(i int) tea.Cmd {
+		if m.screen != screenTargets || m.targetPick != p || i >= len(p.top().list.matches) {
+			return nil
+		}
+		return markOrAct(&p.top().list.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+	})
 	b.WriteString(footer)
 	return b.String()
 }

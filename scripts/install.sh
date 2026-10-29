@@ -157,7 +157,7 @@ main() {
 	if [ -n "$path_changed" ]; then
 		printf '  PATH:    %s was added to your login profile; open a new terminal to use `qatlas`.\n' "$bindir"
 	fi
-	printf '\nNext: run `qatlas tui` (press c to connect a provider) or `qatlas web`.\n'
+	printf '\nNext: run `qatlas tui` (press g to connect a provider) or `qatlas web`.\n'
 }
 
 main "$@"

@@ -118,7 +118,7 @@ func newConnectionTestServer(t *testing.T, v *vault.Vault, tester ...Tester) (*S
 	if len(tester) > 0 {
 		tst = tester[0]
 	}
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tst)
+	s, err := New(testOverview(), v, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tst)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

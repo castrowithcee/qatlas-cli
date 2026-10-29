@@ -39,6 +39,15 @@ func AdminRequired(v *vault.Vault) (required, locked bool, err error) {
 	return false, false, nil
 }
 
+// AdminTimeout is how long a proven passphrase authorises managing actions on v: the admin session time of
+// its effective settings (see vault.EffectiveSettings), read now because a passphrase proof may just have
+// unlocked the vault. A locked vault, which cannot read its settings.age, and an untrusted settings.age give
+// 0, so every managing action asks for the passphrase. It is never taken from the configuration file.
+func AdminTimeout(v *vault.Vault) time.Duration {
+	settings, _ := vault.EffectiveSettings(v)
+	return settings.AdminTimeout
+}
+
 // VerifyAdmin checks passphrase against the vault's live state: it unlocks a locked vault and verifies one
 // that is already unlocked in this process, without any other side effect. It is the one passphrase rule
 // every surface uses. A vault that is missing, absent or unencrypted has no passphrase to approve and is
@@ -65,10 +74,11 @@ func VerifyAdmin(v *vault.Vault, passphrase string) error {
 // Its zero value is an inactive session on the real clock that keeps a deadline only. It is not safe for
 // concurrent use; a surface that is must serialize access itself.
 //
-// The vault.admin_timeout is passed to each call rather than fixed, because a surface may re-read it. A
-// timeout above zero keeps the session open until that long has passed without activity. A timeout of zero
-// keeps no deadline: a session built with oneShot grants exactly one use (Consume), otherwise a grant is not
-// active at all and the next action must ask again.
+// The admin session time is passed to each call rather than fixed, because a surface reads it from the
+// vault's settings, which a passphrase proof may just have made readable. A timeout above zero keeps the
+// session open until that long has passed without activity. A timeout of zero keeps no deadline: a session
+// built with oneShot grants exactly one use (Consume), otherwise a grant is not active at all and the next
+// action must ask again.
 type AdminSession struct {
 	oneShot bool
 	now     func() time.Time

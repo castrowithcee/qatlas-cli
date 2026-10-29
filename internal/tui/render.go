@@ -481,7 +481,7 @@ func (m *Model) keyHint(text string) string {
 
 // dialogKeyHint is the key line of a modal dialog: groups never split across a wrap, only between groups,
 // and within a group the key (its first word) is bold while the action after it keeps the plain hint style.
-// A single group too wide for the terminal is cut with "...". It stands in the dialog itself, where its
+// A single group too wide for the terminal is cut with "…". It stands in the dialog itself, where its
 // keys are buttons.
 func (m *Model) dialogKeyHint(text string) string {
 	if strings.Contains(text, "{info} info") {

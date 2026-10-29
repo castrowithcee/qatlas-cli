@@ -276,3 +276,24 @@ func TestLogEntryCarriesTheRenameFields(t *testing.T) {
 		t.Fatalf("fields = %+v, want %+v", got, f)
 	}
 }
+
+// A server kept with a retention of zero never removes a day file.
+func TestServerWithoutRetentionKeepsOldDays(t *testing.T) {
+	dir := t.TempDir()
+	logs := filepath.Join(dir, "logs")
+	if err := os.MkdirAll(logs, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(logs, "2020-01-01.jsonl")
+	if err := os.WriteFile(old, []byte(`{"seq":1,"time":"2020-01-01T00:00:00Z","path":"cli","operation":"old.entry"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := testServer()
+	s.KeepLog(dir, 0)
+	if _, err := exchangeOverPipe(t, s, testClient(), request{Op: opLog, Entry: goodEntry()}); err != nil {
+		t.Fatalf("log error = %v", err)
+	}
+	if _, err := os.Stat(old); err != nil {
+		t.Fatalf("the server removed an old day file: %v", err)
+	}
+}

@@ -272,7 +272,7 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 		t.Fatalf("n: screen %v, want the question", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"Guided setup", "(•) empty", "( ) from existing connection...",
+	for _, want := range []string{"Guided setup", "(•) empty", "( ) from existing connection…",
 		"up/down move", "enter choose", "esc cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not show %q:\n%s", want, view)
@@ -328,7 +328,7 @@ func TestNewWithoutEntriesSkipsTheQuestion(t *testing.T) {
 	}
 }
 
-// A token copy takes vorbilder and only an expiry that still lies ahead, under a new name, and creating it
+// A token copy takes models and only an expiry that still lies ahead, under a new name, and creating it
 // goes through the same admin-only create as a new token.
 func TestDuplicateTokenTakesVorbilderAndFutureExpiry(t *testing.T) {
 	store, dir, v := newTokenFixture(t)

@@ -212,7 +212,7 @@ func (m *Model) detailPanel(name string, height int) ([]string, int, [][2]int) {
 	if len(body) > room {
 		body = body[:room]
 		if room > 0 {
-			body[room-1] = styles.hint.Render("...")
+			body[room-1] = styles.hint.Render("…")
 		}
 	}
 	lines := append(head, body...)

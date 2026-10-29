@@ -1,8 +1,8 @@
 // The Tokens section (see the sectionTokens comment in tui.go): the agent tokens of an encrypted vault, each
-// with its vorbild connections and its expiry, and the screens that create, show, and revoke one.
+// with its model connections and its expiry, and the screens that create, show, and revoke one.
 //
 // Every function here that reads or changes a token defers to package vault, the same core 'qatlas vault
-// token' uses, and asks package approval which vorbilder cover nothing now; nothing here reimplements
+// token' uses, and asks package approval which models cover nothing now; nothing here reimplements
 // either. A token's value is read from the vault only to draw it on the detail screen, and only while it is
 // revealed there in an admin session: it never enters the model, a message, a status, or an error.
 package tui
@@ -24,15 +24,15 @@ import (
 
 // The rows of the form that creates an agent token, besides its name.
 const (
-	vorbilderLabel = "vorbilder"
+	vorbilderLabel = "models"
 	expiresLabel   = "expires"
 )
 
-// tokenLapsedText is what a vorbild that covers nothing now is marked with, symbol and words together.
+// tokenLapsedText is what a model that covers nothing now is marked with, symbol and words together.
 func tokenLapsedText() string { return tr(tTokenLapsed) }
 
 // tokenEntry is one agent token as the Tokens section shows it: never its value, which only tokenValue
-// reads, and only for the revealed detail screen. lapsed names its vorbilder that cover nothing now, and
+// reads, and only for the revealed detail screen. lapsed names its models that cover nothing now, and
 // checkErr says why that could not be found out, "" when it could.
 type tokenEntry struct {
 	token    vault.Token
@@ -112,15 +112,15 @@ func (m *Model) tokenValue(name string) string {
 }
 
 // tokenValueShown reports whether the detail screen draws the token's value: only once s asked for it, and
-// only while this window's admin session lasts. With vault.admin_timeout: 0 there never is a session to
+// only while this window's admin session lasts. With an admin session time of 0 there never is a session to
 // last; the passphrase s just asked for is the proof then, and the value stays shown until s hides it or
 // the detail screen is left.
 func (m *Model) tokenValueShown() bool {
-	return m.tokenReveal && (m.adminSessionActive() || m.cfg.VaultAdminTimeout() <= 0)
+	return m.tokenReveal && (m.adminSessionActive() || m.adminTimeout() <= 0)
 }
 
 // tokenWarning is the short warning the list shows behind a token's name, symbol and words together so it
-// never rests on colour alone; "" when nothing keeps the token from approving what its vorbilder allow.
+// never rests on colour alone; "" when nothing keeps the token from approving what its models allow.
 func tokenWarning(entry tokenEntry) string {
 	var parts []string
 	if entry.token.Expired(time.Now()) {
@@ -154,7 +154,7 @@ func tokenExpiry(token vault.Token) string {
 }
 
 // tokenCells are the cells of one token in the Tokens list: its name with any warning behind it, since the
-// first column is never cut, its expiry, and its vorbilder.
+// first column is never cut, its expiry, and its models.
 func (m *Model) tokenCells(name string) []string {
 	entry, ok, _ := m.tokenByName(name)
 	if !ok {
@@ -177,7 +177,7 @@ func (m *Model) tokenNames() []string {
 	return names
 }
 
-// vorbildChoices are the connections a token may name as a vorbild: every one that reads a vault credential,
+// vorbildChoices are the connections a token may name as a model: every one that reads a vault credential,
 // since the vault approves nothing for any other, sorted.
 func (m *Model) vorbildChoices() []string {
 	var names []string
@@ -191,7 +191,7 @@ func (m *Model) vorbildChoices() []string {
 }
 
 // tokensBlocked is why n cannot start a token now, "" when it can: the vault cannot hold tokens at all, or no
-// connection could be a vorbild. A locked vault does not block it; requireAdmin unlocks it first.
+// connection could be a model. A locked vault does not block it; requireAdmin unlocks it first.
 func (m *Model) tokensBlocked() string {
 	_, unavailable := m.tokensReport()
 	if unavailable != "" && !m.vaultLocked() {
@@ -203,10 +203,10 @@ func (m *Model) tokensBlocked() string {
 	return ""
 }
 
-// tokenFields are the rows of the form that creates an agent token: its name, its vorbilder ticked in a
+// tokenFields are the rows of the form that creates an agent token: its name, its models ticked in a
 // picker, and its optional expiry. A token is never edited; it is revoked and created anew.
 //
-// A token filled from source (see template.go) starts with that token's copy name, its vorbilder that still
+// A token filled from source (see template.go) starts with that token's copy name, its models that still
 // read a vault credential, and its expiry only while it still lies ahead; its value is always a new one.
 func (m *Model) tokenFields(source string) []field {
 	var name, expires string
@@ -267,7 +267,7 @@ type tokenActionMsg struct {
 }
 
 // createToken creates the token the form describes, once requireAdmin proved the admin session. What the
-// form can check itself (the name, at least one vorbild that still reads a vault credential, the expiry) is
+// form can check itself (the name, at least one model that still reads a vault credential, the expiry) is
 // refused on the form with every input kept; the vault write runs as a command, off the event loop.
 func (m *Model) createToken() tea.Cmd {
 	if m.vaultBusy {
@@ -416,7 +416,7 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 }
 
 // tokenDetailView draws the detail screen of one token: its state, its value, masked until v reveals it, its
-// vorbilder with a warning in words beside every one that covers nothing now, its expiry, and when it was
+// models with a warning in words beside every one that covers nothing now, its expiry, and when it was
 // created.
 func (m *Model) tokenDetailView() string {
 	name := m.tokenDetail

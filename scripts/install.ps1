@@ -204,7 +204,7 @@ function Install-Qatlas {
             Write-Host "  PATH:    $bindir was added to your user PATH; open a new terminal to use ``qatlas``."
         }
         Write-Host ''
-        Write-Host 'Next: run `qatlas tui` (press c to connect a provider) or `qatlas web`.'
+        Write-Host 'Next: run `qatlas tui` (press g to connect a provider) or `qatlas web`.'
     } catch {
         Write-Error ("qatlas-install: " + $_.Exception.Message)
         return

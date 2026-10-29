@@ -165,25 +165,6 @@ func TestDeleteConflictKeepsTheOtherChangeAndRepeatSucceeds(t *testing.T) {
 	}
 }
 
-func TestVaultSettingsConflictKeepsTheOtherChange(t *testing.T) {
-	m, store, path, _, _ := newStoreModel(t)
-	addService(t, m, "wiki", "https://wiki.example.invalid")
-	openVaultSection(t, m)
-	foreignWriters[1].write(t, store, "theirs")
-	m.saveVault()
-	if !strings.Contains(m.fail, "changed outside this editor") {
-		t.Fatalf("fail = %q, want a conflict", m.fail)
-	}
-	if _, ok := savedConfig(t, path).Services["theirs"]; !ok {
-		t.Fatal("the other change was lost")
-	}
-	m.clearMessages()
-	m.saveVault()
-	if m.fail != "" || m.status != "Saved" {
-		t.Errorf("repeating: fail %q status %q", m.fail, m.status)
-	}
-}
-
 func TestPayloadSaveConflictStoresNothingAndRepeatSucceeds(t *testing.T) {
 	h := newPayloadHarness(t, false)
 	h.startPayload(t, "billing", storageKeyring, "")

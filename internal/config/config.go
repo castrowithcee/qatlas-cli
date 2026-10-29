@@ -328,41 +328,24 @@ func (c *Config) SecretStore() string {
 	return c.Defaults.SecretStore
 }
 
-// DefaultVaultIdleTimeout is how long the vault process holds the unlocked vault without a read before it
-// locks itself, unless vault.idle_timeout says otherwise.
-const DefaultVaultIdleTimeout = 12 * time.Hour
-
-// DefaultVaultAdminTimeout is how long an admin session of the TUI editor (internal/tui, see requireAdmin)
-// stays open, without a key press in that window, before it asks for the vault's passphrase again, unless
-// vault.admin_timeout says otherwise.
-const DefaultVaultAdminTimeout = 10 * time.Minute
-
-// VaultSettings holds the settings of the vault that are not secret.
+// VaultSettings holds the vault entries of the configuration file, which have no effect. The idle time and
+// the admin session time are settings of the vault itself, authenticated in its settings.age, because this
+// file can be edited by an agent and so must not lengthen either.
 type VaultSettings struct {
-	// IdleTimeout is how long the vault process holds the unlocked vault without a read before it locks
-	// itself, as a Go duration such as "12h" or "30m". Left empty, it means DefaultVaultIdleTimeout. It must
-	// be positive: a vault process that never locks itself is not offered, and 'qatlas vault lock' locks it
-	// at once.
+	// IdleTimeout has no effect: how long the vault process holds the unlocked vault without a read is a
+	// setting of the vault. It is accepted only so an existing configuration still loads, as a positive
+	// Go duration such as "12h" or an empty value.
 	IdleTimeout string `yaml:"idle_timeout,omitempty"`
-	// AdminTimeout is how long the TUI editor's admin session (internal/tui, see requireAdmin) stays open,
-	// without a key press in that window, before it asks for the vault's passphrase again, as a Go duration
-	// such as "10m". Left empty, it means DefaultVaultAdminTimeout. "0" is allowed and means asking for the
-	// passphrase on every managing action instead of keeping a session at all; it must not be negative.
+	// AdminTimeout has no effect: how long an admin session stays open is a setting of the vault. It is
+	// accepted only so an existing configuration still loads, as a Go duration that is not negative, such
+	// as "10m" or "0", or an empty value.
 	AdminTimeout string `yaml:"admin_timeout,omitempty"`
 }
 
-// VaultIdleTimeout returns the effective idle timeout of the vault process. A configuration that passed
-// Validate always has one; an unparseable value falls back to DefaultVaultIdleTimeout.
-func (c *Config) VaultIdleTimeout() time.Duration {
-	if d, err := parseIdleTimeout(c.Vault.IdleTimeout); err == nil && d > 0 {
-		return d
-	}
-	return DefaultVaultIdleTimeout
-}
-
+// parseIdleTimeout checks text as a vault.idle_timeout; an empty one is valid.
 func parseIdleTimeout(text string) (time.Duration, error) {
 	if text == "" {
-		return DefaultVaultIdleTimeout, nil
+		return 0, nil
 	}
 	d, err := time.ParseDuration(text)
 	if err != nil {
@@ -374,21 +357,10 @@ func parseIdleTimeout(text string) (time.Duration, error) {
 	return d, nil
 }
 
-// VaultAdminTimeout returns the effective admin session timeout the TUI editor's requireAdmin reads (see
-// internal/tui/admin.go). A configuration that passed Validate always has one; an unparseable value falls
-// back to DefaultVaultAdminTimeout. Unlike VaultIdleTimeout, "0" is a real, valid value, not a fallback
-// trigger: it tells requireAdmin to never keep a session at all, asking for the passphrase on every managing
-// action instead.
-func (c *Config) VaultAdminTimeout() time.Duration {
-	if d, err := parseAdminTimeout(c.Vault.AdminTimeout); err == nil {
-		return d
-	}
-	return DefaultVaultAdminTimeout
-}
-
+// parseAdminTimeout checks text as a vault.admin_timeout; an empty one is valid.
 func parseAdminTimeout(text string) (time.Duration, error) {
 	if text == "" {
-		return DefaultVaultAdminTimeout, nil
+		return 0, nil
 	}
 	d, err := time.ParseDuration(text)
 	if err != nil {
@@ -400,26 +372,12 @@ func parseAdminTimeout(text string) (time.Duration, error) {
 	return d, nil
 }
 
-// DefaultLogRetentionDays is how many days of invocation log entries are kept when logs.retention_days is
-// left out.
-const DefaultLogRetentionDays = 90
-
-// LogSettings holds the settings of the invocation log that are not secret. The log itself is not
-// optional: every invoke over the CLI and MCP writes an entry whatever this section says; only how long
-// entries are kept is configurable.
+// LogSettings holds the invocation log section of the configuration. The log itself is not optional: every
+// invoke over the CLI and MCP writes an entry whatever this section says.
 type LogSettings struct {
-	// RetentionDays is how many days of invocation log entries are kept, a positive integer. Left out or
-	// zero, it means DefaultLogRetentionDays.
+	// RetentionDays has no effect: how long entries are kept is a setting of the vault, which this file,
+	// editable by an agent, cannot shorten. It is accepted only so an existing configuration still loads.
 	RetentionDays int `yaml:"retention_days,omitempty"`
-}
-
-// LogRetentionDays returns the effective retention window of the invocation log. A configuration that
-// passed Validate always has a positive one; an unset value falls back to DefaultLogRetentionDays.
-func (c *Config) LogRetentionDays() int {
-	if c.Logs.RetentionDays <= 0 {
-		return DefaultLogRetentionDays
-	}
-	return c.Logs.RetentionDays
 }
 
 // The supported credential types.

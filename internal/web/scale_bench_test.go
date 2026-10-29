@@ -73,7 +73,7 @@ func scalePage(b testing.TB, overview Overview, store *config.Store) func() *htt
 	if store != nil {
 		svc = manage.New(store, resolver, connlog.SurfaceWeb, &redact.Redactor{})
 	}
-	s, err := New(overview, nil, defaultTestAdminTimeout, svc, resolver, &redact.Redactor{}, nil)
+	s, err := New(overview, nil, svc, resolver, &redact.Redactor{}, nil)
 	if err != nil {
 		b.Fatalf("New: %v", err)
 	}

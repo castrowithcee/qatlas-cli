@@ -65,7 +65,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"tokens, go approvals, go services, go credentials, go general, go vault, go defaults, go transfer,\n" +
 			"go update, go self-test, or go logs.\n" +
 			"In a list, / filters, n adds (in Connections n is the guided setup, which adds a missing service or\n" +
-			"credential on the way), enter edits, d deletes, t tests the selected connection, c starts\n" +
+			"credential on the way), enter edits, d deletes, t tests the selected connection, g starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
 			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
@@ -73,11 +73,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
 			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
 			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
-			"searchable list; in Connections, n and c ask the same for the guided setup, which then starts\n" +
+			"searchable list; in Connections, n and g ask the same for the guided setup, which then starts\n" +
 			"from a connection. A\n" +
 			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
-			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
+			"copied agent token keeps its models and an expiry that still lies ahead, but gets its own\n" +
 			"value.\n\n" +
 			"Nothing unsaved is dropped silently, and one question asks about all of it: a changed form, a\n" +
 			"changed list of targets or paths, a target or path typed but not yet taken, a half-built target,\n" +
@@ -90,7 +90,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Focus and state read without colour. The active section is in brackets, and > in front of the\n" +
 			"tab line says it has the focus; the selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
 			"say warning: or error:. Colour only supports these marks; NO_COLOR turns it off.\n\n" +
-			"c sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
+			"g sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
 			"access, and a summary that saves the connection and can test it right away. Each step offers\n" +
 			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
 			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
@@ -130,8 +130,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"storing or removing a secret, and every action of Settings > Vault (6, see below) each ask for the vault's\n" +
 			"passphrase the first time, masked in a screen of their own, never on this terminal. Answering it\n" +
 			"unlocks the vault where it was locked, and either way starts an admin session bound to this\n" +
-			"window: further managing actions run at once until vault.admin_timeout passes without a key\n" +
-			"press, after which the next one asks again; vault.admin_timeout: 0 asks every time instead of\n" +
+			"window: further managing actions run at once until the admin session timeout of the vault passes\n" +
+			"without a key press, after which the next one asks again; a timeout of 0s asks every time instead of\n" +
 			"keeping a session. A wrong passphrase reopens the same prompt with error: wrong passphrase; esc\n" +
 			"cancels only that one action, leaving the form exactly as typed so it can be tried again. No\n" +
 			"other window, and no vault process a Linux or macOS build may hold unlocked outside this run,\n" +
@@ -139,7 +139,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault, or one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
 			"The header above the tab line always shows the vault's state, unlocked, locked, or unencrypted,\n" +
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
-			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
+			"encrypted: admin off, admin Nm left, or admin: confirm each change for an admin session timeout of 0s.\n" +
 			"ctrl+l works on the tab line, the lists, the forms, the pickers and tables, the target and path\n" +
 			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
 			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
@@ -197,9 +197,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +
 			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
 			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
-			"vault.idle_timeout and vault.admin_timeout, saved with F2 like any other setting; admin_timeout\n" +
-			"sets how long this window's own admin session above stays open (see the read-only\n" +
-			"paragraph further up), 0 asking for the passphrase on every managing action instead.\n\n" +
+			"the vault's idle timeout, admin session timeout, and log retention, editable while the vault is\n" +
+			"unlocked and saved with F2 into the encrypted vault as settings.age, never into config.yaml, like\n" +
+			"'qatlas vault settings'; the admin session timeout sets how long this window's own admin session\n" +
+			"above stays open (see the read-only paragraph further up), 0s asking for the passphrase on every\n" +
+			"managing action instead.\n\n" +
 			"Saving a change while the vault is encrypted approves it automatically, without an extra\n" +
 			"step: the connection saved directly, in its own form or by the guided setup, and any other\n" +
 			"connection whose scope changed because of that same save, such as one sharing a service\n" +
@@ -207,8 +209,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
 			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
 			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"Tokens (4, first part of Access) lists the agent tokens of an encrypted vault with their vorbild connections and expiry,\n" +
-			"and marks an expired token, or a vorbild that covers nothing now, with ⚠ and words behind its\n" +
+			"Tokens (4, first part of Access) lists the agent tokens of an encrypted vault with their model connections and expiry,\n" +
+			"and marks an expired token, or a model that covers nothing now, with ⚠ and words behind its\n" +
 			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
 			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
 			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +
@@ -240,7 +242,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"per local day, a row per week under the weekdays, leveled by the number of invokes (quartiles of\n" +
 			"the busy days) in colour, or with ·░▒▓█ where there is none and .-=+# in a terminal that is not\n" +
 			"UTF-8, a legend, and the calls, the success rate, and the errors.\n" +
-			"A day outside logs.retention_days shows × instead of the dot of a day without calls, a day with a\n" +
+			"A day outside the log retention shows × instead of the dot of a day without calls, a day with a\n" +
 			"changed line ✗, and a day with missing entries …. The mode, the days, the filters, and the search\n" +
 			"apply to it; from a single day, the heatmap widens the days to the retention window.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +

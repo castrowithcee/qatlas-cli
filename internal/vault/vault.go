@@ -13,7 +13,7 @@
 //
 // An encrypted vault can also hold tokens.age, the agent tokens (see Token): each a random value that lets an
 // agent approve an open connection change without the passphrase, as long as the change reaches no further
-// than one of the token's vorbild connections (see ApproveWithToken). The file carries a check value keyed
+// than one of the token's model connections (see ApproveWithToken). The file carries a check value keyed
 // from the vault's private key, so a document merely encrypted to the public recipient is not trusted.
 //
 // Every file follows the same rule the plaintext credential fallback uses: the vault directory is 0700,

@@ -86,10 +86,10 @@ func NewServer(key age.Identity, secrets map[string]map[string]string, bindings 
 }
 
 // KeepLog makes the server the writer of the invocation log below vaultDir, the vault directory it holds
-// unlocked, which keeps the entries of retentionDays days: every log request is signed with the log key
-// and appended under the log's own lock, through the same invokelog.Logger any other writer uses. Both
-// values come from the configuration the process was started with, never from a request. A server
-// without KeepLog refuses every log request. Call it before Serve.
+// unlocked, which keeps the entries of retentionDays days (zero keeps all): every log request is signed
+// with the log key and appended under the log's own lock, through the same invokelog.Logger any other writer
+// uses. Both values come from the vault the process was started for, never from a request. A server without
+// KeepLog refuses every log request. Call it before Serve.
 func (s *Server) KeepLog(vaultDir string, retentionDays int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -102,7 +102,7 @@ func (s *Server) KeepLog(vaultDir string, retentionDays int) {
 // vaultDir, the vault directory it holds unlocked, which comes from the configuration the process was
 // started with, never from a request. For each such request the server opens the vault with its key as the
 // vault is on disk then, so a token created or revoked since counts at once; checks the token, its expiry,
-// and what its vorbild connections cover (see vault.Vault.ApproveWithToken); writes the approvals into the
+// and what its model connections cover (see vault.Vault.ApproveWithToken); writes the approvals into the
 // vault; checks every later get against them; and logs each decision with the token's name, never its
 // value. A server without it refuses every approve-token request. Call it before Serve.
 func (s *Server) ApproveWithTokens(vaultDir string) {

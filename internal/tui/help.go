@@ -127,20 +127,34 @@ func (m *Model) keyLineCount(keys string) int {
 }
 
 // helpTopics draws the topics with the current one in brackets, like the tabs of a detail pane.
-func (m *Model) helpTopics() string {
+func (m *Model) helpTopics() (string, [][2]int) {
 	var names []string
 	for _, topic := range helptopics.All() {
 		names = append(names, topic.Name)
 	}
-	strip, _ := tabStrip(names, m.helpTopic, true)
-	return strip
+	return tabStrip(names, m.helpTopic, true)
+}
+
+// hitHelpTopics makes the topic tabs clickable. The strip stands in screen row y from column x on. A click does
+// what the keys that switch the topic do, and so starts the text at its top.
+func (m *Model) hitHelpTopics(spans [][2]int, y, x int) {
+	for i, span := range spans {
+		m.addHit(x+span[0], y, x+span[1], y+1, func() tea.Cmd {
+			if m.screen == screenHelp {
+				m.helpTopic = i
+				m.help.reset()
+				m.clampHelp()
+			}
+			return nil
+		})
+	}
 }
 
 // helpFrame is everything of the help screen except the text: above it the topics with the current one in
 // brackets, and the macOS note where it fits, below it the position in the text and the keys. room is the
 // number of text lines between them.
 func (m *Model) helpFrame() (string, string, int) {
-	strip := m.helpTopics()
+	strip, _ := m.helpTopics()
 	base := styles.title.Render("Help") + "  " + strip + "\n\n"
 	if m.helpOverlay() {
 		base = strip + "\n\n"
@@ -189,6 +203,10 @@ func (m *Model) clampHelp() []string {
 func (m *Model) helpView() string {
 	rows := m.clampHelp()
 	head, foot, _ := m.helpFrame()
+	if !m.inModal {
+		_, spans := m.helpTopics()
+		m.hitHelpTopics(spans, m.workspaceTop(), lipgloss.Width(styles.title.Render("Help")+"  "))
+	}
 	shown := make([]string, 0, len(rows))
 	headings := m.helpHeadings()
 	for _, line := range rows {

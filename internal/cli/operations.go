@@ -111,18 +111,18 @@ func applicationCore(opts *Options, registry *capability.Registry, withSecrets b
 
 // applicationCoreForInvoke builds the core exactly like applicationCore(opts, registry, true), then installs
 // the invocation log every invoke over path ("cli" or "mcp") appends to: the invocation log lives under the
-// same vault directory a vault credential does, so it exists without a vault ever being set up, and its
-// retention follows logs.retention_days of the same configuration this core was loaded from. client is the
+// same vault directory a vault credential does, so it exists without a vault ever being set up. Its
+// retention is the vault's, never the configuration's (see connlog.SigningWriter). client is the
 // MCP client's name and version from initialize, or nil on the CLI and where a client never declared one.
 // Each entry is signed where the vault's key is at hand, by a running vault process or by this process
 // when it holds the vault unlocked; see invokeLogWriter.
 func applicationCoreForInvoke(opts *Options, registry *capability.Registry, path string,
 	client *invokelog.ClientInfo) (*application.Core, error) {
-	core, cfg, configPath, err := loadCore(opts, registry, true)
+	core, _, configPath, err := loadCore(opts, registry, true)
 	if err != nil {
 		return nil, err
 	}
-	core.SetInvokeLog(newInvokeLogWriter(opts, invokeLogDir(configPath), cfg.LogRetentionDays()), path, client)
+	core.SetInvokeLog(newInvokeLogWriter(opts, invokeLogDir(configPath)), path, client)
 	return core, nil
 }
 
@@ -130,8 +130,8 @@ func applicationCoreForInvoke(opts *Options, registry *capability.Registry, path
 func invokeLogDir(configPath string) string { return vault.New(filepath.Dir(configPath)).Dir() }
 
 // newInvokeLogWriter returns the writer of the invocation log under vaultDir.
-func newInvokeLogWriter(opts *Options, vaultDir string, retentionDays int) invokeLogWriter {
-	writer := invokeLogWriter{logger: invokelog.New(vaultDir, retentionDays)}
+func newInvokeLogWriter(opts *Options, vaultDir string) invokeLogWriter {
+	writer := invokeLogWriter{logger: invokelog.New(vaultDir, 0)}
 	// Only the vault this very log belongs to signs it.
 	if secrets, err := opts.resolver(); err == nil && secrets.Vault() != nil && secrets.Vault().Dir() == vaultDir {
 		writer.vault = secrets.Vault()

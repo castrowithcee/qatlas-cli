@@ -11,7 +11,10 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -40,13 +43,16 @@ func newEncryptedVaultModel(t *testing.T, dir, passphrase string, unlockedInProc
 	return m, store
 }
 
-// setAdminTimeout saves vault.admin_timeout without going through the vault form, so a test can pick the
-// value its own model is built with before requireAdmin ever reads it.
-func setAdminTimeout(t *testing.T, store *config.Store, timeout string) {
+// setAdminTimeout stores the admin session time in the settings of the model's own, unlocked vault, the way
+// the vault form does, so a test can pick the value before requireAdmin ever reads it.
+func setAdminTimeout(t *testing.T, m *Model, timeout string) {
 	t.Helper()
-	cfg := newTestConfig(t)
-	cfg.Vault.AdminTimeout = timeout
-	mustNoError(t, store.Save(cfg))
+	d, err := time.ParseDuration(timeout)
+	mustNoError(t, err)
+	settings := vault.DefaultSettings()
+	settings.AdminTimeout = d
+	mustNoError(t, m.secrets.Vault().SetSettings(settings))
+	m.RefreshAdminTimeout()
 }
 
 // The editor opens, and stays, read-only regardless of the vault's state: browsing every section, opening
@@ -192,18 +198,16 @@ func TestAdminSessionCancelPreservesFormInput(t *testing.T) {
 	}
 }
 
-// vault.admin_timeout: 0 never keeps a session at all: every single managing action asks for the passphrase
+// An admin session time of 0 never keeps a session at all: every single managing action asks for the passphrase
 // again, immediately after the previous one succeeded.
 func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
-	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
-	setAdminTimeout(t, store, "0")
-	m.cfg = mustLoad(t, store)
-	syncRevision(t, m)
+	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
+	setAdminTimeout(t, m, "0")
 
 	addKeyringCredentialGated(t, m, "reader", "hunter2")
 	if m.AdminSessionActive() {
-		t.Fatal("AdminSessionActive() = true with vault.admin_timeout: 0")
+		t.Fatal("AdminSessionActive() = true with an admin session time of 0")
 	}
 
 	// A second, otherwise independent managing action asks again right away.
@@ -219,7 +223,7 @@ func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 	}
 }
 
-// Once vault.admin_timeout passes without a key press, the session ends silently, and the next managing
+// Once the admin session time passes without a key press, the session ends silently, and the next managing
 // action asks again. Any key press while the session is still active renews its idle deadline instead, so
 // it never expires while someone is actually using the window.
 func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
@@ -467,7 +471,7 @@ func mustLoad(t *testing.T, store *config.Store) *config.Config {
 }
 
 // A vault action that proves the passphrase on its own (here "change passphrase") starts a session like the
-// admin dialog does, so with vault.admin_timeout: 0 it keeps none: the next change asks again. With a
+// admin dialog does, so with an admin session time of 0 it keeps none: the next change asks again. With a
 // timeout above zero the same action leaves the session open and the next change runs at once.
 func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 	for _, tc := range []struct {
@@ -479,10 +483,8 @@ func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "qatlas")
-			m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
-			setAdminTimeout(t, store, tc.timeout)
-			m.cfg = mustLoad(t, store)
-			syncRevision(t, m)
+			m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
+			setAdminTimeout(t, m, tc.timeout)
 
 			openVaultSection(t, m)
 			focusRole(t, m, "change passphrase")
@@ -538,5 +540,59 @@ func TestAdminSessionAsksOnceForNewInConnections(t *testing.T) {
 	if _, ok := loaded.Services["wiki"]; !ok || loaded.Credentials["reader"].Type == "" ||
 		loaded.Connections["personal"].Service != "wiki" {
 		t.Errorf("saved configuration = %+v", loaded)
+	}
+}
+
+// A locked vault cannot read its settings, so no proof yet means the safe 0 whatever vault.admin_timeout says
+// in the configuration; the passphrase proof unlocks the vault and the stored time applies.
+func TestAdminTimeoutLockedUntilProofThenStored(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	seed, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
+	setAdminTimeout(t, seed, "7m")
+
+	m, store := newEncryptedVaultModel(t, dir, "hunter2", false)
+	cfg := newTestConfig(t)
+	cfg.Vault.AdminTimeout = "1h"
+	mustNoError(t, store.Save(cfg))
+	m.cfg = mustLoad(t, store)
+	syncRevision(t, m)
+	m.RefreshAdminTimeout()
+	if got := m.adminTimeout(); got != 0 {
+		t.Fatalf("admin timeout of a locked vault before the proof = %v, want 0", got)
+	}
+
+	mustNoError(t, manage.VerifyAdmin(m.secrets.Vault(), "hunter2"))
+	m.handleAdminVerified(adminVerifiedMsg{back: m.screen, action: func() tea.Cmd { return nil }})
+	if got := m.adminTimeout(); got != 7*time.Minute {
+		t.Fatalf("admin timeout after the proof = %v, want the stored 7m, not the configured 1h", got)
+	}
+	if remaining := m.AdminSessionRemaining(); remaining <= 6*time.Minute || remaining > 7*time.Minute {
+		t.Fatalf("AdminSessionRemaining() = %v, want about 7m", remaining)
+	}
+
+	m.secrets.Vault().Forget()
+	m.handleVaultLocked(vaultLockedMsg{})
+	if got := m.adminTimeout(); got != 0 {
+		t.Fatalf("admin timeout after locking = %v, want 0", got)
+	}
+}
+
+// An untrusted settings.age never gives more than 0; a vault without encryption has the default.
+func TestAdminTimeoutUntrustedAndUnencrypted(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
+	setAdminTimeout(t, m, "1h")
+	mustNoError(t, os.WriteFile(filepath.Join(m.secrets.Vault().Dir(), "settings.age"), []byte("not an age file"), 0o600))
+	m.RefreshAdminTimeout()
+	if got := m.adminTimeout(); got != 0 {
+		t.Fatalf("admin timeout with an untrusted settings.age = %v, want 0", got)
+	}
+
+	plain := filepath.Join(t.TempDir(), "qatlas")
+	secrets, _ := newVaultResolver(t, plain)
+	m2, err := buildModel(newTestStore(t, filepath.Join(plain, "config.yaml")), nil, secrets, nil)
+	mustNoError(t, err)
+	if got := m2.adminTimeout(); got != vault.DefaultAdminTimeout {
+		t.Fatalf("admin timeout of an unencrypted vault = %v, want the default", got)
 	}
 }

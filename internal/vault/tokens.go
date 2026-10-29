@@ -43,7 +43,7 @@ const tokenBytes = 32
 const maxTokenName = 64
 
 // Token is one agent token: a random value that lets an agent approve an open connection change without the
-// passphrase, as long as the change reaches no further than one of its vorbild connections, named in Models.
+// passphrase, as long as the change reaches no further than one of its model connections, named in Models.
 // Expires is nil for a token that never expires. Value is as secret as a credential: it is shown only to a
 // person who entered the passphrase, never logged, and never put in an error.
 type Token struct {
@@ -69,8 +69,8 @@ var (
 	ErrTokenExists = errors.New("an agent token of this name exists already")
 	// ErrTokenNotFound reports a token name the vault holds no token for.
 	ErrTokenNotFound = errors.New("the vault holds no agent token of this name")
-	// ErrNoModels reports a token without a vorbild connection, which could approve nothing.
-	ErrNoModels = errors.New("an agent token needs at least one vorbild connection")
+	// ErrNoModels reports a token without a model connection, which could approve nothing.
+	ErrNoModels = errors.New("an agent token needs at least one model connection")
 	// ErrTokenUnknown reports a presented agent token the vault does not hold: never created, revoked, or
 	// mistyped. It never names the value.
 	ErrTokenUnknown = errors.New("the agent token is not one this vault holds; it may have been revoked")
@@ -209,7 +209,7 @@ func (v *Vault) Tokens() ([]Token, error) {
 	return tokens, nil
 }
 
-// CreateToken creates an agent token named name with the vorbild connections models and an optional expiry,
+// CreateToken creates an agent token named name with the model connections models and an optional expiry,
 // and writes it to the vault unlocked in this process. The value is 256 random bits. Whether each model
 // names a connection is the caller's to check; the vault knows no configuration.
 func (v *Vault) CreateToken(name string, models []string, expires *time.Time) (Token, error) {

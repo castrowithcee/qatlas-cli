@@ -59,10 +59,10 @@ func (m *Model) vaultSegments() []string {
 	case m.vaultDisplayUnlocked(state):
 		// A vault process elsewhere may hold it open while this window itself has never unlocked it; either
 		// way the admin state belongs here too, since every unlocked, encrypted vault shows one, and
-		// adminHeaderText already reads "admin off" (or the vault.admin_timeout: 0 text) on its own for a
+		// adminHeaderText already reads "admin off" (or the admin session time 0 text) on its own for a
 		// window that never started a session, since AdminSessionActive is false regardless of why.
 		admin := statusDim
-		if m.cfg.VaultAdminTimeout() > 0 && m.AdminSessionActive() {
+		if m.adminTimeout() > 0 && m.AdminSessionActive() {
 			admin = statusOK
 		}
 		return []string{statusMark(statusOK, tr(tVaultUnlocked)), statusMark(admin, m.adminHeaderText())}
@@ -93,9 +93,9 @@ func (m *Model) vaultDisplayUnlocked(state vault.State) bool {
 
 // adminHeaderText is the header's admin abbreviation for an encrypted, unlocked vault: "admin off" while
 // this window has no session, "admin Nm left" with its remaining time rounded to minutes, or "admin: confirm
-// each change" for vault.admin_timeout: 0, which never keeps one at all (see requireAdmin in admin.go).
+// each change" for an admin session time of 0, which never keeps one at all (see requireAdmin in admin.go).
 func (m *Model) adminHeaderText() string {
-	if m.cfg.VaultAdminTimeout() <= 0 {
+	if m.adminTimeout() <= 0 {
 		return tr(tAdminEachChange)
 	}
 	if !m.AdminSessionActive() {
@@ -235,17 +235,10 @@ func (m *Model) vaultUnlockPrompt() promptDialog {
 }
 
 // vaultUnlockHint explains what answering the 'ctrl+l' unlock dialog does besides unlocking the vault
-// itself: starts this window's admin session too, until vault.admin_timeout idle, or, for
-// vault.admin_timeout: 0, asks again on the very next change regardless (the same words admin.go's own
-// adminSessionHint uses for that one case, since a session never starts at all either way).
-func (m *Model) vaultUnlockHint() string {
-	timeout := m.cfg.VaultAdminTimeout()
-	if timeout <= 0 {
-		return m.adminSessionHint()
-	}
-	minutes := int(timeout.Round(time.Minute) / time.Minute)
-	return tr(tUnlockAlsoAdmin, minutes)
-}
+// itself: starts this window's admin session too. The dialog opens for a locked vault, whose admin session
+// time is stored in settings.age and unreadable until the passphrase unlocked it, so the hint must not
+// claim a duration, nor that every change asks again.
+func (m *Model) vaultUnlockHint() string { return tr(tUnlockAlsoAdmin) }
 
 // vaultUnlockedMsg carries the outcome of unlocking the vault back into the event loop: the scrypt work
 // vault.Vault.Unlock does never runs on it. back is the screen to return to; merged is how many pending
@@ -434,6 +427,7 @@ func (m *Model) beginVaultLock() tea.Cmd {
 func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	m.endAdminSession()
+	m.RefreshAdminTimeout()
 	m.vaultProcessUnlocked = false
 	if msg.err != nil {
 		m.fail = tr(tVaultProcessNotLocked, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))

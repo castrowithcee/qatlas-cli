@@ -56,8 +56,8 @@ type RenamePlan struct {
 	// is, so a valid one stays valid and an open one stays open.
 	Approval      string
 	CarryApproval bool
-	// LapsedTokens names the agent tokens that name the connection as a vorbild, or, for a credential, whose
-	// vorbild has an approval naming the credential that the rename does not carry over; the rename ends that
+	// LapsedTokens names the agent tokens that name the connection as a model, or, for a credential, whose
+	// model has an approval naming the credential that the rename does not carry over; the rename ends that
 	// cover.
 	LapsedTokens []string
 	// VaultUnread is true when the vault is encrypted but not unlocked in this process, so approvals and agent
@@ -96,7 +96,7 @@ type RenameResult struct {
 //
 // A name that is no valid name, is taken, or would inherit what the vault holds for another connection - an
 // approval under that name that is not the rest of renaming this one, or an agent token that names it as a
-// vorbild - is refused.
+// model - is refused.
 func (s *Service) PlanRename(kind, old, name string, approve bool) (*RenamePlan, error) {
 	cfg, rev, err := s.Load()
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *Service) planVault(plan *RenamePlan, cfg *config.Config, approve bool) 
 	}
 	for _, token := range tokens {
 		if slices.Contains(token.Models, plan.New) {
-			return &RenameRefusedError{fmt.Errorf("agent token %s names %s as a vorbild connection; renaming a "+
+			return &RenameRefusedError{fmt.Errorf("agent token %s names %s as a model connection; renaming a "+
 				"connection to that name would extend the token, so revoke the token first", token.Name, plan.New)}
 		}
 		if slices.Contains(token.Models, plan.Old) {
@@ -306,7 +306,7 @@ func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, e
 		}
 	}
 	if plan.Kind == RenameConnection {
-		recorder := connlog.NewRecorder(s.surface, s.store.Path(), plan.cfg.LogRetentionDays(), v, s.processOK)
+		recorder := connlog.NewRecorder(s.surface, s.store.Path(), v, s.processOK)
 		if err := recorder.RecordRename(plan.Old, plan.New, plan.ID); err != nil {
 			res.Warnings = append(res.Warnings, s.redact("warning: "+err.Error()))
 		}

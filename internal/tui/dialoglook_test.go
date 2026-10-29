@@ -159,7 +159,7 @@ func TestDialogScreensFramedAtSizeAndPlainAtTheSmallest(t *testing.T) {
 					checkFits(t, view, size.w, size.h)
 					plain := ansi.Strip(view)
 					// The placeholder of a text input carries its own grey, which the terminal drops with NO_COLOR.
-					if noColor && strings.Contains(strings.ReplaceAll(view, "\x1b[38;5;240m", ""), "\x1b[3") {
+					if noColor && strings.Contains(view, "\x1b[3") {
 						t.Errorf("a colour sequence with NO_COLOR set:\n%q", view)
 					}
 					framed := strings.Contains(plain, "╭") || strings.Contains(plain, "╔")

@@ -242,6 +242,11 @@ func (m *Model) modalView() (string, bool) {
 	top, left := dialogOrigin(dialog, m.termWidth, m.termHeight)
 	m.markDialog(dialog, top, left)
 	m.hitDialog(lines, footers, top, left)
+	m.hitPathRows(lines, top+1, left+2)
+	if m.screen == screenHelp {
+		_, spans := m.helpTopics()
+		m.hitHelpTopics(spans, top+1, left+2)
+	}
 	for i, match := range paletteIndex {
 		if match >= 0 {
 			m.addHit(left+1, top+1+i, left+inner+3, top+2+i, func() tea.Cmd { return m.pickCommand(match) })

@@ -403,7 +403,8 @@ func (e *UnsignedError) Unwrap() error { return e.Err }
 // Logger appends invoke entries under one vault directory's logs subdirectory. The zero value is not
 // usable; use New.
 type Logger struct {
-	vaultDir      string
+	vaultDir string
+	// retentionDays is how many days of history Append keeps; zero never removes a day file.
 	retentionDays int
 	// key signs every entry written; nil leaves them unsigned.
 	key *Key
@@ -412,8 +413,10 @@ type Logger struct {
 	now func() time.Time
 }
 
-// New returns a logger writing under vaultDir/logs. It touches no file: like the vault itself, the
-// directory and its files are created lazily, on the first Append, and New never initializes a vault.
+// New returns a logger writing under vaultDir/logs that keeps retentionDays days of history. Zero keeps
+// everything: the logger never removes a day file, which is what a writer without a trusted retention
+// must do. It touches no file: like the vault itself, the directory and its files are created lazily, on the
+// first Append, and New never initializes a vault.
 func New(vaultDir string, retentionDays int) *Logger {
 	return &Logger{vaultDir: vaultDir, retentionDays: retentionDays}
 }
@@ -423,6 +426,14 @@ func New(vaultDir string, retentionDays int) *Logger {
 func (l *Logger) WithKey(key *Key) *Logger {
 	out := *l
 	out.key = key
+	return &out
+}
+
+// WithRetention returns a logger like l that keeps retentionDays days of history; zero never removes a
+// day file. A writer sets it per append, once it knows which retention is trusted.
+func (l *Logger) WithRetention(retentionDays int) *Logger {
+	out := *l
+	out.retentionDays = retentionDays
 	return &out
 }
 
@@ -440,8 +451,9 @@ func (l *Logger) clock() time.Time {
 
 // Append writes one entry for a completed invoke, chained to the last entry this installation ever wrote,
 // across day files and across processes. Retention runs first, under the same lock: a day file older than
-// the logger's retention window is removed, and if any file was actually removed, a KindCut marker
-// documenting the cut is written immediately before the real entry, in the same file.
+// the logger's retention window is removed (none is, with a retention of zero), and if any file was
+// actually removed, a KindCut marker documenting the cut is written immediately before the real entry, in
+// the same file.
 //
 // A returned error means the entry might not be durable. The caller reports it as a warning; it must never
 // turn a completed invoke into a failure or change its result.
@@ -459,9 +471,13 @@ func (l *Logger) Append(f Fields) error {
 	now := l.clock()
 	todayPath := filepath.Join(dir, now.Format("2006-01-02")+".jsonl")
 
-	removed, removedRaw, err := applyRetention(dir, now, l.retentionDays)
-	if err != nil {
-		return err
+	var removed Entry
+	var removedRaw []byte
+	if l.retentionDays > 0 {
+		var err error
+		if removed, removedRaw, err = applyRetention(dir, now, l.retentionDays); err != nil {
+			return err
+		}
 	}
 	last, lastRaw, err := lastLine(dir)
 	if err != nil {

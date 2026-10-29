@@ -218,7 +218,7 @@ func (s *Server) fillRename(data *renameData, plan *manage.RenamePlan) {
 	}
 	if len(plan.LapsedTokens) > 0 {
 		data.Lapsed = s.redact(fmt.Sprintf("Ends the cover of agent tokens through %s: %s. A token whose "+
-			"vorbild is affected no longer covers anything through it; tokens are never rewritten.",
+			"model is affected no longer covers anything through it; tokens are never rewritten.",
 			plan.Old, strings.Join(plan.LapsedTokens, ", ")))
 	}
 	for _, outside := range plan.Outside {

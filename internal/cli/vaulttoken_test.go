@@ -21,12 +21,12 @@ func encryptedTokenFixture(t *testing.T) string {
 }
 
 // createAgentToken runs 'vault token create' with the passphrase and returns the token's value.
-func createAgentToken(t *testing.T, dir, name string, vorbilder ...string) string {
+func createAgentToken(t *testing.T, dir, name string, models ...string) string {
 	t.Helper()
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	args := []string{"vault", "token", "create", name, "--config", configIn(dir), "--output", "json"}
-	for _, vorbild := range vorbilder {
-		args = append(args, "--vorbild", vorbild)
+	for _, model := range models {
+		args = append(args, "--model", model)
 	}
 	code, stdout, stderr := runWithInput(t, &Options{}, "", args...)
 	if code != exitOK {
@@ -44,7 +44,7 @@ func createAgentToken(t *testing.T, dir, name string, vorbilder ...string) strin
 }
 
 // 'vault token' creates, lists, shows, and revokes tokens with the passphrase; only create and show print a
-// value, and list warns about a vorbild that covers nothing now.
+// value, and list warns about a model that covers nothing now.
 func TestVaultTokenCommands(t *testing.T) {
 	dir := encryptedTokenFixture(t)
 	value := createAgentToken(t, dir, "kunde-a", "wiki")
@@ -54,7 +54,7 @@ func TestVaultTokenCommands(t *testing.T) {
 	}
 
 	code, stdout, stderr := run("vault", "token", "list")
-	if code != exitOK || !strings.Contains(stdout, `"name":"kunde-a"`) || !strings.Contains(stdout, `"vorbilder":"wiki"`) ||
+	if code != exitOK || !strings.Contains(stdout, `"name":"kunde-a"`) || !strings.Contains(stdout, `"models":"wiki"`) ||
 		!strings.Contains(stdout, `"expires":"never"`) || strings.Contains(stdout, value) || stderr != "" {
 		t.Fatalf("list: exit %d, stdout %q, stderr %q, want the token without its value", code, stdout, stderr)
 	}
@@ -64,11 +64,11 @@ func TestVaultTokenCommands(t *testing.T) {
 	}
 
 	for _, args := range [][]string{
-		{"vault", "token", "create", "kunde-a", "--vorbild", "wiki"},
-		{"vault", "token", "create", "kunde-b", "--vorbild", "unknown"},
+		{"vault", "token", "create", "kunde-a", "--model", "wiki"},
+		{"vault", "token", "create", "kunde-b", "--model", "unknown"},
 		{"vault", "token", "create", "kunde-b"},
-		{"vault", "token", "create", "kunde b", "--vorbild", "wiki"},
-		{"vault", "token", "create", "kunde-b", "--vorbild", "wiki", "--expires", "2001-01-01"},
+		{"vault", "token", "create", "kunde b", "--model", "wiki"},
+		{"vault", "token", "create", "kunde-b", "--model", "wiki", "--expires", "2001-01-01"},
 		{"vault", "token", "show", "unknown"},
 	} {
 		if code, _, stderr := run(args...); code != exitUsage || !strings.Contains(stderr, "usage") {
@@ -76,15 +76,15 @@ func TestVaultTokenCommands(t *testing.T) {
 		}
 	}
 
-	// Renaming the vorbild leaves the token without it; list says so.
+	// Renaming the model leaves the token without it; list says so.
 	config, _ := os.ReadFile(configIn(dir))
 	renamed := strings.Replace(string(config), "  wiki:\n    service: wiki", "  wiki-renamed:\n    service: wiki", 1)
 	renamed = strings.Replace(renamed, "knowledge: wiki", "knowledge: wiki-renamed", 1)
 	if err := os.WriteFile(configIn(dir), []byte(renamed), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, stdout, _ := run("vault", "token", "list"); !strings.Contains(stdout, "vorbild wiki covers nothing now") {
-		t.Errorf("list after renaming the vorbild = %q, want the warning", stdout)
+	if _, stdout, _ := run("vault", "token", "list"); !strings.Contains(stdout, "model wiki covers nothing now") {
+		t.Errorf("list after renaming the model = %q, want the warning", stdout)
 	}
 
 	code, stdout, _ = runWithInput(t, &Options{}, "", "vault", "token", "revoke", "kunde-a", "--yes", "--config", configIn(dir))
@@ -107,7 +107,7 @@ func TestVaultTokenCommandsNeedAdminAndEncryption(t *testing.T) {
 	withInteractive(t, false)
 	for _, args := range [][]string{
 		{"vault", "token", "list"},
-		{"vault", "token", "create", "kunde-a", "--vorbild", "wiki"},
+		{"vault", "token", "create", "kunde-a", "--model", "wiki"},
 		{"vault", "token", "show", "kunde-a"},
 		{"vault", "token", "revoke", "kunde-a"},
 	} {
@@ -123,7 +123,7 @@ func TestVaultTokenCommandsNeedAdminAndEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 	withInteractive(t, true)
-	code, _, stderr := runWithInput(t, &Options{}, "", "vault", "token", "create", "kunde-a", "--vorbild", "wiki",
+	code, _, stderr := runWithInput(t, &Options{}, "", "vault", "token", "create", "kunde-a", "--model", "wiki",
 		"--config", configIn(plain))
 	if code != exitUsage || !strings.Contains(stderr, "agent tokens need an encrypted vault") {
 		t.Errorf("create on an unencrypted vault: exit %d, stderr %q, want the encryption named", code, stderr)
@@ -278,5 +278,41 @@ func TestVaultTokenRevokeConfirmation(t *testing.T) {
 	withInteractive(t, true)
 	if !listed() {
 		t.Error("no terminal: the token is gone")
+	}
+}
+
+// --model and the hidden --vorbild both name a token's models, may be mixed, and output carries models.
+func TestVaultTokenModelFlagAndHiddenAlias(t *testing.T) {
+	dir := encryptedTokenFixture(t)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	run := func(args ...string) (int, string, string) {
+		t.Helper()
+		return runWithInput(t, &Options{}, "", append(args, "--config", configIn(dir))...)
+	}
+
+	for _, flag := range []string{"--model", "--vorbild"} {
+		name := map[string]string{"--model": "via-new", "--vorbild": "via-old"}[flag]
+		code, stdout, stderr := run("vault", "token", "create", name, flag, "wiki")
+		if code != exitOK || !strings.Contains(stdout, "models") || strings.Contains(stdout, "vorbild") {
+			t.Fatalf("create %s: exit %d, stdout %q, stderr %q, want models", flag, code, stdout, stderr)
+		}
+	}
+	code, stdout, _ := run("vault", "token", "create", "mixed", "--model", "wiki", "--vorbild", "wiki")
+	if code != exitOK || !strings.Contains(stdout, "wiki") {
+		t.Errorf("mixed flags: exit %d, stdout %q, want both flags to count", code, stdout)
+	}
+
+	for _, args := range [][]string{{"vault", "token", "list"}, {"vault", "token", "show", "via-new"}} {
+		for _, format := range []string{"table", "json"} {
+			code, stdout, _ := run(append(args, "--output", format)...)
+			if code != exitOK || !strings.Contains(strings.ToLower(stdout), "models") || strings.Contains(strings.ToLower(stdout), "vorbild") {
+				t.Errorf("%v --output %s: exit %d, stdout %q, want models and no vorbilder", args, format, code, stdout)
+			}
+		}
+	}
+
+	_, help, _ := run("vault", "token", "create", "--help")
+	if !strings.Contains(help, "--model") || strings.Contains(help, "vorbild") {
+		t.Errorf("create help = %q, want --model and no vorbild", help)
 	}
 }
