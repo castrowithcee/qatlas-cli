@@ -446,27 +446,37 @@ func (m *Model) pickCells(e *pickEntry) []string {
 	return cells
 }
 
-// updatePick handles the picker. Every printable key belongs to the search.
+// updatePick handles the picker, which has two zones: the search line, where every printable key is text, and
+// the entries, where space ticks. tab and shift+tab change the zone; a printable key other than space
+// leads from the entries back into the search.
 func (m *Model) updatePick(key tea.KeyPressMsg) tea.Cmd {
 	p := m.targetPick
 	lv := p.top()
 	m.clearMessages()
 	switch {
 	case keyIs(key, actBack):
-		if len(p.marks) > 0 {
-			p.marks, p.markOrder = map[string]config.TargetEntry{}, nil
-			m.status = tr(tPickMarksCleared)
-			return nil
+		switch {
+		case len(p.levels) > 1:
+			return m.pickBack()
+		case len(p.marks) > 0:
+			m.askLeave(false)
+		default:
+			m.closePick()
 		}
-		m.closePick()
 	case keyIs(key, actEnter):
 		m.pickTake(true)
 	case keyIs(key, actRight):
 		return m.pickOpen(lv)
-	case keyIs(key, actLeft):
-		return m.pickBack()
-	case keyIs(key, actNext):
+	case keyIs(key, actNext) || keyIs(key, actPrev):
+		if lv.list.editing {
+			lv.list.stopFilter()
+		} else {
+			lv.list.startFilter()
+		}
+	case keyIs(key, actSpace) && !lv.list.editing:
 		m.pickMark(lv)
+	case keyIs(key, actSearch) && !lv.list.editing:
+		lv.list.startFilter()
 	case keyIs(key, actNextKind):
 		return m.pickNextKind(lv)
 	case keyIs(key, actReload):
@@ -486,6 +496,9 @@ func (m *Model) updatePick(key tea.KeyPressMsg) tea.Cmd {
 		lv.list.page(key, start, end)
 		return m.pickMore(lv)
 	default:
+		if !lv.list.editing && key.Text != "" {
+			lv.list.startFilter()
+		}
 		before := lv.list.query()
 		cmd := lv.list.updateFilter(key)
 		if lv.list.query() == before {
@@ -717,18 +730,19 @@ func (m *Model) pickFrame() (string, string) {
 	if _, ok := lv.current(); ok && p.url == "" && len(m.pickKindsUnder(lv.kind())) > 0 {
 		keys += " · right open"
 	}
-	if len(p.levels) > 1 {
-		keys += " · left back"
-	}
 	if m.targetMetadata().Multiple {
-		keys += " · tab mark"
+		if lv.list.editing {
+			keys += " · tab entries"
+		} else {
+			keys += " · space tick · tab search"
+		}
 	}
 	if len(lv.kinds) > 1 {
 		keys += " · {nextkind} next kind"
 	}
 	keys += " · {save} save · esc "
-	if len(p.marks) > 0 {
-		keys += "clear marks"
+	if len(p.levels) > 1 {
+		keys += "level up"
 	} else {
 		keys += "close"
 	}

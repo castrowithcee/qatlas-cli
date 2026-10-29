@@ -129,8 +129,8 @@ var keyDefs = []struct {
 	{actUpdate, levelLetter, []string{"U"}, tKeyHelpUpdate},
 	{actWrite, levelLetter, []string{"W"}, tKeyHelpWrite},
 
-	// The control keys of text lines and of the target picker. None can be rebound to a global action.
-	{actRemoveField, levelCtrl, []string{"ctrl+d"}, tKeyHelpRemoveField},
+	// The control keys of text lines and of the target picker, and F8 of the payload form. None can be rebound to a global action.
+	{actRemoveField, levelCtrl, []string{"f8"}, tKeyHelpRemoveField},
 	{actSuggestPrev, levelCtrl, []string{"ctrl+p"}, tKeyHelpSuggestPrev},
 	{actSuggestNext, levelCtrl, []string{"ctrl+n"}, tKeyHelpSuggestNext},
 	{actNextKind, levelCtrl, []string{"ctrl+y"}, tKeyHelpNextKind},

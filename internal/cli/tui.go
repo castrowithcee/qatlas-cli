@@ -116,7 +116,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"third party by reference. In 2 Credentials, s opens the form of a new one (and enter edits an\n" +
 			"existing one): a name, where its values are kept (system keyring or vault, never environment\n" +
 			"variables), an optional description that discovery publishes, and one masked row per field. Type\n" +
-			"a field name in the new field row and press enter to add its row; ctrl+d removes the focused\n" +
+			"a field name in the new field row and press enter to add its row; F8 removes the focused\n" +
 			"field after asking, and a removed field's stored value is deleted when you save. Each value is typed masked,\n" +
 			"never shown or prefilled, and at least 4 characters; on an existing payload secret an empty row\n" +
 			"keeps the stored value. Saving stores the values and the configuration entry together, in an\n" +

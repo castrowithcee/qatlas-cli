@@ -39,7 +39,7 @@ func TestPayloadSaveChainsTheVaultProcessWarnings(t *testing.T) {
 	}
 	typeText(t, m, "new-user-value-2")
 	pump(t, m, "tab")
-	m.Update(ctrlD())
+	m.Update(keyF8())
 	press(t, m, "y")
 	pump(t, m, "f2")
 	if m.screen != screenAdminAuth {
