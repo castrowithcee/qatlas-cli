@@ -364,7 +364,22 @@ func TestBulkApproveRemovesStaleApprovals(t *testing.T) {
 	if len(m.list.all) != 0 {
 		t.Fatalf("Approvals lists %v, want none open", m.list.all)
 	}
+	// Anything but y leaves the approvals as they are, and the lowercase letter is not bound.
 	press(t, m, "a")
+	if m.approveAllConfirm || m.screen != screenList {
+		t.Fatalf("lowercase a opened the bulk confirmation: screen %v", m.screen)
+	}
+	for _, no := range []string{"n", "esc"} {
+		press(t, m, "A")
+		if !m.approveAllConfirm || m.screen != screenConfirm {
+			t.Fatalf("A did not ask first: screen %v", m.screen)
+		}
+		press(t, m, no)
+		if m.approveAllConfirm || m.screen != screenList {
+			t.Fatalf("%s after A = screen %v status %q, want the list untouched", no, m.screen, m.status)
+		}
+	}
+	press(t, m, "A")
 	if !m.approveAllConfirm || m.screen != screenConfirm {
 		t.Fatalf("a with nothing open but a stale approval did not open the bulk confirmation: screen %v", m.screen)
 	}
@@ -487,7 +502,7 @@ func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 	}
 
 	// Bulk approval of what remains, with a confirmation naming the count.
-	press(t, m, "a")
+	press(t, m, "A")
 	if !m.approveAllConfirm || m.screen != screenConfirm {
 		t.Fatalf("a did not open the bulk confirmation: screen %v", m.screen)
 	}

@@ -112,7 +112,7 @@ func dialogScreens() []dialogScreen {
 		{"selftest failed", selftestAt(failed)},
 		{"update question", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
-			press(t, m, "u")
+			press(t, m, "U")
 			return m
 		}},
 		{"restart question", func(t *testing.T) *Model {
@@ -229,7 +229,7 @@ func TestQuestionAndPromptFillTheWorkspaceInAPanel(t *testing.T) {
 
 	m := startedWith(t, newerRelease())
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	press(t, m, "u")
+	press(t, m, "U")
 	view := ansi.Strip(m.framedText(m.updateView))
 	if !strings.Contains(view, "╭") || !strings.Contains(view, warnMark+" Update qatlas to v0.5.0?") {
 		t.Errorf("the update question is not a panel with its mark:\n%s", view)

@@ -4267,7 +4267,7 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionApprovals && m.vaultLocked():
 		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "enter details · A approve all · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
 		keys = "enter unlock · n new · " + back + " · {command} cmds · {help} help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && total == 0:

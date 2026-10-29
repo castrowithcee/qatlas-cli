@@ -263,26 +263,26 @@ func TestTokenValueIsShownOnlyOnRequest(t *testing.T) {
 	}
 	view := screenOf(m)
 	if strings.Contains(view, token.Value) || !strings.Contains(view, "●●●●") ||
-		!strings.Contains(view, "v reveal/hide") {
+		!strings.Contains(view, "V reveal/hide") {
 		t.Errorf("the detail does not mask the value behind v:\n%s", view)
 	}
 
-	pump(t, m, "v")
+	pump(t, m, "V")
 	if !strings.Contains(screenOf(m), token.Value) {
 		t.Errorf("v in an admin session does not show the value:\n%s", screenOf(m))
 	}
 	assertNoTokenValue(t, m)
-	pump(t, m, "v")
+	pump(t, m, "V")
 	if strings.Contains(screenOf(m), token.Value) {
 		t.Error("a second v does not hide the value again")
 	}
 
-	pump(t, m, "v")
+	pump(t, m, "V")
 	m.admin.End()
 	if strings.Contains(screenOf(m), token.Value) {
 		t.Error("the value stays shown after the admin session lapsed")
 	}
-	pump(t, m, "v")
+	pump(t, m, "V")
 	if m.screen != screenAdminAuth || m.adminAuth.locked {
 		t.Fatalf("v after the session lapsed = screen %v, want the admin passphrase dialog", m.screen)
 	}

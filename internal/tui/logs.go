@@ -1274,24 +1274,24 @@ func (m *Model) logKeys() string {
 		// The short form names the same keys with shorter words.
 		switch {
 		case lv.stats && lv.sessions && !lv.list.editing:
-			return "up/down scroll · m or s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+			return "up/down scroll · M or s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 		case lv.stats && !lv.list.editing:
 			return "s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 		case lv.list.editing:
 			return "type to search · up/down move · enter keep · {back} clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · enter open · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "left/right mode · enter open · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "enter date · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case lv.focus == logFocusTabs:
-			return "left/right tab · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "left/right tab · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		case len(lv.list.matches) == 0 || lv.heat:
-			return "tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 		}
-		return "enter detail · tab next · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "enter detail · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
 	if lv.stats && lv.sessions && m.screen != screenNav && !lv.list.editing {
-		return "up/down scroll · m or s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+		return "up/down scroll · M or s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
 	}
 	if lv.stats && m.screen != screenNav && !lv.list.editing {
 		return "s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
@@ -1302,15 +1302,15 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · {back} clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · enter open · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "left/right change mode · enter open · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "enter or left/right change the date · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case lv.focus == logFocusTabs:
-		return "left/right change tab · tab next field · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "left/right change tab · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	case len(lv.list.matches) == 0 || lv.heat:
-		return "tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "tab next field · left/right change · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	}
-	keys := "enter details · tab next field · left/right change · f filter · s summary · m MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+	keys := "enter details · tab next field · left/right change · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "{back} back", "{back} clear search", 1)
 	}

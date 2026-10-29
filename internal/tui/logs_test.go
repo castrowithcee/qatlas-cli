@@ -812,7 +812,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	f.append("cli", "", "cli.only", "wiki", "success")
 	m := f.model(true, f.localToday())
 
-	press(t, m, "m")
+	press(t, m, "M")
 	view := m.render()
 	if !m.logs.stats || !m.logs.sessions {
 		t.Fatalf("m did not open the session summary:\n%s", view)
@@ -820,7 +820,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	// The panel wraps the note, so the words are compared without its frame and line breaks.
 	flat := strings.Join(strings.Fields(strings.ReplaceAll(view, "│", " ")), " ")
 	for _, want := range []string{"~tokens", "estimate", "system prompt and thinking", "session " + sessionNew,
-		"m or s or esc back to the rows"} {
+		"M or s or esc back to the rows"} {
 		if !strings.Contains(flat, want) {
 			t.Errorf("the session summary lacks %q:\n%s", want, view)
 		}
@@ -860,11 +860,11 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	}
 
 	// m again, and s from the group summary, lead back.
-	press(t, m, "m")
+	press(t, m, "M")
 	if m.logs.stats || m.logs.sessions {
 		t.Fatalf("m did not leave the session summary")
 	}
-	press(t, m, "s", "m")
+	press(t, m, "s", "M")
 	if !m.logs.sessions {
 		t.Fatalf("m from the group summary did not show the sessions")
 	}
@@ -882,7 +882,7 @@ func TestLogsSessionSummaryScrollsAndFitsNarrow(t *testing.T) {
 	}
 	m := f.model(true, f.localToday())
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 18})
-	press(t, m, "m")
+	press(t, m, "M")
 	view := m.render()
 	assertViewFits(t, view, 60, 18)
 	if !strings.Contains(view, "... ") || !strings.Contains(view, "more") || strings.Contains(view, "wiki.tool111") {
@@ -906,13 +906,13 @@ func TestLogsSessionSummaryWithoutSessionsSaysSo(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("cli", "", "cli.only", "wiki", "success")
 	m := f.model(true, f.localToday())
-	press(t, m, "m")
+	press(t, m, "M")
 	if view := m.render(); !strings.Contains(view, "No MCP session among the entries shown") {
 		t.Errorf("no hint without sessions:\n%s", view)
 	}
 	// A day without any entry keeps the plain empty-log text.
 	m = f.model(true, "2021-05-05")
-	press(t, m, "m")
+	press(t, m, "M")
 	if view := m.render(); !strings.Contains(view, "No entries for 2021-05-05.") {
 		t.Errorf("an empty day lacks its hint in the session summary:\n%s", view)
 	}

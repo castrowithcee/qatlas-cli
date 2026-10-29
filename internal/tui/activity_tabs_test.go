@@ -58,7 +58,7 @@ func TestLogsTabsSwitchByKeyAndClick(t *testing.T) {
 	if m.logs.tab() != logTabDetails || m.logs.sessions {
 		t.Errorf("s = tab %v sessions %v, want the summary", m.logs.tab(), m.logs.sessions)
 	}
-	press(t, m, "m")
+	press(t, m, "M")
 	if m.logs.tab() != logTabDetails || !m.logs.sessions {
 		t.Errorf("m = tab %v sessions %v, want the sessions", m.logs.tab(), m.logs.sessions)
 	}

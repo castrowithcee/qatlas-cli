@@ -345,7 +345,7 @@ func (m *Model) findingsView() string {
 	keys := "up/down choose"
 	switch {
 	case f.canRevert():
-		keys += " · enter finish · b put back"
+		keys += " · enter finish · B put back"
 	case f.action() != "":
 		keys += " · enter " + f.action()
 	}

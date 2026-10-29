@@ -95,7 +95,7 @@ func startedWith(t *testing.T, updater Updater) *Model {
 	return m
 }
 
-const fullBanner = "Update available v0.4.0 → v0.5.0 · u update"
+const fullBanner = "Update available v0.4.0 → v0.5.0 · U update"
 
 func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 	fake := newerRelease()
@@ -117,7 +117,7 @@ func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 		if strings.Contains(view, "Update") || strings.Contains(view, "error:") || m.fail != "" || m.status != "" {
 			t.Errorf("%s: the editor is not silent:\n%s", name, view)
 		}
-		press(t, m, "u")
+		press(t, m, "U")
 		if m.screen != screenNav || fake.updates != 0 {
 			t.Errorf("%s: u acted without a newer release: screen %v updates %d", name, m.screen, fake.updates)
 		}
@@ -134,7 +134,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 	for _, no := range []string{"n", "esc"} {
 		fake := newerRelease()
 		m := startedWith(t, fake)
-		press(t, m, "u")
+		press(t, m, "U")
 		if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") ||
 			!strings.Contains(flatText(screenOf(m)), "y update n/esc cancel") {
 			t.Fatalf("u did not ask:\n%s", m.render())
@@ -148,7 +148,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 	fake := newerRelease()
 	m := startedWith(t, fake)
 	press(t, m, "enter")
-	_, cmd := m.Update(keyMsg("u"))
+	_, cmd := m.Update(keyMsg("U"))
 	if cmd != nil || m.screen != screenUpdate {
 		t.Fatalf("u in the list did not ask first: screen %v", m.screen)
 	}
@@ -160,7 +160,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 	if !strings.Contains(strings.Split(view, "\n")[0], "Updating to v0.5.0 …") {
 		t.Errorf("the running update is not shown in the top line:\n%s", view)
 	}
-	press(t, m, "u")
+	press(t, m, "U")
 	if m.screen != screenList {
 		t.Errorf("u asked again while the update runs")
 	}
@@ -174,10 +174,10 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 			t.Errorf("the finished update does not say %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "u update") {
+	if strings.Contains(view, "U update") {
 		t.Errorf("the installed release is still offered:\n%s", view)
 	}
-	press(t, m, "u")
+	press(t, m, "U")
 	if m.screen != screenList || fake.updates != 1 {
 		t.Errorf("u offered the installed release again")
 	}
@@ -202,7 +202,7 @@ func TestUpdateFailuresAreReported(t *testing.T) {
 			fake.updateErr = tt.err
 			m := startedWith(t, fake)
 			m.redactor.Add("s3cr3t-value")
-			pump(t, m, "u", "y")
+			pump(t, m, "U", "y")
 			view := strings.Join(strings.Fields(screenOf(m)), " ")
 			for _, want := range tt.want {
 				if !strings.Contains(view, want) {
@@ -238,8 +238,8 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 		banner        string
 	}{
 		{width: 100, height: 28, banner: fullBanner},
-		{width: 50, height: 24, banner: "Update available v0.5.0 · u update"},
-		{width: 40, height: minimumHeight, banner: "Update v0.5.0 · u"},
+		{width: 50, height: 24, banner: "Update available v0.5.0 · U update"},
+		{width: 40, height: minimumHeight, banner: "Update v0.5.0 · U"},
 	} {
 		m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
 		for _, screen := range []string{"tab line", "help", "question"} {
@@ -248,7 +248,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			case "help":
 				press(t, m, "?")
 			case "question":
-				press(t, m, "u")
+				press(t, m, "U")
 			}
 			view := m.render()
 			assertViewFits(t, view, tt.width, tt.height)
@@ -299,7 +299,7 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	fake := newerRelease()
 	fake.beforeReplace = func() { fake.order = append(fake.order, "locked") }
 	m := startedWith(t, fake)
-	press(t, m, "u")
+	press(t, m, "U")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	wants := []string{"Update qatlas to v0.5.0?", "A running vault process is handed over to the new version",
 		"'qatlas tui' and 'qatlas web'"}
@@ -316,7 +316,7 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	if len(fake.order) != 0 || fake.updates != 0 {
 		t.Errorf("n did something: %v", fake.order)
 	}
-	pump(t, m, "u", "y")
+	pump(t, m, "U", "y")
 	if got := strings.Join(fake.order, ","); got != "locked,replaced" {
 		t.Errorf("order = %q, want locked,replaced", got)
 	}
@@ -333,22 +333,22 @@ func TestUpdateWaitsForRunningWork(t *testing.T) {
 			fake := newerRelease()
 			m := startedWith(t, fake)
 			busy(m)
-			press(t, m, "u")
-			if m.screen == screenUpdate || !strings.Contains(m.status, "then press u again") {
+			press(t, m, "U")
+			if m.screen == screenUpdate || !strings.Contains(m.status, "then press U again") {
 				t.Fatalf("u opened the question or gave no reason: screen %v status %q", m.screen, m.status)
 			}
 
 			// Work that starts while the question is open stops the installation at y.
 			m.vaultBusy, m.busy = false, ""
-			press(t, m, "u")
+			press(t, m, "U")
 			busy(m)
 			_, cmd := m.Update(keyMsg("y"))
-			if cmd != nil || m.updating || fake.updates != 0 || !strings.Contains(m.status, "then press u again") {
+			if cmd != nil || m.updating || fake.updates != 0 || !strings.Contains(m.status, "then press U again") {
 				t.Errorf("y installed during work: updating %v updates %d status %q", m.updating, fake.updates, m.status)
 			}
 
 			m.vaultBusy, m.busy = false, ""
-			pump(t, m, "u", "y")
+			pump(t, m, "U", "y")
 			if fake.updates != 1 {
 				t.Errorf("the update did not run once the work was done: %d", fake.updates)
 			}
@@ -388,7 +388,7 @@ func TestTheBannerEmojiIsAnIcon(t *testing.T) {
 	setUTF8(t, "xterm-256color", "C.UTF-8")
 	m := startedWith(t, newerRelease())
 	m.prefs.Icons = uiprefs.IconsUnicode
-	if got, want := m.updateBanners()[0], "Update available v0.4.0 → v0.5.0 🎉 · u update"; got != want {
+	if got, want := m.updateBanners()[0], "Update available v0.4.0 → v0.5.0 🎉 · U update"; got != want {
 		t.Errorf("unicode banner = %q, want %q", got, want)
 	}
 	m.prefs.Icons = uiprefs.IconsNone
