@@ -58,7 +58,7 @@ const (
 	// now: a new connection reading a vault credential, or one whose scope changed since it was last
 	// approved. See approvals.go.
 	sectionApprovals
-	// sectionTokens lists the agent tokens of an encrypted vault, with their vorbild connections and expiry,
+	// sectionTokens lists the agent tokens of an encrypted vault, with their model connections and expiry,
 	// and creates, shows, and revokes them in an admin session. See tokens.go.
 	sectionTokens
 	// sectionLogs is the invocation log, read only: its own screen with a day, range or all days, filters,
@@ -4952,7 +4952,7 @@ var sectionColumns = map[section][]column{
 		{title: "DESCRIPTION", flex: true, tone: toneText}},
 	sectionDefaults:  {{title: "PROVIDER OR TOOL", tone: toneText}, {title: "CONNECTION", tone: toneText}},
 	sectionApprovals: {{title: "CONNECTION", tone: toneText}, {title: "CHANGE", flex: true, tone: toneText}},
-	sectionTokens:    {{title: "NAME", tone: toneText}, {title: "EXPIRES", tone: toneDim}, {title: "VORBILDER", flex: true, tone: toneText}},
+	sectionTokens:    {{title: "NAME", tone: toneText}, {title: "EXPIRES", tone: toneDim}, {title: "MODELS", flex: true, tone: toneText}},
 }
 
 // connectionStateTone colours the state of a connection: active green, expired red, anything else (disabled)

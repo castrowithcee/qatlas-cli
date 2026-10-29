@@ -14,7 +14,7 @@ import (
 )
 
 // Without a terminal, 'vault approve' hands the agent token to the vault process: it approves the change
-// the token's vorbild covers, which reaches the running process at once, leaves the wider one open and
+// the token's model covers, which reaches the running process at once, leaves the wider one open and
 // fails with admin-required naming it and the field, and logs each decision with the token's name. The
 // token's value appears nowhere.
 func TestVaultApproveWithAnAgentToken(t *testing.T) {

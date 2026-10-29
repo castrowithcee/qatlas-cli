@@ -18,7 +18,7 @@ import (
 const tokenPassphrase = "correct horse battery staple"
 
 // newTokenFixture is newApprovalFixture with its one connection ("personal") approved, so it covers
-// something as a vorbild, and a vault of the test's own, unlocked with the passphrase, to create tokens in
+// something as a model, and a vault of the test's own, unlocked with the passphrase, to create tokens in
 // before the editor opens, or to check what the editor wrote. The editor itself opens cold over dir, see
 // openApprovalModel.
 func newTokenFixture(t *testing.T) (*config.Store, string, *vault.Vault) {
@@ -98,7 +98,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 }
 
 // A locked vault's tokens are not listed merely by opening the section; enter unlocks it through the admin
-// dialog and the list then shows every token with its vorbilder and expiry, never a value.
+// dialog and the list then shows every token with its models and expiry, never a value.
 func TestTokensWhileLocked(t *testing.T) {
 	store, dir, v := newTokenFixture(t)
 	token := fixtureToken(t, v, "kunde-a-ci", nil, "personal")
@@ -133,7 +133,7 @@ func TestTokensWhileLocked(t *testing.T) {
 	}
 }
 
-// n creates a token in an admin session: a name, vorbilder ticked in the picker, and an expiry. The created
+// n creates a token in an admin session: a name, models ticked in the picker, and an expiry. The created
 // token opens its detail with the value still hidden, and the vault on disk holds exactly what was chosen.
 func TestCreatingATokenInTheTUI(t *testing.T) {
 	store, dir, _ := newTokenFixture(t)
@@ -147,7 +147,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 		t.Fatalf("screen after n and the passphrase = %v, want the token form", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"New agent token", "vorbilder", "expires", "F2 create"} {
+	for _, want := range []string{"New agent token", "models", "expires", "F2 create"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the token form does not show %q:\n%s", want, view)
 		}
@@ -156,16 +156,16 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 	typeText(t, m, "kunde-a-ci")
 	press(t, m, "tab")
 	if view := screenOf(m); !strings.Contains(view, "enter open") || !strings.Contains(view, "F2 create") {
-		t.Errorf("the vorbilder row does not name its keys:\n%s", view)
+		t.Errorf("the models row does not name its keys:\n%s", view)
 	}
 	press(t, m, "enter")
 	if m.screen != screenPicker || !slices.Equal(m.picker.all, []string{"personal"}) {
-		t.Fatalf("enter on vorbilder = screen %v choices %v, want the picker of vault connections",
+		t.Fatalf("enter on models = screen %v choices %v, want the picker of vault connections",
 			m.screen, m.picker.all)
 	}
 	press(t, m, " ", "enter")
 	if got := m.fieldValue(vorbilderLabel); got != "personal" {
-		t.Fatalf("vorbilder = %q after ticking, want personal", got)
+		t.Fatalf("models = %q after ticking, want personal", got)
 	}
 	press(t, m, "tab")
 	typeText(t, m, "2099-12-01")
@@ -203,7 +203,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 }
 
 // The form refuses, on itself and with every input kept, what the vault would refuse or what could never
-// work: a bad name, no vorbild, an expiry in the past or unreadable, and a name that is taken.
+// work: a bad name, no model, an expiry in the past or unreadable, and a name that is taken.
 func TestTokenFormRefusesWhatCannotWork(t *testing.T) {
 	store, dir, v := newTokenFixture(t)
 	fixtureToken(t, v, "taken", nil, "personal")
@@ -224,7 +224,7 @@ func TestTokenFormRefusesWhatCannotWork(t *testing.T) {
 	refused("agent token name must")
 	clearField(t, m)
 	typeText(t, m, "kunde-b")
-	refused("tick at least one vorbild")
+	refused("tick at least one model")
 	press(t, m, "tab", "enter", " ", "enter", "tab")
 	typeText(t, m, "2000-01-01")
 	refused("expires lies in the past")
@@ -237,7 +237,7 @@ func TestTokenFormRefusesWhatCannotWork(t *testing.T) {
 	typeText(t, m, "taken")
 	refused("agent token taken exists already")
 	if got := m.fieldValue("name"); got != "taken" || m.fieldValue(vorbilderLabel) != "personal" {
-		t.Errorf("the refused form holds name %q vorbilder %q, want every input kept", got,
+		t.Errorf("the refused form holds name %q models %q, want every input kept", got,
 			m.fieldValue(vorbilderLabel))
 	}
 
@@ -338,7 +338,7 @@ func TestRevokingATokenAsksFirst(t *testing.T) {
 	}
 }
 
-// A vorbild that covers nothing now, and an expiry that has passed, are named on the list behind the token's
+// A model that covers nothing now, and an expiry that has passed, are named on the list behind the token's
 // name and on its detail, symbol and words together, never colour alone; both fit a narrow terminal.
 func TestTokenWarningsForLapsedVorbildAndExpiry(t *testing.T) {
 	store, dir, v := newTokenFixture(t)
@@ -350,7 +350,7 @@ func TestTokenWarningsForLapsedVorbildAndExpiry(t *testing.T) {
 	openTokensUnlocked(t, m)
 
 	view := screenOf(m)
-	for _, want := range []string{"ci  ⚠ 1 vorbild covers nothing", "old  ⚠ expired"} {
+	for _, want := range []string{"ci  ⚠ 1 model covers nothing", "old  ⚠ expired"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list does not show %q:\n%s", want, view)
 		}
@@ -359,7 +359,7 @@ func TestTokenWarningsForLapsedVorbildAndExpiry(t *testing.T) {
 	pump(t, m, "enter")
 	view = screenOf(m)
 	if !strings.Contains(view, "⚠ gone (renamed, deleted") || !strings.Contains(view, "covers nothing") {
-		t.Errorf("the detail does not warn in words about the lapsed vorbild:\n%s", view)
+		t.Errorf("the detail does not warn in words about the lapsed model:\n%s", view)
 	}
 	pump(t, m, "esc", "down", "enter")
 	if m.tokenDetail != "old" || !strings.Contains(screenOf(m), "⚠ expired, approves nothing") {

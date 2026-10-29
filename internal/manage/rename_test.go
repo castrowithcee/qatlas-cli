@@ -59,7 +59,7 @@ defaults:
 `
 
 // renameWorld is renameConfig beside an encrypted vault unlocked in this process that approves every vault
-// connection, one of which, widened, has been widened since and is open, and an agent token whose vorbild
+// connection, one of which, widened, has been widened since and is open, and an agent token whose model
 // is vault-wiki.
 type renameWorld struct {
 	dir, path string
@@ -176,7 +176,7 @@ func TestRenameConnectionCarriesItsApprovalAndLogsOneRename(t *testing.T) {
 		t.Errorf("plan = %+v, want the valid approval carried", plan)
 	}
 	if !reflect.DeepEqual(plan.LapsedTokens, []string{"helper"}) {
-		t.Errorf("LapsedTokens = %v, want the token whose vorbild is renamed", plan.LapsedTokens)
+		t.Errorf("LapsedTokens = %v, want the token whose model is renamed", plan.LapsedTokens)
 	}
 	if len(plan.Outside) == 0 || !strings.Contains(strings.Join(plan.Outside, "\n"), "--connection vault-wiki") {
 		t.Errorf("Outside = %v, want the places qatlas cannot change", plan.Outside)
@@ -347,7 +347,7 @@ func TestRenameRefusesNamesTakenOrClaimed(t *testing.T) {
 		{"invalid name", RenameConnection, "vault-wiki", "-bad", "must consist of"},
 		{"same name", RenameConnection, "vault-wiki", "vault-wiki", "already has this name"},
 		{"missing entry", RenameConnection, "nothing", "something", "does not exist"},
-		{"a token's vorbild", RenameConnection, "vault-wiki", "ghost", "names ghost as a vorbild"},
+		{"a token's model", RenameConnection, "vault-wiki", "ghost", "names ghost as a model"},
 		{"another connection's approval", RenameConnection, "vault-wiki", "gone", "stale approval under the name gone"},
 		{"unknown kind", "provider", "docs", "pages", "cannot be renamed"},
 	}

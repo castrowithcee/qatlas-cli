@@ -59,7 +59,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
 			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault,\n" +
 			"with one exception: an agent token lets 'vault approve' release, without a terminal, the open\n" +
-			"connection changes that reach no further than one of the token's vorbild connections; see\n" +
+			"connection changes that reach no further than one of the token's model connections; see\n" +
 			"'qatlas vault token'.\n\n" +
 			"An encrypted vault also needs its passphrase to answer a read outside such a command, unless a\n" +
 			"vault process holds it unlocked, and asks for it on the terminal, never as a command line\n" +
@@ -303,11 +303,11 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"QATLAS_AGENT_TOKEN, else in the nearest .qatlas/local/agent.env of the working directory or a\n" +
 			"directory above it, else in ~/.qatlas/local/agent.env, as a line QATLAS_AGENT_TOKEN=<token>. The\n" +
 			"vault process that holds the vault unlocked checks the token, its expiry, and each open change,\n" +
-			"approves every change a vorbild of the token covers, or only the ones --connection names, and logs\n" +
+			"approves every change a model of the token covers, or only the ones --connection names, and logs\n" +
 			"each decision in the invocation log with the token's name, never its value. No token, an unknown,\n" +
 			"revoked, or expired one, a vault that is not encrypted, or a change the token does not cover fails\n" +
 			"with admin-required, naming each change left open and what of it the token does not cover:\n" +
-			"service, credential, effects, tools, targets, paths, or that it is a vorbild itself. Without a\n" +
+			"service, credential, effects, tools, targets, paths, or that it is a model itself. Without a\n" +
 			"vault process, the vault locked, it fails with vault-locked, since only that process can check a\n" +
 			"token. The stale approval of a connection removed or renamed is a change of kind delete: a token\n" +
 			"that covers the connection it belonged to removes it.",

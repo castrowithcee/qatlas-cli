@@ -36,7 +36,7 @@ func treeIn(t *testing.T, dir string) map[string]string {
 }
 
 // renameVault is twoConnectionVaultFixture, written with ids, with both connections approved in an encrypted vault and an agent
-// token whose vorbild is wiki.
+// token whose model is wiki.
 func renameVault(t *testing.T) string {
 	t.Helper()
 	dir := twoConnectionVaultFixture(t)
@@ -70,7 +70,7 @@ func TestConfigRenameConnectionCarriesItsApproval(t *testing.T) {
 	for _, want := range []string{
 		"rename connection wiki -> wiki-main\n", "  id        " + id + ", kept\n",
 		"  rewrites  defaults.connections.knowledge\n", "  approval  approved; carried over, so wiki-main stays approved\n",
-		"  warning   agent token helper names wiki as a vorbild", "  outside   agent calls and scripts",
+		"  warning   agent token helper names wiki as a model", "  outside   agent calls and scripts",
 		"the vault files are backed up as ", "renamed connection wiki to wiki-main\n",
 	} {
 		if !strings.Contains(stdout, want) {

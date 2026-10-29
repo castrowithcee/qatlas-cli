@@ -16,7 +16,7 @@ const (
 	ChangeDelete = "delete"
 )
 
-// The gaps an agent token can leave in a change: the fields of a connection no vorbild covers, and two
+// The gaps an agent token can leave in a change: the fields of a connection no model covers, and two
 // reasons that are no field. None ever holds a value, only the name of what is missing.
 const (
 	GapService    = "service"
@@ -31,12 +31,12 @@ const (
 	// GapState marks a switch of a connection from disabled to active, which no token covers.
 	GapState = "state"
 	// GapActiveUntil marks a change that sets, lengthens or lifts a connection's active_until limit, which
-	// no token covers. Only a shorter limit than the approved one is left to the vorbild.
+	// no token covers. Only a shorter limit than the approved one is left to the model.
 	GapActiveUntil = "active until"
-	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
+	// GapVorbild marks a change to a connection that is itself the model of an agent token, which no
 	// token may change or delete.
 	GapVorbild = "vorbild"
-	// GapNoVorbild marks a change the token has no usable vorbild for at all: each is renamed, deleted,
+	// GapNoVorbild marks a change the token has no usable model for at all: each is renamed, deleted,
 	// not approved, or reads a credential stored anew since.
 	GapNoVorbild = "no-vorbild"
 )
@@ -48,7 +48,7 @@ type TokenChange struct {
 	// Kind is ChangeCreate, ChangeUpdate, or ChangeDelete.
 	Kind     string `json:"kind"`
 	Approved bool   `json:"approved"`
-	// Gaps names what no vorbild covers, empty for an approved change; see the Gap constants.
+	// Gaps names what no model covers, empty for an approved change; see the Gap constants.
 	Gaps []string `json:"gaps,omitempty"`
 }
 
@@ -58,13 +58,13 @@ type TokenApproval struct {
 	Token string `json:"token,omitempty"`
 	// Changes lists every open change considered, sorted by connection.
 	Changes []TokenChange `json:"changes,omitempty"`
-	// Lapsed names the vorbild connections of the token that cover nothing now, sorted.
+	// Lapsed names the model connections of the token that cover nothing now, sorted.
 	Lapsed []string `json:"lapsed,omitempty"`
 	// NotOpen names the connections asked for that have no open change, sorted.
 	NotOpen []string `json:"not_open,omitempty"`
 }
 
-// model is one usable vorbild: its name and the approval that is its ceiling.
+// model is one usable model connection of a token: its name and the approval that is its ceiling.
 type model struct {
 	name     string
 	approval Approval
@@ -77,15 +77,15 @@ type model struct {
 // is an update, and an approval without a connection in current is a delete, which removes the approval.
 // only, when not empty, limits the changes to the connections it names.
 //
-// A change is covered when a vorbild V of the token, as V is approved, not as it may be configured now, has
+// A change is covered when a model V of the token, as V is approved, not as it may be configured now, has
 // the same service (provider and endpoint) and the same credential entry, and the change stays inside V:
 // its effects a subset of V's; its tools a subset of V's tools list, where V has one; its targets among
 // V's, where V has any; its paths inside V's, where V is bound to any; its local file directories, per
 // direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
 // V's, each with the same fields. A delete is covered when the
-// approval it removes was. A vorbild counts only while it is a connection in current and its approval still
+// approval it removes was. A model counts only while it is a connection in current and its approval still
 // reads the credential entry it was given for and is neither disabled nor past its active_until at now. A
-// change to a connection that is the vorbild of any token is never covered. A change from disabled to active
+// change to a connection that is the model of any token is never covered. A change from disabled to active
 // is never covered, nor is one that sets, lengthens or lifts the active_until limit. A change partly outside
 // stays open whole.
 //
@@ -204,7 +204,7 @@ func (v *Vault) ApproveWithTokenConnections(value string, current []Scope, conne
 		default:
 			change.Gaps = bestCover(models, c.scope, c.id)
 		}
-		// Switching a connection on again widens what its credential reaches, whatever a vorbild allows.
+		// Switching a connection on again widens what its credential reaches, whatever a model allows.
 		if old, ok := doc.Approvals[change.Connection]; ok && change.Kind == ChangeUpdate &&
 			old.Scope.Disabled && !c.scope.Disabled {
 			change.Gaps = append(change.Gaps, GapState)
@@ -255,7 +255,7 @@ func bestCover(models []model, scope Scope, id string) []string {
 	return best
 }
 
-// coverGaps lists the fields of scope, read with the credential entry id, that the approved vorbild does not
+// coverGaps lists the fields of scope, read with the credential entry id, that the approved model does not
 // cover, in a fixed order.
 func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	ceiling, change := vorbild.Scope.Normalized(), scope.Normalized()
@@ -269,17 +269,17 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if !subset(change.Effects, ceiling.Effects) {
 		gaps = append(gaps, GapEffects)
 	}
-	// A vorbild without a tools list admits every tool of its effects; one with a list admits only a
+	// A model without a tools list admits every tool of its effects; one with a list admits only a
 	// change whose own list stays inside it, never one without a list.
 	if ceiling.Tools != nil && (change.Tools == nil || !subset(change.Tools, ceiling.Tools)) {
 		gaps = append(gaps, GapTools)
 	}
-	// Targets compare by their exact entries: a provider's wildcard or pattern in the vorbild covers only
+	// Targets compare by their exact entries: a provider's wildcard or pattern in the model covers only
 	// that same entry, since the vault knows no provider's rules.
 	if len(ceiling.Targets) > 0 && (len(change.Targets) == 0 || !subset(change.Targets, ceiling.Targets)) {
 		gaps = append(gaps, GapTargets)
 	}
-	// Exclusions run the other way: the vorbild's exclusions narrow it, so a change that drops one reaches
+	// Exclusions run the other way: the model's exclusions narrow it, so a change that drops one reaches
 	// more than was approved. Kept or added exclusions stay covered.
 	if !subset(ceiling.Exclude, change.Exclude) {
 		gaps = append(gaps, GapExclude)
@@ -290,8 +290,8 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if !filesWithin(change.FilesRead, ceiling.FilesRead) || !filesWithin(change.FilesWrite, ceiling.FilesWrite) {
 		gaps = append(gaps, GapFiles)
 	}
-	// Forward credentials compare by name and exact field list: a vorbild covers a change only when every
-	// credential the change releases is released by the vorbild with the same fields, so a change that
+	// Forward credentials compare by name and exact field list: a model covers a change only when every
+	// credential the change releases is released by the model with the same fields, so a change that
 	// releases more, or other fields, stays open.
 	if !forwardWithin(change.Forward, ceiling.Forward) {
 		gaps = append(gaps, GapForward)
@@ -327,14 +327,14 @@ func subset(values, of []string) bool {
 }
 
 // filesWithin reports whether every entry of files lies inside one of bases, the entries of the same
-// direction in the vorbild. No entries are always covered, since they release nothing; any entry is
-// uncovered where the vorbild releases nothing in that direction.
+// direction in the model. No entries are always covered, since they release nothing; any entry is
+// uncovered where the model releases nothing in that direction.
 func filesWithin(files, bases []string) bool {
 	return len(files) == 0 || pathsWithin(files, bases)
 }
 
 // pathsWithin reports whether paths is not empty and every entry lies inside one of bases. An empty paths
-// list means every project, which no bound vorbild covers.
+// list means every project, which no bound model covers.
 func pathsWithin(paths, bases []string) bool {
 	if len(paths) == 0 {
 		return false

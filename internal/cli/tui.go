@@ -77,7 +77,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"from a connection. A\n" +
 			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
-			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
+			"copied agent token keeps its models and an expiry that still lies ahead, but gets its own\n" +
 			"value.\n\n" +
 			"Nothing unsaved is dropped silently, and one question asks about all of it: a changed form, a\n" +
 			"changed list of targets or paths, a target or path typed but not yet taken, a half-built target,\n" +
@@ -209,8 +209,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
 			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
 			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"Tokens (4, first part of Access) lists the agent tokens of an encrypted vault with their vorbild connections and expiry,\n" +
-			"and marks an expired token, or a vorbild that covers nothing now, with ⚠ and words behind its\n" +
+			"Tokens (4, first part of Access) lists the agent tokens of an encrypted vault with their model connections and expiry,\n" +
+			"and marks an expired token, or a model that covers nothing now, with ⚠ and words behind its\n" +
 			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
 			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
 			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +

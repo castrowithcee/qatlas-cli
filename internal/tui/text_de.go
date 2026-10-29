@@ -456,7 +456,7 @@ var textDE = map[textID]string{
 	tVaultNewHint:                                              "verdeckt und zweimal eingegeben",
 	tBusyChangingPassphrase:                                    "Passphrase des Tresors wird geändert",
 	tBusyDecrypting:                                            "Verschlüsselung des Tresors wird ausgeschaltet",
-	labelID("vorbilder"):                                       "Vorbilder",
+	labelID("models"):                                          "Vorbilder",
 	labelID("expires"):                                         "Läuft ab",
 	labelID("value"):                                           "Wert",
 	labelID("created"):                                         "Angelegt",
