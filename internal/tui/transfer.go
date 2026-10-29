@@ -603,7 +603,11 @@ func (m *Model) exportRow(i int) string {
 	if e.marks[key] {
 		box = "[x] "
 	}
-	return p.tableRow(i == e.rows.cursor, truncateCells(box+m.exportRowText(key), p.cells()))
+	line := truncateCells(box+m.exportRowText(key), p.cells())
+	if e.marks[key] {
+		line = colourTick(line, styles.cell)
+	}
+	return p.tableRow(i == e.rows.cursor, line)
 }
 
 func (m *Model) exportSelectFrame() (string, string) {

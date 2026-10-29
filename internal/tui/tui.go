@@ -728,6 +728,10 @@ type Model struct {
 	vaultUnlock          *vaultUnlockPrompt
 	vaultLockConfirm     bool
 	vaultLockBack        screen
+	// settingsTakeover is the open question of the first unlock after the vault settings moved out of
+	// config.yaml (see takeover.go); settingsTakeoverBack is the screen it returns to.
+	settingsTakeover     *manage.SettingsTakeover
+	settingsTakeoverBack screen
 
 	// logs is the state of the Logs section; see logs.go.
 	logs *logView
@@ -790,16 +794,20 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	}
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
+	m.list.stops = true
 	m.picker = newFilterList(m.choiceShown)
 	m.templateList = newFilterList(m.templateText)
 	m.templateList.input.Placeholder = "Type to search"
 	m.versionList = newFilterList(m.versionText)
+	m.versionList.stops = true
 	m.versionList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target + " " + m.targetLabels[target] })
+	m.targetList.stops = true
 	m.targetInput = textField("", "", false).input
 	m.labelInput = textField("", "", false).input
 	m.pathList = newFilterList(func(path string) string { return path })
+	m.pathList.stops = true
 	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView(time.Now())
 	m.refreshLogRetention()
@@ -2585,6 +2593,15 @@ func (m *Model) replaceEffectChoices(provider string) {
 }
 
 func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
+	if m.settingsTakeover != nil {
+		switch {
+		case keyIs(key, actYes):
+			m.answerSettingsTakeover(true)
+		case keyIs(key, actNo) || keyIs(key, actBack):
+			m.answerSettingsTakeover(false)
+		}
+		return nil
+	}
 	if m.vaultLockConfirm {
 		switch {
 		case keyIs(key, actYes):
@@ -5178,6 +5195,8 @@ func (m *Model) profileConfirmView() string {
 // It ends in the key line and carries no notes, so the same text serves the modal and the full screen.
 func (m *Model) confirmView() string {
 	switch {
+	case m.settingsTakeover != nil:
+		return m.settingsTakeoverView()
 	case m.vaultLockConfirm:
 		return m.vaultLockConfirmView()
 	case m.decryptConfirm:

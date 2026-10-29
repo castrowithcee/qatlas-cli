@@ -286,12 +286,12 @@ func (m *Model) templateView() string {
 	for i, row := range rows {
 		mark, style := "( ) ", styles.hint
 		if i == m.template.index {
-			mark, style = "(•) ", styles.active
+			mark, style = "(*) ", styles.active
 		}
 		var text string
 		if m.boxed() {
 			_, width := m.fitIn(m.boxRoom(), "  ")
-			text = m.boxRow(m.listRowIn(m.boxRoom(), i == m.template.index, truncateCells(mark+row, width)))
+			text = m.boxRow(m.listRowIn(m.boxRoom(), i == m.template.index, colourRadio(truncateCells(mark+row, width))))
 		} else {
 			text = m.indentedHanging(style, mark, row)
 		}
@@ -315,7 +315,7 @@ func (m *Model) indentedHanging(style lipgloss.Style, marker, text string) strin
 	lines := strings.Split(render(style, width, text), "\n")
 	for i, l := range lines {
 		if i == 0 {
-			lines[i] = head + l
+			lines[i] = colourRadio(head) + l
 			continue
 		}
 		lines[i] = strings.Repeat(" ", len(head)) + l

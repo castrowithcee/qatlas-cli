@@ -29,6 +29,9 @@ type filterList struct {
 	offset  int
 	input   textinput.Model
 	editing bool
+	// stops makes the arrow keys stop at the first and last entry. A list of records stops; a list to choose
+	// one value from wraps.
+	stops bool
 }
 
 func newFilterList(text func(string) string) filterList {
@@ -97,8 +100,15 @@ func (l *filterList) selectName(name string) bool {
 	return false
 }
 
-// move steps through the shown entries and wraps at both ends, like every other list of the editor.
-func (l *filterList) move(by int) { l.cursor = wrap(l.cursor+by, len(l.matches)) }
+// move steps through the shown entries with the arrow keys. A list to choose a value from wraps at both
+// ends; a list of records (stops) stops there, like the page and end keys.
+func (l *filterList) move(by int) {
+	if l.stops {
+		l.jump(by)
+		return
+	}
+	l.cursor = wrap(l.cursor+by, len(l.matches))
+}
 
 // jump moves by a page or to an end. It stops at the ends instead of wrapping: a page key that lands at
 // the other end of a long list would lose the reader's place.

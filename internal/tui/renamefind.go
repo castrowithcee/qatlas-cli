@@ -273,9 +273,9 @@ func (m *Model) updateFindings(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actBack):
 		m.closeFindings()
 	case keyIs(key, actUp):
-		s.cursor = wrap(s.cursor-1, len(s.items))
+		s.cursor = max(s.cursor-1, 0)
 	case keyIs(key, actDown):
-		s.cursor = wrap(s.cursor+1, len(s.items))
+		s.cursor = min(s.cursor+1, len(s.items)-1)
 	case keyIs(key, actHome):
 		s.cursor = 0
 	case keyIs(key, actEnd):

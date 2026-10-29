@@ -150,46 +150,65 @@ func settingsMAC(key *age.X25519Identity, doc settingsDocument) (string, error) 
 // the safe values; a file that cannot be read for another reason does the same. Without a key the safe
 // settings come with ErrNotUnlocked.
 func ReadSettings(dir string, key *age.X25519Identity) (Settings, error) {
+	settings, _, err := readSettings(dir, key)
+	return settings, err
+}
+
+// readSettings is ReadSettings that also returns the schema of the trusted file it read: 0 for a missing
+// file and for any result that is not trusted.
+func readSettings(dir string, key *age.X25519Identity) (Settings, int, error) {
 	if key == nil {
-		return SafeSettings(), ErrNotUnlocked
+		return SafeSettings(), 0, ErrNotUnlocked
 	}
 	data, err := readFile(filepath.Join(dir, settingsFile))
 	if err != nil {
 		if isNotExist(err) {
-			return DefaultSettings(), nil
+			return DefaultSettings(), 0, nil
 		}
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	plain, err := decryptFrom(data, key)
 	if err != nil {
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	defer clear(plain)
 	var doc settingsDocument
 	if err := json.Unmarshal(plain, &doc); err != nil {
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	behaviour, err := ParseUpdateBehaviour(doc.UpdateHandover)
 	if err != nil {
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	want, err := settingsMAC(key, doc)
 	if err != nil || !hmac.Equal([]byte(want), []byte(doc.MAC)) {
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	if doc.Schema == 1 {
 		settings := DefaultSettings()
 		settings.Update = behaviour
-		return settings, nil
+		return settings, 1, nil
 	}
 	settings := Settings{
 		Update: behaviour, IdleTimeout: time.Duration(doc.IdleTimeoutNS),
 		AdminTimeout: time.Duration(doc.AdminTimeoutNS), RetentionDays: doc.RetentionDays,
 	}
 	if settings.Validate() != nil {
-		return SafeSettings(), ErrSettingsUntrusted
+		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
-	return settings, nil
+	return settings, doc.Schema, nil
+}
+
+// SettingsCurrent reports whether the vault unlocked in this process holds a trusted settings.age in the
+// current schema, the one that carries the idle time, the admin session time and the log retention. A
+// missing file and a schema 1 file are not current. A file that is not trusted fails with
+// ErrSettingsUntrusted; without an unlocked vault the error is that of Settings.
+func (v *Vault) SettingsCurrent() (bool, error) {
+	if _, err := v.unlockedDocument(); err != nil {
+		return false, err
+	}
+	_, schema, err := readSettings(v.dir, v.identity.key)
+	return schema == settingsSchemaVersion, err
 }
 
 // Settings returns the settings of the vault unlocked in this process, with the semantics of ReadSettings.

@@ -202,7 +202,7 @@ func TestStoredKeyNamesReachTheEditorUnchanged(t *testing.T) {
 	keys := []struct{ sequence, name, action string }{
 		{"\x1bOQ", "f2", uiprefs.ActionSave}, {"\x1bOR", "f3", uiprefs.ActionSave}, {"\x1bOS", "f4", uiprefs.ActionSave},
 		{"\x1b[17~", "f6", uiprefs.ActionSave}, {"\x1b[18~", "f7", uiprefs.ActionSave},
-		{"\x1b[19~", "f8", uiprefs.ActionSave}, {"\x1b[20~", "f9", uiprefs.ActionSave},
+		{"\x1b[19~", "f8", ""}, {"\x1b[20~", "f9", uiprefs.ActionSave},
 		{"\x1b[25~", "f13", uiprefs.ActionSave}, {"\x1b[1;2P", "f13", uiprefs.ActionSave},
 		{"\x1b[1;2Q", "f14", uiprefs.ActionSave}, {"\x1b[1;2R", "f15", uiprefs.ActionSave},
 		{"\x1b[1;2S", "f16", uiprefs.ActionSave}, {"\x1b[15;2~", "f17", uiprefs.ActionSave},
@@ -215,7 +215,8 @@ func TestStoredKeyNamesReachTheEditorUnchanged(t *testing.T) {
 	var stream strings.Builder
 	var want []string
 	for _, k := range keys {
-		// ctrl+r and ctrl+y belong to the target picker: they reach the editor by name, but no binding holds them.
+		// ctrl+r and ctrl+y belong to the target picker and f8 to the payload form: they reach the editor by
+		// name, but no binding holds them.
 		if _, err := uiprefs.DefaultKeys().Check(k.action, k.name); err != nil && k.action != "" {
 			t.Errorf("%s is no key a binding may hold: %v", k.name, err)
 		}
