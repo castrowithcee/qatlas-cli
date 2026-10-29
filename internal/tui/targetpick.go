@@ -778,6 +778,13 @@ func (m *Model) pickView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.pickRow(i) + "\n")
 	}
+	p := m.targetPick
+	m.hitRows(m.hitTop(header), m.usable(0), start, end, m.pickRow, func(i int) tea.Cmd {
+		if m.screen != screenTargets || m.targetPick != p || i >= len(p.top().list.matches) {
+			return nil
+		}
+		return markOrAct(&p.top().list.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+	})
 	b.WriteString(footer)
 	return b.String()
 }

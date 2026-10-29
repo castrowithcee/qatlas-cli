@@ -683,6 +683,8 @@ type Model struct {
 	tooSmall bool
 	// footerLog, when set, collects the footer lines a dialog draws, to make its keys clickable.
 	footerLog *[]footerLine
+	// pathShown are the path suggestions drawn in this frame, until the lines they stand in are placed.
+	pathShown []pathRowsShown
 	// inModal is set while a dialog is drawn as a modal: its text then carries its buttons.
 	inModal bool
 	// inPanel is set while a question is drawn for the inside of a frame (see framedText).
@@ -3814,6 +3816,7 @@ func (m *Model) renderFrame() string {
 		return ""
 	}
 	m.hits, m.frameHits, m.zones, m.barHits, m.dialogBox, m.tooSmall = nil, nil, nil, nil, hit{}, false
+	m.pathShown = nil
 	m.drawn = true
 	if m.dd != nil {
 		m.dd.placed = false
@@ -3856,6 +3859,10 @@ func (m *Model) promptScreen() bool {
 func (m *Model) workspaceView() string {
 	view := m.fittedEditorView()
 	if m.screen == screenLeave || m.viewFits(view) {
+		if !m.backdrop {
+			// Under a modal the suggestions belong to the dialog, which places them.
+			m.hitPathRows(strings.Split(view, "\n"), m.workspaceTop(), 0)
+		}
 		return view
 	}
 	m.tooSmall = true

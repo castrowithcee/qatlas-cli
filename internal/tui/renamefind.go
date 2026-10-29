@@ -359,8 +359,15 @@ func (m *Model) findingsView() string {
 	start := max(min(s.cursor-room/2, len(s.items)-room), 0)
 	end := min(start+room, len(s.items))
 	rows := make([]string, 0, end-start)
+	row := func(i int) string { return p.row(i == s.cursor, m.findingRow(s.items[i])) }
 	for i := start; i < end; i++ {
-		rows = append(rows, p.row(i == s.cursor, m.findingRow(s.items[i])))
+		rows = append(rows, row(i))
 	}
+	m.hitRows(m.hitTop(head), m.usable(0), start, end, row, func(i int) tea.Cmd {
+		if m.screen != screenFindings || m.findings != s || i >= len(s.items) {
+			return nil
+		}
+		return markOrAct(&s.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+	})
 	return head + strings.Join(rows, "\n") + "\n" + foot
 }

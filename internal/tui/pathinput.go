@@ -4,11 +4,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 )
@@ -141,9 +143,31 @@ func (p *pathField) refresh() {
 
 // shown are the suggestions that stand under the typed path and the position of the marked one among them.
 func (p *pathField) shown() ([]string, int) {
-	start := max(0, min(p.mark-pathSuggestionsShown+1, len(p.matches)-pathSuggestionsShown))
-	end := min(len(p.matches), start+pathSuggestionsShown)
+	start, end := p.window()
 	return p.matches[start:end], p.mark - start
+}
+
+// window is the range of the suggestions that stand under the typed path.
+func (p *pathField) window() (int, int) {
+	start := max(0, min(p.mark-pathSuggestionsShown+1, len(p.matches)-pathSuggestionsShown))
+	return start, min(len(p.matches), start+pathSuggestionsShown)
+}
+
+// click is a click on suggestion i. Only up/down mark a suggestion for enter, so the first click marks the way
+// they do, and a click on the marked one takes it as tab does.
+func (p *pathField) click(i int) {
+	if i < 0 || i >= len(p.matches) {
+		return
+	}
+	taken := false
+	markOrAct(&p.mark, i, p.marked, func() tea.Cmd {
+		taken = true
+		p.complete()
+		return nil
+	})
+	if !taken {
+		p.marked = true
+	}
 }
 
 // suggest are the entries that complete typed: those inside the directory it names up to its last separator
@@ -251,10 +275,52 @@ func (m *Model) pathLinesIn(room int, label string, p *pathField) string {
 	var b strings.Builder
 	b.WriteString(prefix + lipgloss.NewStyle().MaxWidth(width).Render(inputView(in)) + "\n")
 	suggestions, current := p.shown()
+	shown := pathRowsShown{field: p}
+	shown.first, _ = p.window()
 	for i, suggestion := range suggestions {
-		b.WriteString(m.rowIn(room, i == current, suggestion) + "\n")
+		row := m.rowIn(room, i == current, suggestion)
+		shown.rows = append(shown.rows, strings.TrimRight(ansi.Strip(row), " "))
+		b.WriteString(row + "\n")
+	}
+	if len(suggestions) > 0 {
+		// A field is drawn more than once while a frame is laid out; the last drawing counts.
+		m.pathShown = slices.DeleteFunc(m.pathShown, func(s pathRowsShown) bool { return s.field == p })
+		m.pathShown = append(m.pathShown, shown)
 	}
 	return b.String()
+}
+
+// pathRowsShown are the suggestion rows a pathField drew, as plain text, from suggestion first on.
+type pathRowsShown struct {
+	field *pathField
+	first int
+	rows  []string
+}
+
+// hitPathRows makes the suggestions drawn in lines clickable. lines stand from screen row y0 and column x0 on.
+// A suggestion is found by its text, so one that a narrow room wrapped over several lines is no target.
+func (m *Model) hitPathRows(lines []string, y0, x0 int) {
+	for _, shown := range m.pathShown {
+		at := 0
+		for k, row := range shown.rows {
+			for ; at < len(lines); at++ {
+				plain := strings.TrimRight(ansi.Strip(lines[at]), " ")
+				idx := strings.Index(plain, row)
+				if idx < 0 {
+					continue
+				}
+				field, i := shown.field, shown.first+k
+				x := x0 + ansi.StringWidth(plain[:idx])
+				m.addHit(x, y0+at, x+ansi.StringWidth(row), y0+at+1, func() tea.Cmd {
+					field.click(i)
+					return nil
+				})
+				at++
+				break
+			}
+		}
+	}
+	m.pathShown = nil
 }
 
 // pathKeys is the key line of a path prompt: keys, with the suggestion keys in front while there are any.

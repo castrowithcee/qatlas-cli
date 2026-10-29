@@ -1606,9 +1606,20 @@ func (m *Model) logDateDialogView() string {
 	b.WriteString(m.wrapped(styles.title, title) + "\n\n")
 	m.formCol = m.labelColumn(labels...)
 	defer func() { m.formCol = 0 }()
-	for i, in := range d.inputs {
-		b.WriteString(m.formRow(i == d.focus, logLabel(labels[i]), inputView(in)) + "\n")
+	row := func(i int) string { return m.formRow(i == d.focus, logLabel(labels[i]), inputView(d.inputs[i])) }
+	for i := range d.inputs {
+		b.WriteString(row(i) + "\n")
 	}
+	// A click on a field takes the focus, as tab does; nothing is typed or applied by it.
+	m.hitRows(m.hitTop(m.wrapped(styles.title, title)+"\n\n"), m.usable(0), 0, len(d.inputs), row, func(i int) tea.Cmd {
+		if m.screen != screenLogs || m.logs.dialog != d || i >= len(d.inputs) {
+			return nil
+		}
+		d.inputs[d.focus].Blur()
+		d.focus = i
+		d.inputs[d.focus].Focus()
+		return nil
+	})
 	b.WriteString(m.indented(tr(tLogDateHint)) + "\n")
 	if d.err != "" {
 		b.WriteString(m.indentedWith(styles.fail, tr(tNoteError, d.err)) + "\n")
@@ -1630,6 +1641,13 @@ func (m *Model) logPickView() string {
 	for i := start; i < end; i++ {
 		b.WriteString(m.logPickRow(i) + "\n")
 	}
+	p := m.logs.pick
+	m.hitRows(m.hitTop(head), m.usable(0), start, end, m.logPickRow, func(i int) tea.Cmd {
+		if m.screen != screenLogs || m.logs.pick != p || i >= len(p.list.matches) {
+			return nil
+		}
+		return markOrAct(&p.list.cursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+	})
 	b.WriteString(foot)
 	return b.String()
 }
