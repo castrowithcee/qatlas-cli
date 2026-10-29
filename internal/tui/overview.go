@@ -10,7 +10,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // The Overview is the start of the editor: how much of each kind exists, the state of the vault, and the
@@ -42,14 +41,13 @@ const (
 	overviewStackedRecent = 5
 )
 
-// overviewIcons are the Nerd Font glyphs (Font Awesome range) before the label of a count when the icons
-// preference is nerdfont: link, cube, key, lock, check.
-var overviewIcons = map[section]string{
-	sectionConnections: "\uf0c1",
-	sectionServices:    "\uf1b2",
-	sectionCredentials: "\uf084",
-	sectionTokens:      "\uf023",
-	sectionApprovals:   "\uf058",
+// overviewIcons is the meaning of the icon before the label of a count.
+var overviewIcons = map[section]iconID{
+	sectionConnections: iconConnections,
+	sectionServices:    iconServices,
+	sectionCredentials: iconCredentials,
+	sectionTokens:      iconTokens,
+	sectionApprovals:   iconApprovals,
 }
 
 // overviewTiles are the counts, in the order of the areas that hold them.
@@ -133,8 +131,8 @@ func (m *Model) overviewHeader(width, n int) []string {
 // selected one where it fits, so the selection shows without colour as well.
 func (m *Model) overviewCardLabel(item overviewItem, inner int, selected bool) string {
 	label := item.label
-	if m.prefs.Icons == uiprefs.IconsNerdFont {
-		label = overviewIcons[item.target] + " " + label
+	if icon := m.icon(overviewIcons[item.target]); icon != "" {
+		label = icon + " " + label
 	}
 	if selected {
 		if lipgloss.Width(label)+2 <= inner {
@@ -152,8 +150,8 @@ func (m *Model) overviewCards(tiles []overviewItem, width int) (lines []string, 
 	need := 0
 	for _, t := range tiles {
 		label := lipgloss.Width(t.label)
-		if m.prefs.Icons == uiprefs.IconsNerdFont {
-			label += 2
+		if icon := m.icon(overviewIcons[t.target]); icon != "" {
+			label += lipgloss.Width(icon) + 1
 		}
 		// The title sits in the top border with a space on each side, so it needs one cell more than the value.
 		need = max(need, label+1, lipgloss.Width(t.value))

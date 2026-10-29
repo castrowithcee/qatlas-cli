@@ -255,19 +255,23 @@ func TestIconsKeepTheNameVisible(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 28})
 		m.prefs.Icons = uiprefs.IconsNone
 		plain := m.navLine()
-		if strings.Contains(plain, areaIcons[areaOverview]) {
-			t.Errorf("width %d: icons shown although the preference is none", width)
-		}
-		m.prefs.Icons = uiprefs.IconsNerdFont
-		for _, s := range []section{sectionOverview, sectionConnections, sectionSettings()} {
-			m.section = s
-			line := m.navLine()
-			a := s.area()
-			if !strings.Contains(line, a.title()) || !strings.Contains(line, areaIcons[a]) {
-				t.Errorf("width %d, area %s: tab line lacks icon or name: %q", width, a.title(), line)
+		for _, id := range areaIcons {
+			if strings.Contains(plain, iconTable[id].unicode) || strings.Contains(plain, iconTable[id].nerd) {
+				t.Errorf("width %d: icons shown although the preference is none", width)
 			}
-			if lipgloss.Width(line) > width {
-				t.Errorf("width %d: tab line is %d cells wide", width, lipgloss.Width(line))
+		}
+		for _, value := range []string{uiprefs.IconsUnicode, uiprefs.IconsNerdFont} {
+			m.prefs.Icons = value
+			for _, s := range []section{sectionOverview, sectionConnections, sectionSettings()} {
+				m.section = s
+				line := m.navLine()
+				a := s.area()
+				if !strings.Contains(line, a.title()) || !strings.Contains(line, m.icon(areaIcons[a])) {
+					t.Errorf("width %d, %s, area %s: tab line lacks icon or name: %q", width, value, a.title(), line)
+				}
+				if lipgloss.Width(line) > width {
+					t.Errorf("width %d, %s: tab line is %d cells wide", width, value, lipgloss.Width(line))
+				}
 			}
 		}
 	}
@@ -333,12 +337,12 @@ func TestUpdatePageNamesRunningVersion(t *testing.T) {
 func TestIconsExplanationShowsTestCharactersAndFontHint(t *testing.T) {
 	eachLanguage(t, func(t *testing.T) {
 		m, _, _ := newModel(t)
-		f := choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, uiprefs.IconsNone)
+		f := choiceField(iconsLabel, []string{uiprefs.IconsUnicode, uiprefs.IconsNerdFont, uiprefs.IconsNone}, uiprefs.IconsUnicode)
 		for name, got := range map[string]string{
 			"detail": f.withDetail(iconsDetail()).detail,
 			"picker": m.pickerChoiceSubject(f, uiprefs.IconsNerdFont).long,
 		} {
-			for _, icon := range areaIcons {
+			for _, icon := range nerdAreaGlyphs() {
 				if !strings.Contains(got, icon) {
 					t.Errorf("%s lacks the test character %q: %q", name, icon, got)
 				}

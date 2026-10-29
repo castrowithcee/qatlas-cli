@@ -7,7 +7,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -37,24 +36,10 @@ type heatGlyphs struct {
 
 // heatGlyphSet is the set the terminal can draw: block characters where the locale is UTF-8, else ASCII.
 func heatGlyphSet() heatGlyphs {
-	if heatASCII() {
+	if !utf8Terminal() {
 		return heatGlyphs{zero: ".", levels: [...]string{"-", "=", "+", "#"}, outside: "x", altered: "!", gap: "~"}
 	}
 	return heatGlyphs{zero: "·", levels: [...]string{"░", "▒", "▓", "█"}, outside: "×", altered: "✗", gap: "…"}
-}
-
-// heatASCII reports whether the terminal is not known to draw block characters: a dumb terminal, or a
-// locale that names a character set other than UTF-8. An unset locale counts as UTF-8.
-var heatASCII = func() bool {
-	if os.Getenv("TERM") == "dumb" {
-		return true
-	}
-	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
-		if v := strings.ToLower(os.Getenv(name)); v != "" {
-			return !strings.Contains(v, "utf-8") && !strings.Contains(v, "utf8")
-		}
-	}
-	return false
 }
 
 // cell is the glyph and style of one day. A day the check flagged shows that before its level.

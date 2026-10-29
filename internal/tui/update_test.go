@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // fakeUpdater answers the check and the installation from its fields and counts the installations.
@@ -94,7 +95,7 @@ func startedWith(t *testing.T, updater Updater) *Model {
 	return m
 }
 
-const fullBanner = "Update available v0.4.0 → v0.5.0 🎉 · u update"
+const fullBanner = "Update available v0.4.0 → v0.5.0 · u update"
 
 func TestTheBannerNamesOnlyANewerRelease(t *testing.T) {
 	fake := newerRelease()
@@ -379,5 +380,19 @@ func TestTheBannerShowsTheDownloadProgress(t *testing.T) {
 	deliver(m, next)
 	if fake.updates != 1 || m.updating || m.updated != "v0.5.0" {
 		t.Fatalf("the installation did not finish: updates %d updating %v updated %q", fake.updates, m.updating, m.updated)
+	}
+}
+
+// The celebration beside the full banner is an icon: it follows the preference and keeps the banner whole.
+func TestTheBannerEmojiIsAnIcon(t *testing.T) {
+	setUTF8(t, "xterm-256color", "C.UTF-8")
+	m := startedWith(t, newerRelease())
+	m.prefs.Icons = uiprefs.IconsUnicode
+	if got, want := m.updateBanners()[0], "Update available v0.4.0 → v0.5.0 🎉 · u update"; got != want {
+		t.Errorf("unicode banner = %q, want %q", got, want)
+	}
+	m.prefs.Icons = uiprefs.IconsNone
+	if got := m.updateBanners()[0]; got != fullBanner {
+		t.Errorf("banner without icons = %q, want %q", got, fullBanner)
 	}
 }

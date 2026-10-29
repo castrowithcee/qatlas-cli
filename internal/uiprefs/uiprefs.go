@@ -31,6 +31,7 @@ const (
 	ThemeQatlasLight = "qatlas light"
 
 	IconsNone     = "none"
+	IconsUnicode  = "unicode"
 	IconsNerdFont = "nerdfont"
 
 	// The language of the editor's own texts; system follows the language of the device.
@@ -48,6 +49,10 @@ const (
 // DefaultStart is the area the editor opens on by default. Whether another name is an area is the editor's
 // to decide; this package only keeps the text.
 const DefaultStart = "overview"
+
+// formatVersion is written to every file this version saves. A file without it was written before unicode
+// became the default icons value, when Save wrote the old default none explicitly; that none is not a choice.
+const formatVersion = 2
 
 // formerThemes are the values of the former colour scheme and the themes they stand for now.
 var formerThemes = map[string]string{"auto": ThemeTerminal, "light": ThemeQatlasLight, "dark": ThemeQatlasDark}
@@ -69,7 +74,7 @@ func (p Prefs) MouseEnabled() bool { return !p.MouseOff }
 
 // Default returns the preferences of a device that has none.
 func Default() Prefs {
-	return Prefs{Theme: ThemeTerminal, Start: DefaultStart, Icons: IconsNone, Language: LanguageEnglish, Keys: DefaultKeys()}
+	return Prefs{Theme: ThemeTerminal, Start: DefaultStart, Icons: IconsUnicode, Language: LanguageEnglish, Keys: DefaultKeys()}
 }
 
 // Path returns the preferences file that belongs to the configuration directory dir.
@@ -88,6 +93,7 @@ func Load(path string) (Prefs, []string) {
 		return prefs, []string{fmt.Sprintf("cannot read %s, using the defaults: %v", path, err)}
 	}
 	var raw struct {
+		Format   *int    `yaml:"format"`
 		Theme    *string `yaml:"theme"`
 		Start    *string `yaml:"start"`
 		Icons    *string `yaml:"icons"`
@@ -125,11 +131,14 @@ func Load(path string) (Prefs, []string) {
 	}
 	if raw.Icons != nil {
 		switch *raw.Icons {
-		case IconsNone, IconsNerdFont:
+		case IconsNone, IconsUnicode, IconsNerdFont:
 			prefs.Icons = *raw.Icons
+			if *raw.Icons == IconsNone && (raw.Format == nil || *raw.Format < formatVersion) {
+				prefs.Icons = IconsUnicode
+			}
 		default:
-			warnings = append(warnings, fmt.Sprintf("%s: icons %q is not none or nerdfont, using %s",
-				path, *raw.Icons, IconsNone))
+			warnings = append(warnings, fmt.Sprintf("%s: icons %q is not unicode, nerdfont or none, using %s",
+				path, *raw.Icons, IconsUnicode))
 		}
 	}
 	if raw.Language != nil {
@@ -166,9 +175,9 @@ func Save(path string, prefs Prefs) error {
 		return errors.New("theme must not be empty")
 	}
 	switch prefs.Icons {
-	case IconsNone, IconsNerdFont:
+	case IconsNone, IconsUnicode, IconsNerdFont:
 	default:
-		return fmt.Errorf("icons %q is not none or nerdfont", prefs.Icons)
+		return fmt.Errorf("icons %q is not unicode, nerdfont or none", prefs.Icons)
 	}
 	switch prefs.Language {
 	case "":
@@ -188,10 +197,11 @@ func Save(path string, prefs Prefs) error {
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(struct {
-		Prefs `yaml:",inline"`
-		Mouse bool      `yaml:"mouse"`
-		Keys  *keysFile `yaml:"keys,omitempty"`
-	}{prefs, prefs.MouseEnabled(), keys.file()}); err != nil {
+		Prefs  `yaml:",inline"`
+		Mouse  bool      `yaml:"mouse"`
+		Format int       `yaml:"format"`
+		Keys   *keysFile `yaml:"keys,omitempty"`
+	}{prefs, prefs.MouseEnabled(), formatVersion, keys.file()}); err != nil {
 		return err
 	}
 	if err := enc.Close(); err != nil {

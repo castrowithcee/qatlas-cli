@@ -8,8 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // layoutWorkspace derives the room of the workspace from the terminal. It takes the full width; above it
@@ -180,14 +178,11 @@ func (m *Model) configPath() string {
 	return path
 }
 
-// headerLogo is the Nerd Font glyph in front of the name; without that preference the name stands alone.
-const headerLogo = "\uf1b2"
-
 // headerStatus are the left parts of the header: the name and the status marks of the vault and admin.
 func (m *Model) headerStatus() []string {
 	name := styles.title.Render(tr(tHeaderTitle))
-	if m.prefs.Icons == uiprefs.IconsNerdFont {
-		name = styles.active.Render(headerLogo) + " " + name
+	if icon := m.icon(iconLogo); icon != "" {
+		name = styles.active.Render(icon) + " " + name
 	}
 	return append([]string{name}, m.vaultSegments()...)
 }
@@ -208,8 +203,8 @@ func (m *Model) headerHints() string {
 
 // navLine is the tab line: every area by number and name, the active one as an accent surface (in brackets
 // without colour), and "> " in front while the tabs have the focus; the fill or the brackets and the marker,
-// not the colour alone, say which one is active. A terminal too narrow for all names closes the gaps first
-// and then shortens the others to their numbers; the active tab always stays whole.
+// not the colour alone, say which one is active. A terminal too narrow for all names closes the gaps first,
+// then drops the icons, and then shortens the others to their numbers; the active tab always stays whole.
 func (m *Model) navLine() string { return m.navTabs().line }
 
 // navBar is the tab line as drawn, and the cells of the tab of each area in it (a tab cut off by the edge of
@@ -231,32 +226,34 @@ func (m *Model) navTabs() navBar {
 		focus = "> "
 	}
 	plain := plainTabs()
-	var spaced, compact, short []string
+	var spaced, compact, bare, short []string
 	active := -1
 	for s := area(0); s < areaCount; s++ {
 		name := fmt.Sprintf("%d %s", int(s)+1, s.title())
-		if m.prefs.Icons == uiprefs.IconsNerdFont {
+		plainName := name
+		if icon := m.icon(areaIcons[s]); icon != "" {
 			// The icon comes before the name and never replaces it.
-			name = fmt.Sprintf("%d %s %s", int(s)+1, areaIcons[s], s.title())
+			name = fmt.Sprintf("%d %s %s", int(s)+1, icon, s.title())
 		}
 		if s == m.section.area() && m.wizard == nil {
-			tab := " " + name + " "
+			tab, bareTab := " "+name+" ", " "+plainName+" "
 			if plain {
-				tab = "[" + name + "]"
+				tab, bareTab = "["+name+"]", "["+plainName+"]"
 			}
-			spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
+			spaced, compact, bare, short = append(spaced, tab), append(compact, tab), append(bare, bareTab), append(short, tab)
 			active = int(s)
 			continue
 		}
-		spaced, compact, short = append(spaced, " "+name+" "), append(compact, name), append(short, fmt.Sprint(int(s)+1))
+		spaced, compact = append(spaced, " "+name+" "), append(compact, name)
+		bare, short = append(bare, plainName), append(short, fmt.Sprint(int(s)+1))
 	}
 	if m.wizard != nil {
 		tab := tr(tTabSetup)
-		spaced, compact, short = append(spaced, tab), append(compact, tab), append(short, tab)
+		spaced, compact, bare, short = append(spaced, tab), append(compact, tab), append(bare, tab), append(short, tab)
 		active = len(spaced) - 1
 	}
 	line, items := focus+strings.Join(spaced, " "), spaced
-	for _, tabs := range [][]string{compact, short} {
+	for _, tabs := range [][]string{compact, bare, short} {
 		if lipgloss.Width(line) <= m.termWidth {
 			break
 		}
