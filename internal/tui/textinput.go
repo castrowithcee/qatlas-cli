@@ -12,13 +12,13 @@ import (
 )
 
 // inputStyles are the styles of every text field: plain prompt and text, and the placeholder and suggestion in
-// grey 240. The library's own defaults colour the prompt and a blurred text. The cursor is the terminal's own
-// (see cursorMark) and static: blinking would need the blink command threaded through Init, through every
-// focus change and through the timer messages this event loop drops.
+// the hint style of the active theme. The library's own defaults colour the prompt and a blurred text. The
+// cursor is the terminal's own (see cursorMark) and static: blinking would need the blink command threaded
+// through Init, through every focus change and through the timer messages this event loop drops.
 func inputStyles() textinput.Styles {
 	state := textinput.StyleState{
-		Placeholder: lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		Suggestion:  lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		Placeholder: styles.hint,
+		Suggestion:  styles.hint,
 	}
 	return textinput.Styles{Focused: state, Blurred: state}
 }
@@ -96,6 +96,8 @@ func cursorColumn(in textinput.Model) int {
 // the library's own placeholder keeps no more than the first character of a field without a width. A focused
 // field carries the cursorMark.
 func inputView(in textinput.Model) string {
+	// The styles are set again here so a theme change reaches fields built before it.
+	in.SetStyles(inputStyles())
 	if in.Value() != "" || in.Placeholder == "" {
 		view := in.View()
 		if !in.Focused() {
