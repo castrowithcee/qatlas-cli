@@ -433,6 +433,8 @@ func (m *Model) overviewView() string {
 		lines, _, foot = m.overviewLines()
 	}
 	m.hitOverview()
+	top := m.workspaceTop()
+	m.addZone(0, top, m.usable(0), top+m.height-(strings.Count(foot, "\n")+1), m.zoneRows)
 	return strings.Join(lines, "\n") + "\n" + foot
 }
 

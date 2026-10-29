@@ -245,6 +245,9 @@ type logView struct {
 	// day is the day of logModeDay, from and to the range of logModeRange, all as logDateLayout.
 	day, from, to string
 	focus         logFocus
+	// zoneTabs and zoneBar are the lines of the tab line and of the filter line in the head of the last
+	// frame, counted from its first line.
+	zoneTabs, zoneBar [2]int
 
 	// loadID guards against an answer to a load that a later one replaced; loading is true until the latest
 	// one answered, and loaded once any did.
@@ -951,11 +954,13 @@ func (m *Model) logsView() string {
 		} else {
 			b.WriteString(m.logInside(m.logStatLines(m.logStats(), room)))
 		}
+		m.zoneLogs(b.String())
 		b.WriteString(foot)
 		return b.String()
 	}
 	if lv.heat && lv.loaded && lv.err == "" && len(lv.list.matches) > 0 {
 		b.WriteString(m.logHeatLines(room))
+		m.zoneLogs(b.String())
 		b.WriteString(foot)
 		return b.String()
 	}
@@ -965,8 +970,34 @@ func (m *Model) logsView() string {
 		b.WriteString(m.logRowLine(i, l) + "\n")
 	}
 	m.hitLogs(head, start, end)
+	m.zoneLogs(b.String())
 	b.WriteString(foot)
 	return b.String()
+}
+
+// zoneLogs registers the zones of the Logs screen, whose lines up to its foot are drawn: the panel with its
+// table, summary or heatmap takes the rows, the tab line the tabs, the filter line its first field. The
+// frame of the panel, where there is one, belongs to the panel.
+func (m *Model) zoneLogs(drawn string) {
+	lv := m.logs
+	top, width := m.workspaceTop(), m.usable(0)
+	end := top + strings.Count(drawn, "\n")
+	if lv.framed {
+		end++
+	}
+	m.addZone(0, top, width, end, func() tea.Cmd { return m.zoneLogFocus(logFocusRows) })
+	m.addZone(0, top+lv.zoneTabs[0], width, top+lv.zoneTabs[1], func() tea.Cmd { return m.zoneLogFocus(logFocusTabs) })
+	m.addZone(0, top+lv.zoneBar[0], width, top+lv.zoneBar[1], func() tea.Cmd { return m.zoneLogFocus(logFocusMode) })
+}
+
+// zoneLogFocus is the click on the free area of a part of the Logs screen: that part takes the focus, with the
+// checks the other clicks of the screen meet.
+func (m *Model) zoneLogFocus(focus logFocus) tea.Cmd {
+	lead, ok := m.logBarGuard()
+	if ok {
+		m.logs.focus = focus
+	}
+	return lead
 }
 
 // logRoom is the width of the lines inside the panel of the last frame, or of the whole workspace where the
@@ -1170,6 +1201,8 @@ func (m *Model) logsFrame() (string, string) {
 		} else {
 			barLines = append(barLines, filterRows...)
 		}
+		lv.zoneTabs = [2]int{len(lines), len(lines) + len(tabLine)}
+		lv.zoneBar = [2]int{len(lines) + len(tabLine), len(lines) + len(barLines)}
 		for _, line := range barLines {
 			if framed {
 				line = panelSide(line, room, focused)
