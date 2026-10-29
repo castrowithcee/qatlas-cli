@@ -245,7 +245,7 @@ func TestDraftTargetsNeedTheVaultUnlockedHere(t *testing.T) {
 	}
 }
 
-// An agent token that covers the draft as a vorbild never stands in for the admin session, and does not open
+// An agent token that covers the draft as a model never stands in for the admin session, and does not open
 // the ordinary way either.
 func TestDraftTargetsAreOutOfReachOfAnAgentToken(t *testing.T) {
 	v := draftVault(t)

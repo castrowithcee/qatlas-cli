@@ -29,7 +29,7 @@ func Terms() []Term {
 			"secret works only after a person approved it as it is configured now. Changing it asks for a new " +
 			"approval."},
 		{ID: "term.token", Title: "Token", Text: "An agent token lets an agent approve connection changes itself, " +
-			"within the limits of the vorbild connections it names. It is shown once and kept in the vault."},
+			"within the limits of the model connections it names. It is shown once and kept in the vault."},
 		{ID: "term.vault", Title: "Vault", Text: "The vault is the encrypted store for secrets, unlocked with a " +
 			"passphrase. Reading needs no passphrase while a vault process holds it unlocked; managing it needs an " +
 			"admin session."},

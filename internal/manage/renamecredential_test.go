@@ -64,7 +64,7 @@ func TestRenameVaultCredentialRenamesTheEntryAndCarriesValidApprovals(t *testing
 		t.Errorf("readers = %v, want %v", got, wantStates)
 	}
 	if len(plan.LapsedTokens) != 0 {
-		t.Errorf("LapsedTokens = %v, want none: the vorbild's approval is carried", plan.LapsedTokens)
+		t.Errorf("LapsedTokens = %v, want none: the model's approval is carried", plan.LapsedTokens)
 	}
 	// The credential names no provider, so it accepts every role.
 	wantEnv := []EnvRename{
@@ -106,7 +106,7 @@ func TestRenameVaultCredentialRenamesTheEntryAndCarriesValidApprovals(t *testing
 	}
 	tokens, _ := w.v.Tokens()
 	if lapsed, _ := approval.LapsedModels(after, w.v, tokens[0], time.Time{}); len(lapsed) != 0 {
-		t.Errorf("lapsed vorbilder = %v", lapsed)
+		t.Errorf("lapsed models = %v", lapsed)
 	}
 	var ops []string
 	for _, e := range w.logged(t) {
@@ -127,7 +127,7 @@ func TestRenameVaultCredentialWithoutAdminSessionLeavesApprovals(t *testing.T) {
 		t.Errorf("readers = %v, carried = %v, want nothing carried", got, res.Carried)
 	}
 	if !reflect.DeepEqual(plan.LapsedTokens, []string{"helper"}) {
-		t.Errorf("LapsedTokens = %v, want the token whose vorbild reads the credential", plan.LapsedTokens)
+		t.Errorf("LapsedTokens = %v, want the token whose model reads the credential", plan.LapsedTokens)
 	}
 	if approvals, _ := w.v.Approvals(); !reflect.DeepEqual(approvals, approvalsBefore) {
 		t.Error("an approval was touched without an admin session")

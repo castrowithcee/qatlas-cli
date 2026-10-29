@@ -36,9 +36,9 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"was not read.\n\n" +
 			"The configuration file is backed up before it is replaced, and the vault's files before the vault\n" +
 			"is written. A renamed connection's approval moves to the new name as it is: an approved connection\n" +
-			"stays approved and an open one stays open. An agent token that names the old name as a vorbild no\n" +
+			"stays approved and an open one stays open. An agent token that names the old name as a model no\n" +
 			"longer covers anything through it; tokens are never rewritten. A name an agent token names as a\n" +
-			"vorbild, or that a stale approval in the vault still holds, is refused. The rename is logged as\n" +
+			"model, or that a stale approval in the vault still holds, is refused. The rename is logged as\n" +
 			"one config.connection.rename entry with both names and the connection's id. Should the run stop\n" +
 			"before it is complete, the approval left under the other name approves nothing and 'qatlas vault\n" +
 			"approve' names it. A service is renamed in the configuration alone: approvals name the provider\n" +
@@ -46,7 +46,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"A credential takes its secrets along: the system keyring's keys of a keyring credential and the\n" +
 			"vault entry of a vault credential, with its id and its pending writes. The approval of every\n" +
 			"connection that reads it and is approved moves to the new name; an open one stays open. An agent\n" +
-			"token whose vorbild's approval the rename does not carry, because it ran without an admin session,\n" +
+			"token whose model's approval the rename does not carry, because it ran without an admin session,\n" +
 			"no longer covers anything through it. Environment variables derived from the old name, which\n" +
 			"override its stored secrets, are read under the new name from then on; the list names both, and\n" +
 			"qatlas changes no environment. A name the vault, the system keyring, or the unencrypted fallback\n" +
@@ -290,11 +290,11 @@ func writeRenamePlan(out io.Writer, opts *Options, plan *manage.RenamePlan) {
 	}
 	for _, token := range plan.LapsedTokens {
 		if plan.Kind == manage.RenameCredential {
-			fmt.Fprintf(out, "  warning   agent token %s has a vorbild whose approval of %s is not carried over; "+
+			fmt.Fprintf(out, "  warning   agent token %s has a model whose approval of %s is not carried over; "+
 				"it no longer covers anything through it\n", apply(token), apply(plan.Old))
 			continue
 		}
-		fmt.Fprintf(out, "  warning   agent token %s names %s as a vorbild and no longer covers anything through it\n",
+		fmt.Fprintf(out, "  warning   agent token %s names %s as a model and no longer covers anything through it\n",
 			apply(token), apply(plan.Old))
 	}
 	for _, outside := range plan.Outside {
