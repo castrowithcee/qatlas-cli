@@ -273,11 +273,10 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 		if code != exitOK || !strings.Contains(stdout, `"updated":true`) {
 			t.Fatalf("refuse=%v: exit code = %d, stdout = %q, stderr = %q", refuse, code, stdout, stderr)
 		}
-		want := "qatlas: the vault process was locked because the release is not signed, before qatlas was replaced; run 'qatlas vault unlock' to " +
+		want := "qatlas: the vault process did not hand the vault over and locked itself; run 'qatlas vault unlock' to " +
 			"unlock the vault again\n"
 		if refuse {
-			want = "qatlas: warning: the vault process could not be locked because the release is not signed, " +
-				"before qatlas was replaced: "
+			want = "qatlas: warning: the vault process could not be locked"
 		}
 		if !strings.HasPrefix(stderr, want) || (refuse && !strings.Contains(stderr, "kill "+strconv.Itoa(os.Getpid()))) {
 			t.Fatalf("refuse=%v: stderr = %q, want %q", refuse, stderr, want)
@@ -311,15 +310,16 @@ func installedProgram(t *testing.T) string {
 }
 
 // releaseUpdater returns an updater for executable against a local release v1.1.0 whose program is
-// "new-program" and which carries no signature. before runs right before the installed files are replaced,
+// "new-program" and which is signed by a key the updater trusts. before runs right before the installed files are replaced,
 // after the command's own hook.
 func releaseUpdater(t *testing.T, executable string, before func()) *selfupdate.Client {
 	t.Helper()
-	return signedReleaseUpdater(t, executable, nil, nil, before)
+	signer := releasetest.NewSigner(t)
+	return signedReleaseUpdater(t, executable, signer, signer.PublicKey(), before)
 }
 
 // signedReleaseUpdater is releaseUpdater for a release whose checksums signer signed, which the updater
-// trusts only if trusted is that signer's key; a nil signer publishes no signature.
+// trusts only if trusted is that signer's key;
 func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, trusted ssh.PublicKey, before func()) *selfupdate.Client {
 	t.Helper()
 	var archive bytes.Buffer

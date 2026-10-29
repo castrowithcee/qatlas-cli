@@ -26,6 +26,10 @@ import (
 	"time"
 	"unsafe"
 
+	"golang.org/x/crypto/ssh"
+
+	"github.com/castrowithcee/qatlas-cli/internal/release"
+	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -106,6 +110,7 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 		t.Fatal("building the archive")
 	}
 	sum := sha256.Sum256(archive.Bytes())
+	signer := releasetest.NewSigner(t)
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -113,9 +118,13 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": latest, "assets": []map[string]string{
 				{"name": archiveName, "browser_download_url": server.URL + "/" + archiveName},
 				{"name": "checksums.txt", "browser_download_url": server.URL + "/checksums.txt"},
+				{"name": "checksums.txt.sig", "browser_download_url": server.URL + "/checksums.txt.sig"},
 			}})
 		case "/checksums.txt":
 			_, _ = fmt.Fprintf(w, "%s  %s\n", hex.EncodeToString(sum[:]), archiveName)
+		case "/checksums.txt.sig":
+			_, _ = w.Write(releasetest.Sign(t, signer, release.Namespace, "sha512",
+				[]byte(fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), archiveName))))
 		case "/" + archiveName:
 			_, _ = w.Write(archive.Bytes())
 		default:
@@ -151,7 +160,8 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 	cmd := exec.Command(bin, "tui")
 	cmd.Env = []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color",
 		"QATLAS_CONFIG=" + configPath, "XDG_RUNTIME_DIR=" + runtimeDir, secret.StoreSelector + "=none",
-		runAsTUIEnv + "=1", tuiVersionEnv + "=v1.0.0", tuiReleasesEnv + "=" + server.URL}
+		runAsTUIEnv + "=1", tuiVersionEnv + "=v1.0.0", tuiReleasesEnv + "=" + server.URL,
+		tuiKeyEnv + "=" + string(ssh.MarshalAuthorizedKey(signer.PublicKey()))}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 	if err := cmd.Start(); err != nil {
