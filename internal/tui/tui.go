@@ -3781,10 +3781,11 @@ func sectionShortcut(key string) (section, bool) {
 	return areaSections[key[0]-'1'][0], true
 }
 
-// View is the Bubble Tea entry point; all drawing lives in render. The editor draws inline, below the shell
-// prompt, never on the alternate screen.
+// View is the Bubble Tea entry point; all drawing lives in render. The alternate screen is requested in every
+// view, also while quitting, so the renderer never switches back mid-run.
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
+	v.AltScreen = true
 	v.Cursor = m.cursor
 	v.MouseMode = m.mouseMode()
 	return v
