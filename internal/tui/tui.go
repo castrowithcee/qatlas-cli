@@ -667,6 +667,8 @@ type Model struct {
 	// The click targets of the frame drawn last; see mouse.go.
 	hits      []hit
 	frameHits []hit
+	// zones are the focus zones of the frame drawn last, ranked below every other target.
+	zones []hit
 	// cursor is where the focused text field of the frame drawn last puts the terminal cursor; nil hides it.
 	cursor *tea.Cursor
 	// drawn is set when the targets match the state: render sets it, any other message clears it. During a
@@ -3805,7 +3807,7 @@ func (m *Model) renderFrame() string {
 	if m.quitting {
 		return ""
 	}
-	m.hits, m.frameHits, m.tooSmall = nil, nil, false
+	m.hits, m.frameHits, m.zones, m.tooSmall = nil, nil, nil, false
 	m.drawn = true
 	if m.dd != nil {
 		m.dd.placed = false
@@ -4162,10 +4164,12 @@ func (m *Model) listView() string {
 		room := m.height - strings.Count(footer, "\n") - 1
 		out := m.withPane(strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"), footer, room, m.titleRows())
 		m.hitNotice(out, footer)
+		m.zoneList(out, footer)
 		return out
 	}
 	b.WriteString(footer)
 	m.hitNotice(b.String(), footer)
+	m.zoneList(b.String(), footer)
 	return b.String()
 }
 
