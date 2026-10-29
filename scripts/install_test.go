@@ -181,7 +181,7 @@ func TestInstallFreshAndReinstall(t *testing.T) {
 	e.publish("v1.0.0", "program one", releaseOptions{})
 
 	out := e.mustRun(nil)
-	for _, want := range []string{"v1.0.0", filepath.Join(e.prefix, "bin", "qatlas"), "new terminal", "qatlas tui", "qatlas web"} {
+	for _, want := range []string{"v1.0.0", filepath.Join(e.prefix, "bin", "qatlas"), "new terminal", "qatlas tui", "qatlas web", "press g to connect a provider"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

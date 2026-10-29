@@ -65,7 +65,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"tokens, go approvals, go services, go credentials, go general, go vault, go defaults, go transfer,\n" +
 			"go update, go self-test, or go logs.\n" +
 			"In a list, / filters, n adds (in Connections n is the guided setup, which adds a missing service or\n" +
-			"credential on the way), enter edits, d deletes, t tests the selected connection, c starts\n" +
+			"credential on the way), enter edits, d deletes, t tests the selected connection, g starts\n" +
 			"the guided setup, and q quits, as it does from the tab line and the Logs screen; on any other\n" +
 			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
 			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
@@ -73,7 +73,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
 			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
 			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
-			"searchable list; in Connections, n and c ask the same for the guided setup, which then starts\n" +
+			"searchable list; in Connections, n and g ask the same for the guided setup, which then starts\n" +
 			"from a connection. A\n" +
 			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
@@ -90,7 +90,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Focus and state read without colour. The active section is in brackets, and > in front of the\n" +
 			"tab line says it has the focus; the selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
 			"say warning: or error:. Colour only supports these marks; NO_COLOR turns it off.\n\n" +
-			"c sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
+			"g sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
 			"access, and a summary that saves the connection and can test it right away. Each step offers\n" +
 			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
 			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
