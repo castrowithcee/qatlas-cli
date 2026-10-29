@@ -159,3 +159,22 @@ func TestOriginsFollowARename(t *testing.T) {
 		t.Fatalf("origin = %+v, want outside: a rename alone explains no change", got)
 	}
 }
+
+// With a retention of zero the log is never truncated, so the window reaches back over all of it.
+func TestOriginsWithoutTruncationReachBackOverTheWholeLog(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Now().AddDate(0, 0, -400)
+	logChange(t, invokelog.New(dir, 0).WithClock(func() time.Time { return old }), "cli",
+		invokelog.OperationConnectionCreate, "alpha")
+	now := time.Now()
+	change := Change{Connection: "alpha", New: true}
+	if got := Origins(dir, nil, []Change{change}, now, now, 90)["alpha"]; got.Source != OriginOutside {
+		t.Fatalf("origin with a window of 90 days = %+v, want outside", got)
+	}
+	if got := Origins(dir, nil, []Change{change}, now, now, 0)["alpha"]; got.Source != OriginCLI {
+		t.Fatalf("origin without truncation = %+v, want cli", got)
+	}
+	if from := LogWindow(change, now, 0); from.After(old) {
+		t.Fatalf("LogWindow without truncation starts at %v, want before the oldest entry %v", from, old)
+	}
+}

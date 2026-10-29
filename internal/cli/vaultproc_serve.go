@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"time"
 
 	"filippo.io/age"
 
@@ -32,7 +33,7 @@ const vaultProcessPlatform = true
 // waits until that process moved its socket onto the vault socket; it keeps the time that process would have
 // locked at. Only a platform that hands the vault over on an update starts one (see vaultHandoverPlatform);
 // elsewhere a successor refuses to start.
-func runVaultServe(opts *Options, reg *capability.Registry, successor bool) error {
+func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error {
 	handover, report, ok := serveStreams()
 	if !ok {
 		return &UsageError{errors.New("'qatlas vault serve' is started by 'qatlas vault unlock'; run that instead")}
@@ -83,11 +84,6 @@ func runVaultServe(opts *Options, reg *capability.Registry, successor bool) erro
 		answer(err.Error())
 		return err
 	}
-	idle, retentionDays, err := vaultProcessSettings(path, reg)
-	if err != nil {
-		answer(err.Error())
-		return err
-	}
 	vaultDir := vault.New(filepath.Dir(path)).Dir()
 	socket, err := vaultproc.SocketPath(vaultDir)
 	if err != nil {
@@ -109,13 +105,16 @@ func runVaultServe(opts *Options, reg *capability.Registry, successor bool) erro
 	}
 
 	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
-	server.IdleTimeout = idle
+	// The idle time is the one authenticated in settings.age, read with the key this process holds, as
+	// the retention below is. The configuration file is not asked: an agent may have written it. An
+	// untrusted settings.age gives the default.
+	server.IdleTimeout = vaultProcessIdleTimeout(vaultDir, key)
 	if snap.LocksAt != nil {
 		server.LocksAt = *snap.LocksAt
 	}
 	// While it runs, this process is the one writer that signs the invocation log of this vault, with the
-	// retention the configuration had when it started.
-	server.KeepLog(vaultDir, retentionDays)
+	// retention settings.age had when it started. Untrusted settings.age truncates nothing.
+	server.KeepLog(vaultDir, vaultProcessLogRetention(vaultDir, key))
 	// It also approves open connection changes an agent token covers, in this same vault.
 	server.ApproveWithTokens(vaultDir)
 	// And, where this platform does so, it hands the vault over to a successor from a verified release,
@@ -164,4 +163,19 @@ func readHandover(f *os.File) (vault.Snapshot, error) {
 		return vault.Snapshot{}, errors.New("the vault handed over cannot be read")
 	}
 	return snap, nil
+}
+
+// vaultProcessLogRetention is the retention the vault process truncates the log with: the one authenticated
+// in settings.age, read with the key the process holds. An untrusted settings.age gives zero, which never
+// truncates.
+func vaultProcessLogRetention(vaultDir string, key *age.X25519Identity) int {
+	settings, _ := vault.ReadSettings(vaultDir, key)
+	return settings.RetentionDays
+}
+
+// vaultProcessIdleTimeout is the idle time the vault process locks itself after: the one authenticated in
+// settings.age, read with the key the process holds. An untrusted settings.age gives the default.
+func vaultProcessIdleTimeout(vaultDir string, key *age.X25519Identity) time.Duration {
+	settings, _ := vault.ReadSettings(vaultDir, key)
+	return settings.IdleTimeout
 }

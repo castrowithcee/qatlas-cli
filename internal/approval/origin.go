@@ -81,12 +81,16 @@ func storedAnewOnly(change Change) bool {
 }
 
 // since is the start of the log window that can explain change: its last approval, or for a connection
-// never approved the retention window ending at now.
+// never approved the retention window ending at now, or, with a retentionDays of zero (the log is never
+// truncated), the zero time, which reaches back over all the log there is.
 func since(change Change, now time.Time, retentionDays int) time.Time {
 	if !change.Approved.IsZero() {
 		return change.Approved
 	}
-	return now.AddDate(0, 0, -max(retentionDays, 1))
+	if retentionDays <= 0 {
+		return time.Time{}
+	}
+	return now.AddDate(0, 0, -retentionDays)
 }
 
 // LogWindow is the first day, in the local zone, of the log entries that can explain change; the logs
@@ -99,23 +103,24 @@ func LogWindow(change Change, now time.Time, retentionDays int) time.Time {
 // config.connection.create or .change of that connection written after its last approval, under its current
 // name or, past a config.connection.rename entry, under the name it had before, read from the day
 // files of vaultDir since the oldest such approval (a connection never approved is looked up over the last
-// retentionDays days) and checked with checker, which may be nil. A change whose only difference is a
-// credential stored anew is OriginVault and needs no log. Where no entry is found, the change was made
-// outside qatlas, to the configuration file last modified at configModTime. A log that cannot be read leaves
-// OriginUnknown, never an error.
+// retentionDays days, or over all of it for zero) and checked with checker, which may be nil. A change whose
+// only difference is a credential stored anew is OriginVault and needs no log. Where no entry is found, the
+// change was made outside qatlas, to the configuration file last modified at configModTime. A log that cannot
+// be read leaves OriginUnknown, never an error.
 func Origins(vaultDir string, checker invokelog.Checker, changes []Change, configModTime, now time.Time,
 	retentionDays int) map[string]Origin {
 	out := make(map[string]Origin, len(changes))
 	var lookup []Change
 	var oldest time.Time
+	haveOldest := false
 	for _, change := range changes {
 		if storedAnewOnly(change) {
 			out[change.Connection] = Origin{Source: OriginVault, Credential: change.After.Credential}
 			continue
 		}
 		lookup = append(lookup, change)
-		if from := since(change, now, retentionDays); oldest.IsZero() || from.Before(oldest) {
-			oldest = from
+		if from := since(change, now, retentionDays); !haveOldest || from.Before(oldest) {
+			oldest, haveOldest = from, true
 		}
 	}
 	if len(lookup) == 0 {

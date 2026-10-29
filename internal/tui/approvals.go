@@ -570,9 +570,10 @@ func (m *Model) loadApprovalOrigin(name string) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	m.refreshLogRetention()
 	v := m.logVault()
 	configPath := m.svc.Path()
-	retention := m.cfg.LogRetentionDays()
+	retention := m.logRetention
 	return func() tea.Msg {
 		checker, _, done := logChecker(context.Background(), v)
 		defer done()
@@ -619,9 +620,10 @@ func (m *Model) openApprovalLogs(name string) tea.Cmd {
 		return nil
 	}
 	now := time.Now()
+	m.refreshLogRetention()
 	lv := m.logs
 	lv.mode = logModeRange
-	lv.from = approval.LogWindow(change, now, m.cfg.LogRetentionDays()).Format(logDateLayout)
+	lv.from = approval.LogWindow(change, now, m.logRetention).Format(logDateLayout)
 	lv.to = now.In(time.Local).Format(logDateLayout)
 	lv.filters = [logFilterCount]string{}
 	lv.filters[logFilterConnection] = m.logText(name)

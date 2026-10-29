@@ -37,6 +37,10 @@ const (
 // A vault process that is there but cannot take the entry never costs the entry: it is written here
 // instead, unsigned unless this process holds the vault unlocked, and the reason comes back as an
 // *invokelog.UnsignedError for the caller to warn about.
+//
+// The retention comes from the vault, never from the configuration file: a vault process applies its own,
+// and a writer here applies vault.EffectiveSettings, so one that cannot read settings.age (locked, or
+// untrusted) removes no day file.
 type SigningWriter struct {
 	Logger *invokelog.Logger
 	// Vault is the vault the log belongs to; nil where there is none.
@@ -53,8 +57,12 @@ func (w SigningWriter) Append(f invokelog.Fields) error {
 			state = current
 		}
 	}
+	// An unreadable settings.age reads as the safe settings, which never truncate; the entry is written all
+	// the same.
+	settings, _ := vault.EffectiveSettings(w.Vault)
+	logger := w.Logger.WithRetention(settings.RetentionDays)
 	if state != vault.StateLocked && state != vault.StateUnlocked {
-		return w.Logger.Append(f)
+		return logger.Append(f)
 	}
 
 	var processErr error
@@ -77,10 +85,10 @@ func (w SigningWriter) Append(f invokelog.Fields) error {
 	if state == vault.StateUnlocked {
 		if key, err := w.Vault.LogKey(); err == nil {
 			defer key.Clear()
-			return w.Logger.WithKey(key).Append(f)
+			return logger.WithKey(key).Append(f)
 		}
 	}
-	if err := w.Logger.Append(f); err != nil {
+	if err := logger.Append(f); err != nil {
 		return err
 	}
 	if processErr != nil {
@@ -96,11 +104,11 @@ type Recorder struct {
 }
 
 // NewRecorder returns the recorder for surface that writes under the vault directory next to the
-// configuration file at configPath, with retention days of the configuration, signed through v when v is the
-// vault of that directory. processSupported says whether a vault process may be asked.
-func NewRecorder(surface, configPath string, retentionDays int, v *vault.Vault, processSupported bool) *Recorder {
+// configuration file at configPath, signed through v when v is the vault of that directory. processSupported
+// says whether a vault process may be asked.
+func NewRecorder(surface, configPath string, v *vault.Vault, processSupported bool) *Recorder {
 	dir := vault.New(filepath.Dir(configPath)).Dir()
-	writer := SigningWriter{Logger: invokelog.New(dir, retentionDays), ProcessSupported: processSupported}
+	writer := SigningWriter{Logger: invokelog.New(dir, 0), ProcessSupported: processSupported}
 	if v != nil && v.Dir() == dir {
 		writer.Vault = v
 	}

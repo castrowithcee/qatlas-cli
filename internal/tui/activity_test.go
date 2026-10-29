@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // activityCall is one synthetic invoke: days before today at noon local time.
@@ -235,10 +236,15 @@ func TestLogsHeatmapMarksDaysOutsideRetention(t *testing.T) {
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := heatModel(t, f)
+	m.logRetention = 90
 	if grid := heatRows(m.render()); strings.Contains(grid, "x") {
 		t.Fatalf("a retention of 90 days marks days as outside it:\n%s", grid)
 	}
-	m.cfg.Logs.RetentionDays = 5
+	m.cfg.Logs.RetentionDays = 1
+	if grid := heatRows(m.render()); strings.Contains(grid, "x") {
+		t.Fatalf("logs.retention_days of the configuration marks days as outside the retention:\n%s", grid)
+	}
+	m.logRetention = 5
 	grid := heatRows(m.render())
 	// The 8th day back holds a call and keeps its level; the empty ones before the 5th day back are marked.
 	if !strings.Contains(grid, "x") {
@@ -246,6 +252,25 @@ func TestLogsHeatmapMarksDaysOutsideRetention(t *testing.T) {
 	}
 	if strings.Contains(grid, "x") && strings.Count(grid, "x") > 20*heatWideCell {
 		t.Errorf("too many days marked:\n%s", grid)
+	}
+	// A log that is never truncated has no day outside it.
+	m.logRetention = 0
+	if grid := heatRows(m.render()); strings.Contains(grid, "x") {
+		t.Errorf("a log that is never truncated marks days as outside the retention:\n%s", grid)
+	}
+}
+
+// The retention the heatmaps draw by is read from the vault's effective settings when the vault state may
+// have changed, not from the configuration: a vault locked in this editor never truncates.
+func TestRefreshLogRetentionFollowsTheVaultNotTheConfiguration(t *testing.T) {
+	f := activityLog(t)
+	m := f.model(false, f.localToday())
+	m.cfg.Logs.RetentionDays = 1
+	m.logRetention = 42
+	m.refreshLogRetention()
+	want, _ := vault.EffectiveSettings(m.logVault())
+	if m.logRetention != want.RetentionDays || m.logRetention == 1 {
+		t.Errorf("logRetention = %d, want %d from the vault", m.logRetention, want.RetentionDays)
 	}
 }
 

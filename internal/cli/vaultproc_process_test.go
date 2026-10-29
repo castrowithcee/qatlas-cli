@@ -188,9 +188,27 @@ func TestVaultUnlockStartsAVaultProcess(t *testing.T) {
 	}
 }
 
-// vault.idle_timeout reaches the vault process, which locks itself once it passed without a read.
+// storeIdleTimeout writes the idle timeout into the authenticated settings.age of the vault in dir.
+func storeIdleTimeout(t *testing.T, dir string, idle time.Duration) {
+	t.Helper()
+	v := vault.New(dir)
+	if _, err := v.Unlock("s3cret-phrase"); err != nil {
+		t.Fatalf("Unlock() = %v", err)
+	}
+	settings := vault.DefaultSettings()
+	settings.IdleTimeout = idle
+	if err := v.SetSettings(settings); err != nil {
+		t.Fatalf("SetSettings() = %v", err)
+	}
+	v.Forget()
+}
+
+// The idle timeout stored in settings.age reaches the vault process, which locks itself once it passed
+// without a read. A longer vault.idle_timeout in the configuration, which an agent may have written, changes
+// nothing.
 func TestVaultProcessLocksItselfWhenIdle(t *testing.T) {
-	dir := encryptedVaultFixture(t, "vault:\n  idle_timeout: 700ms\n")
+	dir := encryptedVaultFixture(t, "vault:\n  idle_timeout: 24h\n")
+	storeIdleTimeout(t, dir, 700*time.Millisecond)
 	client := withVaultProcess(t, dir)
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 
@@ -200,7 +218,7 @@ func TestVaultProcessLocksItselfWhenIdle(t *testing.T) {
 	}
 	status, err := client.Status(context.Background())
 	if err != nil || time.Until(status.LocksAt) > time.Second {
-		t.Fatalf("Status() = %+v, %v, want the configured idle timeout", status, err)
+		t.Fatalf("Status() = %+v, %v, want the stored idle timeout", status, err)
 	}
 	for deadline := time.Now().Add(5 * time.Second); ; {
 		if _, err := client.Status(context.Background()); errors.Is(err, vaultproc.ErrNotRunning) {
@@ -219,17 +237,45 @@ func TestVaultProcessLocksItselfWhenIdle(t *testing.T) {
 	}
 }
 
-// A configuration whose idle timeout is unusable stops the unlock before the passphrase is asked.
-func TestVaultUnlockChecksTheIdleTimeoutFirst(t *testing.T) {
-	dir := encryptedVaultFixture(t, "vault:\n  idle_timeout: \"0\"\n")
-	withVaultProcess(t, dir)
-	withVaultPassphrase(t, func(string) (string, error) {
-		t.Errorf("the passphrase was asked for despite an unusable configuration")
-		return "", vault.ErrNoTerminal
-	})
-	code, _, stderr := runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
-	if code != exitUsage || !strings.Contains(stderr, "vault.idle_timeout") {
-		t.Fatalf("exit code = %d, stderr = %q, want the setting refused", code, stderr)
+// Without a stored idle timeout the vault process locks itself in 12h, whatever vault.idle_timeout says in
+// the configuration, and a configuration value that was refused once no longer stops the unlock.
+func TestVaultProcessIgnoresTheConfiguredIdleTimeout(t *testing.T) {
+	for _, extra := range []string{"vault:\n  idle_timeout: 700ms\n", "vault:\n  idle_timeout: \"0\"\n"} {
+		dir := encryptedVaultFixture(t, extra)
+		client := withVaultProcess(t, dir)
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+
+		code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
+		if code != exitOK {
+			t.Fatalf("unlock with %q: exit code = %d (stdout: %s, stderr: %s)", extra, code, stdout, stderr)
+		}
+		status, err := client.Status(context.Background())
+		if err != nil || time.Until(status.LocksAt) < 11*time.Hour {
+			t.Fatalf("Status() with %q = %+v, %v, want the default 12h", extra, status, err)
+		}
+		runWithInput(t, &Options{}, "", "vault", "lock", "--config", configIn(dir))
+	}
+}
+
+// An untrusted settings.age gives the 12h idle timeout and a warning on stderr that names no content.
+func TestVaultProcessUntrustedSettingsIdleTimeout(t *testing.T) {
+	dir := encryptedVaultFixture(t, "")
+	if err := os.WriteFile(filepath.Join(dir, vault.DirName, "settings.age"), []byte("not written by this vault"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client := withVaultProcess(t, dir)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
+	if code != exitOK {
+		t.Fatalf("unlock: exit code = %d (stdout: %s, stderr: %s)", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, vault.ErrSettingsUntrusted.Error()) || strings.Contains(stdout, "settings.age") {
+		t.Fatalf("unlock: stdout = %q, stderr = %q, want the warning on stderr only", stdout, stderr)
+	}
+	status, err := client.Status(context.Background())
+	if err != nil || time.Until(status.LocksAt) < 11*time.Hour {
+		t.Fatalf("Status() = %+v, %v, want the default 12h", status, err)
 	}
 }
 

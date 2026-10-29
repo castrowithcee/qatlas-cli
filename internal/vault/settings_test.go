@@ -1,10 +1,12 @@
 package vault
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"filippo.io/age"
 )
@@ -80,7 +82,7 @@ func TestTamperedUpdateBehaviourLocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mac, err := settingsMAC(v.identity.key, "handover")
+	mac, err := settingsMAC(v.identity.key, settingsDocument{Schema: 1, UpdateHandover: "handover"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +107,8 @@ func TestTamperedUpdateBehaviourLocks(t *testing.T) {
 			writeSettings(t, v, recipient, `{"schema":1,"update_handover":"lock","mac":"`+mac+`"}`)
 		},
 		"unknown schema": func() {
-			m, _ := settingsMAC(v.identity.key, "handover")
-			writeSettings(t, v, recipient, `{"schema":2,"update_handover":"handover","mac":"`+m+`"}`)
+			m, _ := settingsMAC(v.identity.key, settingsDocument{Schema: 2, UpdateHandover: "handover"})
+			writeSettings(t, v, recipient, `{"schema":3,"update_handover":"handover","mac":"`+m+`"}`)
 		},
 		"not json": func() { writeSettings(t, v, recipient, `handover`) },
 	}
@@ -125,7 +127,7 @@ func TestTamperedUpdateBehaviourLocks(t *testing.T) {
 func TestUnknownUpdateBehaviourWithValidCheckValueLocks(t *testing.T) {
 	v := tokenVault(t)
 	recipient, _ := v.Recipient()
-	mac, err := settingsMAC(v.identity.key, "never")
+	mac, err := settingsMAC(v.identity.key, settingsDocument{Schema: 1, UpdateHandover: "never"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,4 +167,202 @@ func TestEncryptCreatesNoSettingsFile(t *testing.T) {
 		t.Errorf("Encrypt created settings.age: %v", err)
 	}
 	wantBehaviour(t, v, UpdateHandover, nil)
+}
+
+func wantSettings(t *testing.T, v *Vault, want Settings, wantErr error) {
+	t.Helper()
+	got, err := v.Settings()
+	if got != want || !errors.Is(err, wantErr) {
+		t.Fatalf("Settings() = %+v, %v, want %+v, %v", got, err, want, wantErr)
+	}
+	read, err := ReadSettings(v.Dir(), v.identity.key)
+	if read != want || !errors.Is(err, wantErr) {
+		t.Fatalf("ReadSettings() = %+v, %v, want %+v, %v", read, err, want, wantErr)
+	}
+}
+
+func TestSettingsDefaultsAndSafeValues(t *testing.T) {
+	v := tokenVault(t)
+	wantSettings(t, v, Settings{UpdateHandover, 12 * time.Hour, 10 * time.Minute, 90}, nil)
+	if got, err := ReadSettings(v.Dir(), nil); got != SafeSettings() || !errors.Is(err, ErrNotUnlocked) {
+		t.Errorf("ReadSettings() without a key = %+v, %v", got, err)
+	}
+	if safe := SafeSettings(); safe.Update != UpdateLock || safe.IdleTimeout != 12*time.Hour ||
+		safe.AdminTimeout != 0 || safe.RetentionDays != 0 {
+		t.Errorf("SafeSettings() = %+v", safe)
+	}
+}
+
+func TestSettingsRoundTripAndNoUpperBound(t *testing.T) {
+	v := tokenVault(t)
+	for _, want := range []Settings{
+		{UpdateLock, time.Second, 0, 1},
+		{UpdateHandover, 10000 * time.Hour, 5000 * time.Hour, 100000},
+		{UpdateLock, 90 * time.Minute, 30 * time.Second, 7},
+	} {
+		if err := v.SetSettings(want); err != nil {
+			t.Fatalf("SetSettings(%+v) = %v", want, err)
+		}
+		wantSettings(t, v, want, nil)
+	}
+}
+
+func TestSetSettingsRejectsInvalidValues(t *testing.T) {
+	v := tokenVault(t)
+	good := DefaultSettings()
+	if err := v.SetSettings(good); err != nil {
+		t.Fatal(err)
+	}
+	for name, bad := range map[string]Settings{
+		"behaviour":      {"sometimes", time.Hour, time.Minute, 1},
+		"zero idle":      {UpdateLock, 0, time.Minute, 1},
+		"negative idle":  {UpdateLock, -time.Hour, time.Minute, 1},
+		"negative admin": {UpdateLock, time.Hour, -time.Second, 1},
+		"zero retention": {UpdateLock, time.Hour, time.Minute, 0},
+		"negative days":  {UpdateLock, time.Hour, time.Minute, -3},
+	} {
+		if err := v.SetSettings(bad); err == nil {
+			t.Errorf("SetSettings accepted %s", name)
+		}
+	}
+	wantSettings(t, v, good, nil)
+}
+
+func TestSetUpdateBehaviourKeepsOtherSettings(t *testing.T) {
+	v := tokenVault(t)
+	want := Settings{UpdateHandover, 3 * time.Hour, 0, 30}
+	if err := v.SetSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetUpdateBehaviour(UpdateLock); err != nil {
+		t.Fatal(err)
+	}
+	want.Update = UpdateLock
+	wantSettings(t, v, want, nil)
+}
+
+func TestTamperedSettingsAreUntrustedAsAWhole(t *testing.T) {
+	v := tokenVault(t)
+	want := Settings{UpdateHandover, 3 * time.Hour, 5 * time.Minute, 30}
+	if err := v.SetSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(v.Dir(), settingsFile)
+	good, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipient, _ := v.Recipient()
+	foreign, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := func(mutate func(d *settingsDocument)) string {
+		d := settingsDocument{Schema: 2, UpdateHandover: "handover",
+			IdleTimeoutNS: int64(3 * time.Hour), AdminTimeoutNS: int64(5 * time.Minute), RetentionDays: 30}
+		d.MAC, _ = settingsMAC(v.identity.key, d)
+		mutate(&d)
+		b, _ := json.Marshal(d)
+		return string(b)
+	}
+	// Each field changed after the check value was computed, plus invalid values under a valid check value.
+	cases := map[string]string{
+		"behaviour":  doc(func(d *settingsDocument) { d.UpdateHandover = "lock" }),
+		"idle":       doc(func(d *settingsDocument) { d.IdleTimeoutNS++ }),
+		"admin":      doc(func(d *settingsDocument) { d.AdminTimeoutNS++ }),
+		"retention":  doc(func(d *settingsDocument) { d.RetentionDays++ }),
+		"schema":     doc(func(d *settingsDocument) { d.Schema = 1 }),
+		"unknown":    doc(func(d *settingsDocument) { d.Schema = 3 }),
+		"garbage":    `handover`,
+		"no mac":     doc(func(d *settingsDocument) { d.MAC = "" }),
+		"neg idle":   signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: -1, RetentionDays: 1}),
+		"neg admin":  signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: 1, AdminTimeoutNS: -1, RetentionDays: 1}),
+		"zero days":  signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: 1}),
+		"bad update": signed(v, settingsDocument{Schema: 2, UpdateHandover: "never", IdleTimeoutNS: 1, RetentionDays: 1}),
+	}
+	for name, plain := range cases {
+		t.Run(name, func(t *testing.T) {
+			writeSettings(t, v, recipient, plain)
+			wantSettings(t, v, SafeSettings(), ErrSettingsUntrusted)
+		})
+	}
+	t.Run("foreign recipient", func(t *testing.T) {
+		writeSettings(t, v, foreign.Recipient().String(), doc(func(*settingsDocument) {}))
+		wantSettings(t, v, SafeSettings(), ErrSettingsUntrusted)
+	})
+	t.Run("changed bytes", func(t *testing.T) {
+		changed := append([]byte(nil), good...)
+		changed[len(changed)/2] ^= 0xff
+		if err := os.WriteFile(path, changed, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		wantSettings(t, v, SafeSettings(), ErrSettingsUntrusted)
+	})
+	if err := os.WriteFile(path, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wantSettings(t, v, want, nil)
+}
+
+func signed(v *Vault, d settingsDocument) string {
+	d.MAC, _ = settingsMAC(v.identity.key, d)
+	b, _ := json.Marshal(d)
+	return string(b)
+}
+
+func TestSchemaOneFileReadsTrustedWithDefaults(t *testing.T) {
+	v := tokenVault(t)
+	recipient, _ := v.Recipient()
+	for _, behaviour := range []UpdateBehaviour{UpdateLock, UpdateHandover} {
+		mac, err := settingsMAC(v.identity.key, settingsDocument{Schema: 1, UpdateHandover: string(behaviour)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeSettings(t, v, recipient, `{"schema":1,"update_handover":"`+string(behaviour)+`","mac":"`+mac+`"}`)
+		want := DefaultSettings()
+		want.Update = behaviour
+		wantSettings(t, v, want, nil)
+	}
+	// Changing another setting rewrites the file as schema 2.
+	if err := v.SetUpdateBehaviour(UpdateHandover); err != nil {
+		t.Fatal(err)
+	}
+	wantSettings(t, v, DefaultSettings(), nil)
+}
+
+func TestEffectiveSettingsFollowTheVaultState(t *testing.T) {
+	if got, err := EffectiveSettings(nil); got != DefaultSettings() || err != nil {
+		t.Errorf("EffectiveSettings(nil) = %+v, %v, want the defaults", got, err)
+	}
+	if got, err := EffectiveSettings(New(filepath.Join(t.TempDir(), "absent"))); got != DefaultSettings() || err != nil {
+		t.Errorf("EffectiveSettings(absent) = %+v, %v, want the defaults", got, err)
+	}
+
+	lowWorkFactor(t)
+	plain := New(t.TempDir())
+	if err := plain.Set("gh", "token", "synthetic", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := EffectiveSettings(plain); got != DefaultSettings() || err != nil {
+		t.Errorf("EffectiveSettings(unencrypted) = %+v, %v, want the defaults", got, err)
+	}
+
+	v := tokenVault(t)
+	want := Settings{UpdateLock, time.Hour, time.Minute, 7}
+	if err := v.SetSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := EffectiveSettings(v); got != want || err != nil {
+		t.Errorf("EffectiveSettings(unlocked) = %+v, %v, want %+v", got, err, want)
+	}
+	locked := New(filepath.Dir(v.Dir()))
+	if got, err := EffectiveSettings(locked); got != SafeSettings() || err != nil {
+		t.Errorf("EffectiveSettings(locked) = %+v, %v, want the safe settings", got, err)
+	}
+	if err := os.WriteFile(filepath.Join(v.Dir(), settingsFile), []byte("garbage"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := EffectiveSettings(v); got != SafeSettings() || !errors.Is(err, ErrSettingsUntrusted) {
+		t.Errorf("EffectiveSettings(untrusted) = %+v, %v, want the safe settings and ErrSettingsUntrusted", got, err)
+	}
 }

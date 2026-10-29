@@ -43,8 +43,9 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"encrypted vault, either the coupled browser's own masked passphrase form, or, in this terminal\n" +
 			"while it stays interactive, pressing enter and then typing the passphrase covertly, the same\n" +
 			"hidden way every other management command reads one. A right passphrase approves the coupled\n" +
-			"session for vault.admin_timeout (default 10m idle, renewed by activity); admin_timeout: 0\n" +
-			"approves exactly the next change and nothing beyond it. A vault with no passphrase at all needs\n" +
+			"session for the admin session timeout of 'qatlas vault settings' (default 10m idle, renewed by\n" +
+			"activity); a timeout of 0s approves exactly the next change and nothing beyond it. A vault with no\n" +
+			"passphrase at all needs\n" +
 			"no approval beyond coupling, and the page says so.\n\n" +
 			"With admin approval active, the coupled browser can also add a credential (keyring, vault, or\n" +
 			"env), replace one secret role of an existing keyring or vault credential, and walk a guided setup\n" +
@@ -89,7 +90,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 
 			svc := manage.New(store, secrets, connlog.SurfaceWeb, opts.Redactor).
 				WithTargetSource(targetSource(opts, registry))
-			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout(),
+			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(),
 				svc, secrets, opts.Redactor, web.Tester(connectionTester(store, opts, registry)))
 			if err != nil {
 				return err

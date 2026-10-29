@@ -59,7 +59,7 @@ func newApprovalWebFixture(t *testing.T) (*Server, *config.Store, *vault.Vault) 
 		t.Fatalf("SetVault: %v", err)
 	}
 
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
+	s, err := New(testOverview(), v, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

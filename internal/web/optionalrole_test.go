@@ -51,7 +51,7 @@ func newSiteTestServer(t *testing.T) (*Server, *config.Store, *secret.MemoryStor
 	mem := secret.NewMemoryStore()
 	red := &redact.Redactor{}
 	resolver := secret.NewWith(func(string) string { return "" }, mem, nil, red)
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
+	s, err := New(testOverview(), nil, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

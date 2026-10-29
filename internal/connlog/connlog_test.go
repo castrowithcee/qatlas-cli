@@ -144,7 +144,7 @@ func TestNilRecorderLogsNothing(t *testing.T) {
 
 func TestNewRecorderWritesUnderTheVaultNextToTheConfig(t *testing.T) {
 	root := t.TempDir()
-	recorder := NewRecorder(SurfaceTUI, filepath.Join(root, "config.yaml"), 90, nil, false)
+	recorder := NewRecorder(SurfaceTUI, filepath.Join(root, "config.yaml"), nil, false)
 	if err := recorder.Record(configWith(), configWith("a")); err != nil {
 		t.Fatal(err)
 	}

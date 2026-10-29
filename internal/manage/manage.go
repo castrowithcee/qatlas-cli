@@ -414,7 +414,7 @@ func (s *Service) RecordConnections(before, after *config.Config) string {
 	if len(connlog.Changes(before, after)) == 0 {
 		return ""
 	}
-	recorder := connlog.NewRecorder(s.surface, s.store.Path(), after.LogRetentionDays(), s.vault(), s.processOK)
+	recorder := connlog.NewRecorder(s.surface, s.store.Path(), s.vault(), s.processOK)
 	if err := recorder.Record(before, after); err != nil {
 		return s.redact("warning: " + err.Error())
 	}

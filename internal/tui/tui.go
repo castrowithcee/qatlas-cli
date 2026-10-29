@@ -52,7 +52,7 @@ const (
 	sectionConnections
 	sectionDefaults
 	// sectionVault is a settings form, not a list of named entries: it shows the vault's state and the
-	// actions that apply to it, and edits vault.idle_timeout and vault.admin_timeout. See vaultsettings.go.
+	// actions that apply to it, and edits the vault settings. See vaultsettings.go.
 	sectionVault
 	// sectionApprovals lists the connections an encrypted vault has not approved as they are configured
 	// now: a new connection reading a vault credential, or one whose scope changed since it was last
@@ -575,18 +575,21 @@ type Model struct {
 	vaultOffer *vaultOffer
 	vaultBusy  bool
 	// adminAuth holds the masked admin passphrase dialog while requireAdmin has one open, and nil otherwise.
-	// admin is this window's own admin session: inactive until started, and, with vault.admin_timeout: 0,
-	// never kept at all. See admin.go.
-	adminAuth *adminAuth
-	admin     manage.AdminSession
+	// admin is this window's own admin session: inactive until started, and, with an admin session
+	// time of 0, never kept at all. adminTimeoutValue is that time as the vault's settings.age gives it,
+	// cached by RefreshAdminTimeout and valid once adminTimeoutRead. See admin.go.
+	adminAuth         *adminAuth
+	admin             manage.AdminSession
+	adminTimeoutValue time.Duration
+	adminTimeoutRead  bool
 	// decryptConfirm is the explicit y/n question before the vault's encryption is switched off, holding the
 	// already-verified current passphrase to run the switch with once it is answered y. It is cleared, and
 	// the passphrase dropped, the moment the question is answered either way.
 	decryptConfirm    bool
 	decryptPassphrase string
-	// handoverShown is the update behaviour the vault form's choice row opened with, "" while that row is
-	// not editable. Only a row moved off it is saved (see saveVault).
-	handoverShown string
+	// settingsShown are the vault settings the vault form's rows opened with, nil while they are not
+	// editable. Only a differing form is saved (see saveVault).
+	settingsShown *shownSettings
 	// migrate holds a 'migrate credentials.yaml' action's decided plan while any of its several screens are
 	// open, and nil otherwise; see internal/tui/migrate.go. migratePlanConfirm and migrateDeleteConfirm are
 	// its two y/n questions, asked apart: the first before anything is written, the second, once
@@ -728,6 +731,10 @@ type Model struct {
 
 	// logs is the state of the Logs section; see logs.go.
 	logs *logView
+	// logRetention is the retention of the vault's invocation log the heatmaps and the approval window
+	// draw by, zero for a log that is never truncated. It is read from settings.age by refreshLogRetention
+	// when the vault state may have changed, never while drawing.
+	logRetention int
 	// overviewAct is the latest activity the Overview shows, read in the background.
 	overviewAct overviewActivity
 
@@ -795,6 +802,8 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.pathList = newFilterList(func(path string) string { return path })
 	m.pathInput = newPathField(pathDirectory)
 	m.logs = newLogView(time.Now())
+	m.refreshLogRetention()
+	m.RefreshAdminTimeout()
 	// The editor opens on the tab line, with the Overview already shown below it.
 	m.section = sectionOverview
 	m.list.reset(m.listItems(m.section))
@@ -887,10 +896,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tokenActionMsg:
 		return m, m.handleTokenAction(msg)
 	case vaultUnlockedMsg:
+		m.refreshLogRetention()
 		return m, tea.Batch(m.handleVaultUnlocked(msg), m.reloadShownLogs(), m.loadOverviewActivity())
 	case vaultProcessStartedMsg:
 		return m, m.handleVaultProcessStarted(msg)
 	case vaultLockedMsg:
+		m.refreshLogRetention()
 		return m, tea.Batch(m.handleVaultLocked(msg), m.reloadShownLogs(), m.loadOverviewActivity())
 	case logsLoadedMsg:
 		return m, m.handleLogsLoaded(msg)

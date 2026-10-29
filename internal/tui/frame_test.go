@@ -146,9 +146,7 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 			{"admin session starts", unlocked.startAdminSession, "admin 10m left"},
 			{"admin session ends", unlocked.endAdminSession, "admin off"},
 			{"admin asks every time", func() {
-				cfg := unlocked.cfg.Clone()
-				cfg.Vault.AdminTimeout = "0"
-				unlocked.cfg = cfg
+				unlocked.adminTimeoutValue, unlocked.adminTimeoutRead = 0, true
 			}, "admin: confirm each change"},
 		} {
 			step.do()
@@ -169,8 +167,7 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 				t.Errorf("width %d, %s: the footer is not the last line:\n%s", width, step.name, view)
 			}
 		}
-		unlocked.cfg = unlocked.cfg.Clone()
-		unlocked.cfg.Vault.AdminTimeout = ""
+		unlocked.RefreshAdminTimeout()
 	}
 }
 
@@ -299,12 +296,10 @@ func TestHeaderIsOneRowWithoutThePathAtTheSmallestWidth(t *testing.T) {
 			for _, each := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/each-change=%v", vc.name, each), func(t *testing.T) {
 					m := vc.m
-					cfg := m.cfg.Clone()
-					cfg.Vault.AdminTimeout = ""
+					m.RefreshAdminTimeout()
 					if each {
-						cfg.Vault.AdminTimeout = "0"
+						m.adminTimeoutValue = 0
 					}
-					m.cfg = cfg
 					for _, width := range []int{minimumWidth, minimumWidth + 1, 60} {
 						m.Update(tea.WindowSizeMsg{Width: width, Height: minimumHeight})
 						lines := m.headerLines()

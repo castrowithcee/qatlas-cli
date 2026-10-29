@@ -676,3 +676,26 @@ func TestValidateDraftTargetChoiceEntries(t *testing.T) {
 		t.Error("IsDraftTargetOperation accepted a saved connection's choice")
 	}
 }
+
+// A retention of zero never removes a day file, however old, and WithRetention sets the window per logger.
+func TestZeroRetentionNeverRemovesADayFile(t *testing.T) {
+	dir := t.TempDir()
+	logger, moveTo := clockAt(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	logger.vaultDir = dir
+	mustAppend(t, logger, "old.one")
+	moveTo(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	mustAppend(t, logger, "fresh.one")
+	if _, err := os.Stat(filepath.Join(logger.logsDir(), "2026-01-01.jsonl")); err != nil {
+		t.Fatalf("a logger without retention removed an old day file: %v", err)
+	}
+
+	kept := logger.WithRetention(30)
+	moveTo(time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC))
+	mustAppend(t, kept, "fresh.two")
+	if _, err := os.Stat(filepath.Join(logger.logsDir(), "2026-01-01.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("WithRetention(30) kept a day file older than 30 days: %v", err)
+	}
+	if logger.retentionDays != 0 {
+		t.Fatalf("WithRetention changed the receiver: %d", logger.retentionDays)
+	}
+}

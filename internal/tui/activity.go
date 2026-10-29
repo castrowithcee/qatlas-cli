@@ -118,9 +118,22 @@ func heatLegendMarks() string {
 func localDay(t time.Time) string { return t.In(time.Local).Format(invokelog.DateLayout) }
 
 // retentionStart is the first local day the log still holds: a day file older than the retention window is
-// removed on the next invoke (see invokelog.New).
+// removed on the next invoke (see invokelog.New). It is empty for a log that is never truncated, so no day
+// lies outside it; the heatmap then reaches back as far as it draws.
 func (m *Model) retentionStart(now time.Time) string {
-	return localDay(now.AddDate(0, 0, -m.cfg.LogRetentionDays()))
+	if m.logRetention <= 0 {
+		return ""
+	}
+	return localDay(now.AddDate(0, 0, -m.logRetention))
+}
+
+// heatStart is the first local day a wide heatmap draws: the start of the retention window, or, for a log that
+// is never truncated, as far back as the heatmap reaches at all.
+func (m *Model) heatStart(now time.Time) string {
+	if start := m.retentionStart(now); start != "" {
+		return start
+	}
+	return localDay(now.AddDate(0, 0, -7*maxHeatWeeks))
 }
 
 // heatSpan is the local days the Logs heatmap draws: the selected days, or, for All, the retention window.
@@ -128,7 +141,7 @@ func (m *Model) heatSpan() (from, to string) {
 	now := m.timeNow()
 	from, to = m.logs.bounds()
 	if m.logs.mode == logModeAll {
-		from, to = m.retentionStart(now), localDay(now)
+		from, to = m.heatStart(now), localDay(now)
 	}
 	if last, err := time.ParseInLocation(invokelog.DateLayout, to, time.Local); err == nil {
 		if oldest := localDay(last.AddDate(0, 0, -7*maxHeatWeeks)); from < oldest {
@@ -164,7 +177,7 @@ func (m *Model) setHeat(on bool) tea.Cmd {
 		return nil
 	}
 	now := m.timeNow()
-	lv.mode, lv.from, lv.to = logModeRange, m.retentionStart(now), localDay(now)
+	lv.mode, lv.from, lv.to = logModeRange, m.heatStart(now), localDay(now)
 	return m.loadLogs()
 }
 
@@ -225,6 +238,7 @@ type overviewActivityMsg struct {
 // loadOverviewActivity reads and checks the latest weeks as a command. A log that cannot be read leaves the
 // Overview without the block.
 func (m *Model) loadOverviewActivity() tea.Cmd {
+	m.refreshLogRetention()
 	v := m.logVault()
 	now := m.timeNow()
 	from := localDay(now.AddDate(0, 0, -7*overviewHeatWeeks))

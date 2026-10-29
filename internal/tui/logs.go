@@ -363,6 +363,14 @@ func (m *Model) logVault() *vault.Vault {
 	return vault.New(filepath.Dir(m.svc.Path()))
 }
 
+// refreshLogRetention reads the retention of the vault's log from its effective settings (settings.age,
+// never the configuration file) and keeps it for drawing. An untrusted settings.age reads as never
+// truncating, as the writers treat it.
+func (m *Model) refreshLogRetention() {
+	settings, _ := vault.EffectiveSettings(m.logVault())
+	m.logRetention = settings.RetentionDays
+}
+
 // loadLogs reads and checks the UTC files overlapping the selected local days as a command. The walk
 // reads every file for the chain, but keeps and checks only the overlapping files.
 func (m *Model) loadLogs() tea.Cmd {
@@ -606,6 +614,7 @@ func (m *Model) openLogs() tea.Cmd {
 	m.stopTest()
 	m.testName, m.editing, m.confirmRole = "", "", ""
 	m.clearMessages()
+	m.refreshLogRetention()
 	lv := m.logs
 	lv.focus, lv.dialog, lv.pick, lv.stats, lv.sessions, lv.heat = logFocusRows, nil, nil, false, false, false
 	m.screen = screenLogs

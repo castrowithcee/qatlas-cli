@@ -130,8 +130,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"storing or removing a secret, and every action of Settings > Vault (6, see below) each ask for the vault's\n" +
 			"passphrase the first time, masked in a screen of their own, never on this terminal. Answering it\n" +
 			"unlocks the vault where it was locked, and either way starts an admin session bound to this\n" +
-			"window: further managing actions run at once until vault.admin_timeout passes without a key\n" +
-			"press, after which the next one asks again; vault.admin_timeout: 0 asks every time instead of\n" +
+			"window: further managing actions run at once until the admin session timeout of the vault passes\n" +
+			"without a key press, after which the next one asks again; a timeout of 0s asks every time instead of\n" +
 			"keeping a session. A wrong passphrase reopens the same prompt with error: wrong passphrase; esc\n" +
 			"cancels only that one action, leaving the form exactly as typed so it can be tried again. No\n" +
 			"other window, and no vault process a Linux or macOS build may hold unlocked outside this run,\n" +
@@ -139,7 +139,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault, or one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
 			"The header above the tab line always shows the vault's state, unlocked, locked, or unencrypted,\n" +
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
-			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
+			"encrypted: admin off, admin Nm left, or admin: confirm each change for an admin session timeout of 0s.\n" +
 			"ctrl+l works on the tab line, the lists, the forms, the pickers and tables, the target and path\n" +
 			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
 			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
@@ -197,9 +197,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +
 			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
 			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
-			"vault.idle_timeout and vault.admin_timeout, saved with F2 like any other setting; admin_timeout\n" +
-			"sets how long this window's own admin session above stays open (see the read-only\n" +
-			"paragraph further up), 0 asking for the passphrase on every managing action instead.\n\n" +
+			"the vault's idle timeout, admin session timeout, and log retention, editable while the vault is\n" +
+			"unlocked and saved with F2 into the encrypted vault as settings.age, never into config.yaml, like\n" +
+			"'qatlas vault settings'; the admin session timeout sets how long this window's own admin session\n" +
+			"above stays open (see the read-only paragraph further up), 0s asking for the passphrase on every\n" +
+			"managing action instead.\n\n" +
 			"Saving a change while the vault is encrypted approves it automatically, without an extra\n" +
 			"step: the connection saved directly, in its own form or by the guided setup, and any other\n" +
 			"connection whose scope changed because of that same save, such as one sharing a service\n" +
@@ -240,7 +242,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"per local day, a row per week under the weekdays, leveled by the number of invokes (quartiles of\n" +
 			"the busy days) in colour, or with ·░▒▓█ where there is none and .-=+# in a terminal that is not\n" +
 			"UTF-8, a legend, and the calls, the success rate, and the errors.\n" +
-			"A day outside logs.retention_days shows × instead of the dot of a day without calls, a day with a\n" +
+			"A day outside the log retention shows × instead of the dot of a day without calls, a day with a\n" +
 			"changed line ✗, and a day with missing entries …. The mode, the days, the filters, and the search\n" +
 			"apply to it; from a single day, the heatmap widens the days to the retention window.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +

@@ -126,10 +126,7 @@ func TestVaultHeaderAdminAbbreviation(t *testing.T) {
 		t.Fatalf("vaultHeaderText() with 100s left = %q, want it rounded to %q", got, "admin 2m left")
 	}
 
-	cfg := m.cfg.Clone()
-	cfg.Vault.AdminTimeout = "0"
-	m.cfg = cfg
-	syncRevision(t, m)
+	setAdminTimeout(t, m, "0")
 	if got := m.vaultHeaderText(); !strings.Contains(got, "admin: confirm each change") {
 		t.Fatalf("vaultHeaderText() with admin_timeout 0 = %q, want it to contain %q", got, "admin: confirm each change")
 	}
@@ -137,22 +134,17 @@ func TestVaultHeaderAdminAbbreviation(t *testing.T) {
 
 // A vault process elsewhere holds the vault open while this window itself never unlocked it (locally
 // locked, vaultProcessUnlocked true): the header still shows the admin abbreviation, "admin off" or, for
-// vault.admin_timeout: 0, "admin: confirm each change", never a remaining time, since no session can exist
-// in this window without its own proof of the passphrase.
+// the safe admin session time 0, "admin: confirm each change", never a remaining time, since no session can
+// exist in this window without its own proof of the passphrase, and the stored time is unreadable until then.
 func TestVaultHeaderAdminAbbreviationWithOnlyTheVaultProcessUnlocked(t *testing.T) {
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
 	m.vaultProcessUnlocked = true
 
-	if got := m.vaultHeaderText(); !strings.Contains(got, "vault unlocked") || !strings.Contains(got, "admin off") {
-		t.Fatalf("vaultHeaderText() = %q, want it to contain %q and %q", got, "vault unlocked", "admin off")
-	}
-
-	cfg := m.cfg.Clone()
-	cfg.Vault.AdminTimeout = "0"
-	m.cfg = cfg
-	syncRevision(t, m)
-	if got := m.vaultHeaderText(); !strings.Contains(got, "admin: confirm each change") {
-		t.Fatalf("vaultHeaderText() with admin_timeout 0 = %q, want it to contain %q", got, "admin: confirm each change")
+	// Locked in this window, the stored admin session time is unreadable and the safe 0 shows.
+	if got := m.vaultHeaderText(); !strings.Contains(got, "vault unlocked") ||
+		!strings.Contains(got, "admin: confirm each change") {
+		t.Fatalf("vaultHeaderText() = %q, want it to contain %q and %q", got, "vault unlocked",
+			"admin: confirm each change")
 	}
 }
 
@@ -354,25 +346,19 @@ func TestCtrlLLocksWhenOnlyTheVaultProcessHoldsItUnlocked(t *testing.T) {
 }
 
 // The 'ctrl+l' unlock dialog explains that answering it also starts this window's admin session, worded for
-// a plain unlock rather than admin.go's own "Admin passphrase needed to save" wording; vault.admin_timeout:
-// 0 keeps the same text admin.go's own dialog uses for that one case, since neither ever keeps a session.
+// a plain unlock rather than admin.go's own "Admin passphrase needed to save" wording. The vault is locked,
+// so its stored admin session time is unreadable: the text names neither a duration nor "asks on every change".
 func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
 	openSectionByName(t, m, sectionServices)
 	pump(t, m, "ctrl+l")
 
 	view := screenOf(m)
-	if !strings.Contains(view, "this also starts admin mode for this window, until 10m idle") {
+	if !strings.Contains(view, "this also starts admin mode for this window, for as long as the vault settings say") {
 		t.Fatalf("unlock dialog = %q, want it to say it also starts admin mode", view)
 	}
-
-	cfg := m.cfg.Clone()
-	cfg.Vault.AdminTimeout = "0"
-	m.cfg = cfg
-	syncRevision(t, m)
-	view = screenOf(m)
-	if !strings.Contains(view, "vault.admin_timeout is 0: asks again on every change") {
-		t.Fatalf("unlock dialog with admin_timeout 0 = %q, want the same zero-text admin.go's dialog uses", view)
+	if strings.Contains(view, "asks again on every change") {
+		t.Fatalf("unlock dialog = %q, want no claim about asking on every change", view)
 	}
 }
 

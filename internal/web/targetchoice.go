@@ -53,14 +53,14 @@ type targetErrorBody struct {
 
 // withTargetGuard is withAdminGuard for a read: the same session, Origin and CSRF checks, and the admin
 // approval spent exactly as a mutation spends it. A read is not exempt because it reads the credential's
-// secret and the provider's data, and with vault.admin_timeout of 0 it therefore uses up the one approval
+// secret and the provider's data, and with an admin session time of 0 it therefore uses up the one approval
 // like a write does (the TUI does the same). It does not take writeMu, since it writes no configuration.
 // Without an active approval the proof stays empty and the core answers admin-required for an encrypted
 // vault; it needs none otherwise.
 func (s *Server) withTargetGuard(next func(w http.ResponseWriter, r *http.Request, proof manage.AdminProof)) http.HandlerFunc {
 	return s.withSessionGuard(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
-		proof, _ := s.admin.Authorize(s.adminTimeout)
+		proof, _ := s.admin.Authorize(s.adminTimeout())
 		s.mu.Unlock()
 		next(w, r, proof)
 	})
