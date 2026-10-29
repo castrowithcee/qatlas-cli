@@ -667,6 +667,11 @@ type Model struct {
 	// The click targets of the frame drawn last; see mouse.go.
 	hits      []hit
 	frameHits []hit
+	// barHits are the tabs of the tab line and the option bar. Unlike the other targets they stand under a
+	// dialog too, because a click on a tab leaves what the dialog allows to leave.
+	barHits []hit
+	// dialogBox is the cells a dialog covers in the frame drawn last; a tab under it is not reachable.
+	dialogBox hit
 	// zones are the focus zones of the frame drawn last, ranked below every other target.
 	zones []hit
 	// cursor is where the focused text field of the frame drawn last puts the terminal cursor; nil hides it.
@@ -3807,7 +3812,7 @@ func (m *Model) renderFrame() string {
 	if m.quitting {
 		return ""
 	}
-	m.hits, m.frameHits, m.zones, m.tooSmall = nil, nil, nil, false
+	m.hits, m.frameHits, m.zones, m.barHits, m.dialogBox, m.tooSmall = nil, nil, nil, nil, hit{}, false
 	m.drawn = true
 	if m.dd != nil {
 		m.dd.placed = false

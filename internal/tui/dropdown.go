@@ -183,8 +183,10 @@ func (m *Model) clickDropdown(x, y int) tea.Cmd {
 	if x > b.x0 && x < b.x1-1 && y > b.y0 && y < b.y1-1 {
 		return m.chooseDropdown(y - b.y0 - 1)
 	}
+	// Any other click closes the list, as esc does; a click on a tab then goes on.
 	m.dd = nil
-	return nil
+	cmd, _ := m.clickBar(tea.Mouse{X: x, Y: y})
+	return cmd
 }
 
 // fieldRows sets styled fields, each led by its own two-cell marker column and two cells apart, into lines of width

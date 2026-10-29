@@ -433,6 +433,8 @@ func (m *Model) infoView() string {
 	}
 	dialog := panel(truncateDots(s.title, inner-2), lines, inner, len(lines), panelOpts{focused: true})
 	background := m.frame(m.workspaceView())
+	top, left := dialogOrigin(dialog, m.termWidth, m.termHeight)
+	m.markDialog(dialog, top, left)
 	return overlay(background, dialog, m.termWidth, m.termHeight)
 }
 
