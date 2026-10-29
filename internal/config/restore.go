@@ -19,6 +19,9 @@ type Backup struct {
 	path string
 }
 
+// Path is the full path of the backup file.
+func (b Backup) Path() string { return b.path }
+
 // backupName matches the backups of the configuration file: the plain ones, the hand-edited ones, and the
 // first hand-edited one. Copies of other files (the vault) and anything else in the directory do not match.
 var backupName = regexp.MustCompile(`^config-(?:first-hand-)?(\d{8}T\d{6}Z)-(\d{3})(?:-hand)?\.yaml$`)

@@ -129,7 +129,12 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"strictly than on Linux: a process of this user that takes over one of its threads, or that runs\n" +
 			"elevated with the debug privilege, still can. On other platforms the vault stays unlocked only for\n" +
 			"this process. Run against a vault that is not encrypted and locked, it asks for nothing and just\n" +
-			"reports the vault's status.",
+			"reports the vault's status.\n\n" +
+			"The first unlock after the idle timeout, the admin session timeout, and the log retention moved\n" +
+			"into the vault shows the values config.yaml still holds for them (vault.idle_timeout,\n" +
+			"vault.admin_timeout, logs.retention_days) on stderr and asks once whether to take them over into\n" +
+			"the vault; the default is no. Either way the three fields are then removed from config.yaml,\n" +
+			"with a backup whose path is reported. The values never take effect without a yes.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultUnlock(c, opts, reg)
@@ -846,6 +851,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 	if _, err := vault.EffectiveSettings(v); errors.Is(err, vault.ErrSettingsUntrusted) {
 		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", err)
 	}
+	offerSettingsTakeover(c, opts, reg, v)
 	mergedText := fmt.Sprintf("merged %d pending %s", merged, plural(merged, "entry", "entries"))
 	notice := pendingApprovalNotice(opts, reg, v)
 

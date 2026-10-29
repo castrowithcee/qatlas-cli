@@ -144,7 +144,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
 			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
 			"it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
-			"starts this window's admin session in the same step; on an unlocked, encrypted vault it asks\n" +
+			"starts this window's admin session in the same step. The first such unlock after the idle\n" +
+			"timeout, the admin session timeout, and the log retention moved into the vault asks once whether\n" +
+			"to take over the values config.yaml still holds for them (default no) and then removes those\n" +
+			"fields from config.yaml with a backup; on an unlocked, encrypted vault it asks\n" +
 			"Lock the vault now?, and y locks the vault process, forgets the key this window held, and ends the\n" +
 			"admin session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
 			"The system keyring is the credential store the operating system already provides: Secret\n" +
