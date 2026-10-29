@@ -25,7 +25,7 @@ const (
 // few greens to tell four levels apart, so the shade glyphs carry them.
 func heatColoured() bool {
 	profile := currentProfile()
-	return styles.palette.heat[0] != "" && profile != profileNone && profile != profile16 && !heatASCII()
+	return styles.palette.heat[0] != "" && profile != profileNone && profile != profile16 && utf8Terminal()
 }
 
 // heatSquare is the two-cell mark of a level: a square in its heat colour, or the glyph of the level.

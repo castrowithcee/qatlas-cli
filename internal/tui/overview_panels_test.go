@@ -22,7 +22,10 @@ func demoOverview(t *testing.T, noColor bool, width, height int) *Model {
 	t.Helper()
 	fixtures := demoFixtures()
 	visualSetup(t, noColor)
-	return visualModel(t, fixtures, width, height, uiprefs.ThemeQatlasDark)
+	m := visualModel(t, fixtures, width, height, uiprefs.ThemeQatlasDark)
+	// These tests look for plain labels; the icons have tests of their own.
+	m.prefs.Icons = uiprefs.IconsNone
+	return m
 }
 
 // demoFixtures is the absolute path of the snapshot fixtures, resolved before a test changes its directory.

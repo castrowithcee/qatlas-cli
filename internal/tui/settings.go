@@ -9,19 +9,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
-// areaIcons are the Nerd Font glyphs (Font Awesome range) shown before an area's name when the icons
-// preference is nerdfont: home, link, history, key, book, cog. The name always stays beside the icon.
-var areaIcons = [areaCount]string{
-	areaOverview:    "",
-	areaConnections: "",
-	areaActivity:    "",
-	areaAccess:      "",
-	areaLibrary:     "",
-	areaSettings:    "",
-}
-
-// iconsTest explains the nerdfont value with the glyphs themselves, taken from areaIcons.
-func iconsTest() string { return fmt.Sprintf(tr(tIconsTest), strings.Join(areaIcons[:], " ")) }
+// iconsTest explains the nerdfont value with the glyphs themselves.
+func iconsTest() string { return fmt.Sprintf(tr(tIconsTest), strings.Join(nerdAreaGlyphs(), " ")) }
 
 // iconsDetail is the long explanation of the icons preference.
 func iconsDetail() string { return tr(tIconsDetail) + ". " + iconsTest() }
@@ -122,7 +111,7 @@ func (m *Model) generalFields() []field {
 			withDetail(tr(tThemeDetail)),
 		choiceField(startLabel, areas, start).
 			withHint(tr(tStartHint)),
-		choiceField(iconsLabel, []string{uiprefs.IconsNone, uiprefs.IconsNerdFont}, prefs.Icons).
+		choiceField(iconsLabel, []string{uiprefs.IconsUnicode, uiprefs.IconsNerdFont, uiprefs.IconsNone}, prefs.Icons).
 			withHint(tr(tIconsHint)).
 			withDetail(iconsDetail()),
 		choiceField(langLabel, []string{uiprefs.LanguageEnglish, uiprefs.LanguageGerman, uiprefs.LanguageSystem}, language).

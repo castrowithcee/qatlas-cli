@@ -306,7 +306,7 @@ func (m *Model) paneShown() bool { return m.inPane || (m.width >= helpPaneMinWid
 func (m *Model) screenView() string {
 	if !m.backdrop {
 		// Every drawing of the screen starts its targets anew; the last one is the one that is shown.
-		m.hits = nil
+		m.hits, m.zones = nil, nil
 	}
 	if !m.paneShown() {
 		return m.editorView()

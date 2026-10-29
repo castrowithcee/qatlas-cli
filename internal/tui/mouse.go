@@ -41,6 +41,16 @@ func (m *Model) addFrameHit(x0, y0, x1, y1 int, act func() tea.Cmd) {
 	m.frameHits = append(m.frameHits, hit{x0, y0, x1, y1, act})
 }
 
+// addZone registers a focus zone: the free area of a part of the screen that a key press can focus. A click on
+// it does only what tabbing there does, never more, and a zone ranks below every other target, so that a click
+// on an element inside it stays that element's click.
+func (m *Model) addZone(x0, y0, x1, y1 int, act func() tea.Cmd) {
+	if m.backdrop || m.tooSmall || x1 <= x0 || y1 <= y0 {
+		return
+	}
+	m.zones = append(m.zones, hit{x0, y0, x1, y1, act})
+}
+
 // workspaceTop is the screen row of the first line of the workspace: below the header, the tab line, the option
 // bar of an area that has one, and the rule.
 func (m *Model) workspaceTop() int {
@@ -155,7 +165,7 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	if m.dd != nil {
 		return m.clickDropdown(event.X, event.Y)
 	}
-	hits := append(append([]hit{}, m.frameHits...), m.hits...)
+	hits := append(append(append([]hit{}, m.zones...), m.frameHits...), m.hits...)
 	for i := len(hits) - 1; i >= 0; i-- {
 		h := hits[i]
 		if event.X >= h.x0 && event.X < h.x1 && event.Y >= h.y0 && event.Y < h.y1 {
@@ -512,12 +522,89 @@ func (m *Model) clickSubTab(s section) tea.Cmd {
 	return tea.Batch(lead, cmd)
 }
 
+// zoneBar is the click on the free area of the tab line or the option bar: it leaves the screen the way a click
+// on a tab does, and hands the focus to the bar without changing the section.
+func (m *Model) zoneBar(sub bool) tea.Cmd {
+	lead, ok := m.leaveForBar()
+	if !ok {
+		return lead
+	}
+	if m.screen != screenNav {
+		m.focusNav()
+	}
+	m.navSub = sub && m.hasSubTabs()
+	return lead
+}
+
+func (m *Model) zoneTabLine() tea.Cmd   { return m.zoneBar(false) }
+func (m *Model) zoneOptionBar() tea.Cmd { return m.zoneBar(true) }
+
+// zoneRows is the click on the free area of the rows of a list or the Overview: the rows take the focus, as
+// tab or enter from the bars gives it. On the page of a setting that is entering the page. A typed filter is
+// left alone.
+func (m *Model) zoneRows() tea.Cmd {
+	switch m.screen {
+	case screenNav:
+		return m.focusList()
+	case screenList:
+	default:
+		return nil
+	}
+	if m.list.editing {
+		return nil
+	}
+	m.barFocus, m.noticeFocus = 0, false
+	m.leaveDetail()
+	return nil
+}
+
+// zoneFilterBar is the click on the free area of the filter bar of a list: the first field takes the focus,
+// as tab gives it, unless a field of the bar has it already.
+func (m *Model) zoneFilterBar() tea.Cmd {
+	if m.screen == screenNav {
+		if cmd := m.focusList(); m.screen != screenList {
+			return cmd
+		}
+	}
+	if m.screen != screenList || m.list.editing || !m.listBarShown() {
+		return nil
+	}
+	m.leaveDetail()
+	m.noticeFocus = false
+	if m.barFocus == 0 {
+		m.barFocus = 1
+	}
+	return nil
+}
+
+// zoneList registers the zones of a list screen drawn as out with footer below the table: the table, from its
+// title to the end of its frame, and the filter bar inside it. A filter being typed has none.
+func (m *Model) zoneList(out, footer string) {
+	if m.list.editing {
+		return
+	}
+	top := m.workspaceTop()
+	end := top + strings.Count(out, "\n") - strings.Count(footer, "\n")
+	if m.tableFramed() {
+		end++
+	}
+	m.addZone(0, top, m.listWidth(), end, m.zoneRows)
+	if m.listBarShown() {
+		row := top + m.listBarOffset()
+		m.addZone(0, row, m.listWidth(), row+1, m.zoneFilterBar)
+	}
+}
+
 // registerBars makes the tab line and the option bar clickable.
 func (m *Model) registerBars() {
 	if m.backdrop || m.tooSmall || m.wizard != nil {
 		return
 	}
 	row := len(m.headerLines())
+	m.addZone(0, row, m.termWidth, row+1, m.zoneTabLine)
+	if m.hasSubTabs() {
+		m.addZone(0, row+1, m.termWidth, row+2, m.zoneOptionBar)
+	}
 	areas := m.navTabs()
 	for s, span := range areas.spans {
 		a := area(s)

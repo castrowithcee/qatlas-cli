@@ -240,8 +240,12 @@ func (m *Model) updateBanners() []string {
 		return []string{tr(tBannerUpdating, m.installing()), tr(tBannerUpdatingShort)}
 	case m.updateOffered():
 		current, latest := m.release.Current, m.release.Latest
+		celebrate := ""
+		if icon := m.icon(iconUpdate); icon != "" {
+			celebrate = " " + icon
+		}
 		return []string{
-			tr(tBannerAvailableFull, current, latest),
+			tr(tBannerAvailableFull, current, latest, celebrate),
 			tr(tBannerAvailable, current, latest),
 			tr(tBannerAvailableLatest, latest),
 			tr(tBannerAvailableShort, latest),

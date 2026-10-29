@@ -8,8 +8,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
 
 // The command line (':') runs the editor's recurring actions by name. It is a register, not a second set of
@@ -25,8 +23,8 @@ type command struct {
 	hidden bool
 	// shortcut returns the key that already does the same, or "" where there is none.
 	shortcut func() string
-	// icon is the Nerd Font glyph shown before the name, or "" where there is none.
-	icon string
+	// icon is the meaning of the glyph shown before the name; iconNone where there is none.
+	icon iconID
 	// unavailable returns the reason the command cannot run on m.screen now, or "" where it can.
 	unavailable func(m *Model) string
 	// run performs the action on the screen the command line was opened from.
@@ -373,9 +371,9 @@ func (m *Model) paletteLines(inner, room int) ([]string, []int) {
 		cursor := min(cl.cursor, len(matches)-1)
 		start := max(min(cursor-rows/2, len(matches)-rows), 0)
 		end := min(start+rows, len(matches))
-		nerd := m.prefs.Icons == uiprefs.IconsNerdFont
+		icons := m.icon(areaIcons[areaOverview]) != ""
 		for i := start; i < end; i++ {
-			lines, index = append(lines, m.paletteRow(matches[i], i == cursor, nerd, inner)), append(index, i)
+			lines, index = append(lines, m.paletteRow(matches[i], i == cursor, icons, inner)), append(index, i)
 		}
 	}
 	lines, index = append(lines, ""), append(index, -1)
@@ -386,7 +384,7 @@ func (m *Model) paletteLines(inner, room int) ([]string, []int) {
 }
 
 // paletteRow is one entry: marker, icon, name and description at the left, the shortcut at the right.
-func (m *Model) paletteRow(c command, chosen, nerd bool, width int) string {
+func (m *Model) paletteRow(c command, chosen, icons bool, width int) string {
 	right := ""
 	if c.shortcut != nil {
 		right = c.shortcut()
@@ -396,10 +394,11 @@ func (m *Model) paletteRow(c command, chosen, nerd bool, width int) string {
 		prefix = "> "
 	}
 	left := fmt.Sprintf("%-14s %s", c.name, c.desc)
-	if nerd {
-		icon := c.icon
+	if icons {
+		// Entries without an icon keep the column, so the names stay aligned.
+		icon := m.icon(c.icon)
 		if icon == "" {
-			icon = " "
+			icon = strings.Repeat(" ", lipgloss.Width(m.icon(areaIcons[areaOverview])))
 		}
 		left = icon + " " + left
 	}
