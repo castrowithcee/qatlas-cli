@@ -127,8 +127,7 @@ func TestBuiltinThemesFollowTheColourProfile(t *testing.T) {
 
 func TestBuiltinThemesYieldToNoColor(t *testing.T) {
 	restoreRenderer(t)
-	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	for _, s := range builtinSchemes {
 		applyTheme(s.name)
 		if styles.filled || styles.palette != (palette{}) {

@@ -19,20 +19,32 @@ const (
 	profileTrueColor colorProfile = iota
 	profile256
 	profile16
+	// profileASCII shows no colour but keeps bold, faint and reverse (NO_COLOR at a terminal).
+	profileASCII
+	// profileNone shows neither colour nor attributes (no terminal, TERM=dumb).
 	profileNone
 )
 
 // profile is what Run found the terminal to show; tests set it.
 var profile = profileNone
 
-// toColorprofile is the profile of the colour library. No colour is NoTTY, which drops bold, faint and
-// reverse as well, as the output always did without colour; none of them carries a meaning alone.
+// colourless reports whether a profile shows no colour. Every fallback without colour (frame, selection
+// mark, tab brackets, heat glyphs, canvas, terminal colour query) asks it, so none hangs on a palette field.
+func (p colorProfile) colourless() bool { return p == profileASCII || p == profileNone }
+
+// noColour reports whether the current profile shows no colour.
+func noColour() bool { return currentProfile().colourless() }
+
+// toColorprofile is the profile of the colour library. ASCII keeps bold, faint and reverse; NoTTY drops them
+// as well, as a terminal that shows nothing does.
 func toColorprofile(p colorProfile) colorprofile.Profile {
 	switch p {
 	case profile256:
 		return colorprofile.ANSI256
 	case profile16:
 		return colorprofile.ANSI
+	case profileASCII:
+		return colorprofile.ASCII
 	case profileNone:
 		return colorprofile.NoTTY
 	}
@@ -47,17 +59,21 @@ func fromColorprofile(p colorprofile.Profile) colorProfile {
 		return profile256
 	case colorprofile.ANSI:
 		return profile16
+	case colorprofile.ASCII:
+		return profileASCII
 	}
 	return profileNone
 }
 
 // detectProfile is the colour profile of the terminal behind out. NO_COLOR turns colour off with any value,
-// not only with the values the colour library reads as true.
+// not only with the values the colour library reads as true, and keeps the attributes of a terminal that
+// shows any; without a terminal or with TERM=dumb nothing is shown at all.
 func detectProfile(out io.Writer) colorProfile {
-	if os.Getenv("NO_COLOR") != "" {
-		return profileNone
+	p := fromColorprofile(colorprofile.Detect(out, os.Environ()))
+	if os.Getenv("NO_COLOR") != "" && p != profileNone {
+		return profileASCII
 	}
-	return fromColorprofile(colorprofile.Detect(out, os.Environ()))
+	return p
 }
 
 func currentProfile() colorProfile { return profile }

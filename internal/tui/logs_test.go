@@ -689,7 +689,7 @@ func TestLogsShowResponseSizeAsEstimatedTokens(t *testing.T) {
 	}
 	for _, op := range []string{"op.old", "op.failed"} {
 		// The size stands before the duration, which ends the row.
-		fields := strings.Fields(strings.Trim(rowLine(t, view, op), "│ "))
+		fields := strings.Fields(strings.Trim(rowLine(t, view, op), "│║ "))
 		if line := rowLine(t, view, op); len(fields) < 2 || fields[len(fields)-2] != "-" || strings.Contains(line, "tok") {
 			t.Errorf("row %s does not show - for the size: %q", op, line)
 		}
@@ -818,7 +818,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 		t.Fatalf("m did not open the session summary:\n%s", view)
 	}
 	// The panel wraps the note, so the words are compared without its frame and line breaks.
-	flat := strings.Join(strings.Fields(strings.ReplaceAll(view, "│", " ")), " ")
+	flat := strings.Join(strings.Fields(strings.NewReplacer("│", " ", "║", " ").Replace(view)), " ")
 	for _, want := range []string{"~tokens", "estimate", "system prompt and thinking", "session " + sessionNew,
 		"M or s or esc back to the rows"} {
 		if !strings.Contains(flat, want) {
@@ -840,7 +840,7 @@ func TestLogsSessionSummaryShowsAreasToolsAndEstimates(t *testing.T) {
 	for name, cells := range want {
 		var got []string
 		for _, l := range strings.Split(view, "\n") {
-			cell := strings.TrimSpace(strings.Trim(strings.TrimSpace(l), "│"))
+			cell := strings.TrimSpace(strings.Trim(strings.TrimSpace(l), "│║"))
 			if fields := strings.Fields(cell); strings.HasPrefix(cell, name+" ") && len(fields) >= 5 {
 				got = fields[len(fields)-5:]
 				break

@@ -75,8 +75,8 @@ func TestDocLinesKeepTheAddressVisible(t *testing.T) {
 		t.Setenv("NO_COLOR", "1")
 		before := styles
 		t.Cleanup(func() { setTheme(before) })
-		applyTheme("")
 		withProfile(t, detectProfile(&strings.Builder{}))
+		applyTheme("")
 		got := shown(strings.Join(docLines(url, 200), "\n"))
 		if !strings.Contains(got, url) || strings.Contains(got, "\x1b") {
 			t.Errorf("view = %q, want the address as plain text", got)

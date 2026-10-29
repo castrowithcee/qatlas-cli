@@ -13,7 +13,12 @@ var sgr = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func withTheme(t *testing.T, th theme) {
 	t.Helper()
 	before, profile := styles, currentProfile()
-	setProfile(profileTrueColor)
+	// A theme without a palette is the theme of a profile without colour.
+	if th.palette == (palette{}) {
+		setProfile(profileASCII)
+	} else {
+		setProfile(profileTrueColor)
+	}
 	setTheme(th)
 	t.Cleanup(func() { setTheme(before); setProfile(profile) })
 }

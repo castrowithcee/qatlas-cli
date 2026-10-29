@@ -90,16 +90,17 @@ func visualSetup(t *testing.T, noColor bool) {
 	t.Cleanup(func() { uiLang, time.Local = lang, local })
 	setLanguage(uiprefs.LanguageEnglish)
 	time.Local = time.UTC
-	setProfile(profileTrueColor)
-	termFg, termBg = nil, nil
 	// Icons and block characters depend on the locale; the snapshots must not depend on the machine.
 	t.Setenv("LC_ALL", "C.UTF-8")
 	t.Setenv("TERM", "xterm-256color")
+	// The no-colour snapshots run on the profile of NO_COLOR at a terminal, which keeps the attributes.
 	if noColor {
-		t.Setenv("NO_COLOR", "1")
+		setProfile(profileASCII)
 	} else {
-		t.Setenv("NO_COLOR", "")
+		setProfile(profileTrueColor)
 	}
+	termFg, termBg = nil, nil
+	t.Setenv("NO_COLOR", "")
 	t.Chdir(t.TempDir())
 }
 
@@ -342,7 +343,7 @@ func visualProfileShots() []visualProfileShot {
 		{visualShot{"63-connections-16", 150, 42, dark, false, connections}, profile16},
 		{visualShot{"64-connections-light", 150, 42, light, false, connections}, profileTrueColor},
 		{visualShot{"65-connections-qatlas-background", 150, 42, dark, false, connections}, profileTrueColor},
-		{visualShot{"66-connections-no-color", 150, 42, dark, true, connections}, profileTrueColor},
+		{visualShot{"66-connections-no-color", 150, 42, dark, true, connections}, profileASCII},
 	}
 }
 
@@ -407,7 +408,11 @@ func TestVisualSnapshots(t *testing.T) {
 	}
 	shots := make([]visualTerminalShot, 0, 90)
 	for _, shot := range visualShots() {
-		shots = append(shots, visualTerminalShot{visualProfileShot: visualProfileShot{shot, profileTrueColor}})
+		p := profileTrueColor
+		if shot.noColor {
+			p = profileASCII
+		}
+		shots = append(shots, visualTerminalShot{visualProfileShot: visualProfileShot{shot, p}})
 	}
 	for _, shot := range visualProfileShots() {
 		shots = append(shots, visualTerminalShot{visualProfileShot: shot})

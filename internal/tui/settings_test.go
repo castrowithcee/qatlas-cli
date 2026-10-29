@@ -29,6 +29,7 @@ func lockedVaultModel(t *testing.T) (*Model, string) {
 }
 
 func TestGeneralSavesWithoutAdminSession(t *testing.T) {
+	useColour(t)
 	restoreRenderer(t)
 	t.Setenv("NO_COLOR", "")
 	m, path := lockedVaultModel(t)

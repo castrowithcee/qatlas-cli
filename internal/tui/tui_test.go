@@ -1142,6 +1142,12 @@ func screenOf(m *Model) string {
 }
 
 // flatText is a view as one line of words, where the spacing between groups of keys does not matter.
+// roundFrame draws the double frame of a focused zone as the rounded one, for the tests that read the layout of
+// a screen and not which zone has the focus (a profile without colour draws the double one).
+func roundFrame(view string) string { return frameRounder.Replace(view) }
+
+var frameRounder = strings.NewReplacer("╔", "╭", "╗", "╮", "╚", "╰", "╝", "╯", "═", "─", "║", "│")
+
 func flatText(view string) string { return strings.Join(strings.Fields(view), " ") }
 
 // withFooter is a view drawn by a single screen function with the footer under it, which the keys of that
@@ -1957,7 +1963,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 // so a test can look at the shape of the form (a row is its label and its value, a hint is indented under
 // it) rather than at the cells that fill it out.
 func formLines(m *Model) []string {
-	lines := strings.Split(screenOf(m), "\n")
+	lines := strings.Split(roundFrame(screenOf(m)), "\n")
 	entries := m.formSections()
 	list := 0
 	full := m.width

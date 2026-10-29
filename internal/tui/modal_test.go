@@ -13,7 +13,7 @@ import (
 // edge; the warning mark in the row under its top border tells it from the frame of the workspace behind it.
 func dialogRows(view string) (top, bottom, left int, ok bool) {
 	top = -1
-	rows := strings.Split(view, "\n")
+	rows := strings.Split(roundFrame(view), "\n")
 	for i, line := range rows {
 		if at := strings.Index(line, "╭─"); at >= 0 && i+1 < len(rows) && strings.Contains(rows[i+1], "│ "+warnMark+" ") {
 			top, left = i, lipgloss.Width(line[:at])
@@ -55,7 +55,7 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 		t.Fatalf("screen = %v, want the confirmation", m.screen)
 	}
 
-	view := m.render()
+	view := roundFrame(m.render())
 	assertViewFits(t, view, 100, 30)
 	if !strings.Contains(view, `Delete "wiki"?`) || !strings.Contains(view, "y remove") {
 		t.Fatalf("the question or its keys are missing:\n%s", view)

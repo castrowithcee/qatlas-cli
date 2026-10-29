@@ -20,13 +20,16 @@ func TestTablesStandInAPanelWithTitleCountAndGroupHeads(t *testing.T) {
 		t.Errorf("the table frame does not follow the title line:\n%s", screenOf(m))
 	}
 	view := screenOf(m)
-	for _, want := range []string{"NAME", "STATE", "▾ ■ bookstack (1)", "▾ ■ tracker (2)", "╰"} {
+	for _, want := range []string{"NAME", "STATE", "▾ ■ bookstack (1)", "▾ ■ tracker (2)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the framed table lacks %q:\n%s", want, view)
 		}
 	}
+	if !strings.ContainsAny(view, "╰╚") {
+		t.Errorf("the framed table lacks its bottom edge:\n%s", view)
+	}
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: smallestListHeight})
-	if view := screenOf(m); strings.ContainsAny(view, "│╭╰") || !strings.Contains(view, "Connections  1/3") {
+	if view := screenOf(m); strings.ContainsAny(view, "│╭╰║╔╚") || !strings.Contains(view, "Connections  1/3") {
 		t.Errorf("a terminal without room for the frame keeps the compact table:\n%s", view)
 	}
 }
@@ -34,12 +37,11 @@ func TestTablesStandInAPanelWithTitleCountAndGroupHeads(t *testing.T) {
 // The marked row has its bar and accent mark under colour and its '>' without; the state is told by its word
 // and, under colour, by its colour.
 func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
-	before := currentProfile()
-	t.Cleanup(func() { setProfile(before) })
+	restoreRenderer(t)
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)
 
-	setProfile(profile16)
+	lookOf(profile16)
 	coloured := screenOf(m)
 	if row := findRow(coloured, "wiki-docs"); !strings.Contains(row, "▌") || !hasBackground(row) {
 		t.Errorf("the marked row has no accent mark and bar: %q", row)
@@ -52,7 +54,7 @@ func TestMarkedRowAndStateAreClearWithAndWithoutColour(t *testing.T) {
 		t.Error("active, expired and disabled share one style")
 	}
 
-	setProfile(profileNone)
+	lookOf(profileNone)
 	plain := screenOf(m)
 	if strings.Contains(plain, "\x1b") || strings.Contains(plain, "▌") {
 		t.Errorf("without colour the table still emits styles or the accent mark:\n%s", plain)

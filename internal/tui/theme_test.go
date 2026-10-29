@@ -2,7 +2,6 @@ package tui
 
 import (
 	"image/color"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -61,8 +60,7 @@ func TestColoursStepDownWithTheProfile(t *testing.T) {
 
 func TestNoColorEmitsNoColourSequence(t *testing.T) {
 	restoreRenderer(t)
-	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	applyTheme(uiprefs.ThemeQatlasDark)
 	if styles.filled {
 		t.Fatal("NO_COLOR left the background fill on")
@@ -127,9 +125,25 @@ func TestResetsColour(t *testing.T) {
 // from.
 func darkTheme() theme { return buildTheme(paletteOf(true, currentProfile()), false) }
 
-// useDarkColours activates darkTheme, or no colour at all under NO_COLOR, as applyTheme does.
+// useColour gives the test a profile with colour and the dark theme, restored afterwards: the look of a
+// terminal that shows colour. Tests start without colour (see profile).
+func useColour(t *testing.T) {
+	t.Helper()
+	restoreRenderer(t)
+	setProfile(profileTrueColor)
+	setTheme(darkTheme())
+}
+
+// lookOf switches the profile and the default theme with it, as a start does: the theme of a profile without
+// colour names none.
+func lookOf(p colorProfile) {
+	setProfile(p)
+	setTheme(defaultTheme())
+}
+
+// useDarkColours activates darkTheme, or no colour at all under a profile without colour, as applyTheme does.
 func useDarkColours() {
-	if os.Getenv("NO_COLOR") != "" {
+	if noColour() {
 		setTheme(noColorTheme())
 		return
 	}
@@ -260,11 +274,11 @@ func TestTerminalThemeFallsBackToFrames(t *testing.T) {
 	}
 }
 
-// NO_COLOR wins over the terminal theme with any value: no colour, and no question to the terminal.
+// A profile without colour (NO_COLOR at a terminal included) wins over the terminal theme: no colour, and no
+// question to the terminal.
 func TestNoColorAsksTheTerminalNothing(t *testing.T) {
 	restoreRenderer(t)
 	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "")
 	if terminalColourQuery(uiprefs.ThemeTerminal) == nil {
 		t.Fatal("the terminal theme does not ask the terminal for its colours")
 	}
@@ -275,16 +289,15 @@ func TestNoColorAsksTheTerminalNothing(t *testing.T) {
 	if terminalColourQuery(uiprefs.ThemeTerminal) != nil {
 		t.Error("a 16-colour terminal is asked for colours it cannot use")
 	}
-	setProfile(profileTrueColor)
-	for _, value := range []string{"1", "yes"} {
-		t.Setenv("NO_COLOR", value)
+	for _, p := range []colorProfile{profileASCII, profileNone} {
+		setProfile(p)
 		if terminalColourQuery(uiprefs.ThemeTerminal) != nil {
-			t.Errorf("NO_COLOR=%s: the terminal is asked for its colours", value)
+			t.Errorf("profile %v: the terminal is asked for its colours", p)
 		}
 		termFg, termBg = &rgb{255, 255, 255}, &rgb{0, 0, 0}
 		applyTheme(uiprefs.ThemeTerminal)
 		if styles.palette != (palette{}) || strings.Contains(styles.active.Render("x"), "\x1b[3") {
-			t.Errorf("NO_COLOR=%s: the terminal theme still names colours", value)
+			t.Errorf("profile %v: the terminal theme still names colours", p)
 		}
 	}
 }

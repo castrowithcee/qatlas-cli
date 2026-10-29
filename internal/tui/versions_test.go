@@ -89,7 +89,9 @@ func choosable() *versionFake {
 }
 
 // boxText is the text of a screen without the frame of a box and the line breaks of its wrapping.
-func boxText(view string) string { return flatText(strings.ReplaceAll(view, "│", " ")) }
+func boxText(view string) string {
+	return flatText(strings.NewReplacer("│", " ", "║", " ").Replace(view))
+}
 
 // startedVersions builds an editor on v0.4.0 that can choose versions.
 func startedVersions(t *testing.T, fake *versionFake) *Model {
