@@ -92,6 +92,9 @@ func visualSetup(t *testing.T, noColor bool) {
 	time.Local = time.UTC
 	setProfile(profileTrueColor)
 	termFg, termBg = nil, nil
+	// Icons and block characters depend on the locale; the snapshots must not depend on the machine.
+	t.Setenv("LC_ALL", "C.UTF-8")
+	t.Setenv("TERM", "xterm-256color")
 	if noColor {
 		t.Setenv("NO_COLOR", "1")
 	} else {

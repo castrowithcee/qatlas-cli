@@ -1,9 +1,9 @@
-[1mQatlas[m  [1;32m●[m vault unlocked  [90m●[m admin off                                                                                                [90m[?] help[m  [90m[:] cmd[m
-[1;34m> [m[1;44m 1 Overview [m [90m 2 Connections [m [90m 3 Activity [m [90m 4 Access [m [90m 5 Library [m [90m 6 Settings [m
+[1;34m🌐[m [1mQatlas[m  [1;32m●[m vault unlocked  [90m●[m admin off                                                                                             [90m[?] help[m  [90m[:] cmd[m
+[1;34m> [m[1;44m 1 🏠 Overview [m [90m 2 🔗 Connections [m [90m 3 📈 Activity [m [90m 4 🔑 Access [m [90m 5 📚 Library [m [90m 6 🔧 Settings [m
 [90m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
 [1mOverview[m                                                                                                                       [90mWed, 18 Mar 2026  12:00[m
 [90mSetup and recent activity[m
-[90m╭─[m[1m Connections [m[90m──────────────╮[m [90m╭─[m[1m Services [m[90m────────────────╮[m [90m╭─[m[1m Credentials [m[90m─────────────╮[m [90m╭─[m[1m Tokens [m[90m──────────────────╮[m [90m╭─[m[1m Approvals [m[90m───────────────╮[m
+[90m╭─[m[1m 🔗 Connections [m[90m───────────╮[m [90m╭─[m[1m 📦 Services [m[90m─────────────╮[m [90m╭─[m[1m 🔐 Credentials [m[90m──────────╮[m [90m╭─[m[1m 🎫 Tokens [m[90m───────────────╮[m [90m╭─[m[1m ✅ Approvals [m[90m────────────╮[m
 [90m│[m [1m7[m                          [90m│[m [90m│[m [1m7[m                         [90m│[m [90m│[m [1m7[m                         [90m│[m [90m│[m [1m0[m                         [90m│[m [90m│[m [1m7[m                         [90m│[m
 [90m╰────────────────────────────╯[m [90m╰───────────────────────────╯[m [90m╰───────────────────────────╯[m [90m╰───────────────────────────╯[m [90m╰───────────────────────────╯[m
 [90mqatlas 1.2.3  config.yaml[m

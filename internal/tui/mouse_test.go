@@ -696,6 +696,7 @@ func TestATooSmallTerminalIgnoresTheMouse(t *testing.T) {
 func TestSwitchedOffMouseDoesNothing(t *testing.T) {
 	m := sizedModel(groupModel(t), 120, 40)
 	m.prefs = uiprefs.Default()
+	m.prefs.Icons = uiprefs.IconsNone
 	m.prefs.MouseOff = true
 	section := m.section
 	clickOn(t, m, "6 Settings")
@@ -719,6 +720,7 @@ func TestSwitchedOffMouseDoesNothing(t *testing.T) {
 
 func TestTheMouseSettingAppliesAtOnce(t *testing.T) {
 	m, path := lockedVaultModel(t)
+	m.prefs.Icons = uiprefs.IconsNone
 	sizedModel(m, 100, 40)
 	openSectionByName(t, m, sectionGeneral)
 	focusField(t, m, mouseLabel)

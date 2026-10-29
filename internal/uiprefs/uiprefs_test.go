@@ -94,7 +94,7 @@ func TestSaveReplacesWholeFileAndLastWriterWins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(data); got != "theme: qatlas light\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n" {
+	if got := string(data); got != "theme: qatlas light\nstart: overview\nicons: none\nlanguage: english\nmouse: true\nformat: 2\n" {
 		t.Fatalf("file = %q", got)
 	}
 }
@@ -237,5 +237,47 @@ func TestFormerColourSchemeBecomesTheme(t *testing.T) {
 	}
 	if got, _ := Load(Path(t.TempDir())); got.Theme != ThemeTerminal {
 		t.Errorf("without a file the theme is %q, want %s", got.Theme, ThemeTerminal)
+	}
+}
+
+func TestIconsDefaultAndMigration(t *testing.T) {
+	dir := t.TempDir()
+	path := Path(dir)
+	if got, _ := Load(path); got.Icons != IconsUnicode {
+		t.Errorf("default icons = %q, want %q", got.Icons, IconsUnicode)
+	}
+	// A file from before the format field holds the former default none, which was never a choice.
+	if err := os.WriteFile(path, []byte("theme: terminal\nstart: overview\nicons: none\nlanguage: english\nmouse: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := Load(path)
+	if got.Icons != IconsUnicode || len(warnings) != 0 {
+		t.Fatalf("old none = %q %v, want %q", got.Icons, warnings, IconsUnicode)
+	}
+	// A none chosen and saved afterwards stays.
+	got.Icons = IconsNone
+	if err := Save(path, got); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(path); again.Icons != IconsNone {
+		t.Errorf("saved none = %q, want it kept", again.Icons)
+	}
+	// A saved unicode and nerdfont load as they are.
+	for _, v := range []string{IconsUnicode, IconsNerdFont} {
+		got.Icons = v
+		if err := Save(path, got); err != nil {
+			t.Fatal(err)
+		}
+		if again, _ := Load(path); again.Icons != v {
+			t.Errorf("saved %q = %q", v, again.Icons)
+		}
+	}
+	// The message of an invalid value names all three.
+	if err := os.WriteFile(path, []byte("icons: emoji\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, warnings = Load(path)
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "unicode, nerdfont or none") {
+		t.Errorf("warnings = %v", warnings)
 	}
 }
