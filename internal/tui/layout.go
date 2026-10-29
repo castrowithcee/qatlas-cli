@@ -260,9 +260,8 @@ func (m *Model) navTabs() navBar {
 		line, items = focus+strings.Join(tabs, " "), tabs
 	}
 	bar := navBar{line: clipCells(m.tabLine(focus, items, active), m.termWidth)}
-	if m.wizard == nil {
-		bar.spans = spanItems(items, lipgloss.Width(focus), " ", m.termWidth)
-	}
+	// The setup tab that stands after the areas during the guided setup is no target.
+	bar.spans = spanItems(items, lipgloss.Width(focus), " ", m.termWidth)[:min(len(items), int(areaCount))]
 	return bar
 }
 

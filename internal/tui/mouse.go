@@ -41,6 +41,47 @@ func (m *Model) addFrameHit(x0, y0, x1, y1 int, act func() tea.Cmd) {
 	m.frameHits = append(m.frameHits, hit{x0, y0, x1, y1, act})
 }
 
+// addBarHit registers a tab of the tab line or the option bar. It also stands under a dialog, whose backdrop is
+// the frame with these bars: whether a click on one may go on is for leaveForBar to say.
+func (m *Model) addBarHit(x0, y0, x1, y1 int, act func() tea.Cmd) {
+	if m.tooSmall || x1 <= x0 || y1 <= y0 {
+		return
+	}
+	m.barHits = append(m.barHits, hit{x0, y0, x1, y1, act})
+}
+
+// markDialog notes the cells a dialog drawn from row top and column left covers.
+func (m *Model) markDialog(dialog []string, top, left int) {
+	w := 0
+	for _, line := range dialog {
+		w = max(w, ansi.StringWidth(line))
+	}
+	m.dialogBox = hit{x0: left, y0: top, x1: left + w, y1: top + len(dialog)}
+}
+
+// barAt is the click on a tab at the cell, unless a dialog covers it.
+func (m *Model) barAt(x, y int) (func() tea.Cmd, bool) {
+	if d := m.dialogBox; x >= d.x0 && x < d.x1 && y >= d.y0 && y < d.y1 {
+		return nil, false
+	}
+	for _, h := range m.barHits {
+		if x >= h.x0 && x < h.x1 && y >= h.y0 && y < h.y1 {
+			return h.act, true
+		}
+	}
+	return nil, false
+}
+
+// clickBar is the click on a tab, if the cell is one.
+func (m *Model) clickBar(event tea.Mouse) (tea.Cmd, bool) {
+	act, ok := m.barAt(event.X, event.Y)
+	if !ok {
+		return nil, false
+	}
+	m.touchAdminSessionIfActive()
+	return act(), true
+}
+
 // addZone registers a focus zone: the free area of a part of the screen that a key press can focus. A click on
 // it does only what tabbing there does, never more, and a zone ranks below every other target, so that a click
 // on an element inside it stays that element's click.
@@ -145,11 +186,13 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	m.verified = !m.tooSmall
 	defer func() { m.verified, m.drawn = false, false }()
 	if m.infoOpen {
-		if !wheel {
-			m.infoOpen = false
-			return nil
+		if wheel {
+			return m.wheel(event)
 		}
-		return m.wheel(event)
+		// The explanation closes the way esc closes it; a click on a tab then goes on.
+		m.infoOpen = false
+		cmd, _ := m.clickBar(event)
+		return cmd
 	}
 	if m.tooSmall {
 		return nil
@@ -164,6 +207,9 @@ func (m *Model) updateMouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	if m.dd != nil {
 		return m.clickDropdown(event.X, event.Y)
+	}
+	if cmd, ok := m.clickBar(event); ok {
+		return cmd
 	}
 	hits := append(append(append([]hit{}, m.zones...), m.frameHits...), m.hits...)
 	for i := len(hits) - 1; i >= 0; i-- {
@@ -402,7 +448,7 @@ func spanItems(items []string, start int, sep string, width int) []navSpan {
 
 // barLeaveSteps bounds the esc presses a click on a bar makes, so a screen whose esc changes nothing cannot
 // loop; the deepest stack of screens is a few levels.
-const barLeaveSteps = 6
+const barLeaveSteps = 8
 
 // backShown reports whether esc leads one level back from the screen shown now, which is where the back button
 // stands. It is false on the top level of an area (the tab line, a list, Logs, the page form of a setting),
@@ -466,40 +512,53 @@ func (m *Model) registerBack(span navSpan) {
 	m.addFrameHit(span.x0, 0, span.x1, 1, m.pressBack)
 }
 
-// leaveForBar prepares the screen for a click on the tab line or the option bar: it is allowed where the keys
-// reach the bars, and from a form without unsaved input, which it closes the way esc does. From a deeper
-// screen it presses esc, one level after the other, up to one of those; a question that esc raises on the way
-// (unsaved input) is the end of the click, as a typed search line, a dialog or a save in flight is. It reports
-// whether the click may go on.
+// leaveForBar prepares the screen for a click on the tab line or the option bar: it goes the way esc goes, one
+// level after the other, up to a screen the keys reach the bars from. A typed line ends and an overlay without
+// a question closes as esc ends them; the form or the guided setup is left as esc leaves it, and the question
+// esc raises on the way (unsaved input) is the end of the click. A question, a dialog that asks for a
+// passphrase, a connection test result, a save in flight and the capture of a key are never answered by a
+// click, so a click on a tab does nothing there. It reports whether the click may go on.
 func (m *Model) leaveForBar() (cmd tea.Cmd, ok bool) {
-	if m.wizard != nil || m.infoOpen {
-		return nil, false
-	}
 	var cmds []tea.Cmd
 	for range barLeaveSteps {
+		if m.barAsked() {
+			break
+		}
 		switch m.screen {
 		case screenNav:
 			return tea.Batch(cmds...), true
 		case screenList, screenLogs:
-			return tea.Batch(cmds...), !m.typing()
-		case screenForm:
-			if m.payloadRemoveAsk || m.payloadSaving {
-				return tea.Batch(cmds...), false
+			if !m.typing() {
+				return tea.Batch(cmds...), true
 			}
-			if m.dirty() {
-				return tea.Batch(append(cmds, m.requestLeave())...), false
+		case screenForm, screenSummary, screenProviders:
+			if m.wizard != nil || m.screen == screenForm {
+				if m.payloadRemoveAsk || m.payloadSaving || (m.wizard != nil && m.wizard.saving) {
+					return tea.Batch(cmds...), false
+				}
+				cmds = append(cmds, m.requestLeave())
+				return tea.Batch(cmds...), m.screen != screenLeave
 			}
-			return tea.Batch(append(cmds, m.abandon())...), true
 		}
-		// A search line of a picker or table and the lines of the transfer steps are left by esc at once;
-		// every other typed line first ends its own editing, which a click does not do.
-		if !m.backShown() || (m.typing() && m.screen != screenPicker && m.screen != screenProviders &&
-			m.screen != screenTransfer) {
+		if !m.typing() && !m.backShown() && m.screen != screenHelp {
 			break
 		}
 		cmds = append(cmds, m.pressBack())
 	}
 	return tea.Batch(cmds...), false
+}
+
+// barAsked reports whether a click on a tab must leave the screen as it is: a question or a dialog with a
+// passphrase is open, a connection test result waits, or a key is being captured.
+func (m *Model) barAsked() bool {
+	if m.keyCapture || m.questionScreen() || m.testResultShown() {
+		return true
+	}
+	switch m.screen {
+	case screenSecret, screenVaultOffer, screenAdminAuth, screenVaultUnlock, screenLeave:
+		return true
+	}
+	return false
 }
 
 // clickArea is a click on an area of the tab line.
@@ -595,27 +654,31 @@ func (m *Model) zoneList(out, footer string) {
 	}
 }
 
-// registerBars makes the tab line and the option bar clickable.
+// registerBars makes the tab line and the option bar clickable. The guided setup shows the tab line only; its
+// option bar row stays empty, and the free areas of the bars are not targets there.
 func (m *Model) registerBars() {
-	if m.backdrop || m.tooSmall || m.wizard != nil {
+	if m.tooSmall {
 		return
 	}
 	row := len(m.headerLines())
-	m.addZone(0, row, m.termWidth, row+1, m.zoneTabLine)
-	if m.hasSubTabs() {
-		m.addZone(0, row+1, m.termWidth, row+2, m.zoneOptionBar)
+	setup := m.wizard != nil
+	if !setup {
+		m.addZone(0, row, m.termWidth, row+1, m.zoneTabLine)
+		if m.hasSubTabs() {
+			m.addZone(0, row+1, m.termWidth, row+2, m.zoneOptionBar)
+		}
 	}
 	areas := m.navTabs()
 	for s, span := range areas.spans {
 		a := area(s)
-		m.addFrameHit(span.x0, row, span.x1, row+1, func() tea.Cmd { return m.clickArea(a) })
+		m.addBarHit(span.x0, row, span.x1, row+1, func() tea.Cmd { return m.clickArea(a) })
 	}
-	if !m.hasSubTabs() {
+	if setup || !m.hasSubTabs() {
 		return
 	}
 	for _, sub := range m.subNavSpans() {
 		s := sub.section
-		m.addFrameHit(sub.x0, row+1, sub.x1, row+2, func() tea.Cmd { return m.clickSubTab(s) })
+		m.addBarHit(sub.x0, row+1, sub.x1, row+2, func() tea.Cmd { return m.clickSubTab(s) })
 	}
 }
 

@@ -240,6 +240,7 @@ func (m *Model) modalView() (string, bool) {
 		background = m.frame(m.workspaceView())
 	})
 	top, left := dialogOrigin(dialog, m.termWidth, m.termHeight)
+	m.markDialog(dialog, top, left)
 	m.hitDialog(lines, footers, top, left)
 	for i, match := range paletteIndex {
 		if match >= 0 {

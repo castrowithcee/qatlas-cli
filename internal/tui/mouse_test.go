@@ -1204,7 +1204,7 @@ func TestBackButtonClickFromADeeperScreenIsOneEsc(t *testing.T) {
 // A click on a tab leaves every level by the way of esc and reaches the area.
 func TestTabClickWorksFromEveryLevel(t *testing.T) {
 	for _, c := range backCases() {
-		if !c.back || c.name == "help as an overlay" {
+		if !c.back {
 			continue
 		}
 		m := c.open(t)
@@ -1242,26 +1242,6 @@ func TestTabClickFromAPickerKeepsUnsavedInputBehindTheQuestion(t *testing.T) {
 	clickOn(t, m, "6 Settings")
 	if m.screen != screenLeave || m.section != sectionDefaults {
 		t.Errorf("a changed form: screen %v section %v, want the leave question over Defaults", m.screen, m.section)
-	}
-}
-
-// A click on a tab does nothing where esc would only end a typed line, a dialog or a question.
-func TestTabClickDoesNothingWhileTypingOrAsked(t *testing.T) {
-	m := targetsScreen(t)
-	press(t, m, "n")
-	typeText(t, m, "repos/octo/x")
-	clickOn(t, m, "6 Settings")
-	if m.screen != screenTargets || !m.typing() {
-		t.Errorf("a click while a target is typed: screen %v typing %v", m.screen, m.typing())
-	}
-	m = sizedModel(groupModel(t), 160, 40)
-	openSectionByName(t, m, sectionServices)
-	pressNew(t, m)
-	typeText(t, m, "draft")
-	press(t, m, "esc")
-	clickOn(t, m, "6 Settings")
-	if m.screen != screenLeave || m.section != sectionServices {
-		t.Errorf("a click over the question: screen %v section %v", m.screen, m.section)
 	}
 }
 
