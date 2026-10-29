@@ -251,7 +251,7 @@ func (s *Service) chooseTargets(ctx context.Context, proof AdminProof, subject t
 		result = choiceErr.Code
 	}
 	var warning string
-	recorder := connlog.NewRecorder(s.surface, s.store.Path(), cfg.LogRetentionDays(), s.vault(), s.processOK)
+	recorder := connlog.NewRecorder(s.surface, s.store.Path(), s.vault(), s.processOK)
 	// A draft has no name or id of its own yet; its entry names the draft and nothing the person typed.
 	name, id := resolved.Name, resolved.ID
 	if subject.draft {

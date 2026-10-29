@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
@@ -63,9 +64,19 @@ func (s *Server) adminActiveLocked() bool {
 }
 
 // grantAdminLocked starts, or renews, this run's admin approval once a passphrase just proved it.
-// vault.admin_timeout of 0 grants exactly the next mutation instead of a session, which withAdminGuard
+// An admin session time of 0 grants exactly the next mutation instead of a session, which withAdminGuard
 // spends the moment it lets a mutation through. Callers must hold s.mu.
-func (s *Server) grantAdminLocked() { s.admin.Grant(s.adminTimeout) }
+func (s *Server) grantAdminLocked() { s.admin.Grant(s.adminTimeout()) }
+
+// adminTimeout is the admin session time of this run's vault, read from its authenticated settings at the
+// moment it is needed because the proof that grants an approval may just have unlocked the vault. A locked
+// vault or an untrusted settings.age gives 0, so no approval outlives the one action it was proven for.
+func (s *Server) adminTimeout() time.Duration {
+	if s.adminTimeoutSource != nil {
+		return s.adminTimeoutSource()
+	}
+	return manage.AdminTimeout(s.vault)
+}
 
 // touchAdminIfActive renews the admin approval's idle deadline on every request the coupled session makes,
 // the same rule internal/tui's touchAdminSessionIfActive applies to every key press of an active window. It
@@ -73,7 +84,9 @@ func (s *Server) grantAdminLocked() { s.admin.Grant(s.adminTimeout) }
 func (s *Server) touchAdminIfActive() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.admin.Touch(s.adminTimeout)
+	if s.admin.Active() {
+		s.admin.Touch(s.adminTimeout())
+	}
 }
 
 // VerifyAndGrantAdmin checks passphrase against this run's vault exactly the way internal/tui's own admin
@@ -155,7 +168,7 @@ func (s *Server) withAdminGuard(next http.HandlerFunc) http.HandlerFunc {
 		s.mu.Lock()
 		active := s.adminActiveLocked()
 		if active {
-			s.admin.Consume(s.adminTimeout)
+			s.admin.Consume(s.adminTimeout())
 		}
 		s.mu.Unlock()
 		if !active {

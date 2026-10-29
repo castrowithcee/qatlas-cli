@@ -4,9 +4,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // testMutation is the test-owned mutating route every admin-guard test protects with withAdminGuard,
@@ -159,7 +163,7 @@ func TestAdminApprovalExpiresAndReapprovesEitherWay(t *testing.T) {
 	}
 }
 
-// TestAdminTimeoutZeroApprovesOnlyTheNextChange proves vault.admin_timeout: "0" grants exactly one
+// TestAdminTimeoutZeroApprovesOnlyTheNextChange proves an admin session time of 0 grants exactly one
 // mutation, and the one after it needs a fresh approval again.
 func TestAdminTimeoutZeroApprovesOnlyTheNextChange(t *testing.T) {
 	v := encryptedTestVault(t)
@@ -333,5 +337,97 @@ func TestBrowserFormPostKeepsOrigin(t *testing.T) {
 	}
 	if !s.adminActive() {
 		t.Fatal("browser form POST did not grant admin approval")
+	}
+}
+
+// storedAdminServer is a coupled server whose admin session time comes from the vault, as in a run.
+func storedAdminServer(t *testing.T, v *vault.Vault) (*Server, *http.Cookie, string) {
+	t.Helper()
+	s, cookie, csrf := coupledServer(t, v, defaultTestAdminTimeout)
+	s.adminTimeoutSource = nil
+	return s, cookie, csrf
+}
+
+func storeAdminTimeout(t *testing.T, v *vault.Vault, d time.Duration) {
+	t.Helper()
+	settings := vault.DefaultSettings()
+	settings.AdminTimeout = d
+	if err := v.SetSettings(settings); err != nil {
+		t.Fatalf("SetSettings: %v", err)
+	}
+}
+
+// The admin session time is the one stored in the vault: a stored 0 approves exactly one change, a stored
+// time keeps the approval open until it passes without activity.
+func TestStoredAdminTimeoutApplies(t *testing.T) {
+	v := encryptedTestVault(t)
+	storeAdminTimeout(t, v, 0)
+	s, cookie, csrf := storedAdminServer(t, v)
+	if err := s.VerifyAndGrantAdmin(syntheticPassphrase); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	var calls int
+	guarded := s.withAdminGuard(testMutation(&calls))
+	post := func() int {
+		return recordHandler(guarded, http.MethodPost, "/mutate", s.addr, cookie, "http://"+s.addr, url.Values{"csrf": {csrf}}).Code
+	}
+	if got := post(); got != http.StatusOK {
+		t.Fatalf("first change with stored 0: status = %d, want 200", got)
+	}
+	if got := post(); got != http.StatusForbidden {
+		t.Fatalf("second change with stored 0: status = %d, want 403", got)
+	}
+
+	storeAdminTimeout(t, v, time.Minute)
+	if err := s.VerifyAndGrantAdmin(syntheticPassphrase); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	if got := post(); got != http.StatusOK {
+		t.Fatalf("change with stored 1m: status = %d, want 200", got)
+	}
+	if got := post(); got != http.StatusOK {
+		t.Fatalf("second change with stored 1m: status = %d, want 200", got)
+	}
+	s.now = func() time.Time { return time.Now().Add(2 * time.Minute) }
+	if got := post(); got != http.StatusForbidden {
+		t.Fatalf("change after the stored time: status = %d, want 403", got)
+	}
+}
+
+// A locked vault has no readable settings, so the safe 0 applies; the proof unlocks it and the stored time
+// applies from then on.
+func TestLockedVaultAdminTimeoutIsSafeUntilProven(t *testing.T) {
+	v := encryptedTestVault(t)
+	storeAdminTimeout(t, v, 7*time.Minute)
+	v.Forget()
+	s, _, _ := storedAdminServer(t, v)
+	if got := s.adminTimeout(); got != 0 {
+		t.Fatalf("admin timeout of a locked vault = %v, want 0", got)
+	}
+	if err := s.VerifyAndGrantAdmin(syntheticPassphrase); err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+	if got := s.adminTimeout(); got != 7*time.Minute {
+		t.Fatalf("admin timeout after the proof = %v, want 7m", got)
+	}
+	if !s.adminActiveLocked() {
+		t.Fatal("the approval is not active after the proof with a stored time of 7m")
+	}
+}
+
+// An untrusted settings.age never gives more than 0, an unencrypted vault has the default.
+func TestAdminTimeoutUntrustedAndUnencrypted(t *testing.T) {
+	v := encryptedTestVault(t)
+	storeAdminTimeout(t, v, time.Hour)
+	if err := os.WriteFile(filepath.Join(v.Dir(), "settings.age"), []byte("not an age file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, _, _ := storedAdminServer(t, v)
+	if got := s.adminTimeout(); got != 0 {
+		t.Fatalf("admin timeout with an untrusted settings.age = %v, want 0", got)
+	}
+	s2, _, _ := storedAdminServer(t, vaultAbsent(t))
+	if got := s2.adminTimeout(); got != vault.DefaultAdminTimeout {
+		t.Fatalf("admin timeout of an unencrypted vault = %v, want the default", got)
 	}
 }

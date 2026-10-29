@@ -3,7 +3,9 @@ package tui
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -19,7 +21,16 @@ const (
 	vaultActionDecrypt    = "decrypt"
 )
 
-const updateBehaviourLabel = "update behaviour"
+// shownSettings are the vault settings a form opened with; the alias keeps the vault package out of the
+// files that only hold the model.
+type shownSettings = vault.Settings
+
+const (
+	updateBehaviourLabel = "update behaviour"
+	idleTimeoutLabel     = "idle timeout"
+	adminTimeoutLabel    = "admin timeout"
+	logRetentionLabel    = "log retention"
+)
 
 // vaultActionDone is the status line once an action finished without error.
 func vaultActionDone(action string) string {
@@ -58,8 +69,8 @@ func (m *Model) openVaultForm() tea.Cmd {
 	return nil
 }
 
-// vaultFields builds the rows of the vault form: the state, the actions that apply to it, and the two
-// timeouts, which are config, not vault-file state, and so are offered whatever the vault's state is.
+// vaultFields builds the rows of the vault form: the state, the actions that apply to it, and the vault
+// settings, which are stored in the vault itself and so are editable only while this run holds it unlocked.
 func (m *Model) vaultFields() []field {
 	fields := []field{{label: "state", kind: fieldVaultState, readOnly: true}}
 
@@ -76,43 +87,52 @@ func (m *Model) vaultFields() []field {
 		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml", tr(tVaultMigrateHint), tr(tVaultMigrateDetail)))
 	}
 
-	fields = append(fields, m.updateBehaviourField())
-	fields = append(fields,
-		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(tr(tVaultIdleHint)).withDetail(tr(tVaultIdleDetail)),
-		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(tr(tVaultAdminHint)).withDetail(tr(tVaultAdminDetail)),
-	)
-	return fields
+	return append(fields, m.vaultSettingFields()...)
 }
 
-// updateBehaviourField is the "update behaviour" row: handover or lock, stored authenticated in the encrypted
-// vault's settings.age, never in config.yaml. It is a choice only while this run holds the vault unlocked,
-// the only time the stored value can be read and a change written; otherwise it is a read-only row that
-// names why.
-func (m *Model) updateBehaviourField() field {
-	m.handoverShown = ""
+// vaultSettingFields are the rows of the settings stored authenticated in the encrypted vault's settings.age,
+// never in config.yaml: the update behaviour, the idle timeout, the admin session timeout, and the log
+// retention. They are editable only while this run holds the vault unlocked, the only time the stored values
+// can be read and a change written; otherwise they are read-only rows that name why. An untrusted settings.age
+// shows the safe values with a warning, and saving replaces it.
+func (m *Model) vaultSettingFields() []field {
+	m.settingsShown = nil
 	reason := ""
 	switch m.vaultState() {
 	case vault.StateUnlocked:
-		behaviour, err := m.secrets.Vault().UpdateBehaviour()
-		if err != nil && !errors.Is(err, vault.ErrSettingsUntrusted) {
+		settings, err := m.secrets.Vault().Settings()
+		untrusted := errors.Is(err, vault.ErrSettingsUntrusted)
+		if err != nil && !untrusted {
 			reason = m.redactor.Apply(err.Error())
 			break
 		}
-		m.handoverShown = string(behaviour)
-		f := choiceField(updateBehaviourLabel, []string{string(vault.UpdateHandover), string(vault.UpdateLock)},
-			string(behaviour))
-		f.hint, f.detail = tr(tUpdateBehaviourHint), tr(tUpdateBehaviourDetail)
-		if err != nil {
-			f.hint = tr(tUpdateBehaviourUntrustedHint)
-			f.detail = tr(tUpdateBehaviourUntrustedDetail, tr(tUpdateBehaviourDetail))
+		m.settingsShown = &settings
+		behaviour := choiceField(updateBehaviourLabel, []string{string(vault.UpdateHandover), string(vault.UpdateLock)},
+			string(settings.Update)).withHint(tr(tUpdateBehaviourHint)).withDetail(tr(tUpdateBehaviourDetail))
+		idle := textField(idleTimeoutLabel, vault.FormatTimeout(settings.IdleTimeout), false).
+			withHint(tr(tVaultIdleHint)).withDetail(tr(tVaultIdleDetail))
+		admin := textField(adminTimeoutLabel, vault.FormatTimeout(settings.AdminTimeout), false).
+			withHint(tr(tVaultAdminHint)).withDetail(tr(tVaultAdminDetail))
+		retention := textField(logRetentionLabel, strconv.Itoa(settings.RetentionDays), false).
+			withHint(tr(tVaultRetentionHint)).withDetail(tr(tVaultRetentionDetail))
+		rows := []*field{&behaviour, &idle, &admin, &retention}
+		if untrusted {
+			for _, f := range rows {
+				f.hint = tr(tVaultSettingsUntrustedHint)
+				f.detail = tr(tVaultSettingsUntrustedDetail, f.detail)
+			}
 		}
-		return f
+		return []field{behaviour, idle, admin, retention}
 	case vault.StateLocked:
 		reason = tr(tVaultLockedUnlockKey)
 	default:
 		reason = tr(tVaultNeedsPassphrase)
 	}
-	return textField(updateBehaviourLabel, tr(tNotAvailable), true).withHint(reason)
+	rows := make([]field, 0, 4)
+	for _, label := range []string{updateBehaviourLabel, idleTimeoutLabel, adminTimeoutLabel, logRetentionLabel} {
+		rows = append(rows, textField(label, tr(tNotAvailable), true).withHint(reason))
+	}
+	return rows
 }
 
 // vaultActionField is one action row of the vault form: it runs at once on enter, never deferred to F2.
@@ -190,40 +210,44 @@ func (m *Model) vaultStateWarning() string {
 	return tr(tVaultStateWarning)
 }
 
-// saveVault saves the update behaviour into the vault when its row was moved, and vault.idle_timeout and
-// vault.admin_timeout into the configuration, the only rows F2 ever saves on this form; every action row
-// already ran on its own enter (see runVaultActionField).
+// saveVault writes the vault settings of the form into settings.age with one SetSettings, the only rows F2
+// saves on this form, and never touches config.yaml; every action row already ran on its own enter (see
+// runVaultActionField). Both callers reach it through requireAdmin, so it runs only inside a proven admin
+// session. Nothing is written for a value that does not parse or validate, or when nothing differs.
 func (m *Model) saveVault() tea.Cmd {
-	candidate := m.cfg.Clone()
-	candidate.Vault = config.VaultSettings{
-		IdleTimeout:  m.fieldValue("idle timeout"),
-		AdminTimeout: m.fieldValue("admin timeout"),
-	}
-	timeoutsChanged := candidate.Vault != m.cfg.Vault
-	if chosen := m.fieldValue(updateBehaviourLabel); m.handoverShown != "" && chosen != m.handoverShown {
-		if err := m.secrets.Vault().SetUpdateBehaviour(vault.UpdateBehaviour(chosen)); err != nil {
-			m.fail = m.redactor.Apply(err.Error())
-			return nil
-		}
-		m.handoverShown = chosen
-		if !timeoutsChanged {
-			// Only the vault changed; config.yaml stays exactly as it is.
-			m.clearMessages()
-			m.status = tr(tSaved)
-			return m.openVaultForm()
-		}
-	}
-	// Only the vault settings differ, so no connection changes and nothing is logged.
-	m.problems = problemState{}
-	if _, err := m.svc.SaveConfig(m.cfg, candidate, m.rev); err != nil {
-		if !m.conflicted(err) {
-			m.reportSaveError(err, "", true)
-		}
+	shown := m.settingsShown
+	if shown == nil {
 		return nil
 	}
-	m.adoptSaved(candidate)
-	// openVaultForm never clears status or fail on its own (see its comment), so a fail left over from an
-	// earlier, refused attempt on this same form has to be cleared here before it is replaced with success.
+	next := *shown
+	next.Update = vault.UpdateBehaviour(m.fieldValue(updateBehaviourLabel))
+	var err error
+	if next.IdleTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(idleTimeoutLabel))); err != nil {
+		m.fail = tr(tVaultSettingBadDuration, idleTimeoutLabel)
+		return nil
+	}
+	if next.AdminTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(adminTimeoutLabel))); err != nil {
+		m.fail = tr(tVaultSettingBadDuration, adminTimeoutLabel)
+		return nil
+	}
+	if next.RetentionDays, err = strconv.Atoi(strings.TrimSpace(m.fieldValue(logRetentionLabel))); err != nil {
+		m.fail = tr(tVaultSettingBadNumber, logRetentionLabel)
+		return nil
+	}
+	if next == *shown {
+		return nil
+	}
+	if err := next.Validate(); err != nil {
+		m.fail = m.redactor.Apply(err.Error())
+		return nil
+	}
+	if err := m.secrets.Vault().SetSettings(next); err != nil {
+		m.fail = m.redactor.Apply(err.Error())
+		return nil
+	}
+	// The admin session and the log screens read these settings, never the configuration.
+	m.RefreshAdminTimeout()
+	m.refreshLogRetention()
 	m.clearMessages()
 	m.status = tr(tSaved)
 	return m.openVaultForm()
@@ -478,6 +502,8 @@ func (m *Model) handleVaultAction(msg vaultActionMsg) tea.Cmd {
 		m.busy = ""
 	}
 
+	// Encrypting or decrypting changes which settings apply, whether or not the action then proves admin.
+	m.RefreshAdminTimeout()
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
 			m.fail = tr(tPassphraseWrong)

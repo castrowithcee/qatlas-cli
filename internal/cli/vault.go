@@ -71,9 +71,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
 			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
 			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
-			"program or locks it; Windows has no handover and always locks.\n\n" +
+			"program or locks it; Windows has no handover and always locks. 'vault settings' shows or sets\n" +
+			"the idle timeout, the admin session timeout, and the log retention.\n\n" +
 			"On Linux, macOS, and Windows 'vault unlock' hands the unlocked vault to a vault process that holds\n" +
-			"it open until it is idle for vault.idle_timeout (12h unless the configuration says otherwise),\n" +
+			"it open until it is idle for the vault's idle timeout (12h unless 'vault settings' sets another),\n" +
 			"'vault lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current\n" +
 			"process. On Windows it guards its memory less strictly than on Linux; see 'qatlas vault unlock'.\n" +
 			"ctrl+l in 'qatlas tui' unlocks and locks it the same way. Every later\n" +
@@ -117,8 +118,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Long: "Asks for the vault's passphrase on the terminal and, once it opens the vault, merges every\n" +
 			"entry that was queued in pending while it was locked. On Linux, macOS, and Windows it then starts a\n" +
 			"vault process that holds the unlocked vault in memory, detached from the terminal, so it outlives\n" +
-			"the session that started it; it locks itself after vault.idle_timeout without a read, on 'qatlas\n" +
-			"vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
+			"the session that started it; it locks itself after the idle timeout of 'vault settings' without a\n" +
+			"read, on 'qatlas vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
 			"not started a second time, and nothing is asked. Where systemd-logind would end the process at\n" +
 			"logout or remove its socket, a warning names the setting, such as 'loginctl enable-linger'.\n\n" +
 			"On Windows the process listens on a named pipe only this user can open, has no console, so closing\n" +
@@ -318,7 +319,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		"approve only this connection, repeated per connection; the default approves every open one")
 
 	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve,
-		newVaultTokenCommand(opts, reg), newVaultHandoverCommand(opts), newVaultLogsCommand(opts))
+		newVaultTokenCommand(opts, reg), newVaultHandoverCommand(opts), newVaultSettingsCommand(opts), newVaultLogsCommand(opts))
 	return cmd
 }
 
@@ -348,9 +349,9 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
 			"'vault logs stats' sums up the response sizes per tool and connection, and per MCP session the bytes\n" +
 			"of its baseline, navigation, and invokes.\n" +
-			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +
-			"an older day is removed on the next invoke, and the entry written right after names what was\n" +
-			"removed, so the cut is never mistaken for a gap.\n\n" +
+			"The log retention of 'vault settings' keeps entries for that many days, 90 unless set; an older\n" +
+			"day is removed on the next invoke, and the entry written right after names what was removed, so\n" +
+			"the cut is never mistaken for a gap.\n\n" +
 			"An approval with an agent token adds one entry per connection change it decided on, with the\n" +
 			"operation vault.approve, the connection, the kind of change as the effect (create, update, or\n" +
 			"delete), the result (success, or admin-required for a change left open), and the token's name,\n" +
@@ -370,7 +371,7 @@ func newVaultLogsVerifyCommand(opts *Options) *cobra.Command {
 			"sequence number follows the one before it and that its recorded hash is the exact previous line's\n" +
 			"SHA-256, across day boundaries. A changed or deleted entry, or a day file missing from the middle,\n" +
 			"breaks the chain there and is reported; a documented retention cut does not, since the entry\n" +
-			"written right after logs.retention_days removed something names what it removed.\n\n" +
+			"written right after the log retention removed something names what it removed.\n\n" +
 			"An entry also carries a check value, an HMAC-SHA256 of the line under a log key derived from the\n" +
 			"vault's own key, when it was written while the vault's key was at hand: by the vault process that\n" +
 			"'qatlas vault unlock' starts, or by a run that unlocked the vault itself. Every other entry, one\n" +
@@ -820,11 +821,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
 			return err
 		}
-		// The configuration the process reads its idle timeout from is checked before anything is asked.
 		if configPath, err = absConfigPath(opts); err != nil {
-			return err
-		}
-		if _, err := vaultIdleTimeout(configPath, reg); err != nil {
 			return err
 		}
 	}
@@ -844,6 +841,9 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 			return &UsageError{err}
 		}
 		return err
+	}
+	if _, err := vault.EffectiveSettings(v); errors.Is(err, vault.ErrSettingsUntrusted) {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", err)
 	}
 	mergedText := fmt.Sprintf("merged %d pending %s", merged, plural(merged, "entry", "entries"))
 	notice := pendingApprovalNotice(opts, reg, v)
@@ -989,27 +989,6 @@ func absConfigPath(opts *Options) (string, error) {
 		return "", err
 	}
 	return filepath.Abs(path)
-}
-
-// vaultIdleTimeout returns vault.idle_timeout of the configuration at path, the default when there is no
-// configuration file yet.
-func vaultIdleTimeout(path string, reg *capability.Registry) (time.Duration, error) {
-	idle, _, err := vaultProcessSettings(path, reg)
-	return idle, err
-}
-
-// vaultProcessSettings returns what a vault process takes from the configuration at path when it starts:
-// vault.idle_timeout and logs.retention_days, each its default when there is no configuration file yet.
-func vaultProcessSettings(path string, reg *capability.Registry) (idle time.Duration, retentionDays int, err error) {
-	cfg, err := config.Load(path, reg)
-	var missing *config.NotFoundError
-	if errors.As(err, &missing) {
-		return config.DefaultVaultIdleTimeout, config.DefaultLogRetentionDays, nil
-	}
-	if err != nil {
-		return 0, 0, classifyUserError(err)
-	}
-	return cfg.VaultIdleTimeout(), cfg.LogRetentionDays(), nil
 }
 
 func formatLocksAt(t time.Time) string {
@@ -1490,7 +1469,9 @@ func approvalOrigins(ctx context.Context, v *vault.Vault, configPath string, cfg
 	if info, err := os.Stat(configPath); err == nil {
 		modified = info.ModTime()
 	}
-	return approval.Origins(v.Dir(), checker, open, modified, time.Now(), cfg.LogRetentionDays())
+	// An untrusted settings.age reads as never truncating, which widens the window rather than cutting it.
+	settings, _ := vault.EffectiveSettings(v)
+	return approval.Origins(v.Dir(), checker, open, modified, time.Now(), settings.RetentionDays)
 }
 
 // approvalFieldDocument is one changed field: before and after for a single value or a switch between a mode

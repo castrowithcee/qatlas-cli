@@ -456,85 +456,176 @@ func TestVaultDecryptConfirmationWarns(t *testing.T) {
 	}
 }
 
-// vault.idle_timeout and vault.admin_timeout save with F2 through the same validation every other setting
-// uses, survive a reload, and a refused value keeps the form open with what was typed.
-func TestVaultSectionSavesTimeouts(t *testing.T) {
+// unlockedSettingsModel is a model over an encrypted vault this run holds unlocked, with an admin session
+// already started, so F2 saves without asking for the passphrase.
+func unlockedSettingsModel(t *testing.T) (*Model, *config.Store) {
+	t.Helper()
 	dir := filepath.Join(t.TempDir(), "qatlas")
-	path := filepath.Join(dir, "config.yaml")
-	store := newTestStore(t, path)
-	secrets, _ := newVaultResolver(t, dir)
-	m, err := buildModel(store, nil, secrets, nil)
-	if err != nil {
-		t.Fatalf("New() = %v", err)
-	}
+	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
+	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
+	m.startAdminSession()
+	return m, store
+}
+
+// The idle timeout, the admin timeout, and the log retention are rows of the vault form that save with F2 into
+// settings.age, all together with the update behaviour, never into config.yaml; a refused value keeps the form
+// open with what was typed and writes nothing.
+func TestVaultSectionSavesSettingsInTheVault(t *testing.T) {
+	m, store := unlockedSettingsModel(t)
+	configBefore, err := os.ReadFile(store.Path())
+	mustNoError(t, err)
+	settings := filepath.Join(filepath.Dir(store.Path()), vault.DirName, "settings.age")
 	openVaultSection(t, m)
 
+	for label, want := range map[string]string{"idle timeout": "12h", "admin timeout": "10m", "log retention": "90"} {
+		f := m.field(label)
+		if f == nil || f.readOnly || f.value() != want {
+			t.Fatalf("row %q = %+v, want an editable row with %q", label, f, want)
+		}
+	}
+
 	focusRole(t, m, "idle timeout")
+	clearField(t, m)
 	typeText(t, m, "not a duration")
 	press(t, m, "f2")
-	if m.fail != "1 problem; nothing was saved" || len(m.problems.rows["idle timeout"]) != 1 {
-		t.Fatalf("error = %q, want the problem under its row", m.fail)
+	if !strings.Contains(m.fail, "idle timeout") || m.screen != screenForm ||
+		m.fieldValue("idle timeout") != "not a duration" {
+		t.Fatalf("refused value: fail %q screen %v value %q, want the form kept as typed", m.fail, m.screen,
+			m.fieldValue("idle timeout"))
 	}
-	assertNoLocation(t, screenOf(m))
-	if !strings.Contains(screenOf(m), "[!] ") || !strings.Contains(screenOf(m), "such as 15m") {
-		t.Errorf("no cause and resolution under the row:\n%s", screenOf(m))
-	}
-	if m.screen != screenForm || m.fieldValue("idle timeout") != "not a duration" {
-		t.Fatalf("a refused value did not keep the form open with what was typed: screen %v value %q",
-			m.screen, m.fieldValue("idle timeout"))
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Fatalf("a refused value wrote settings.age: %v", err)
 	}
 
 	clearField(t, m)
 	typeText(t, m, "45m")
 	focusRole(t, m, "admin timeout")
+	clearField(t, m)
+	typeText(t, m, "0")
+	focusRole(t, m, "log retention")
+	clearField(t, m)
 	typeText(t, m, "0")
 	press(t, m, "f2")
-	if m.fail != "" {
-		t.Fatalf("saving valid timeouts reported %q", m.fail)
+	if m.fail == "" || m.screen != screenForm {
+		t.Fatalf("a retention of 0 was accepted: fail %q", m.fail)
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Fatalf("a refused value wrote settings.age: %v", err)
 	}
 
-	loaded, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() = %v", err)
+	clearField(t, m)
+	typeText(t, m, "7")
+	press(t, m, "f2")
+	if m.fail != "" {
+		t.Fatalf("saving valid settings reported %q", m.fail)
 	}
-	if loaded.VaultIdleTimeout() != 45*time.Minute {
-		t.Errorf("VaultIdleTimeout() = %v, want 45m", loaded.VaultIdleTimeout())
+	got, err := m.secrets.Vault().Settings()
+	want := vault.DefaultSettings()
+	want.IdleTimeout, want.AdminTimeout, want.RetentionDays = 45*time.Minute, 0, 7
+	if err != nil || got != want {
+		t.Errorf("Settings() = %+v, %v, want %+v", got, err, want)
 	}
-	if loaded.VaultAdminTimeout() != 0 {
-		t.Errorf("VaultAdminTimeout() = %v, want 0, not the default", loaded.VaultAdminTimeout())
+	if m.fieldValue("idle timeout") != "45m" || m.fieldValue("admin timeout") != "0s" ||
+		m.fieldValue("log retention") != "7" {
+		t.Errorf("the form shows %q, %q, %q after saving", m.fieldValue("idle timeout"),
+			m.fieldValue("admin timeout"), m.fieldValue("log retention"))
+	}
+	if m.adminTimeoutValue != 0 || m.logRetention != 7 {
+		t.Errorf("refresh hooks: admin timeout %v, log retention %d, want 0 and 7", m.adminTimeoutValue, m.logRetention)
+	}
+	if configAfter, _ := os.ReadFile(store.Path()); string(configAfter) != string(configBefore) {
+		t.Errorf("config.yaml changed:\n%s", configAfter)
 	}
 }
 
-// A change to the vault's timeouts is a change like any other: esc asks before it is lost, and saving
-// through that question goes through the same validation as F2.
-func TestVaultSectionLeaveAsksBeforeLosingTimeoutChanges(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
-	path := filepath.Join(dir, "config.yaml")
-	store := newTestStore(t, path)
-	secrets, _ := newVaultResolver(t, dir)
-	m, err := buildModel(store, nil, secrets, nil)
-	if err != nil {
-		t.Fatalf("New() = %v", err)
-	}
+// A settings change is a change like any other: esc asks before it is lost, and saving through that
+// question writes the same settings.age as F2.
+func TestVaultSectionLeaveAsksBeforeLosingSettingChanges(t *testing.T) {
+	m, store := unlockedSettingsModel(t)
 	openVaultSection(t, m)
 
 	focusRole(t, m, "idle timeout")
+	clearField(t, m)
 	typeText(t, m, "2h")
 	press(t, m, "esc")
 	if m.screen != screenLeave {
-		t.Fatalf("esc with an unsaved timeout change = screen %v, want the leave question", m.screen)
+		t.Fatalf("esc with an unsaved change = screen %v, want the leave question", m.screen)
 	}
 	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving from the leave question reported %q", m.fail)
 	}
-
-	loaded, err := store.Load()
-	if err != nil {
-		t.Fatalf("Load() = %v", err)
+	got, err := m.secrets.Vault().Settings()
+	if err != nil || got.IdleTimeout != 2*time.Hour {
+		t.Errorf("Settings() = %+v, %v, want an idle timeout of 2h", got, err)
 	}
-	if loaded.VaultIdleTimeout() != 2*time.Hour {
-		t.Errorf("VaultIdleTimeout() = %v, want 2h", loaded.VaultIdleTimeout())
+	loaded, err := store.Load()
+	mustNoError(t, err)
+	if loaded.Vault.IdleTimeout != "" {
+		t.Errorf("config.yaml Vault.IdleTimeout = %q, want it untouched", loaded.Vault.IdleTimeout)
+	}
+}
+
+// Without a proven admin session F2 asks for the passphrase first and writes nothing until it is right.
+func TestVaultSectionSettingsSaveNeedsTheAdminSession(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
+	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
+	settings := filepath.Join(dir, vault.DirName, "settings.age")
+	openVaultSection(t, m)
+
+	focusRole(t, m, "log retention")
+	clearField(t, m)
+	typeText(t, m, "30")
+	press(t, m, "f2")
+	if m.screen != screenAdminAuth {
+		t.Fatalf("F2 without an admin session = screen %v, want the admin dialog", m.screen)
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Fatalf("settings.age exists before the passphrase: %v", err)
+	}
+	typeText(t, m, "hunter2")
+	pump(t, m, "enter")
+	got, err := m.secrets.Vault().Settings()
+	if m.fail != "" || err != nil || got.RetentionDays != 30 {
+		t.Errorf("after the passphrase: fail %q, Settings() = %+v, %v, want retention 30", m.fail, got, err)
+	}
+}
+
+// An untrusted settings.age shows the safe values with a warning hint on every row; saving needs a positive
+// retention, since the safe one (never truncate) is not storable, and then replaces the file.
+func TestVaultSectionUntrustedSettingsShowSafeValues(t *testing.T) {
+	m, store := unlockedSettingsModel(t)
+	settings := filepath.Join(filepath.Dir(store.Path()), vault.DirName, "settings.age")
+	mustNoError(t, os.WriteFile(settings, []byte("not an age file"), 0o600))
+	openVaultSection(t, m)
+
+	for _, label := range []string{"update behaviour", "idle timeout", "admin timeout", "log retention"} {
+		f := m.field(label)
+		if f == nil || f.readOnly || !strings.Contains(f.hint, "settings.age is not understood") {
+			t.Errorf("row %q = %+v, want an editable row with the warning hint", label, f)
+		}
+	}
+	if m.fieldValue("update behaviour") != "lock" || m.fieldValue("admin timeout") != "0s" ||
+		m.fieldValue("log retention") != "0" {
+		t.Errorf("safe values shown: %q, %q, %q", m.fieldValue("update behaviour"), m.fieldValue("admin timeout"),
+			m.fieldValue("log retention"))
+	}
+
+	focusRole(t, m, "idle timeout")
+	clearField(t, m)
+	typeText(t, m, "1h")
+	press(t, m, "f2")
+	if m.fail == "" {
+		t.Fatal("replacing an untrusted settings.age without a retention was accepted")
+	}
+	focusRole(t, m, "log retention")
+	clearField(t, m)
+	typeText(t, m, "30")
+	press(t, m, "f2")
+	got, err := m.secrets.Vault().Settings()
+	if m.fail != "" || err != nil || got.IdleTimeout != time.Hour || got.RetentionDays != 30 || got.Update != vault.UpdateLock {
+		t.Errorf("after replacing: fail %q, Settings() = %+v, %v", m.fail, got, err)
 	}
 }
 
@@ -628,19 +719,6 @@ func TestVaultSectionSavesUpdateBehaviourInTheVault(t *testing.T) {
 	if configAfter, _ := os.ReadFile(store.Path()); string(configAfter) != string(configBefore) {
 		t.Errorf("config.yaml changed:\n%s", configAfter)
 	}
-
-	// Timeouts keep saving into config.yaml beside it.
-	focusRole(t, m, "idle timeout")
-	typeText(t, m, "45m")
-	press(t, m, "f2")
-	loaded, err := store.Load()
-	mustNoError(t, err)
-	if loaded.VaultIdleTimeout() != 45*time.Minute {
-		t.Errorf("VaultIdleTimeout() = %v, want 45m", loaded.VaultIdleTimeout())
-	}
-	if got, _ := m.secrets.Vault().UpdateBehaviour(); got != vault.UpdateLock {
-		t.Errorf("saving a timeout changed the update behaviour to %q", got)
-	}
 }
 
 // Without an unlocked, encrypted vault the row cannot be changed and names why.
@@ -663,9 +741,11 @@ func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			openVaultSection(t, c.m)
-			f := c.m.field("update behaviour")
-			if f == nil || !f.readOnly || f.kind == fieldChoice || !strings.Contains(f.hint, c.reason) {
-				t.Fatalf("update behaviour row = %+v, want a read-only row that names %q", f, c.reason)
+			for _, label := range []string{"update behaviour", "idle timeout", "admin timeout", "log retention"} {
+				f := c.m.field(label)
+				if f == nil || !f.readOnly || f.kind == fieldChoice || !strings.Contains(f.hint, c.reason) {
+					t.Fatalf("%s row = %+v, want a read-only row that names %q", label, f, c.reason)
+				}
 			}
 			press(t, c.m, "right", "f2")
 			if _, err := os.Stat(filepath.Join(filepath.Dir(c.m.store.Path()), vault.DirName, "settings.age")); !os.IsNotExist(err) {

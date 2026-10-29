@@ -306,7 +306,7 @@ func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, e
 		}
 	}
 	if plan.Kind == RenameConnection {
-		recorder := connlog.NewRecorder(s.surface, s.store.Path(), plan.cfg.LogRetentionDays(), v, s.processOK)
+		recorder := connlog.NewRecorder(s.surface, s.store.Path(), v, s.processOK)
 		if err := recorder.RecordRename(plan.Old, plan.New, plan.ID); err != nil {
 			res.Warnings = append(res.Warnings, s.redact("warning: "+err.Error()))
 		}

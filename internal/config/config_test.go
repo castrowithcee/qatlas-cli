@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -108,23 +107,15 @@ func TestVaultCredentialTypeAndSecretStoreDefault(t *testing.T) {
 	}
 }
 
-// vault.idle_timeout is a positive Go duration, 12h when it is left out, and survives a save; anything else
-// is refused by its key.
+// vault.idle_timeout has no effect and is accepted only so an existing configuration loads: a positive Go
+// duration or nothing, and it survives a save; anything else is refused by its key.
 func TestVaultIdleTimeout(t *testing.T) {
-	cfg, err := Decode(strings.NewReader(minimal), testProviders)
-	if err != nil {
-		t.Fatalf("Decode() = %v", err)
-	}
-	if got := cfg.VaultIdleTimeout(); got != 12*time.Hour {
-		t.Errorf("VaultIdleTimeout() without a setting = %v, want 12h", got)
-	}
-
-	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  idle_timeout: 90m\n"), testProviders)
+	cfg, err := Decode(strings.NewReader(minimal+"vault:\n  idle_timeout: 90m\n"), testProviders)
 	if err != nil {
 		t.Fatalf("Decode() with idle_timeout = %v", err)
 	}
-	if got := cfg.VaultIdleTimeout(); got != 90*time.Minute {
-		t.Errorf("VaultIdleTimeout() = %v, want 90m", got)
+	if cfg.Vault.IdleTimeout != "90m" {
+		t.Errorf("Vault.IdleTimeout = %q, want 90m", cfg.Vault.IdleTimeout)
 	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil || !strings.Contains(string(data), "vault:\n    idle_timeout: 90m") {
@@ -142,35 +133,17 @@ func TestVaultIdleTimeout(t *testing.T) {
 	}
 }
 
-// vault.admin_timeout is a Go duration, 10m when it is left out, "0" is a valid value of its own (not a
-// fallback trigger, unlike idle_timeout), and anything negative or unparsable is refused by its key.
+// vault.admin_timeout has no effect and is accepted only so an existing configuration loads: a Go duration
+// that is not negative, "0" included, or nothing; anything else is refused by its key.
 func TestVaultAdminTimeout(t *testing.T) {
-	cfg, err := Decode(strings.NewReader(minimal), testProviders)
-	if err != nil {
-		t.Fatalf("Decode() = %v", err)
-	}
-	if got := cfg.VaultAdminTimeout(); got != 10*time.Minute {
-		t.Errorf("VaultAdminTimeout() without a setting = %v, want 10m", got)
-	}
-
-	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: 5m\n"), testProviders)
-	if err != nil {
-		t.Fatalf("Decode() with admin_timeout = %v", err)
-	}
-	if got := cfg.VaultAdminTimeout(); got != 5*time.Minute {
-		t.Errorf("VaultAdminTimeout() = %v, want 5m", got)
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil || !strings.Contains(string(data), "admin_timeout: 5m") {
-		t.Errorf("the setting does not survive encoding: %s, %v", data, err)
-	}
-
-	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: \"0\"\n"), testProviders)
-	if err != nil {
-		t.Fatalf("Decode() with admin_timeout 0 = %v", err)
-	}
-	if got := cfg.VaultAdminTimeout(); got != 0 {
-		t.Errorf("VaultAdminTimeout() with 0 = %v, want 0, not the default", got)
+	for _, value := range []string{"5m", "0"} {
+		cfg, err := Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: \""+value+"\"\n"), testProviders)
+		if err != nil {
+			t.Fatalf("Decode() with admin_timeout %q = %v", value, err)
+		}
+		if cfg.Vault.AdminTimeout != value {
+			t.Errorf("Vault.AdminTimeout = %q, want %q", cfg.Vault.AdminTimeout, value)
+		}
 	}
 
 	for _, value := range []string{"-1h", "-1s", "twelve minutes", "1d"} {
@@ -194,23 +167,15 @@ func TestCloneKeepsVaultSettings(t *testing.T) {
 	}
 }
 
-// logs.retention_days is a positive integer, DefaultLogRetentionDays (90) when it is left out, and survives
-// both a save and a Clone; anything negative is refused by its key.
+// logs.retention_days is still accepted, so an existing configuration loads, and survives both a save and a
+// Clone; anything negative is refused by its key.
 func TestLogRetentionDays(t *testing.T) {
-	cfg, err := Decode(strings.NewReader(minimal), testProviders)
-	if err != nil {
-		t.Fatalf("Decode() = %v", err)
-	}
-	if got := cfg.LogRetentionDays(); got != DefaultLogRetentionDays {
-		t.Errorf("LogRetentionDays() without a setting = %d, want %d", got, DefaultLogRetentionDays)
-	}
-
-	cfg, err = Decode(strings.NewReader(minimal+"logs:\n  retention_days: 30\n"), testProviders)
+	cfg, err := Decode(strings.NewReader(minimal+"logs:\n  retention_days: 30\n"), testProviders)
 	if err != nil {
 		t.Fatalf("Decode() with retention_days = %v", err)
 	}
-	if got := cfg.LogRetentionDays(); got != 30 {
-		t.Errorf("LogRetentionDays() = %d, want 30", got)
+	if cfg.Logs.RetentionDays != 30 {
+		t.Errorf("Logs.RetentionDays = %d, want 30", cfg.Logs.RetentionDays)
 	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil || !strings.Contains(string(data), "logs:\n    retention_days: 30") {

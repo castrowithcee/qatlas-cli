@@ -104,7 +104,7 @@ func TestConnectionTestButtonRedactsError(t *testing.T) {
 		red.Add(testerCanarySecret)
 		return "", fmt.Errorf("auth failed with token %s", testerCanarySecret)
 	})
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tester)
+	s, err := New(testOverview(), nil, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tester)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

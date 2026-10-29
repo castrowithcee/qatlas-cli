@@ -20,8 +20,7 @@ const syntheticSecret = "sk-test-synthetic-0123456789"
 // never a real credential, only a fixed value tests type back to prove the check that guards it.
 const syntheticPassphrase = "correct-horse-battery-staple-synthetic"
 
-// defaultTestAdminTimeout matches config.DefaultVaultAdminTimeout without this package importing the
-// config package for one constant.
+// defaultTestAdminTimeout matches vault.DefaultAdminTimeout, the session time of a vault without stored settings.
 const defaultTestAdminTimeout = 10 * time.Minute
 
 func testOverview() Overview {
@@ -40,10 +39,11 @@ func newTestServer(t *testing.T) *Server {
 
 func newTestServerWithVault(t *testing.T, v *vault.Vault, adminTimeout time.Duration) *Server {
 	t.Helper()
-	s, err := New(testOverview(), v, adminTimeout, nil, nil, nil, nil)
+	s, err := New(testOverview(), v, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	s.adminTimeoutSource = func() time.Duration { return adminTimeout }
 	t.Cleanup(s.close)
 	return s
 }
@@ -352,7 +352,7 @@ func TestNoExternalAssetsInOverview(t *testing.T) {
 // TestServerServesOverRealLoopback proves the whole thing end to end: a real 127.0.0.1 socket, coupling
 // through it, and ctx cancellation actually closing the listener.
 func TestServerServesOverRealLoopback(t *testing.T) {
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, nil, nil, nil, nil)
+	s, err := New(testOverview(), nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -401,7 +401,7 @@ func TestOverviewShowsConnectionState(t *testing.T) {
 		{Name: "on", Provider: "github", Effects: "read", Tools: "all", State: "active"},
 		{Name: "off", Provider: "github", Effects: "read", Tools: "all", State: "disabled"},
 	}
-	s, err := New(overview, nil, defaultTestAdminTimeout, nil, nil, nil, nil)
+	s, err := New(overview, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -427,7 +427,7 @@ func TestOverviewShowsConnectionLimit(t *testing.T) {
 		{Name: "timed", Provider: "github", Effects: "read", Tools: "all", State: "disabled",
 			ActiveUntil: "2030-01-02T10:00:00Z"},
 	}
-	s, err := New(overview, nil, defaultTestAdminTimeout, nil, nil, nil, nil)
+	s, err := New(overview, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

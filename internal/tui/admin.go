@@ -1,10 +1,11 @@
 // The admin session that gates every managing action of the editor behind the vault's passphrase, once the
 // vault is encrypted. The editor itself always opens read-only; the first managing action of this run asks
 // for the passphrase in a masked screen of its own, never on this process's terminal (see tuiSecrets in
-// internal/cli), and a right answer keeps only this window in "admin mode" until vault.admin_timeout passes
-// without a key press. Every other window, and the vault process a Linux, macOS, or Windows build may hold unlocked outside
-// this run, never shares it: the passphrase is the proof the session rests on, not merely the vault's own
-// unlocked state (see vault.VerifyPassphrase, which checks it without relying on either).
+// internal/cli), and a right answer keeps only this window in "admin mode" until the admin session time
+// stored in the vault's settings passes without a key press. Every other window, and the vault process a
+// Linux, macOS, or Windows build may hold unlocked outside this run, never shares it: the passphrase is the
+// proof the session rests on, not merely the vault's own unlocked state (see vault.VerifyPassphrase, which
+// checks it without relying on either).
 package tui
 
 import (
@@ -184,9 +185,10 @@ func (m *Model) adminAuthPrompt() promptDialog {
 }
 
 // adminSessionHint says how long this window's admin session will stay open once the passphrase proves it,
-// rounded to minutes, or, for vault.admin_timeout: 0, that it will not stay open at all.
+// rounded to minutes, or, for an admin session time of 0, that it will not stay open at all. It is only
+// asked for a vault this process holds unlocked, whose stored time is known; a locked one has its own text.
 func (m *Model) adminSessionHint() string {
-	timeout := m.cfg.VaultAdminTimeout()
+	timeout := m.adminTimeout()
 	if timeout <= 0 {
 		return tr(tAdminTimeoutZero)
 	}
@@ -199,12 +201,34 @@ func (m *Model) adminSessionHint() string {
 // on its own, such as the vault form's "change passphrase", "turn off encryption", and "migrate
 // credentials.yaml" (see handleVaultAction and handleVaultPassphraseVerified in vaultsettings.go): each of
 // those is every bit as much a proof of admin as answering requireAdmin's own dialog, and asking twice in the
-// same breath would only be worse for no more security. With vault.admin_timeout: 0 the session keeps no
-// deadline, so adminSessionActive is never true and every next managing action asks again.
-func (m *Model) startAdminSession() { m.admin.Grant(m.cfg.VaultAdminTimeout()) }
+// same breath would only be worse for no more security. With an admin session time of 0 the session keeps no
+// deadline, so adminSessionActive is never true and every next managing action asks again. The time is
+// read again first: the proof may just have unlocked the vault, which is what makes the stored time readable.
+func (m *Model) startAdminSession() {
+	m.RefreshAdminTimeout()
+	m.admin.Grant(m.adminTimeout())
+}
 
-// touchAdminSession renews this window's idle deadline to vault.admin_timeout from now.
-func (m *Model) touchAdminSession() { m.admin.Touch(m.cfg.VaultAdminTimeout()) }
+// touchAdminSession renews this window's idle deadline to the admin session time from now.
+func (m *Model) touchAdminSession() { m.admin.Touch(m.adminTimeout()) }
+
+// adminTimeout is the admin session time of this run's vault, cached by RefreshAdminTimeout so that drawing
+// and key handling never read settings.age. A model that never refreshed reads it once.
+func (m *Model) adminTimeout() time.Duration {
+	if !m.adminTimeoutRead {
+		m.RefreshAdminTimeout()
+	}
+	return m.adminTimeoutValue
+}
+
+// RefreshAdminTimeout reads the admin session time from the effective settings of this run's vault (see
+// manage.AdminTimeout) and caches it. Call it whenever the vault's state or its settings.age may have
+// changed: after an unlock or lock, a proven passphrase, and a saved change of the settings. The time is
+// never taken from the configuration file. A locked vault, which cannot read settings.age, or an untrusted
+// settings.age gives 0: every managing action asks for the passphrase.
+func (m *Model) RefreshAdminTimeout() {
+	m.adminTimeoutValue, m.adminTimeoutRead = manage.AdminTimeout(m.secrets.Vault()), true
+}
 
 // adminSessionActive reports whether this window's admin session is active right now.
 func (m *Model) adminSessionActive() bool { return m.admin.Active() }
@@ -225,6 +249,6 @@ func (m *Model) endAdminSession() { m.admin.End() }
 func (m *Model) AdminSessionActive() bool { return m.adminSessionActive() }
 
 // AdminSessionRemaining reports how long this window's admin session stays active, or zero when there is
-// none right now (also true for vault.admin_timeout: 0, which never keeps one at all). Rounding it to
+// none right now (also true for an admin session time of 0, which never keeps one at all). Rounding it to
 // minutes for a header belongs to that header, not here.
 func (m *Model) AdminSessionRemaining() time.Duration { return m.admin.Remaining() }

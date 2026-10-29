@@ -58,7 +58,6 @@ var problemRows = map[string]map[string]string{
 		"files.read": filesReadLabel, "files.write": filesWriteLabel,
 	},
 	config.SectionDefaults: {"": "domain"},
-	config.SectionVault:    {"idle_timeout": "idle timeout", "admin_timeout": "admin timeout"},
 }
 
 // problemCodeRows places the problems of a connection that name no field, by the rule they report.

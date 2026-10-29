@@ -86,10 +86,10 @@ func NewServer(key age.Identity, secrets map[string]map[string]string, bindings 
 }
 
 // KeepLog makes the server the writer of the invocation log below vaultDir, the vault directory it holds
-// unlocked, which keeps the entries of retentionDays days: every log request is signed with the log key
-// and appended under the log's own lock, through the same invokelog.Logger any other writer uses. Both
-// values come from the configuration the process was started with, never from a request. A server
-// without KeepLog refuses every log request. Call it before Serve.
+// unlocked, which keeps the entries of retentionDays days (zero keeps all): every log request is signed
+// with the log key and appended under the log's own lock, through the same invokelog.Logger any other writer
+// uses. Both values come from the vault the process was started for, never from a request. A server without
+// KeepLog refuses every log request. Call it before Serve.
 func (s *Server) KeepLog(vaultDir string, retentionDays int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

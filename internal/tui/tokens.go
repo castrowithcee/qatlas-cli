@@ -112,11 +112,11 @@ func (m *Model) tokenValue(name string) string {
 }
 
 // tokenValueShown reports whether the detail screen draws the token's value: only once s asked for it, and
-// only while this window's admin session lasts. With vault.admin_timeout: 0 there never is a session to
+// only while this window's admin session lasts. With an admin session time of 0 there never is a session to
 // last; the passphrase s just asked for is the proof then, and the value stays shown until s hides it or
 // the detail screen is left.
 func (m *Model) tokenValueShown() bool {
-	return m.tokenReveal && (m.adminSessionActive() || m.cfg.VaultAdminTimeout() <= 0)
+	return m.tokenReveal && (m.adminSessionActive() || m.adminTimeout() <= 0)
 }
 
 // tokenWarning is the short warning the list shows behind a token's name, symbol and words together so it

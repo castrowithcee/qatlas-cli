@@ -56,9 +56,8 @@ func (e *mcpExchange) classify(message mcpMessage) {
 type mcpCall struct {
 	// core holds the fields the application core logged for a qatlas.invoke that reached it.
 	core *invokelog.Fields
-	// dir and retention locate the log once the configuration was loaded; dir is empty before.
-	dir       string
-	retention int
+	// dir locates the log once the configuration was loaded; it is empty before.
+	dir string
 }
 
 // Append implements invokelog.Writer: the core hands over its entry, which is appended once the response is
@@ -124,26 +123,23 @@ func (s *mcpServer) appendEntry(ex *mcpExchange, call *mcpCall, fields invokelog
 	fields.Session, fields.ReqBytes, fields.RespBytes = s.session, &req, resp
 
 	var dir string
-	var retention int
 	if call != nil && call.dir != "" {
-		dir, retention = call.dir, call.retention
+		dir = call.dir
 	} else {
-		// Without a configuration there is no retention to apply, and an entry under a default one could
-		// delete days the configuration keeps, so the exchange stays unlogged.
+		// Without a loadable configuration the exchange stays unlogged, as it always did.
 		path, err := config.Path(s.opts.Config)
 		if err != nil {
 			return
 		}
-		cfg, err := config.Load(path, s.registry)
-		if err != nil {
+		if _, err := config.Load(path, s.registry); err != nil {
 			return
 		}
-		dir, retention = invokeLogDir(path), cfg.LogRetentionDays()
+		dir = invokeLogDir(path)
 	}
 	// The log is appended to without holding any lock of the server but the one that guards the resolver:
 	// an append takes a file lock and may ask the vault process.
 	s.coreMu.Lock()
-	writer := newInvokeLogWriter(s.opts, dir, retention)
+	writer := newInvokeLogWriter(s.opts, dir)
 	s.coreMu.Unlock()
 	if warning := application.InvokeLogWarning(writer.Append(fields)); warning != "" {
 		s.writeAudit([]byte(warning))

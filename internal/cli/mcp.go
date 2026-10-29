@@ -680,12 +680,12 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 		projects = s.sessionProjects(ctx)
 	}
 	s.coreMu.Lock()
-	core, cfg, configPath, err := loadCore(s.opts, s.registry, name == "qatlas.invoke")
+	core, _, configPath, err := loadCore(s.opts, s.registry, name == "qatlas.invoke")
 	s.coreMu.Unlock()
 	if err != nil {
 		return nil, nil, err
 	}
-	call.dir, call.retention = invokeLogDir(configPath), cfg.LogRetentionDays()
+	call.dir = invokeLogDir(configPath)
 	if name == "qatlas.invoke" {
 		// The core hands its entry to call, which the server appends once the response is written.
 		core.SetInvokeLog(call, "mcp", client)

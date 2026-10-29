@@ -118,11 +118,11 @@ type Server struct {
 	// vault is this run's vault, or nil when none is configured. The admin approval checks its live state
 	// through it and never resolves or caches a secret of its own.
 	vault *vault.Vault
-	// adminTimeout is vault.admin_timeout: how long an admin approval stays active without activity of the
-	// coupled session, or 0, which means an approval only ever covers exactly the next mutation.
-	adminTimeout time.Duration
-	// admin is the admin approval: a session for adminTimeout > 0, or, for 0, a one-shot approval good for
-	// exactly the next mutation withAdminGuard lets through. Guarded by mu.
+	// adminTimeoutSource, when set, replaces the vault's admin session time, so a test can pick it without
+	// storing it. A run never sets it; see adminTimeout.
+	adminTimeoutSource func() time.Duration
+	// admin is the admin approval: a session for an admin session time > 0, or, for 0, a one-shot approval
+	// good for exactly the next mutation withAdminGuard lets through. Guarded by mu.
 	admin manage.AdminSession
 
 	// writeMu serializes every mutation this run's coupled session may make to config, keyring, or vault, so
@@ -146,8 +146,9 @@ type Server struct {
 
 // New starts listening on 127.0.0.1:0 (an OS-assigned port on the IPv4 loopback interface only) and
 // returns a server ready to run. overview is shown to the browser that redeems the printed URL's token. v is
-// this run's vault, or nil when none is configured; adminTimeout is vault.admin_timeout, read once at
-// startup exactly like every other vault-facing setting this run uses.
+// this run's vault, or nil when none is configured. How long an admin approval stays active is the admin
+// session time of that vault's settings (see adminTimeout), read each time the approval is granted, renewed
+// or spent, never from the configuration file.
 //
 // svc and secrets back the credential forms (see credential.go): svc loads and saves the configuration
 // file this run uses and completes every write, and secrets is the same resolver the rest of this run
@@ -159,7 +160,7 @@ type Server struct {
 // tester runs the connection test the result page's "Test this connection" button offers (see
 // connection.go and internal/cli/web.go's own connectionTester); nil leaves the button unusable without
 // affecting anything else this run serves.
-func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *manage.Service,
+func New(overview Overview, v *vault.Vault, svc *manage.Service,
 	secrets *secret.Resolver, redactor *redact.Redactor, tester Tester) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -181,19 +182,18 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *man
 		return nil, err
 	}
 	s := &Server{
-		listener:     listener,
-		addr:         listener.Addr().String(),
-		tmpl:         tmpl,
-		credTmpl:     credTmpl,
-		now:          time.Now,
-		token:        token,
-		overview:     overview,
-		vault:        v,
-		adminTimeout: adminTimeout,
-		svc:          svc,
-		secrets:      secrets,
-		redactor:     redactor,
-		tester:       tester,
+		listener: listener,
+		addr:     listener.Addr().String(),
+		tmpl:     tmpl,
+		credTmpl: credTmpl,
+		now:      time.Now,
+		token:    token,
+		overview: overview,
+		vault:    v,
+		svc:      svc,
+		secrets:  secrets,
+		redactor: redactor,
+		tester:   tester,
 	}
 	s.admin = manage.NewAdminSession(true, func() time.Time { return s.now() })
 	s.tokenAt = s.now()

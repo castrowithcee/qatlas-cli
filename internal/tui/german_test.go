@@ -122,7 +122,7 @@ func vaultGermanScreens() []germanScreen {
 			return m
 		}},
 		{"admin dialog", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
 			vaultForm(t, m)
 			focusField(t, m, "idle timeout")
 			typeText(t, m, "1")

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
@@ -129,11 +130,11 @@ func TestTargetEndpointNeedsAdminApproval(t *testing.T) {
 	}
 }
 
-// With vault.admin_timeout 0 an approval covers exactly one request; a read spends it like a write.
+// With an admin session time of 0 an approval covers exactly one request; a read spends it like a write.
 func TestTargetReadSpendsOneShotApproval(t *testing.T) {
 	v := encryptedTestVault(t)
 	s, _, _, _ := newConnectionTestServer(t, v)
-	s.adminTimeout = 0
+	s.adminTimeoutSource = func() time.Duration { return 0 }
 	s.svc = s.svc.WithTargetSource(bookTargetSource([]config.TargetEntry{{Target: "shelf/a", Name: "A", Kind: "shelf"}}, nil))
 	cookie, csrf := coupleAndApprove(t, s, v)
 	origin := "http://" + s.addr

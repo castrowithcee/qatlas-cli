@@ -279,7 +279,7 @@ func (s *Service) logMigration(cfg *config.Config) string {
 		Result: "success", Version: config.Version}
 	err := fields.Validate()
 	if err == nil {
-		err = connlog.NewRecorder(s.surface, s.store.Path(), cfg.LogRetentionDays(), s.vault(), s.processOK).Writer.Append(fields)
+		err = connlog.NewRecorder(s.surface, s.store.Path(), s.vault(), s.processOK).Writer.Append(fields)
 	}
 	var unsigned *invokelog.UnsignedError
 	switch {
