@@ -81,9 +81,10 @@ func currentProfile() colorProfile { return profile }
 func setProfile(p colorProfile) { profile = p }
 
 // shown is a frame as the terminal of the current profile is sent it, so what render returns is what the
-// terminal shows. Bubble Tea steps the frame down to the same profile, which leaves it unchanged.
+// terminal shows, symbols outside ASCII included where the terminal draws no UTF-8. Bubble Tea steps the
+// frame down to the same profile, which leaves it unchanged.
 func shown(frame string) string {
-	frame = strings.ReplaceAll(frame, cursorMark, "")
+	frame = asciiOnly(strings.ReplaceAll(frame, cursorMark, ""))
 	if profile == profileTrueColor {
 		return frame
 	}

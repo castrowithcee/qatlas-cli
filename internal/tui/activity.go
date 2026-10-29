@@ -36,10 +36,15 @@ type heatGlyphs struct {
 
 // heatGlyphSet is the set the terminal can draw: block characters where the locale is UTF-8, else ASCII.
 func heatGlyphSet() heatGlyphs {
+	g := heatGlyphs{zero: "·", levels: [...]string{"░", "▒", "▓", "█"}, outside: "×", altered: "✗", gap: "…"}
 	if !utf8Terminal() {
-		return heatGlyphs{zero: ".", levels: [...]string{"-", "=", "+", "#"}, outside: "x", altered: "!", gap: "~"}
+		// The general table gives every glyph but the altered day, which keeps its own mark apart from outside.
+		g = heatGlyphs{zero: asciiOnly(g.zero), outside: asciiOnly(g.outside), altered: "!", gap: asciiOnly(g.gap)}
+		for i, l := range [...]string{"░", "▒", "▓", "█"} {
+			g.levels[i] = asciiOnly(l)
+		}
 	}
-	return heatGlyphs{zero: "·", levels: [...]string{"░", "▒", "▓", "█"}, outside: "×", altered: "✗", gap: "…"}
+	return g
 }
 
 // cell is the glyph and style of one day. A day the check flagged shows that before its level.

@@ -1,0 +1,24 @@
+[1mQatlas[m  [1mo[m vault unlocked  [2mo[m admin off                          [2m[?] help[m  [2m[:] cmd[m
+[1m  [m[2m 1 Overview [m [1m[2 Connections][m [2m 3 Activity [m [2m 4 Access [m [2m 5 Library [m [2m 6 Settings [m
+[2m--------------------------------------------------------------------------------[m
+[1mConnections (7)[m                                                              [2m1/7[m
+
+#=[1m[m=============================================================================#
+#    Group: Provider v      State: All v      Sort: Name v   [2m / search~       [m #
+# [2m    NAME            STATE   SERVICE  EFFECTS             TOOLS  DESCRIPTION[m  #
+#   [2mv [m# [1mbookstack[m[2m (1)[m                                                          #
+# [1;7m>[m[1;7m   wiki-main       [1mactive[m[1;7m  wiki     [2mread,create,update[m[1;7m  [2mall[m[1;7m    Team wiki, ~[m #
+#   [2mv [m# [1mgithub[m[2m (1)[m                                                             #
+#     code-planning   [1mactive[m  code     [2mread[m                [2mall[m    Planning re~ #
+#   [2mv [m# [1mnextcloud[m[2m (1)[m                                                          #
+#     cloud-files     [1mactive[m  cloud    [2mread,create,update[m  [2mall[m    Shared proj~ #
+#   [2mv [m# [1mseatable.base[m[2m (1)[m                                                      #
+#     tables-ops      [1mactive[m  tables   [2mread[m                [2mall[m    Operations ~ #
+#   [2mv [m# [1mtelegram[m[2m (1)[m                                                           #
+#     alerts-bot      [1mactive[m  alerts   [2mread,create,update[m  [2mall[m    Notificatio~ #
+#   [2mv [m# [1mtodoist[m[2m (1)[m                                                            #
+#     tasks-personal  [1mactive[m  tasks    [2mread,create,update[m  [2mall[m    Personal ta~ #
+#   [2mv [m# [1mtwenty-crm[m[2m (1)[m                                                         #
+#     crm-sales       [1mactive[m  crm      [2mread[m                [2mall[m    Sales pipel~ #
+#==============================================================================#
+[1mn[m[2m new[m  [1menter/e[m[2m edit/fold[m  [1md[m[2m delete[m  [1m1-6/esc[m[2m areas[m  [1mctrl+l[m[2m lock vault[m  [1m?[m[2m help[m
