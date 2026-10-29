@@ -90,6 +90,8 @@ func (m *Model) screenBeneath(s screen) (screen, bool) {
 		return screenList, true
 	case screenConfirm:
 		switch {
+		case m.settingsTakeover != nil:
+			return m.settingsTakeoverBack, true
 		case m.vaultLockConfirm:
 			return m.vaultLockBack, true
 		case m.decryptConfirm, m.migratePlanConfirm, m.migrateDeleteConfirm, m.confirmRole != "",
