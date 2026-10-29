@@ -698,7 +698,14 @@ func (m *Model) importView() string {
 	case importMode:
 		p := m.dialogPanelOf()
 		var b strings.Builder
-		b.WriteString(p.top(tr(tImportModeTitle), "") + p.blank())
+		modeHead := p.top(tr(tImportModeTitle), "") + p.blank()
+		b.WriteString(modeHead)
+		m.hitRows(m.hitTop(modeHead), m.usable(0), 0, len(importModeRows), func(int) string { return "" }, func(i int) tea.Cmd {
+			if m.screen != screenTransfer || m.imp != e || e.step != importMode {
+				return nil
+			}
+			return markOrAct(&e.modeCursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+		})
 		for i, row := range importModeRows {
 			b.WriteString(p.tableRow(i == e.modeCursor, truncateCells(tr(row.text), p.cells())) + "\n")
 		}

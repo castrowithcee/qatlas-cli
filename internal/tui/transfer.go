@@ -648,15 +648,33 @@ func (m *Model) exportView() string {
 			b.WriteString(m.exportRow(i) + "\n")
 		}
 		e.rows.offset = start
+		m.hitRows(m.hitTop(head), m.usable(0), start, end, m.exportRow, func(i int) tea.Cmd {
+			if m.screen != screenTransfer || m.export != e || e.step != exportSelect || i >= len(e.rows.matches) {
+				return nil
+			}
+			return markOrAct(&e.rows.cursor, i, true, func() tea.Cmd {
+				return m.press(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+			})
+		})
 		return b.String() + foot
 	case exportMode:
 		reason := e.secretsReason
 		p := m.dialogPanelOf()
 		var b strings.Builder
-		b.WriteString(p.top(tr(tExportSecretsTitle), "") + p.blank())
+		modeHead := p.top(tr(tExportSecretsTitle), "") + p.blank()
+		b.WriteString(modeHead)
 		for i, row := range exportModeRows() {
 			text := row
 			blocked := i > 0 && reason != ""
+			if !blocked {
+				// A row that cannot be chosen is no target: enter on it only says why.
+				m.hitRows(m.hitTop(modeHead)+i, m.usable(0), i, i+1, func(int) string { return "" }, func(i int) tea.Cmd {
+					if m.screen != screenTransfer || m.export != e || e.step != exportMode {
+						return nil
+					}
+					return markOrAct(&e.modeCursor, i, true, func() tea.Cmd { return m.press(tea.KeyPressMsg{Code: tea.KeyEnter}) })
+				})
+			}
 			if blocked {
 				text += tr(tExportNotPossible)
 			}
