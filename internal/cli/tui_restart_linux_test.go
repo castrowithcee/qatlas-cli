@@ -65,6 +65,12 @@ type updateRig struct {
 // release installs; empty stands for a program that starts this test binary again, as the newer version.
 func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 	t.Helper()
+	return newUpdateRigArgs(t, program, prefs, "tui")
+}
+
+// newUpdateRigArgs is newUpdateRig with the arguments the program starts with; none is the bare call.
+func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *updateRig {
+	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +154,7 @@ func newUpdateRig(t *testing.T, program, prefs string) *updateRig {
 		uintptr(unsafe.Pointer(&size))); errno != 0 {
 		t.Fatalf("setting the terminal size: %v", errno)
 	}
-	cmd := exec.Command(bin, "tui")
+	cmd := exec.Command(bin, args...)
 	cmd.Env = []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color",
 		"QATLAS_CONFIG=" + configPath, "XDG_RUNTIME_DIR=" + runtimeDir, secret.StoreSelector + "=none",
 		runAsTUIEnv + "=1", tuiVersionEnv + "=v1.0.0", tuiReleasesEnv + "=" + server.URL}

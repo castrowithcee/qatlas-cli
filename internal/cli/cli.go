@@ -183,7 +183,8 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"already run. People configure named connections; agents discover and invoke tools through them.\n\n" +
 			"Start here:\n" +
 			"  qatlas agents   an agent: how to discover, describe, and invoke tools\n" +
-			"  qatlas tui      a person: set up connections and what each one may do\n\n" +
+			"  qatlas          a person: at a terminal, the editor to set up connections and what each one\n" +
+			"                  may do ('qatlas tui' opens it too)\n\n" +
 			"An agent discovers in small steps: 'qatlas providers' lists every provider with its tools and\n" +
 			"connections, 'qatlas connections <provider>' the configured routes and what each one may do,\n" +
 			"'qatlas tools <provider>' the tools they offer, 'qatlas describe <tool-id>' one complete\n" +
@@ -206,8 +207,14 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			migrateConfig(c, opts, reg)
 			return nil
 		},
-		// Without a subcommand there is nothing to do yet, so the root command prints its own help.
-		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
+		// Without a subcommand a person at a terminal gets the editor; everyone else, and --agent always,
+		// gets the overview.
+		RunE: func(c *cobra.Command, _ []string) error {
+			if opts.Agent || !checkTerminal() {
+				return c.Help()
+			}
+			return startTUI(opts, reg, version)
+		},
 	}
 
 	// Help and version follow Cobra conventions and go to stdout. Version output stays deterministic.

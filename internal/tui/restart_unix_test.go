@@ -37,6 +37,7 @@ func withRestart(t *testing.T, m *Model, replaced bool) *restartRecorder {
 	}
 	r := &restartRecorder{program: program}
 	m.restart = &Restart{
+		Args:     []string{"tui", "--config", "/etc/q.yaml"},
 		Replaced: func() (string, bool) { return program, replaced },
 		Exec: func(path string, argv, env []string) error {
 			r.calls = append(r.calls, execCall{path, argv, env})
@@ -98,8 +99,8 @@ func TestAnUpdateRestartsTheEditorInPlace(t *testing.T) {
 		t.Fatalf("exec ran %d times, want 1", len(r.calls))
 	}
 	call := r.calls[0]
-	if call.path != r.program || strings.Join(call.argv, "\x00") != strings.Join(os.Args, "\x00") {
-		t.Errorf("exec(%q, %q), want the program %q with this process's arguments", call.path, call.argv, r.program)
+	if call.path != r.program || strings.Join(call.argv, "\x00") != strings.Join([]string{os.Args[0], "tui", "--config", "/etc/q.yaml"}, "\x00") {
+		t.Errorf("exec(%q, %q), want the program %q with the subcommand tui and the configuration", call.path, call.argv, r.program)
 	}
 	h := handoffOf(t, call)
 	if h.From != "v0.4.0" || h.To != "v0.5.0" || !h.Unlocked {

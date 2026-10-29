@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -367,41 +368,55 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"whether to restore the newest backup it reads, with the date of the backup; only y does, and n or\n" +
 			"esc ends the rollback without a change. Without a readable backup nothing is changed.",
 		Args: noArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			secret.SetLongRunning("tui")
-			if opts.Agent {
-				return &UsageError{errors.New("the terminal editor cannot run in agent mode")}
-			}
-			path, err := config.Path(opts.Config)
-			if err != nil {
-				return err
-			}
-			// The editor resolves secrets through the same cascade every command uses; it owns no
-			// resolution path of its own.
-			secrets, err := tuiSecrets(opts)
-			if err != nil {
-				return err
-			}
-			store := config.NewStore(path, reg)
-			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor).
-				WithTargetSource(targetSource(opts, reg))
-			// Device-local preferences live beside the configuration and are not part of it. A missing or
-			// damaged file never stops the editor; it opens with the defaults and says why.
-			prefsPath := tuiPrefsPath(path)
-			prefs, prefsWarnings := uiprefs.Load(prefsPath)
-			updater := tuiUpdater(opts, buildVersion)
-			if locking, ok := updater.(*lockingUpdater); ok {
-				locking.svc = svc
-			}
-			return classifyUserError(tui.Run(tui.Options{
-				Service: svc, Store: store, Tester: connectionTester(store, opts, reg), Secrets: secrets,
-				Redactor: opts.Redactor, Version: buildVersion, Updater: updater, Restart: tuiRestart(),
-				SelfTest: tuiSelfTest(buildVersion), Prefs: prefs, PrefsWarnings: prefsWarnings,
-				SavePrefs: func(p uiprefs.Prefs) error { return uiprefs.Save(prefsPath, p) },
-				In:        os.Stdin, Out: os.Stdout,
-			}))
-		},
+		RunE: func(_ *cobra.Command, _ []string) error { return runTUI(opts, reg, buildVersion) },
 	}
+}
+
+// checkTerminal reports whether a bare 'qatlas' may open the editor: standard input and output must both be
+// terminals, since the editor reads keys from one and draws on the other. A test overrides it, like
+// checkInteractive; unlike vault.Interactive, one terminal stream is not enough.
+var checkTerminal = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// startTUI is what a bare 'qatlas' at a terminal runs; a test replaces it to see the branch without a screen.
+var startTUI = runTUI
+
+// runTUI opens the terminal editor. 'qatlas tui' and a bare 'qatlas' at a terminal both run it, so the
+// same flags apply to both.
+func runTUI(opts *Options, reg *capability.Registry, buildVersion string) error {
+	secret.SetLongRunning("tui")
+	if opts.Agent {
+		return &UsageError{errors.New("the terminal editor cannot run in agent mode")}
+	}
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return err
+	}
+	// The editor resolves secrets through the same cascade every command uses; it owns no
+	// resolution path of its own.
+	secrets, err := tuiSecrets(opts)
+	if err != nil {
+		return err
+	}
+	store := config.NewStore(path, reg)
+	svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor).
+		WithTargetSource(targetSource(opts, reg))
+	// Device-local preferences live beside the configuration and are not part of it. A missing or
+	// damaged file never stops the editor; it opens with the defaults and says why.
+	prefsPath := tuiPrefsPath(path)
+	prefs, prefsWarnings := uiprefs.Load(prefsPath)
+	updater := tuiUpdater(opts, buildVersion)
+	if locking, ok := updater.(*lockingUpdater); ok {
+		locking.svc = svc
+	}
+	return classifyUserError(tui.Run(tui.Options{
+		Service: svc, Store: store, Tester: connectionTester(store, opts, reg), Secrets: secrets,
+		Redactor: opts.Redactor, Version: buildVersion, Updater: updater, Restart: tuiRestart(restartArgs(opts)),
+		SelfTest: tuiSelfTest(buildVersion), Prefs: prefs, PrefsWarnings: prefsWarnings,
+		SavePrefs: func(p uiprefs.Prefs) error { return uiprefs.Save(prefsPath, p) },
+		In:        os.Stdin, Out: os.Stdout,
+	}))
 }
 
 // tuiPrefsPath is the device-local preferences file beside the resolved configuration file, so it follows

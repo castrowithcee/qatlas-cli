@@ -227,7 +227,7 @@ func TestInstallPS1FreshAndReinstall(t *testing.T) {
 	forEachShell(t, func(t *testing.T, e *psEnv) {
 		e.publish("v1.0.0", "program one", releaseOptions{})
 		out := e.mustRun()
-		for _, want := range []string{"v1.0.0", e.exe(), "new terminal", "qatlas tui", "qatlas web", "press g to connect a provider"} {
+		for _, want := range []string{"v1.0.0", e.exe(), "new terminal", "run `qatlas` (press g", "qatlas web", "press g to connect a provider"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("output lacks %q:\n%s", want, out)
 			}

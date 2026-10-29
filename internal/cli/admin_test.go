@@ -37,6 +37,8 @@ func TestMain(m *testing.M) {
 		os.Exit(runAsTUI())
 	}
 	checkInteractive = func() bool { return true }
+	// No test runs at a terminal; a test of the bare call sets its own.
+	checkTerminal = func() bool { return false }
 	vaultProcessSupported = false
 	// No test finds an agent token of the machine it runs on; a test that needs one sets its own.
 	lookupAgentToken = func() (string, string, error) { return "", "", nil }

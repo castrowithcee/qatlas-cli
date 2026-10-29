@@ -28,10 +28,13 @@ const (
 )
 
 // Restart is how the editor replaces itself with the program an update installed. A nil Restart disables
-// it; both fields are set together, and are fields so a test reaches every outcome without a second program.
+// it; Replaced and Exec are set together, and are fields so a test reaches every outcome without a second program.
 type Restart struct {
 	// Replaced returns the path the running program started from and whether its file was replaced since.
 	Replaced func() (string, bool)
+	// Args are the arguments the new program starts with, after the program name. They name the
+	// subcommand explicitly, so a rollback to a version whose bare call prints help still opens the editor.
+	Args []string
 	// Exec replaces the process image, and returns only when it failed.
 	Exec func(path string, argv, env []string) error
 }
@@ -155,7 +158,9 @@ func (m *Model) restartNow() tea.Cmd {
 		}
 	}
 	env = append(env, handoffEnv+"="+string(encoded))
-	command := &restartCommand{run: func() error { return m.restart.Exec(m.restartPath, os.Args, env) }}
+	command := &restartCommand{run: func() error {
+		return m.restart.Exec(m.restartPath, append([]string{os.Args[0]}, m.restart.Args...), env)
+	}}
 	return m.execute(command, func(err error) tea.Msg { return restartFailedMsg{err: err} })
 }
 

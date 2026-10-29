@@ -19,7 +19,7 @@ const (
 
 func runAsTUI() int {
 	args := os.Args[1:]
-	if len(args) == 0 || args[0] != "tui" {
+	if len(args) > 0 && args[0] != "tui" {
 		return Run(args, os.Stdout, os.Stderr)
 	}
 	version = os.Getenv(tuiVersionEnv)
