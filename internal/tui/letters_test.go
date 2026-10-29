@@ -233,10 +233,10 @@ func TestRenameHintLineTakesNoRowAction(t *testing.T) {
 	}
 }
 
-// ctrl+t and ctrl+r belong to the target picker: no binding may take them, whatever the rules of the file say.
+// ctrl+y and ctrl+r belong to the target picker: no binding may take them, whatever the rules of the file say.
 func TestPickerControlKeysAreNoBindings(t *testing.T) {
 	keepKeys(t)
-	for _, k := range []string{"ctrl+t", "ctrl+r", "ctrl+d", "ctrl+p", "ctrl+n"} {
+	for _, k := range []string{"ctrl+y", "ctrl+r", "ctrl+d", "ctrl+p", "ctrl+n"} {
 		for _, name := range uiprefs.Actions {
 			if _, err := uiprefs.DefaultKeys().Check(name, k); err == nil {
 				t.Errorf("Check(%s, %s) accepts a key of a screen", name, k)
@@ -262,8 +262,8 @@ func TestCtrlRReloadsThePickerListing(t *testing.T) {
 	if len(src.reqs) != before+1 {
 		t.Errorf("ctrl+r made %d reads, want one more than %d", len(src.reqs), before)
 	}
-	// Every key that can still be bound is a free one, so none of them is ctrl+r or ctrl+t.
-	applyKeys(uiprefs.Keys{Help: "ctrl+g", Command: "ctrl+o", Lock: "ctrl+x"})
+	// Every key that can still be bound is a free one, so none of them is ctrl+r or ctrl+y.
+	applyKeys(uiprefs.Keys{Help: "ctrl+x", Command: "ctrl+l", Lock: "f6"})
 	_, cmd = m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	deliver(m, cmd)
 	if len(src.reqs) != before+2 {

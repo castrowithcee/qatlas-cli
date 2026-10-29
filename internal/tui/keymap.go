@@ -133,7 +133,7 @@ var keyDefs = []struct {
 	{actRemoveField, levelCtrl, []string{"ctrl+d"}, tKeyHelpRemoveField},
 	{actSuggestPrev, levelCtrl, []string{"ctrl+p"}, tKeyHelpSuggestPrev},
 	{actSuggestNext, levelCtrl, []string{"ctrl+n"}, tKeyHelpSuggestNext},
-	{actNextKind, levelCtrl, []string{"ctrl+t"}, tKeyHelpNextKind},
+	{actNextKind, levelCtrl, []string{"ctrl+y"}, tKeyHelpNextKind},
 	{actReload, levelCtrl, []string{"ctrl+r"}, tKeyHelpReload},
 
 	{actUp, levelMove, []string{"up"}, tKeyHelpUp},
@@ -267,6 +267,7 @@ var footerPlaceholders = []struct {
 }{
 	{"{save}", actSave}, {"{help}", actHelp}, {"{info}", actInfo}, {"{command}", actCommand},
 	{"{lock}", actLock}, {"{back}", actBack}, {"{delete}", actDelete}, {"{copy}", actCopy},
+	{"{nextkind}", actNextKind},
 }
 
 // footerKeys replaces the key placeholders of a footer text with the current key names, so a footer

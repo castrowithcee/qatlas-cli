@@ -979,3 +979,31 @@ func TestATypedIDAndTheBuilderTakeExclusions(t *testing.T) {
 		t.Fatalf("the mode stayed on: %v", m.targetExcluded)
 	}
 }
+
+// ctrl+y shows the next kind of the level; ctrl+t, which terminal multiplexers take, does nothing here.
+func TestTheNextKindKeySwitchesTheKind(t *testing.T) {
+	reg := capability.NewRegistry()
+	err := reg.RegisterProvider(config.ProviderMetadata{
+		ID: "lister", Name: "Lister",
+		Target: config.TargetMetadata{Label: "target", Multiple: true, Kinds: []config.TargetKind{
+			{Name: "group", Forms: []string{"g/NAME"}},
+			{Name: "team", Forms: []string{"t/NAME"}},
+		}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := pickerModelOn(t, reg, &listSource{list: pickPage(group("a"))})
+	openPicker(t, m)
+	lv := m.targetPick.top()
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	deliver(m, cmd)
+	if lv.kind() != "group" {
+		t.Errorf("ctrl+t switched the kind to %s", lv.kind())
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	deliver(m, cmd)
+	if lv.kind() != "team" {
+		t.Errorf("ctrl+y left the kind %s, want team", lv.kind())
+	}
+}

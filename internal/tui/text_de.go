@@ -1286,7 +1286,7 @@ var textDE = map[textID]string{
 	footerID("right open"):                                 "right öffnen",
 	footerID("left back"):                                  "left zurück",
 	footerID("tab mark"):                                   "tab markieren",
-	footerID("ctrl+t next kind"):                           "ctrl+t nächste Art",
+	footerID("{nextkind} next kind"):                       "{nextkind} nächste Art",
 	footerID("esc clear marks"):                            "esc Markierungen löschen",
 	footerID("enter store in system keyring"):              "enter im Schlüsselbund speichern",
 	footerID("enter store in the vault"):                   "enter im Tresor speichern",

@@ -724,7 +724,7 @@ func (m *Model) pickFrame() (string, string) {
 		keys += " · tab mark"
 	}
 	if len(lv.kinds) > 1 {
-		keys += " · ctrl+t next kind"
+		keys += " · {nextkind} next kind"
 	}
 	keys += " · {save} save · esc "
 	if len(p.marks) > 0 {
