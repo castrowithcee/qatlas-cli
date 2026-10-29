@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"os"
 	"strconv"
 
 	tea "charm.land/bubbletea/v2"
@@ -239,11 +238,11 @@ func steppedTo256(p palette, fg, bg rgb) (palette, bool) {
 }
 
 // terminalColourQuery asks the terminal for its foreground and background where the theme mixes from them.
-// Nothing is asked under NO_COLOR or of a terminal whose colours the theme could not use.
+// Nothing is asked of a terminal whose colours the theme could not use.
 func terminalColourQuery(name string) tea.Cmd {
 	t, _ := themeNamed(name)
 	p := currentProfile()
-	if t.name != uiprefs.ThemeTerminal || os.Getenv("NO_COLOR") != "" || (p != profileTrueColor && p != profile256) {
+	if t.name != uiprefs.ThemeTerminal || (p != profileTrueColor && p != profile256) {
 		return nil
 	}
 	return tea.Batch(tea.RequestForegroundColor, tea.RequestBackgroundColor)

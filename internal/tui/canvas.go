@@ -11,7 +11,7 @@ import (
 // canvasPrefix is the escape sequence that sets the base background and the text colour under the current
 // colour profile; empty where the terminal shows no colour.
 func (t theme) canvasPrefix() string {
-	if currentProfile() == profileNone {
+	if noColour() {
 		return ""
 	}
 	const probe = "x"

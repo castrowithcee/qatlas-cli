@@ -447,7 +447,8 @@ func (m *Model) listRowIn(room int, active bool, text string) string {
 // selectionMark leads the marked row: a narrow accent bar where colour shows it, and '>' where it does not,
 // so the selection never depends on colour alone.
 func selectionMark() string {
-	if styles.palette.selection == "" || currentProfile() == profileNone {
+	// The plain terminal palette has colour but no selection fill for the bar to stand on.
+	if noColour() || styles.palette.selection == "" {
 		return ">"
 	}
 	return "▌"

@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 
 	"charm.land/lipgloss/v2"
 
@@ -177,7 +176,12 @@ type theme struct {
 	filled bool
 }
 
-func defaultTheme() theme { return buildTheme(paletteOf(true, currentProfile()), false) }
+func defaultTheme() theme {
+	if noColour() {
+		return noColorTheme()
+	}
+	return buildTheme(paletteOf(true, currentProfile()), false)
+}
 
 // noColorTheme names no colour at all and keeps only the attributes (bold, faint, reverse). None of them is
 // the only carrier of a meaning.
@@ -232,10 +236,11 @@ var styles = defaultTheme()
 
 func setTheme(t theme) { styles = t }
 
-// applyTheme activates the theme of a name; a name no theme has gives the default. NO_COLOR wins over every
-// theme, and the editor asks the terminal nothing then (see terminalColourQuery).
+// applyTheme activates the theme of a name; a name no theme has gives the default. A profile without colour
+// (NO_COLOR included, see detectProfile) wins over every theme, and the editor asks the terminal nothing then
+// (see terminalColourQuery).
 func applyTheme(name string) {
-	if os.Getenv("NO_COLOR") != "" {
+	if noColour() {
 		setTheme(noColorTheme())
 		return
 	}

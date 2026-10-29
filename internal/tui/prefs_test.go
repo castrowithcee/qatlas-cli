@@ -24,8 +24,7 @@ func restoreRenderer(t *testing.T) {
 
 func TestColorSchemeNoColorWins(t *testing.T) {
 	restoreRenderer(t)
-	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	termFg, termBg = &rgb{255, 255, 255}, &rgb{0, 0, 0}
 	for _, mode := range themeNames() {
 		applyTheme(mode)
@@ -74,8 +73,8 @@ func TestStartDefaultStaysOnOverview(t *testing.T) {
 	}
 }
 
-// NO_COLOR turns colour off with any value, also with one the colour library does not read as true, and the
-// editor then draws without a single escape sequence.
+// NO_COLOR turns colour off with any value, also with one the colour library does not read as true: at a
+// terminal the editor then keeps bold, faint and reverse and draws no colour sequence.
 func TestNoColorWithAnyValueDrawsWithoutColour(t *testing.T) {
 	restoreRenderer(t)
 	// A terminal the colour library would otherwise give every colour.
@@ -90,13 +89,19 @@ func TestNoColorWithAnyValueDrawsWithoutColour(t *testing.T) {
 		t.Setenv("NO_COLOR", value)
 		setProfile(detectProfile(io.Discard))
 		applyTheme(uiprefs.ThemeQatlasDark)
-		if toColorprofile(currentProfile()) != colorprofile.NoTTY {
-			t.Errorf("NO_COLOR=%s: profile %v, want no colour", value, currentProfile())
+		if toColorprofile(currentProfile()) != colorprofile.ASCII {
+			t.Errorf("NO_COLOR=%s: profile %v, want ASCII", value, currentProfile())
 		}
 		m := sizedModel(groupModel(t), 100, 30)
 		openSectionByName(t, m, sectionConnections)
-		if view := m.render(); strings.Contains(view, "\x1b") {
-			t.Errorf("NO_COLOR=%s: the screen carries escape sequences:\n%q", value, view)
+		view := m.render()
+		for _, seq := range []string{"\x1b[3", "\x1b[4", "38;", "48;"} {
+			if strings.Contains(view, seq) {
+				t.Errorf("NO_COLOR=%s: the screen carries the colour sequence %q:\n%q", value, seq, view)
+			}
+		}
+		if !strings.Contains(view, "\x1b[1m") {
+			t.Errorf("NO_COLOR=%s: the screen lost its attributes:\n%q", value, view)
 		}
 	}
 }

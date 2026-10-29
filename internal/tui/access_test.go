@@ -18,7 +18,6 @@ import (
 func withNoColor(t *testing.T) {
 	t.Helper()
 	restoreRenderer(t)
-	t.Setenv("NO_COLOR", "1")
 	setProfile(profileNone)
 	applyTheme(uiprefs.ThemeTerminal)
 }

@@ -261,9 +261,8 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	before := currentProfile()
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	applyTheme(uiprefs.ThemeTerminal)
-	setProfile(profile256)
 
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 220, Height: 30})

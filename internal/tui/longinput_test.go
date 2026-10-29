@@ -212,7 +212,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					}
 					// Only what the workspace frame holds counts: the tab line draws its own marks.
 					inner := holding[0]
-					for _, part := range strings.Split(inner, "│") {
+					for _, part := range strings.FieldsFunc(inner, func(r rune) bool { return r == '│' || r == '║' }) {
 						if strings.Contains(part, want) {
 							inner = part
 						}

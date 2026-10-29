@@ -124,9 +124,8 @@ func TestDropdownReadsWithoutColour(t *testing.T) {
 	before := currentProfile()
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	applyTheme(uiprefs.ThemeTerminal)
-	setProfile(profile256)
 
 	m := newTableModel(t, 100)
 	openSectionByName(t, m, sectionConnections)

@@ -214,10 +214,10 @@ type navBar struct {
 	spans []navSpan
 }
 
-// plainTabs reports whether the active tab cannot be told by its fill: no theme colours, or a terminal that
-// shows none. The brackets mark it then.
+// plainTabs reports whether the active tab cannot be told by its fill, under a profile without colour. The
+// brackets mark it then.
 func plainTabs() bool {
-	return styles.palette.accent == "" || currentProfile() == profileNone
+	return noColour()
 }
 
 func (m *Model) navTabs() navBar {

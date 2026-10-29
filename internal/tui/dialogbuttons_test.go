@@ -66,8 +66,7 @@ func TestOnlyDestructiveQuestionsHaveADangerButton(t *testing.T) {
 
 func TestDialogsReadWithoutColour(t *testing.T) {
 	restoreRenderer(t)
-	setProfile(profileTrueColor)
-	t.Setenv("NO_COLOR", "1")
+	setProfile(profileASCII)
 	useDarkColours()
 
 	question := openDeleteQuestion(t)

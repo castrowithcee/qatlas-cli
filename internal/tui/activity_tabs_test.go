@@ -115,7 +115,6 @@ func TestActivityHeatmapTotalsMatchTheFixture(t *testing.T) {
 // Every tab reads without colour and fits the smallest terminal: the active tab keeps its brackets, the result its
 // word, and the status of the chain its symbol and word.
 func TestLogsTabsWithoutColourAndAtTheSmallestSize(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "en_US.UTF-8")
 	for _, size := range []struct{ width, height int }{{minimumWidth, minimumHeight}, {80, 24}, {150, 42}} {
 		for _, tab := range []struct {
@@ -147,6 +146,7 @@ func TestLogsTabsWithoutColourAndAtTheSmallestSize(t *testing.T) {
 
 // An empty day says so in the panel, on every tab.
 func TestLogsEmptyDayShowsAShortHintInThePanel(t *testing.T) {
+	useColour(t)
 	f := newLogFixture(t)
 	f.append("cli", "", "wiki.pages.list", "wiki", "success")
 	m := f.model(true, "2001-01-01")
@@ -159,7 +159,6 @@ func TestLogsEmptyDayShowsAShortHintInThePanel(t *testing.T) {
 // The smallest terminal draws the compact Logs frame with or without rows; the explanation of the summary then
 // stands behind the info key, marked on the tab line, and a large terminal keeps it inline.
 func TestLogsCompactFrameLeavesTheSummaryHelpToTheInfoKey(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
 	eachLanguage(t, func(t *testing.T) {
 		for _, sessions := range []bool{false, true} {
 			help := tLogStatsHelp
@@ -172,7 +171,7 @@ func TestLogsCompactFrameLeavesTheSummaryHelpToTheInfoKey(t *testing.T) {
 				m.logs.sessions = sessions
 				m.Update(tea.WindowSizeMsg{Width: 150, Height: 42})
 				large := ansi.Strip(m.render())
-				if !strings.Contains(strings.Join(strings.Fields(strings.ReplaceAll(large, "│", " ")), " "), strings.Join(strings.Fields(tr(help)), " ")) ||
+				if !strings.Contains(strings.Join(strings.Fields(strings.NewReplacer("│", " ", "║", " ").Replace(large)), " "), strings.Join(strings.Fields(tr(help)), " ")) ||
 					strings.Contains(large, infoMark) {
 					t.Errorf("the large frame does not keep the help inline without the mark:\n%s", large)
 				}

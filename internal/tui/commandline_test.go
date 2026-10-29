@@ -282,6 +282,7 @@ func paletteModel(t *testing.T, w, h int) *Model {
 }
 
 func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
+	useColour(t)
 	m := paletteModel(t, 150, 42)
 	view := ansi.Strip(m.render())
 	for _, want := range []string{"Command Palette", "/ search or run a command...", "Open Connections (2)", "close"} {
@@ -354,9 +355,8 @@ func TestPaletteReadsWithoutColour(t *testing.T) {
 	before := currentProfile()
 	prior := styles
 	t.Cleanup(func() { setProfile(before); setTheme(prior) })
-	t.Setenv("NO_COLOR", "1")
-	applyTheme(uiprefs.ThemeTerminal)
 	setProfile(profileNone)
+	applyTheme(uiprefs.ThemeTerminal)
 	m := paletteModel(t, 150, 42)
 	view := m.render()
 	if strings.Contains(view, "\x1b[") {

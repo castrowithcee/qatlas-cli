@@ -78,7 +78,7 @@ func activityLog(t *testing.T) *logFixture {
 func heatRows(view string) string {
 	var rows []string
 	for _, line := range strings.Split(view, "\n") {
-		line = strings.TrimLeft(strings.TrimPrefix(strings.TrimLeft(line, " "), "│"), " ")
+		line = strings.TrimLeft(strings.TrimPrefix(strings.TrimPrefix(strings.TrimLeft(line, " "), "│"), "║"), " ")
 		for _, month := range strings.Split(textEN[tHeatMonths], ",") {
 			if strings.HasPrefix(line, month+" ") && len(line) > len(month)+3 && line[len(month)+1] >= '0' && line[len(month)+1] <= '3' {
 				rows = append(rows, line)
@@ -113,7 +113,6 @@ func TestLogsHeatmapShowsLevelsLegendAndTotals(t *testing.T) {
 		{"ascii", "C", []string{"-", "=", "+", "#"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("NO_COLOR", "1")
 			t.Setenv("LC_ALL", tc.locale)
 			m := heatModel(t, activityLog(t))
 			view := m.render()
@@ -289,7 +288,6 @@ func TestLogsHeatmapFitsSmallTerminals(t *testing.T) {
 }
 
 func TestOverviewShowsTheHeatmapAndRecentCallsAfterLoading(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
 	t.Setenv("LC_ALL", "C")
 	f := activityLog(t)
 	m := overviewModel(t, f.model(false, f.localToday()))

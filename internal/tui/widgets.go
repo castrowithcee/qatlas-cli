@@ -18,7 +18,7 @@ type panelOpts struct {
 // frameChars returns the frame characters: rounded, or double for a focused frame without colour, where the
 // colour of the frame cannot show the focus.
 func frameChars(focused bool) (h, v string, corners [4]string) {
-	if focused && styles.palette.borderFocus == "" {
+	if focused && noColour() {
 		return "═", "║", [4]string{"╔", "╗", "╚", "╝"}
 	}
 	return "─", "│", [4]string{"╭", "╮", "╰", "╯"}

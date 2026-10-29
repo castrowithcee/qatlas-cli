@@ -386,8 +386,7 @@ func withoutPanelFill(row string) string {
 // stays unshaded under colour. No row is ever wider than the terminal, at any of the widths the
 // design is meant to hold at.
 func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
-	before := currentProfile()
-	t.Cleanup(func() { setProfile(before) })
+	restoreRenderer(t)
 
 	for _, width := range []int{40, 79, 80, 120} {
 		m := newTableModel(t, width)
@@ -403,7 +402,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 		}
 		marked, alt := entries[0], entries[1]
 
-		setProfile(profile16)
+		lookOf(profile16)
 		coloured := screenOf(m)
 		assertViewFits(t, coloured, width, m.height)
 		if row := findRow(coloured, marked); !hasBackground(row) || !strings.Contains(row, "▌") {
@@ -413,7 +412,7 @@ func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
 			t.Errorf("width %d: the unmarked row carries the bar, so it is not shaded: %q\n%s", width, row, coloured)
 		}
 
-		setProfile(profileNone)
+		lookOf(profileNone)
 		plain := screenOf(m)
 		assertViewFits(t, plain, width, m.height)
 		if strings.Contains(plain, "\x1b") {

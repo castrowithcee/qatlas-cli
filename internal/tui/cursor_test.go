@@ -23,7 +23,7 @@ func cursorAt(t *testing.T, m *Model) (before, at string) {
 	if c.Blink {
 		t.Error("the cursor blinks, want a static one")
 	}
-	lines := strings.Split(ansi.Strip(frame), "\n")
+	lines := strings.Split(roundFrame(ansi.Strip(frame)), "\n")
 	if c.Y >= len(lines) {
 		t.Fatalf("cursor row %d outside the %d rows drawn", c.Y, len(lines))
 	}
