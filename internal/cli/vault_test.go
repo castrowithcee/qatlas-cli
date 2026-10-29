@@ -186,7 +186,7 @@ func TestCredentialDeleteVault(t *testing.T) {
 	}
 
 	code, stdout, stderr := runWithInput(t, &Options{}, "",
-		"credential", "delete", "wiki-vault", "token-id", "--config", configIn(dir))
+		"credential", "delete", "wiki-vault", "token-id", "--yes", "--config", configIn(dir))
 	if code != exitOK {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
 	}
@@ -198,7 +198,7 @@ func TestCredentialDeleteVault(t *testing.T) {
 	}
 
 	code, _, stderr = runWithInput(t, &Options{}, "",
-		"credential", "delete", "wiki-vault", "token-id", "--config", configIn(dir))
+		"credential", "delete", "wiki-vault", "token-id", "--yes", "--config", configIn(dir))
 	if code != exitUsage || !strings.Contains(stderr, "no stored secret") {
 		t.Errorf("second delete: code = %d, stderr = %q, want exitUsage and 'no stored secret'", code, stderr)
 	}
@@ -222,7 +222,7 @@ func TestCredentialDeleteVaultFileTooOpenIsRefused(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(secretsPath, 0o600) })
 
 	code, stdout, stderr := runWithInput(t, &Options{}, "",
-		"credential", "delete", "wiki-vault", "token-id", "--config", configIn(dir))
+		"credential", "delete", "wiki-vault", "token-id", "--yes", "--config", configIn(dir))
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
 	}

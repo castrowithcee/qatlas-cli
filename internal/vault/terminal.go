@@ -37,10 +37,10 @@ func ReadPassphrase(prompt string) (string, error) {
 }
 
 // ReadConfirm asks a yes-or-no question on the controlling terminal and reads a plain, visible line back. It
-// is how 'qatlas vault decrypt' and 'qatlas vault migrate' ask for the explicit confirmation a destructive
-// step needs, kept apart from ReadPassphrase because the answer is not a secret and is shown as typed. Only
-// "y" or "yes", ignoring case and surrounding space, counts as yes; anything else, including an empty line,
-// is no. It reports ErrNoTerminal exactly like ReadPassphrase when no terminal can be opened.
+// is how commands such as 'qatlas vault migrate', 'credential delete' and 'vault token revoke' ask for the
+// explicit confirmation a destructive step needs ('vault decrypt' takes --confirm instead), kept apart from
+// ReadPassphrase because the answer is not a secret and is shown as typed. Only "y" or "yes", ignoring case
+// and surrounding space, counts as yes; anything else, including an empty line, is no. It reports ErrNoTerminal exactly like ReadPassphrase when no terminal can be opened.
 func ReadConfirm(prompt string) (bool, error) {
 	in, out, closeTTY, err := openTTY()
 	if err != nil {

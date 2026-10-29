@@ -101,7 +101,7 @@ func TestCredentialChangesReachTheVaultProcess(t *testing.T) {
 		t.Fatalf("Get() after set = %q, %v, %v, want the new secret", value, found, err)
 	}
 
-	code, stdout, stderr = runWithInput(t, &Options{}, "", "credential", "delete", "wiki-vault", "token-id",
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "credential", "delete", "wiki-vault", "token-id", "--yes",
 		"--config", configIn(dir))
 	if code != exitOK || stdout != "" || stderr != "" {
 		t.Fatalf("delete: exit code = %d, stdout = %q, stderr = %q, want a silent success", code, stdout, stderr)

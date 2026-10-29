@@ -106,14 +106,19 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		RunE: func(c *cobra.Command, args []string) error { return runVaultTokenShow(c, opts, reg, args[0]) },
 	}
 
+	var assumeYes bool
 	revoke := &cobra.Command{
 		Use:   "revoke <name>",
 		Short: "Revoke one agent token",
 		Long: "Removes the agent token <name> from the vault. It stops working at once, in a running vault\n" +
-			"process too, which reads the tokens from the vault for every approval. Approvals it gave stay.",
+			"process too, which reads the tokens from the vault for every approval. Approvals it gave stay.\n" +
+			"The command first asks \"revoke agent token <name>? [y/N]\" at the terminal and revokes nothing\n" +
+			"unless the answer is y or yes. --yes answers it in advance; without a terminal the command still\n" +
+			"fails as admin-required.",
 		Args: exactlyOneArg("token name"),
-		RunE: func(c *cobra.Command, args []string) error { return runVaultTokenRevoke(c, opts, args[0]) },
+		RunE: func(c *cobra.Command, args []string) error { return runVaultTokenRevoke(c, opts, args[0], assumeYes) },
 	}
+	revoke.Flags().BoolVar(&assumeYes, "yes", false, "answer the confirmation question with yes")
 
 	cmd.AddCommand(list, create, show, revoke)
 	return cmd
@@ -298,10 +303,20 @@ func runVaultTokenShow(c *cobra.Command, opts *Options, reg *capability.Registry
 	return &UsageError{fmt.Errorf("agent token %s: %w", name, vault.ErrTokenNotFound)}
 }
 
-func runVaultTokenRevoke(c *cobra.Command, opts *Options, name string) error {
+func runVaultTokenRevoke(c *cobra.Command, opts *Options, name string, yes bool) error {
 	v, err := tokenVault(opts)
 	if err != nil {
 		return err
+	}
+	if !yes {
+		confirmed, err := confirmDelete(fmt.Sprintf("revoke agent token %s? [y/N] ", name))
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Fprintf(c.OutOrStdout(), "kept agent token %s\n", name)
+			return nil
+		}
 	}
 	if err := v.RevokeToken(name); err != nil {
 		if errors.Is(err, vault.ErrTokenNotFound) {
