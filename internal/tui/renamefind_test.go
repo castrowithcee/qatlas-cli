@@ -193,7 +193,7 @@ func TestApproveAllKeepsTheApprovalOfAHandRename(t *testing.T) {
 	m := s.open(t)
 
 	openSectionByName(t, m, sectionApprovals)
-	press(t, m, "a")
+	press(t, m, "A")
 	if !m.approveAllConfirm {
 		t.Fatalf("a did not open the bulk confirmation:\n%s", screenOf(m))
 	}
@@ -230,10 +230,10 @@ func TestUnfinishedConnectionRenameIsNoticedAndFinished(t *testing.T) {
 
 	openFindingsLine(t, m)
 	wantInView(t, m, "the findings", "connection  main -> personal, unfinished", "enter finish")
-	if strings.Contains(screenOf(m), "b put back") {
+	if strings.Contains(screenOf(m), "B put back") {
 		t.Error("a connection's rename is offered to be put back")
 	}
-	press(t, m, "b")
+	press(t, m, "B")
 	if m.screen != screenFindings || m.rename != nil || m.status == "" {
 		t.Fatalf("b = screen %v status %q, want a refusal on the findings", m.screen, m.status)
 	}
@@ -299,7 +299,7 @@ func TestUnfinishedCredentialRenameIsFinishedOrPutBack(t *testing.T) {
 		m.list.selectName("reader")
 		wantInView(t, m, "the entry", "credential reader has an unfinished rename to reader2")
 		openFindingsLine(t, m)
-		wantInView(t, m, "the findings", "credential  reader -> reader2, unfinished", "enter finish", "b put back")
+		wantInView(t, m, "the findings", "credential  reader -> reader2, unfinished", "enter finish", "B put back")
 
 		pump(t, m, "enter")
 		wantInView(t, m, "the dry run", "Rename credential reader to reader2?", "resumes")
@@ -321,7 +321,7 @@ func TestUnfinishedCredentialRenameIsFinishedOrPutBack(t *testing.T) {
 		openSectionByName(t, m, sectionCredentials)
 		m.list.selectName("reader")
 		openFindingsLine(t, m)
-		pump(t, m, "b")
+		pump(t, m, "B")
 		if m.screen != screenRename || m.rename == nil || !m.rename.plan.Revert {
 			t.Fatalf("b = screen %v, want the dry run of putting back:\n%s", m.screen, screenOf(m))
 		}
@@ -332,7 +332,7 @@ func TestUnfinishedCredentialRenameIsFinishedOrPutBack(t *testing.T) {
 			t.Fatalf("n = screen %v, want the findings with the vault untouched", m.screen)
 		}
 
-		pump(t, m, "b", "y")
+		pump(t, m, "B", "y")
 		if m.fail != "" {
 			t.Fatalf("confirming reported %q", m.fail)
 		}
@@ -364,7 +364,7 @@ func TestAmbiguousFindingHasNoAction(t *testing.T) {
 	if strings.Contains(screenOf(m), "enter adopt") || strings.Contains(screenOf(m), "enter finish") {
 		t.Errorf("an ambiguous finding offers an action:\n%s", screenOf(m))
 	}
-	press(t, m, "enter", "b")
+	press(t, m, "enter", "B")
 	if m.screen != screenFindings || m.rename != nil || m.adminAuth != nil {
 		t.Fatalf("an ambiguous finding started something: screen %v", m.screen)
 	}

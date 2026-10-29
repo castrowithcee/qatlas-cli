@@ -114,7 +114,7 @@ func TestSelftestResultIsSavedAsJSONInTheTempDir(t *testing.T) {
 		return fakeReport(o.Scenario), nil
 	}
 	drainSelftest(m, startSelftestCommand(t, m, "selftest alpha"))
-	press(t, m, "w")
+	press(t, m, "W")
 	if m.st.saved == "" || filepath.Dir(m.st.saved) != tmp {
 		t.Fatalf("saved = %q, want a file in %s", m.st.saved, tmp)
 	}

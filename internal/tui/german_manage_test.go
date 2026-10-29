@@ -28,7 +28,7 @@ func logsGermanScreens() []germanScreen {
 		f.appendSession(sessionNew, "wiki.pages.get", "success", 120, 480)
 		f.appendSession(sessionNew, "wiki.pages.list", "success", 80, 900)
 		m := f.model(true, f.localToday())
-		pump(t, m, "m")
+		pump(t, m, "M")
 		return m
 	}
 	return []germanScreen{
@@ -122,7 +122,7 @@ func logsGermanScreens() []germanScreen {
 			f := newLogFixture(t)
 			f.append("cli", "", "cli.only", "wiki", "success")
 			m := f.model(true, f.localToday())
-			pump(t, m, "m")
+			pump(t, m, "M")
 			return m
 		}},
 		{"logs heatmap", func(t *testing.T) *Model { return heatModel(t, activityLog(t)) }},
@@ -374,44 +374,44 @@ func updateGermanScreens() []germanScreen {
 		{"update banner", func(t *testing.T) *Model { return startedWith(t, newerRelease()) }},
 		{"update question", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
-			pump(t, m, "u")
+			pump(t, m, "U")
 			return m
 		}},
 		{"update waits", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
 			m.vaultBusy = true
-			pump(t, m, "u")
+			pump(t, m, "U")
 			return m
 		}},
 		{"update waits after the question", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
-			pump(t, m, "u")
+			pump(t, m, "U")
 			m.vaultBusy = true
 			pump(t, m, "y")
 			return m
 		}},
 		{"update declined", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
-			pump(t, m, "u", "n")
+			pump(t, m, "U", "n")
 			return m
 		}},
 		{"update installed", func(t *testing.T) *Model {
 			m := startedWith(t, newerRelease())
-			pump(t, m, "u", "y")
+			pump(t, m, "U", "y")
 			return m
 		}},
 		{"update failed", func(t *testing.T) *Model {
 			fake := newerRelease()
 			fake.updateErr = errors.New("download failed")
 			m := startedWith(t, fake)
-			pump(t, m, "u", "y")
+			pump(t, m, "U", "y")
 			return m
 		}},
 		{"update already current", func(t *testing.T) *Model {
 			fake := newerRelease()
 			fake.update.Updated = false
 			m := startedWith(t, fake)
-			pump(t, m, "u", "y")
+			pump(t, m, "U", "y")
 			return m
 		}},
 		{"restart question", func(t *testing.T) *Model {
@@ -477,7 +477,7 @@ func selftestGermanScreens() []germanScreen {
 			return m
 		}},
 		{"selftest result", finished},
-		{"selftest saved", func(t *testing.T) *Model { m := finished(t); pump(t, m, "w"); return m }},
+		{"selftest saved", func(t *testing.T) *Model { m := finished(t); pump(t, m, "W"); return m }},
 		{"selftest error", func(t *testing.T) *Model {
 			m, cmd := start(t, func(context.Context, selftest.Options) (*selftest.Report, error) {
 				return nil, errors.New("the worker did not start")

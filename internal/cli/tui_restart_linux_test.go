@@ -225,7 +225,7 @@ func (r *updateRig) startUpdate() int {
 	// continues where the deciding look ended, not where the screen stands by then: the answer to the
 	// last u may already be in between.
 	for attempt := 0; ; attempt++ {
-		r.typeKeys("u")
+		r.typeKeys("U")
 		var question, refused bool
 		for deadline := time.Now().Add(30 * time.Second); !question && !refused && time.Now().Before(deadline); {
 			time.Sleep(20 * time.Millisecond)

@@ -341,7 +341,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"h/j/k/l letters.\n\n" +
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
-			"v0.5.0 · u update. u on the tab line or in a list asks first and then installs it the way\n" +
+			"v0.5.0 · U update. U on the tab line or in a list asks first and then installs it the way\n" +
 			"'qatlas update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
 			"first, runs the new program at the same path with the same arguments, and says qatlas updated\n" +
 			"from one version to the other. If the vault was unlocked before, the new editor opens the\n" +

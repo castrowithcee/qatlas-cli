@@ -386,7 +386,7 @@ func TestTheVersionListReportsWhatItCannotDo(t *testing.T) {
 func TestUStillInstallsTheNewestStableRelease(t *testing.T) {
 	fake := choosable()
 	m := startedVersions(t, fake)
-	pump(t, m, "u")
+	pump(t, m, "U")
 	if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") {
 		t.Fatalf("u did not ask the update question: screen %v", m.screen)
 	}

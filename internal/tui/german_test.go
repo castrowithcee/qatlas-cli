@@ -226,7 +226,7 @@ func accessGermanScreens() []germanScreen {
 		}},
 		{"approve all question", func(t *testing.T) *Model {
 			m := approvals(t)
-			pump(t, m, "a")
+			pump(t, m, "A")
 			return m
 		}},
 		{"rename prompt", func(t *testing.T) *Model {

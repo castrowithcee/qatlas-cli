@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
@@ -44,13 +45,13 @@ func TestNoKeyHasTwoMeaningsOutsideTheAnswerLevels(t *testing.T) {
 	}
 }
 
-// Every letter of the table is a single lower-case letter or a named key, and the letters of the actions are
+// Every letter of the table is a single letter or a named key, and the letters of the actions are
 // the ones the contract names.
 func TestLetterActionsAreTheAgreedLetters(t *testing.T) {
 	want := map[string]action{
-		"g": actSetup, "c": actCopy, "n": actNew, "a": actApproveAll, "e": actEdit, "r": actRename, "d": actDelete,
-		"v": actReveal, "s": actSummary, "f": actFilter, "b": actRevert, "i": actInfo, "m": actSessions, "o": actLogs,
-		"p": actDuplicate, "q": actQuit, "t": actTest, "u": actUpdate, "w": actWrite,
+		"g": actSetup, "c": actCopy, "n": actNew, "A": actApproveAll, "e": actEdit, "r": actRename, "d": actDelete,
+		"V": actReveal, "s": actSummary, "f": actFilter, "B": actRevert, "i": actInfo, "M": actSessions, "o": actLogs,
+		"p": actDuplicate, "q": actQuit, "t": actTest, "U": actUpdate, "W": actWrite,
 	}
 	got := map[string]action{}
 	for _, d := range keyDefs {
@@ -72,8 +73,8 @@ func TestLetterActionsAreTheAgreedLetters(t *testing.T) {
 // table gains fails here until the help and this list both name it.
 var helpWording = map[string]string{
 	"g": "g starts", "n": "n creates", "e": "e edits", "r": "r renames", "d": "d deletes", "p": "p duplicates",
-	"t": "t tests", "u": "u installs", "a": "a approves", "v": "v shows or hides", "s": "s shows", "f": "f their filter",
-	"m": "m their MCP sessions", "o": "o opens", "w": "w saves", "b": "b puts", "i": "i opens", "q": "q quits",
+	"t": "t tests", "U": "U installs", "A": "A approves", "V": "V shows or hides", "s": "s shows", "f": "f their filter",
+	"M": "M their MCP sessions", "o": "o opens", "W": "W saves", "B": "B puts", "i": "i opens", "q": "q quits",
 	"c": "c hands", "y": "y confirms", "h": "h, j, k, and l", "j": "h, j, k, and l", "k": "h, j, k, and l", "l": "h, j, k, and l",
 }
 
@@ -83,7 +84,7 @@ func TestHelpNamesEveryLetterOfTheTable(t *testing.T) {
 		text.WriteString(topic.Text + "\n")
 	}
 	help := text.String()
-	isLetter := regexp.MustCompile(`^[a-z]$`)
+	isLetter := regexp.MustCompile(`^[a-zA-Z]$`)
 	for _, d := range keyDefs {
 		for _, k := range d.keys {
 			if !isLetter.MatchString(k) {
@@ -355,3 +356,56 @@ func TestFooterGroupsNameOnlyBoundLetters(t *testing.T) {
 }
 
 func isSingleLetter(k string) bool { return len(k) == 1 && k[0] >= 'a' && k[0] <= 'z' }
+
+// capitals are the actions a capital letter owns; the lowercase twin means nothing.
+var capitals = map[string]action{
+	"U": actUpdate, "W": actWrite, "A": actApproveAll, "V": actReveal, "B": actRevert, "M": actSessions,
+}
+
+// A terminal without keyboard enhancements sends a capital as the plain character. The event is decoded the
+// way Bubble Tea does it, so the key table carries exactly the name the action fires on in such a terminal.
+func TestCapitalsArriveAsTheirCharacterFromAPlainTerminal(t *testing.T) {
+	var dec uv.EventDecoder
+	for k, act := range capitals {
+		_, ev := dec.Decode([]byte(k))
+		press, ok := ev.(uv.KeyPressEvent)
+		if !ok {
+			t.Fatalf("%q decoded to %T, want a key press", k, ev)
+		}
+		msg := tea.KeyPressMsg(press)
+		if msg.String() != k {
+			t.Errorf("%q arrives as %q", k, msg.String())
+		}
+		if !keyIs(msg, act) {
+			t.Errorf("%q does not fire %s", k, act)
+		}
+		if lower := strings.ToLower(k); keyIs(textKey(lower), act) {
+			t.Errorf("%q still fires %s", lower, act)
+		}
+		if got := keyLabel(act); got != k {
+			t.Errorf("%s is shown as %q, want %q", act, got, k)
+		}
+	}
+}
+
+// The capital acts where the lowercase letter does nothing.
+func TestCapitalUpdateActsAndLowercaseLettersDoNot(t *testing.T) {
+	fake := newerRelease()
+	m := startedWith(t, fake)
+	for _, k := range []string{"u", "w", "a", "v", "b", "m"} {
+		press(t, m, k)
+		if m.screen != screenNav || m.status != "" || m.fail != "" || fake.updates != 0 {
+			t.Fatalf("%s did something: screen %v status %q", k, m.screen, m.status)
+		}
+	}
+	var dec uv.EventDecoder
+	_, ev := dec.Decode([]byte("U"))
+	m.Update(tea.KeyPressMsg(ev.(uv.KeyPressEvent)))
+	if m.screen != screenUpdate {
+		t.Fatalf("U = screen %v, want the update question", m.screen)
+	}
+	press(t, m, "n")
+	if m.screen != screenNav || fake.updates != 0 {
+		t.Errorf("n after U = screen %v updates %d, want nothing installed", m.screen, fake.updates)
+	}
+}

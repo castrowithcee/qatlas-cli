@@ -354,7 +354,7 @@ func (m *Model) selftestKeys() string {
 	case !st.done:
 		return "{back} cancel · {command} cmds · {help} help"
 	case st.report != nil:
-		return "up/down scroll · w save as file · {back} close · {command} cmds · {help} help"
+		return "up/down scroll · W save as file · {back} close · {command} cmds · {help} help"
 	}
 	return "{back} close · {command} cmds · {help} help"
 }

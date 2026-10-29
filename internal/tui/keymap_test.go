@@ -30,9 +30,9 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 		actVimUp: "k", actVimDown: "j", actVimLeft: "h", actVimRight: "l",
 		actTopicNext: "tab", actTopicPrev: "shift+tab",
 		actEnter: "enter", actSpace: "space", actSearch: "/", actQuit: "q", actYes: "y", actNo: "n", actDiscard: "d",
-		actSetup: "g", actCopy: "c", actNew: "n", actApproveAll: "a", actEdit: "e", actRename: "r", actReveal: "v",
-		actSummary: "s", actFilter: "f", actRevert: "b", actSessions: "m", actLogs: "o", actDuplicate: "p",
-		actTest: "t", actUpdate: "u", actWrite: "w",
+		actSetup: "g", actCopy: "c", actNew: "n", actApproveAll: "A", actEdit: "e", actRename: "r", actReveal: "V",
+		actSummary: "s", actFilter: "f", actRevert: "B", actSessions: "M", actLogs: "o", actDuplicate: "p",
+		actTest: "t", actUpdate: "U", actWrite: "W",
 		actRemoveField: "ctrl+d", actSuggestPrev: "ctrl+p", actSuggestNext: "ctrl+n", actNextKind: "ctrl+t",
 		actReload: "ctrl+r",
 	}

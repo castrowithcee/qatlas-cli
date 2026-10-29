@@ -82,7 +82,7 @@ func TestAnUpdateRestartsTheEditorInPlace(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	m.release = newerRelease().check
 
-	press(t, m, "u")
+	press(t, m, "U")
 	_, cmd := m.Update(keyMsg("y"))
 	deliver(m, cmd)
 	if r.command == nil {
@@ -112,7 +112,7 @@ func TestTheHandoffTellsWhetherTheVaultWasLocked(t *testing.T) {
 	m.updater = newerRelease()
 	r := withRestart(t, m, true)
 	m.release = newerRelease().check
-	pump(t, m, "u", "y")
+	pump(t, m, "U", "y")
 	if r.command == nil {
 		t.Fatal("no restart")
 	}
@@ -128,7 +128,7 @@ func TestAFailedExecKeepsTheEditorRunning(t *testing.T) {
 	r := withRestart(t, m, true)
 	r.execErr = errors.New("exec format error")
 	m.release = newerRelease().check
-	pump(t, m, "u", "y")
+	pump(t, m, "U", "y")
 	if r.command == nil {
 		t.Fatal("no restart")
 	}
@@ -175,7 +175,7 @@ func TestNoRestartWhereTheNewProgramCannotRun(t *testing.T) {
 			m := startedWith(t, newerRelease())
 			r := withRestart(t, m, true)
 			prepare(t, m, r)
-			press(t, m, "u")
+			press(t, m, "U")
 			_, cmd := m.Update(keyMsg("y"))
 			if name == "vault write in flight" {
 				// Work that began after the installation started; u itself refuses to start one meanwhile.
