@@ -125,9 +125,9 @@ func (e *toolEffects) styledRow(row string, marks map[string]bool) string {
 	box := styles.active.Render("[-]")
 	switch ticked {
 	case 0:
-		box = "[ ]"
+		box = tickBox(false)
 	case total:
-		box = styles.ok.Render("[x]")
+		box = tickBox(true)
 	}
 	return box + " " + styles.active.Render(strings.TrimPrefix(row, effectRowPrefix)) +
 		styles.hint.Render(fmt.Sprintf(" %d/%d", ticked, total))

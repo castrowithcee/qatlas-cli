@@ -98,6 +98,11 @@ func tickBox(ticked bool) string {
 	return "[ ]"
 }
 
+// colourRadio colours the first selected radio mark of a drawn row in the tick colour.
+func colourRadio(row string) string {
+	return strings.Replace(row, "(*)", styles.ok.Render("(*)"), 1)
+}
+
 // colourTick colours the first ticked box of a drawn row and sets the style of the cell it stands in again
 // behind it.
 func colourTick(row string, cell lipgloss.Style) string {
