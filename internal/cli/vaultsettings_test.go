@@ -39,14 +39,14 @@ func TestVaultSettingsCommand(t *testing.T) {
 	}
 
 	if code, stdout, stderr := run(); code != exitOK || stderr != "" ||
-		stdout != "idle timeout: 12h\nadmin timeout: 10m\nretention days: 90\n" {
+		stdout != "idle timeout: 12h\nmax unlock: 0s\nadmin timeout: 10m\nretention days: 90\n" {
 		t.Errorf("show: exit %d, stdout %q, stderr %q, want the defaults", code, stdout, stderr)
 	}
 	if code, stdout, _ := run("handover-is-not-a-flag"); code == exitOK {
 		t.Errorf("an argument was accepted: stdout %q", stdout)
 	}
 	if code, stdout, stderr := run("--idle-timeout", "90m"); code != exitOK ||
-		stdout != "idle timeout: 1h30m\nadmin timeout: 10m\nretention days: 90\n" {
+		stdout != "idle timeout: 1h30m\nmax unlock: 0s\nadmin timeout: 10m\nretention days: 90\n" {
 		t.Errorf("set idle: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	if got := storedSettings(t, dir); got.IdleTimeout != 90*time.Minute || got.AdminTimeout != 10*time.Minute ||
@@ -54,20 +54,31 @@ func TestVaultSettingsCommand(t *testing.T) {
 		t.Errorf("stored after idle = %+v", got)
 	}
 	if code, stdout, stderr := run("--admin-timeout", "0"); code != exitOK ||
-		stdout != "idle timeout: 1h30m\nadmin timeout: 0s\nretention days: 90\n" {
+		stdout != "idle timeout: 1h30m\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 90\n" {
 		t.Errorf("set admin: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	if code, stdout, stderr := run("--retention-days", "30", "--idle-timeout", "2h"); code != exitOK ||
-		stdout != "idle timeout: 2h\nadmin timeout: 0s\nretention days: 30\n" {
+		stdout != "idle timeout: 2h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 30\n" {
 		t.Errorf("set two: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	// No upper bound.
 	if code, stdout, _ := run("--idle-timeout", "87600h", "--retention-days", "1000000"); code != exitOK ||
-		stdout != "idle timeout: 87600h\nadmin timeout: 0s\nretention days: 1000000\n" {
+		stdout != "idle timeout: 87600h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 1000000\n" {
 		t.Errorf("large values: exit %d, stdout %q", code, stdout)
 	}
-	if code, stdout, _ := run(); code != exitOK || stdout != "idle timeout: 87600h\nadmin timeout: 0s\nretention days: 1000000\n" {
+	if code, stdout, _ := run(); code != exitOK || stdout != "idle timeout: 87600h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 1000000\n" {
 		t.Errorf("show after set: exit %d, stdout %q", code, stdout)
+	}
+	if code, stdout, stderr := run("--max-unlock", "8h"); code != exitOK || stderr != "" ||
+		stdout != "idle timeout: 87600h\nmax unlock: 8h\nadmin timeout: 0s\nretention days: 1000000\n" {
+		t.Errorf("set max unlock: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if got := storedSettings(t, dir); got.MaxUnlock != 8*time.Hour || got.IdleTimeout != 87600*time.Hour {
+		t.Errorf("stored after max unlock = %+v", got)
+	}
+	if code, stdout, _ := run("--max-unlock", "0s"); code != exitOK ||
+		stdout != "idle timeout: 87600h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 1000000\n" {
+		t.Errorf("max unlock off: exit %d, stdout %q", code, stdout)
 	}
 	if after, _ := os.ReadFile(configIn(dir)); string(after) != string(configBefore) {
 		t.Error("config.yaml changed")
@@ -112,7 +123,7 @@ func TestVaultSettingsCommandNeedsAdminAndEncryption(t *testing.T) {
 	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
 	for _, args := range [][]string{
 		{"--idle-timeout", "soon"}, {"--idle-timeout", "0"}, {"--idle-timeout", "-1h"},
-		{"--admin-timeout", "-1m"}, {"--retention-days", "0"}, {"--retention-days", "-3"},
+		{"--admin-timeout", "-1m"}, {"--max-unlock", "-1m"}, {"--max-unlock", "soon"}, {"--retention-days", "0"}, {"--retention-days", "-3"},
 	} {
 		code, stdout, stderr := runWithInput(t, &Options{}, "", append([]string{"vault", "settings"}, append(args, "--config", configIn(dir))...)...)
 		if code != exitUsage || stdout != "" || !strings.Contains(stderr, "usage") {
@@ -149,7 +160,7 @@ func TestVaultSettingsCommandUntrusted(t *testing.T) {
 	}
 
 	code, stdout, stderr := run()
-	if code != exitOK || stdout != "idle timeout: 12h\nadmin timeout: 0s\nretention days: 0\n" ||
+	if code != exitOK || stdout != "idle timeout: 12h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 0\n" ||
 		!strings.Contains(stderr, "warning: settings.age was not written by this vault") {
 		t.Errorf("show: exit %d, stdout %q, stderr %q, want the safe values and a warning", code, stdout, stderr)
 	}
@@ -158,7 +169,7 @@ func TestVaultSettingsCommandUntrusted(t *testing.T) {
 		t.Errorf("set without retention: exit %d, stdout %q, stderr %q, want usage naming --retention-days", code, stdout, stderr)
 	}
 	if code, stdout, stderr := run("--retention-days", "30"); code != exitOK || stderr != "" ||
-		stdout != "idle timeout: 12h\nadmin timeout: 0s\nretention days: 30\n" {
+		stdout != "idle timeout: 12h\nmax unlock: 0s\nadmin timeout: 0s\nretention days: 30\n" {
 		t.Errorf("replace: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	if got := storedSettings(t, dir); got.Update != vault.UpdateLock || got.AdminTimeout != 0 || got.RetentionDays != 30 {

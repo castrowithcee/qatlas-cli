@@ -725,6 +725,7 @@ type Model struct {
 	// 'ctrl+l' unlock dialog while it is open, back is the screen it returns to either way once it is done.
 	// vaultLockConfirm and vaultLockBack are the same for the short 'Lock the vault now?' question.
 	vaultProcessUnlocked bool
+	vaultProcessEndsAt   time.Time // hard unlock deadline of that process; zero without one
 	vaultUnlock          *vaultUnlockPrompt
 	vaultLockConfirm     bool
 	vaultLockBack        screen
@@ -917,7 +918,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.handleOverviewActivity(msg)
 		return m, nil
 	case vaultProcessCheckMsg:
-		m.vaultProcessUnlocked = msg.unlocked
+		m.vaultProcessUnlocked, m.vaultProcessEndsAt = msg.unlocked, msg.endsAt
 		return m, nil
 	case vaultTickMsg:
 		return m, tea.Batch(m.checkVaultProcess(), vaultTick())

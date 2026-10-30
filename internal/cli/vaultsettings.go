@@ -10,7 +10,7 @@ import (
 )
 
 // errSettingsNeedEncryption refuses the settings of a vault without a passphrase.
-var errSettingsNeedEncryption = errors.New("the idle timeout, the admin session timeout and the log " +
+var errSettingsNeedEncryption = errors.New("the idle timeout, the maximum unlock time, the admin session timeout and the log " +
 	"retention are stored in an encrypted vault: without a passphrase nobody could manage them; run " +
 	"'qatlas vault encrypt' first")
 
@@ -22,17 +22,19 @@ var errRetentionNeeded = errors.New("settings.age is not understood; set --reten
 func newVaultSettingsCommand(opts *Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
-		Short: "Show or set the vault's idle timeout, admin session timeout, and log retention",
+		Short: "Show or set the vault's idle timeout, maximum unlock time, admin session timeout, and log retention",
 		Long: "The idle timeout is how long a vault process that holds the vault unlocked does so without a read\n" +
 			"before it locks itself (12h unless set). The admin session timeout is how long a proven passphrase\n" +
 			"keeps authorising managing actions without activity (10m unless set); 0s asks for the passphrase on\n" +
 			"every managing action. The log retention is how many days of the invocation log are kept (90\n" +
-			"unless set); an older day is removed on the next invoke. Durations are Go durations such as 12h or\n" +
-			"30m.\n\n" +
-			"Without a flag the command shows the three values; with --idle-timeout, --admin-timeout, or\n" +
-			"--retention-days it sets exactly those and keeps the others, including the update behaviour of\n" +
-			"'qatlas vault handover'. The idle timeout and the retention must be positive and the admin session\n" +
-			"timeout must not be negative; nothing is written for an invalid value.\n\n" +
+			"unless set); an older day is removed on the next invoke. The maximum unlock time is how long the\n" +
+			"vault stays unlocked at most, counted from the unlock and independent of reads; it is off unless\n" +
+			"set, and 0s turns it off. Durations are Go durations such as 12h or 30m.\n\n" +
+			"Without a flag the command shows the four values; with --idle-timeout, --max-unlock,\n" +
+			"--admin-timeout, or --retention-days it sets exactly those and keeps the others, including the\n" +
+			"update behaviour of 'qatlas vault handover'. The idle timeout and the retention must be positive\n" +
+			"and the admin session and maximum unlock timeouts must not be negative; nothing is written for an\n" +
+			"invalid value.\n\n" +
 			"The settings are stored authenticated inside the encrypted vault as settings.age, never in\n" +
 			"config.yaml, so only a person with the passphrase can change them. A settings.age that was not\n" +
 			"written by this vault, or is not understood, shows the safe values (updates lock the vault, every\n" +
@@ -46,6 +48,7 @@ func newVaultSettingsCommand(opts *Options) *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error { return runVaultSettings(c, opts) },
 	}
 	cmd.Flags().Duration("idle-timeout", 0, "idle time before the vault locks itself")
+	cmd.Flags().Duration("max-unlock", 0, "longest time the vault stays unlocked, counted from the unlock; 0s turns it off")
 	cmd.Flags().Duration("admin-timeout", 0, "idle time of an admin session; 0s asks every time")
 	cmd.Flags().Int("retention-days", 0, "days of the invocation log to keep")
 	return cmd
@@ -55,16 +58,21 @@ func runVaultSettings(c *cobra.Command, opts *Options) error {
 	flags := c.Flags()
 	idleSet, adminSet, retentionSet := flags.Changed("idle-timeout"), flags.Changed("admin-timeout"),
 		flags.Changed("retention-days")
+	maxUnlockSet := flags.Changed("max-unlock")
+	maxUnlock, _ := flags.GetDuration("max-unlock")
 	idle, _ := flags.GetDuration("idle-timeout")
 	admin, _ := flags.GetDuration("admin-timeout")
 	retention, _ := flags.GetInt("retention-days")
-	setting := idleSet || adminSet || retentionSet
+	setting := idleSet || adminSet || retentionSet || maxUnlockSet
 
 	if setting {
 		// Invalid values are refused before the passphrase is asked for.
 		probe := vault.DefaultSettings()
 		if idleSet {
 			probe.IdleTimeout = idle
+		}
+		if maxUnlockSet {
+			probe.MaxUnlock = maxUnlock
 		}
 		if adminSet {
 			probe.AdminTimeout = admin
@@ -112,6 +120,9 @@ func runVaultSettings(c *cobra.Command, opts *Options) error {
 	if idleSet {
 		current.IdleTimeout = idle
 	}
+	if maxUnlockSet {
+		current.MaxUnlock = maxUnlock
+	}
 	if adminSet {
 		current.AdminTimeout = admin
 	}
@@ -126,6 +137,7 @@ func runVaultSettings(c *cobra.Command, opts *Options) error {
 }
 
 func printSettings(c *cobra.Command, s vault.Settings) {
-	fmt.Fprintf(c.OutOrStdout(), "idle timeout: %s\nadmin timeout: %s\nretention days: %d\n",
-		vault.FormatTimeout(s.IdleTimeout), vault.FormatTimeout(s.AdminTimeout), s.RetentionDays)
+	fmt.Fprintf(c.OutOrStdout(), "idle timeout: %s\nmax unlock: %s\nadmin timeout: %s\nretention days: %d\n",
+		vault.FormatTimeout(s.IdleTimeout), vault.FormatTimeout(s.MaxUnlock), vault.FormatTimeout(s.AdminTimeout),
+		s.RetentionDays)
 }

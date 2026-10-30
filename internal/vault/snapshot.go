@@ -29,6 +29,12 @@ type Snapshot struct {
 	// LocksAt is when a vault process handing the vault over to a successor would have locked itself, which
 	// the successor keeps; nil for an unlock, after which the idle timeout runs from the start.
 	LocksAt *time.Time `json:"locks_at,omitempty"`
+	// UnlockedAt is when the vault was unlocked, which a successor counts its maximum unlock duration from.
+	// Nil from a release that had no maximum: the successor then counts from its own start.
+	UnlockedAt *time.Time `json:"unlocked_at,omitempty"`
+	// MaxUnlock is the maximum unlock duration the handing-over process held, so a successor whose settings
+	// cannot be trusted or were switched off keeps it; zero for none.
+	MaxUnlock time.Duration `json:"max_unlock,omitempty"`
 }
 
 // Snapshot returns what this process unlocked, pending entries already merged in by Unlock. The maps are

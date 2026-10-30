@@ -29,6 +29,12 @@ type Server struct {
 	// takes it in place of IdleTimeout from its start where it is earlier. A successor takes the time of
 	// the process it took the vault over from, so a handover never extends an unlock.
 	LocksAt time.Time
+	// MaxUnlock, when positive, is the longest the server stays unlocked, counted from UnlockedAt and
+	// independent of gets: no get moves the lock time past UnlockedAt plus MaxUnlock. Zero means no limit.
+	MaxUnlock time.Duration
+	// UnlockedAt is when the vault was unlocked; a successor takes the one of the process it took the vault
+	// over from. Zero means Serve's start.
+	UnlockedAt time.Time
 
 	mu      sync.Mutex
 	key     age.Identity                 // the vault's key, which answers a client's challenge
@@ -39,6 +45,8 @@ type Server struct {
 	bindings vault.Bindings
 	locked   bool
 	locksAt  time.Time
+	hardAt   time.Time // UnlockedAt plus MaxUnlock; zero without a maximum
+	unlocked time.Time // when the vault was unlocked, as handed to a successor
 	timer    *time.Timer
 	// vaultDir is the vault directory an approve-token request opens with key; see ApproveWithTokens.
 	vaultDir string
@@ -129,7 +137,15 @@ func copyBindings(b vault.Bindings) vault.Bindings {
 func (s *Server) Serve(l net.Listener) error {
 	s.mu.Lock()
 	s.listener = l
-	s.locksAt = time.Now().Add(s.idle())
+	s.unlocked = s.UnlockedAt
+	if s.unlocked.IsZero() {
+		s.unlocked = time.Now()
+	}
+	s.hardAt = time.Time{}
+	if s.MaxUnlock > 0 {
+		s.hardAt = s.unlocked.Add(s.MaxUnlock)
+	}
+	s.locksAt = s.nextLocksAt()
 	if !s.LocksAt.IsZero() && s.LocksAt.Before(s.locksAt) {
 		s.locksAt = s.LocksAt
 	}
@@ -396,7 +412,12 @@ func (s *Server) answer(req request) response {
 	switch req.Op {
 	case opStatus:
 		locksAt := s.locksAt
-		return response{V: Version, PID: os.Getpid(), LocksAt: &locksAt}
+		resp := response{V: Version, PID: os.Getpid(), LocksAt: &locksAt}
+		if !s.hardAt.IsZero() {
+			endsAt := s.hardAt
+			resp.UnlockEndsAt = &endsAt
+		}
+		return resp
 	case opLock:
 		return response{V: Version}
 	case opBind:
@@ -629,11 +650,20 @@ func logDecision(logger *invokelog.Logger, fields invokelog.Fields) bool {
 	return logger != nil && fields.Validate() == nil && logger.Append(fields) == nil
 }
 
-// touch restarts the idle period on a get. The caller holds s.mu.
+// touch restarts the idle period on a get, never past the hard deadline. The caller holds s.mu.
 func (s *Server) touch() {
-	idle := s.idle()
-	s.locksAt = time.Now().Add(idle)
+	s.locksAt = s.nextLocksAt()
 	if s.timer != nil {
-		s.timer.Reset(idle)
+		s.timer.Reset(time.Until(s.locksAt))
 	}
+}
+
+// nextLocksAt is the idle deadline from now, held back to the hard deadline where there is one. The caller
+// holds s.mu.
+func (s *Server) nextLocksAt() time.Time {
+	at := time.Now().Add(s.idle())
+	if !s.hardAt.IsZero() && s.hardAt.Before(at) {
+		return s.hardAt
+	}
+	return at
 }

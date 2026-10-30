@@ -16,9 +16,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // Tests here never open the real controlling terminal: doing that from 'go test' would hang whenever the
@@ -1551,5 +1553,26 @@ func TestVaultApproveMasksTheOriginOfAChange(t *testing.T) {
 	want := "  origin  https://***:***@wiki.example.invalid/api?token=***&page=1 -> https://***:***@moved.example.invalid/api?token=***&page=1\n"
 	if !strings.Contains(stdout, want) || strings.Contains(stdout, "credentials changed") {
 		t.Errorf("text lacks %q:\n%s", want, stdout)
+	}
+}
+
+func TestVaultStatusObjectNamesTheUnlockDeadline(t *testing.T) {
+	st := vault.Status{State: vault.StateLocked, Entries: -1}
+	at := time.Date(2026, 5, 4, 14, 30, 0, 0, time.UTC)
+	has := func(obj output.Object, name string) bool {
+		for _, f := range obj.Fields {
+			if f.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+	off := vaultStatusObject(st, vaultProcessState{State: "running", Status: vaultproc.Status{LocksAt: at}})
+	if has(off, "unlock_ends_at") {
+		t.Error("status without a maximum names an unlock deadline")
+	}
+	on := vaultStatusObject(st, vaultProcessState{State: "running", Status: vaultproc.Status{LocksAt: at, UnlockEndsAt: at}})
+	if !has(on, "unlock_ends_at") {
+		t.Error("status with a maximum lacks unlock_ends_at")
 	}
 }

@@ -176,18 +176,20 @@ func logEntryOf(f invokelog.Fields) *logEntry {
 // well. A status carries Handover too, the vault's update setting as the process reads it, with
 // SettingsUntrusted where settings.age could not be trusted and reads as lock.
 type response struct {
-	V        int                  `json:"v"`
-	Error    string               `json:"error,omitempty"`
-	Proof    []byte               `json:"proof,omitempty"`
-	Found    bool                 `json:"found,omitempty"`
-	Value    string               `json:"value,omitempty"`
-	PID      int                  `json:"pid,omitempty"`
-	LocksAt  *time.Time           `json:"locks_at,omitempty"`
-	Valid    []bool               `json:"valid,omitempty"`
-	Approval *vault.TokenApproval `json:"approval,omitempty"`
-	Unlogged bool                 `json:"unlogged,omitempty"`
-	Names    *vault.Names         `json:"names,omitempty"`
-	Handover string               `json:"handover,omitempty"`
+	V       int        `json:"v"`
+	Error   string     `json:"error,omitempty"`
+	Proof   []byte     `json:"proof,omitempty"`
+	Found   bool       `json:"found,omitempty"`
+	Value   string     `json:"value,omitempty"`
+	PID     int        `json:"pid,omitempty"`
+	LocksAt *time.Time `json:"locks_at,omitempty"`
+	// UnlockEndsAt belongs to status and is set only where a maximum unlock duration is in force.
+	UnlockEndsAt *time.Time           `json:"unlock_ends_at,omitempty"`
+	Valid        []bool               `json:"valid,omitempty"`
+	Approval     *vault.TokenApproval `json:"approval,omitempty"`
+	Unlogged     bool                 `json:"unlogged,omitempty"`
+	Names        *vault.Names         `json:"names,omitempty"`
+	Handover     string               `json:"handover,omitempty"`
 	// SettingsUntrusted belongs to status.
 	SettingsUntrusted bool `json:"settings_untrusted,omitempty"`
 }

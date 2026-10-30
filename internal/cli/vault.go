@@ -73,7 +73,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
 			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
 			"program or locks it; Windows has no handover and always locks. 'vault settings' shows or sets\n" +
-			"the idle timeout, the admin session timeout, and the log retention.\n\n" +
+			"the idle timeout, the maximum unlock time (counted from the unlock, independent of reads, off by\n" +
+			"default), the admin session timeout, and the log retention.\n\n" +
 			"On Linux, macOS, and Windows 'vault unlock' hands the unlocked vault to a vault process that holds\n" +
 			"it open until it is idle for the vault's idle timeout (12h unless 'vault settings' sets another),\n" +
 			"'vault lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current\n" +
@@ -1035,6 +1036,9 @@ func vaultStatusObject(status vault.Status, process vaultProcessState) output.Ob
 		fields = append(fields,
 			output.Field{Name: "pid", Value: int64(process.Status.PID)},
 			output.Field{Name: "locks_at", Value: formatLocksAt(process.Status.LocksAt)})
+		if !process.Status.UnlockEndsAt.IsZero() {
+			fields = append(fields, output.Field{Name: "unlock_ends_at", Value: formatLocksAt(process.Status.UnlockEndsAt)})
+		}
 		if process.Status.Update != "" {
 			fields = append(fields, output.Field{Name: "update_behaviour", Value: string(process.Status.Update)})
 		}

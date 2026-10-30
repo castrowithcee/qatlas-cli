@@ -201,7 +201,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +
 			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
 			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
-			"the vault's idle timeout, admin session timeout, and log retention, editable while the vault is\n" +
+			"the vault's idle timeout, maximum unlock time (off by default), admin session timeout, and log\n" +
+			"retention, editable while the vault is\n" +
 			"unlocked and saved with F2 into the encrypted vault as settings.age, never into config.yaml, like\n" +
 			"'qatlas vault settings'; the admin session timeout sets how long this window's own admin session\n" +
 			"above stays open (see the read-only paragraph further up), 0s asking for the passphrase on every\n" +
