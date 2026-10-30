@@ -48,6 +48,9 @@ type Settings struct {
 	// RetentionDays is how many days of log history are kept. Zero means never truncate and occurs only in
 	// SafeSettings: it is never a valid value to store and never means "use the default".
 	RetentionDays int
+	// MaxUnlock is the longest the vault stays unlocked, counted from the unlock and independent of reads.
+	// Zero means off, the default and the safe value; no limit is invented.
+	MaxUnlock time.Duration
 }
 
 // DefaultSettings are the settings of a vault without settings.age.
@@ -77,6 +80,9 @@ func (s Settings) Validate() error {
 	}
 	if s.RetentionDays <= 0 {
 		return errors.New("the log retention must be a positive number of days")
+	}
+	if s.MaxUnlock < 0 {
+		return errors.New("the maximum unlock duration must not be negative")
 	}
 	return nil
 }
@@ -114,6 +120,7 @@ type settingsDocument struct {
 	IdleTimeoutNS  int64  `json:"idle_timeout_ns"`
 	AdminTimeoutNS int64  `json:"admin_timeout_ns"`
 	RetentionDays  int    `json:"retention_days"`
+	MaxUnlockNS    int64  `json:"max_unlock_ns"`
 	MAC            string `json:"mac"`
 }
 
@@ -135,7 +142,8 @@ func settingsMAC(key *age.X25519Identity, doc settingsDocument) (string, error) 
 	case 1:
 		fmt.Fprintf(h, "1\n%s", doc.UpdateHandover)
 	case 2:
-		fmt.Fprintf(h, "2\n%s\n%d\n%d\n%d", doc.UpdateHandover, doc.IdleTimeoutNS, doc.AdminTimeoutNS, doc.RetentionDays)
+		fmt.Fprintf(h, "2\n%s\n%d\n%d\n%d\n%d", doc.UpdateHandover, doc.IdleTimeoutNS, doc.AdminTimeoutNS,
+			doc.RetentionDays, doc.MaxUnlockNS)
 	default:
 		return "", errors.New("unknown settings schema")
 	}
@@ -192,6 +200,7 @@ func readSettings(dir string, key *age.X25519Identity) (Settings, int, error) {
 	settings := Settings{
 		Update: behaviour, IdleTimeout: time.Duration(doc.IdleTimeoutNS),
 		AdminTimeout: time.Duration(doc.AdminTimeoutNS), RetentionDays: doc.RetentionDays,
+		MaxUnlock: time.Duration(doc.MaxUnlockNS),
 	}
 	if settings.Validate() != nil {
 		return SafeSettings(), 0, ErrSettingsUntrusted
@@ -200,9 +209,9 @@ func readSettings(dir string, key *age.X25519Identity) (Settings, int, error) {
 }
 
 // SettingsCurrent reports whether the vault unlocked in this process holds a trusted settings.age in the
-// current schema, the one that carries the idle time, the admin session time and the log retention. A
-// missing file and a schema 1 file are not current. A file that is not trusted fails with
-// ErrSettingsUntrusted; without an unlocked vault the error is that of Settings.
+// current schema, the one that carries the idle time, the admin session time, the log retention and the
+// maximum unlock duration. A missing file and a schema 1 file are not current. A file that is not trusted
+// fails with ErrSettingsUntrusted; without an unlocked vault the error is that of Settings.
 func (v *Vault) SettingsCurrent() (bool, error) {
 	if _, err := v.unlockedDocument(); err != nil {
 		return false, err
@@ -254,7 +263,7 @@ func (v *Vault) SetSettings(settings Settings) error {
 	doc := settingsDocument{
 		Schema: settingsSchemaVersion, UpdateHandover: string(settings.Update),
 		IdleTimeoutNS: int64(settings.IdleTimeout), AdminTimeoutNS: int64(settings.AdminTimeout),
-		RetentionDays: settings.RetentionDays,
+		RetentionDays: settings.RetentionDays, MaxUnlockNS: int64(settings.MaxUnlock),
 	}
 	mac, err := settingsMAC(v.identity.key, doc)
 	if err != nil {

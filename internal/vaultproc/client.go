@@ -70,6 +70,9 @@ type Status struct {
 	PID int
 	// LocksAt is when the process locks itself unless a get comes first.
 	LocksAt time.Time
+	// UnlockEndsAt is the hard deadline of the unlock, no get moving the lock past it; zero where no maximum
+	// unlock duration is in force.
+	UnlockEndsAt time.Time
 	// Update is the vault's update setting as the process reads it from settings.age with its own key:
 	// whether an update hands the vault over to the new program or locks it. SettingsUntrusted reports a
 	// settings.age that could not be trusted, which reads as lock. Update is empty for a process that
@@ -88,6 +91,9 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 		SettingsUntrusted: resp.SettingsUntrusted}
 	if resp.LocksAt != nil {
 		status.LocksAt = *resp.LocksAt
+	}
+	if resp.UnlockEndsAt != nil {
+		status.UnlockEndsAt = *resp.UnlockEndsAt
 	}
 	return status, nil
 }

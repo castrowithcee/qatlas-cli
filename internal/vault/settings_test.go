@@ -183,12 +183,12 @@ func wantSettings(t *testing.T, v *Vault, want Settings, wantErr error) {
 
 func TestSettingsDefaultsAndSafeValues(t *testing.T) {
 	v := tokenVault(t)
-	wantSettings(t, v, Settings{UpdateHandover, 12 * time.Hour, 10 * time.Minute, 90}, nil)
+	wantSettings(t, v, Settings{UpdateHandover, 12 * time.Hour, 10 * time.Minute, 90, 0}, nil)
 	if got, err := ReadSettings(v.Dir(), nil); got != SafeSettings() || !errors.Is(err, ErrNotUnlocked) {
 		t.Errorf("ReadSettings() without a key = %+v, %v", got, err)
 	}
 	if safe := SafeSettings(); safe.Update != UpdateLock || safe.IdleTimeout != 12*time.Hour ||
-		safe.AdminTimeout != 0 || safe.RetentionDays != 0 {
+		safe.AdminTimeout != 0 || safe.RetentionDays != 0 || safe.MaxUnlock != 0 {
 		t.Errorf("SafeSettings() = %+v", safe)
 	}
 }
@@ -196,9 +196,10 @@ func TestSettingsDefaultsAndSafeValues(t *testing.T) {
 func TestSettingsRoundTripAndNoUpperBound(t *testing.T) {
 	v := tokenVault(t)
 	for _, want := range []Settings{
-		{UpdateLock, time.Second, 0, 1},
-		{UpdateHandover, 10000 * time.Hour, 5000 * time.Hour, 100000},
-		{UpdateLock, 90 * time.Minute, 30 * time.Second, 7},
+		{UpdateLock, time.Second, 0, 1, 0},
+		{UpdateHandover, 10000 * time.Hour, 5000 * time.Hour, 100000, 0},
+		{UpdateLock, 90 * time.Minute, 30 * time.Second, 7, 0},
+		{UpdateHandover, time.Hour, time.Minute, 7, 8 * time.Hour},
 	} {
 		if err := v.SetSettings(want); err != nil {
 			t.Fatalf("SetSettings(%+v) = %v", want, err)
@@ -214,12 +215,13 @@ func TestSetSettingsRejectsInvalidValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, bad := range map[string]Settings{
-		"behaviour":      {"sometimes", time.Hour, time.Minute, 1},
-		"zero idle":      {UpdateLock, 0, time.Minute, 1},
-		"negative idle":  {UpdateLock, -time.Hour, time.Minute, 1},
-		"negative admin": {UpdateLock, time.Hour, -time.Second, 1},
-		"zero retention": {UpdateLock, time.Hour, time.Minute, 0},
-		"negative days":  {UpdateLock, time.Hour, time.Minute, -3},
+		"behaviour":      {"sometimes", time.Hour, time.Minute, 1, 0},
+		"zero idle":      {UpdateLock, 0, time.Minute, 1, 0},
+		"negative idle":  {UpdateLock, -time.Hour, time.Minute, 1, 0},
+		"negative admin": {UpdateLock, time.Hour, -time.Second, 1, 0},
+		"zero retention": {UpdateLock, time.Hour, time.Minute, 0, 0},
+		"negative days":  {UpdateLock, time.Hour, time.Minute, -3, 0},
+		"negative max":   {UpdateLock, time.Hour, time.Minute, 1, -time.Second},
 	} {
 		if err := v.SetSettings(bad); err == nil {
 			t.Errorf("SetSettings accepted %s", name)
@@ -230,7 +232,7 @@ func TestSetSettingsRejectsInvalidValues(t *testing.T) {
 
 func TestSetUpdateBehaviourKeepsOtherSettings(t *testing.T) {
 	v := tokenVault(t)
-	want := Settings{UpdateHandover, 3 * time.Hour, 0, 30}
+	want := Settings{UpdateHandover, 3 * time.Hour, 0, 30, 0}
 	if err := v.SetSettings(want); err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +245,7 @@ func TestSetUpdateBehaviourKeepsOtherSettings(t *testing.T) {
 
 func TestTamperedSettingsAreUntrustedAsAWhole(t *testing.T) {
 	v := tokenVault(t)
-	want := Settings{UpdateHandover, 3 * time.Hour, 5 * time.Minute, 30}
+	want := Settings{UpdateHandover, 3 * time.Hour, 5 * time.Minute, 30, 2 * time.Hour}
 	if err := v.SetSettings(want); err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +261,8 @@ func TestTamperedSettingsAreUntrustedAsAWhole(t *testing.T) {
 	}
 	doc := func(mutate func(d *settingsDocument)) string {
 		d := settingsDocument{Schema: 2, UpdateHandover: "handover",
-			IdleTimeoutNS: int64(3 * time.Hour), AdminTimeoutNS: int64(5 * time.Minute), RetentionDays: 30}
+			IdleTimeoutNS: int64(3 * time.Hour), AdminTimeoutNS: int64(5 * time.Minute), RetentionDays: 30,
+			MaxUnlockNS: int64(2 * time.Hour)}
 		d.MAC, _ = settingsMAC(v.identity.key, d)
 		mutate(&d)
 		b, _ := json.Marshal(d)
@@ -271,12 +274,14 @@ func TestTamperedSettingsAreUntrustedAsAWhole(t *testing.T) {
 		"idle":       doc(func(d *settingsDocument) { d.IdleTimeoutNS++ }),
 		"admin":      doc(func(d *settingsDocument) { d.AdminTimeoutNS++ }),
 		"retention":  doc(func(d *settingsDocument) { d.RetentionDays++ }),
+		"max unlock": doc(func(d *settingsDocument) { d.MaxUnlockNS++ }),
 		"schema":     doc(func(d *settingsDocument) { d.Schema = 1 }),
 		"unknown":    doc(func(d *settingsDocument) { d.Schema = 3 }),
 		"garbage":    `handover`,
 		"no mac":     doc(func(d *settingsDocument) { d.MAC = "" }),
 		"neg idle":   signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: -1, RetentionDays: 1}),
 		"neg admin":  signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: 1, AdminTimeoutNS: -1, RetentionDays: 1}),
+		"neg max":    signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: 1, RetentionDays: 1, MaxUnlockNS: -1}),
 		"zero days":  signed(v, settingsDocument{Schema: 2, UpdateHandover: "lock", IdleTimeoutNS: 1}),
 		"bad update": signed(v, settingsDocument{Schema: 2, UpdateHandover: "never", IdleTimeoutNS: 1, RetentionDays: 1}),
 	}
@@ -348,7 +353,7 @@ func TestEffectiveSettingsFollowTheVaultState(t *testing.T) {
 	}
 
 	v := tokenVault(t)
-	want := Settings{UpdateLock, time.Hour, time.Minute, 7}
+	want := Settings{UpdateLock, time.Hour, time.Minute, 7, 0}
 	if err := v.SetSettings(want); err != nil {
 		t.Fatal(err)
 	}

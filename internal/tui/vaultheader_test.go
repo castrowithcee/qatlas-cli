@@ -486,3 +486,35 @@ func TestVaultRoleStateDoesNotContradictHeaderUnlockedByProcess(t *testing.T) {
 		t.Fatalf("secretState(%q) = %q, want %q", got, secretState(got), "locked")
 	}
 }
+
+// A vault process with a hard unlock deadline adds it to the unlocked header; without one the header is
+// the plain text.
+func TestVaultHeaderShowsTheUnlockDeadline(t *testing.T) {
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m.vaultProcessUnlocked = true
+	if got := shown(m.vaultHeaderText()); strings.Contains(got, " until ") || !strings.Contains(got, "vault unlocked") {
+		t.Fatalf("header without a deadline = %q, want the plain unlocked text", got)
+	}
+
+	soon := time.Now().Add(time.Minute)
+	m.Update(vaultProcessCheckMsg{unlocked: true, endsAt: soon})
+	want := "vault unlocked until " + unlockDeadlineText(soon, time.Now())
+	if got := shown(m.vaultHeaderText()); !strings.Contains(got, want) {
+		t.Fatalf("header = %q, want it to contain %q", got, want)
+	}
+
+	m.Update(vaultProcessCheckMsg{unlocked: true})
+	if got := shown(m.vaultHeaderText()); strings.Contains(got, " until ") {
+		t.Fatalf("header after the deadline vanished = %q, want none", got)
+	}
+}
+
+func TestUnlockDeadlineTextAddsTheDateOnlyOffToday(t *testing.T) {
+	now := time.Date(2026, 5, 4, 10, 0, 0, 0, time.Local)
+	if got := unlockDeadlineText(time.Date(2026, 5, 4, 14, 30, 0, 0, time.Local), now); got != "14:30" {
+		t.Errorf("today = %q, want 14:30", got)
+	}
+	if got := unlockDeadlineText(time.Date(2026, 5, 5, 1, 5, 0, 0, time.Local), now); got != "2026-05-05 01:05" {
+		t.Errorf("tomorrow = %q, want the date added", got)
+	}
+}

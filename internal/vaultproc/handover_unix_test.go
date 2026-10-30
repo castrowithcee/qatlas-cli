@@ -78,6 +78,10 @@ func handoverHelper(mode, socket string) {
 	s := NewServer(key, snap.Secrets, snap.Bindings)
 	s.Verify = allow
 	s.LocksAt = *snap.LocksAt
+	if snap.UnlockedAt != nil {
+		s.UnlockedAt = *snap.UnlockedAt
+	}
+	s.MaxUnlock = snap.MaxUnlock
 	fmt.Fprintln(report, "ready")
 	_ = report.Close()
 	if err := AwaitHandover(context.Background(), l, socket, HandoverTimeout); err != nil {
@@ -110,17 +114,18 @@ func (l *probeListener) Accept() (net.Conn, error) {
 // handoverFixture is an unlocked vault on disk served by a server in this process, which keeps its log and
 // may hand over, with a signed release whose archive holds the program the server was started from.
 type handoverFixture struct {
-	t        *testing.T
-	vault    *vault.Vault
-	server   *Server
-	served   <-chan error
-	client   *Client
-	socket   string
-	program  string
-	replaced atomic.Bool
-	probe    *writeProbe
-	release  ReleaseFiles
-	scope    vault.Scope
+	t          *testing.T
+	vault      *vault.Vault
+	server     *Server
+	served     <-chan error
+	client     *Client
+	unlockedAt time.Time
+	socket     string
+	program    string
+	replaced   atomic.Bool
+	probe      *writeProbe
+	release    ReleaseFiles
+	scope      vault.Scope
 	// mode is the helper mode a successor is started in; starts counts the successors started, and
 	// successor and output are the last one and its standard output.
 	mode      string
@@ -173,6 +178,9 @@ func newHandoverFixture(t *testing.T) *handoverFixture {
 	}
 	f.server = NewServer(key, snap.Secrets, snap.Bindings)
 	f.server.Verify = allow
+	f.unlockedAt = time.Now().Add(-10 * time.Minute).Truncate(time.Millisecond)
+	f.server.UnlockedAt = f.unlockedAt
+	f.server.MaxUnlock = 30 * time.Minute
 	f.server.KeepLog(f.vault.Dir(), 90)
 	f.server.ownProgram = func() (string, bool) { return f.program, f.replaced.Load() }
 	f.server.AllowHandover(f.vault.Dir(), []ssh.PublicKey{signer.PublicKey()}, f.start)
@@ -610,6 +618,12 @@ func TestHandoverToASuccessor(t *testing.T) {
 	}
 	if value, found, err := f.client.Get(ctx, "gh-a", "user", f.scope); err != nil || !found || value != "synthetic-value" {
 		t.Fatalf("Get() from the successor = %q, %v, %v", value, found, err)
+	}
+	// The successor holds the unlock time of the old process, so its read does not push the lock past the
+	// limit counted from there.
+	if st, err := f.client.Status(ctx); err != nil || !st.LocksAt.Equal(f.unlockedAt.Add(30*time.Minute)) {
+		t.Fatalf("Status() after a get on the successor = %+v, %v, want it locking at the unlock time plus the maximum %v",
+			st, err, f.unlockedAt.Add(30*time.Minute))
 	}
 	for _, path := range []string{f.socket, f.socket + ".lock"} {
 		if _, err := os.Lstat(path); err != nil {

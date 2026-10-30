@@ -538,6 +538,39 @@ func TestVaultSectionSavesSettingsInTheVault(t *testing.T) {
 	}
 }
 
+// The maximum unlock time is a row next to the idle timeout, off by default, saved with the others and refused
+// when negative or not a duration.
+func TestVaultSectionSavesMaxUnlockInTheVault(t *testing.T) {
+	m, _ := unlockedSettingsModel(t)
+	openVaultSection(t, m)
+
+	f := m.field("max unlock time")
+	if f == nil || f.readOnly || f.value() != "0s" || f.hint == "" {
+		t.Fatalf("row = %+v, want an editable row, off, with a hint", f)
+	}
+	focusRole(t, m, "max unlock time")
+	for _, bad := range []string{"-1h", "never"} {
+		clearField(t, m)
+		typeText(t, m, bad)
+		press(t, m, "f2")
+		if m.fail == "" || m.screen != screenForm {
+			t.Fatalf("%q was accepted: fail %q", bad, m.fail)
+		}
+		if got, _ := m.secrets.Vault().Settings(); got.MaxUnlock != 0 {
+			t.Fatalf("a refused value was stored: %+v", got)
+		}
+	}
+	clearField(t, m)
+	typeText(t, m, "8h")
+	press(t, m, "f2")
+	got, err := m.secrets.Vault().Settings()
+	want := vault.DefaultSettings()
+	want.MaxUnlock = 8 * time.Hour
+	if m.fail != "" || err != nil || got != want || m.fieldValue("max unlock time") != "8h" {
+		t.Errorf("after saving: fail %q, Settings() = %+v, %v, row %q", m.fail, got, err, m.fieldValue("max unlock time"))
+	}
+}
+
 // A settings change is a change like any other: esc asks before it is lost, and saving through that
 // question writes the same settings.age as F2.
 func TestVaultSectionLeaveAsksBeforeLosingSettingChanges(t *testing.T) {

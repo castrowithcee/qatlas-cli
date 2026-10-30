@@ -265,6 +265,79 @@ func TestIdleLock(t *testing.T) {
 	}
 }
 
+// A maximum unlock duration locks the server despite continuous gets, and no get moves the lock time past it.
+func TestMaxUnlockLocksDespiteGets(t *testing.T) {
+	path := socketIn(t)
+	l, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	s := NewServer(testKey, testSecrets(), testBindings())
+	s.IdleTimeout = time.Minute
+	s.MaxUnlock = 400 * time.Millisecond
+	start := time.Now()
+	done := serve(t, s, l)
+	c := NewClient(path, testRecipient)
+
+	status, err := c.Status(context.Background())
+	if err != nil || status.LocksAt.After(start.Add(s.MaxUnlock+time.Second)) || time.Until(status.LocksAt) > s.MaxUnlock {
+		t.Fatalf("Status() = %+v, %v, want the maximum as the lock time, not the idle time", status, err)
+	}
+	if !status.UnlockEndsAt.Equal(status.LocksAt) || status.UnlockEndsAt.IsZero() {
+		t.Fatalf("Status().UnlockEndsAt = %v, want the hard deadline %v", status.UnlockEndsAt, status.LocksAt)
+	}
+	for time.Since(start) < 300*time.Millisecond {
+		if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); err != nil {
+			t.Fatalf("Get() error = %v", err)
+		}
+		after, err := c.Status(context.Background())
+		if err != nil || after.LocksAt.After(status.LocksAt) {
+			t.Fatalf("Status() after a get = %+v, %v, want a lock time no later than %v", after, err, status.LocksAt)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	waitServed(t, done)
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Fatalf("locked after %v, want about the maximum", elapsed)
+	}
+}
+
+// Without a maximum the lock time is the idle deadline, as ever; an unlock time in the past counts the maximum
+// from there.
+func TestMaxUnlockOffAndUnlockTime(t *testing.T) {
+	s := NewServer(testKey, testSecrets(), testBindings())
+	s.IdleTimeout = time.Hour
+	s.mu.Lock()
+	if at := s.nextLocksAt(); time.Until(at) < 59*time.Minute {
+		t.Fatalf("lock time without a maximum = in %v, want the idle time", time.Until(at))
+	}
+	s.mu.Unlock()
+
+	path := socketIn(t)
+	l, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	unlocked := time.Now().Add(-10 * time.Minute)
+	s.UnlockedAt = unlocked
+	s.MaxUnlock = 30 * time.Minute
+	done := serve(t, s, l)
+	c := NewClient(path, testRecipient)
+	if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	status, err := c.Status(context.Background())
+	if err != nil || !status.LocksAt.Equal(unlocked.Add(30*time.Minute)) {
+		t.Fatalf("Status() = %+v, %v, want it locking at %v", status, err, unlocked.Add(30*time.Minute))
+	}
+	snap, ok := s.snapshot()
+	if !ok || snap.UnlockedAt == nil || !snap.UnlockedAt.Equal(unlocked) || snap.MaxUnlock != 30*time.Minute {
+		t.Fatalf("snapshot() = %+v, %v, want the unlock time and the maximum handed on", snap, ok)
+	}
+	_ = c.Lock(context.Background())
+	waitServed(t, done)
+}
+
 func TestListenServesOnlyOnce(t *testing.T) {
 	path := socketIn(t)
 	first, err := Listen(path)
@@ -495,4 +568,25 @@ func TestClientReachesAHardenedServer(t *testing.T) {
 	if got := line(t, out); got != "locked" {
 		t.Fatalf("the helper process said %q after Lock()", got)
 	}
+}
+
+func TestStatusWithoutMaximumHasNoUnlockEnd(t *testing.T) {
+	path := socketIn(t)
+	l, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	s := NewServer(testKey, testSecrets(), testBindings())
+	s.IdleTimeout = time.Minute
+	done := serve(t, s, l)
+	c := NewClient(path, testRecipient)
+
+	status, err := c.Status(context.Background())
+	if err != nil || !status.UnlockEndsAt.IsZero() {
+		t.Fatalf("Status() = %+v, %v, want no unlock end without a maximum", status, err)
+	}
+	if err := c.Lock(context.Background()); err != nil {
+		t.Fatalf("Lock() error = %v", err)
+	}
+	waitServed(t, done)
 }

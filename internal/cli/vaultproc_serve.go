@@ -112,6 +112,14 @@ func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error 
 	if snap.LocksAt != nil {
 		server.LocksAt = *snap.LocksAt
 	}
+	// The maximum counts from the unlock: the predecessor's time on a handover, else this start. A
+	// predecessor without the field had no maximum, so counting from this start never shortens or extends
+	// what it promised. The shorter of the inherited and the own maximum holds, so a handover never
+	// removes or extends a limit.
+	if snap.UnlockedAt != nil && !snap.UnlockedAt.After(time.Now()) {
+		server.UnlockedAt = *snap.UnlockedAt
+	}
+	server.MaxUnlock = shorterLimit(snap.MaxUnlock, vaultProcessMaxUnlock(vaultDir, key))
 	// While it runs, this process is the one writer that signs the invocation log of this vault, with the
 	// retention settings.age had when it started. Untrusted settings.age truncates nothing.
 	server.KeepLog(vaultDir, vaultProcessLogRetention(vaultDir, key))
@@ -171,6 +179,24 @@ func readHandover(f *os.File) (vault.Snapshot, error) {
 func vaultProcessLogRetention(vaultDir string, key *age.X25519Identity) int {
 	settings, _ := vault.ReadSettings(vaultDir, key)
 	return settings.RetentionDays
+}
+
+// vaultProcessMaxUnlock is the maximum unlock duration authenticated in settings.age, read with the key the
+// process holds. An untrusted settings.age gives zero, which is no limit.
+func vaultProcessMaxUnlock(vaultDir string, key *age.X25519Identity) time.Duration {
+	settings, _ := vault.ReadSettings(vaultDir, key)
+	return settings.MaxUnlock
+}
+
+// shorterLimit is the smaller positive one of two maximum durations; zero means none.
+func shorterLimit(a, b time.Duration) time.Duration {
+	if a <= 0 {
+		return max(b, 0)
+	}
+	if b <= 0 || a < b {
+		return a
+	}
+	return b
 }
 
 // vaultProcessIdleTimeout is the idle time the vault process locks itself after: the one authenticated in
