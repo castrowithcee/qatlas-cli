@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-
 	"charm.land/lipgloss/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
@@ -143,7 +141,7 @@ func knownTheme(name string) (string, string) {
 	if t, ok := themeNamed(name); ok {
 		return t.name, ""
 	}
-	return themes[0].name, fmt.Sprintf("theme %q is not a theme of this version, using %s", name, themes[0].name)
+	return themes[0].name, tr(tThemeUnknown, name, themes[0].name)
 }
 
 // theme holds the palette and the styles of the TUI. The styles are built from the palette roles. None of

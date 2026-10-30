@@ -49,9 +49,9 @@ func keyRowValue(f field) string {
 	standard := uiprefs.DefaultKeys().Get(f.action)
 	switch {
 	case f.action == uiprefs.ActionInfo && f.bound == "":
-		return tr(tKeyInfoOnly)
+		return tr(tKeyInfoOnly, keyName(keyOf(actInfo)))
 	case f.action == uiprefs.ActionInfo:
-		return tr(tKeyInfoAnd, keyName(f.bound))
+		return tr(tKeyInfoAnd, keyName(keyOf(actInfo)), keyName(f.bound))
 	case f.bound == standard:
 		return tr(tKeyStandard, keyName(f.bound))
 	}
@@ -98,7 +98,7 @@ func (m *Model) captureKey(key tea.KeyPressMsg) tea.Cmd {
 	if name == keyOf(actSpace) {
 		// Check trims a blank key to "", which Info accepts as "no second key", so a space would silently
 		// clear it; refuse it here with the rule's wording for every action.
-		m.fail = "space: space and control characters are no binding"
+		m.fail = tr(tKeySpaceRefused)
 		return nil
 	}
 	chosen, err := m.keysOfForm().Check(f.action, name)

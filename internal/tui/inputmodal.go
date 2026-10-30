@@ -146,7 +146,7 @@ func (m *Model) testResultKey(key tea.KeyPressMsg) {
 // testPrompt is the result of a connection test.
 func (m *Model) testPrompt() promptDialog {
 	return promptDialog{
-		title: "Connection test",
+		title: tr(tConnTestTitle),
 		input: strings.TrimLeft(m.testLine(), "\n"),
 		keys:  "{enter} or {back} close",
 	}

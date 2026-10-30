@@ -2,7 +2,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"path/filepath"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -55,12 +54,10 @@ func (m *Model) conflicted(err error) bool {
 	name := filepath.Base(m.svc.Path())
 	if rerr := m.reloadConfig(); rerr != nil {
 		m.rev = staleRevision
-		m.fail = m.redactor.Apply(fmt.Sprintf("%s changed outside this editor and could not be reloaded: %v; "+
-			"nothing was written", name, rerr))
+		m.fail = m.redactor.Apply(tr(tRevisionReloadFailed, name, rerr))
 		return true
 	}
 	m.status = ""
-	m.fail = name + " changed outside this editor; it was reloaded and nothing was written. " +
-		"Check your input against the current state and repeat the change"
+	m.fail = tr(tRevisionChanged, name)
 	return true
 }

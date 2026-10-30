@@ -165,12 +165,12 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 				}
 				// The list of keys comes with its heading in bold.
 				for i, line := range m.helpLines() {
-					if line == keysHeading {
+					if line == tr(tKeysHeading) {
 						m.clampHelp()
 						m.help.vp.SetYOffset(i)
 					}
 				}
-				if !strings.Contains(m.render(), colourOf(styles.title)+keysHeading) {
+				if !strings.Contains(m.render(), colourOf(styles.title)+tr(tKeysHeading)) {
 					t.Errorf("%dx%d: the heading of the keys is not bold:\n%q", size.width, size.height, m.render())
 				}
 			}

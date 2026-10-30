@@ -226,19 +226,19 @@ func (m *Model) saveVault() tea.Cmd {
 	next.Update = vault.UpdateBehaviour(m.fieldValue(updateBehaviourLabel))
 	var err error
 	if next.IdleTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(idleTimeoutLabel))); err != nil {
-		m.fail = tr(tVaultSettingBadDuration, idleTimeoutLabel)
+		m.fail = tr(tVaultSettingBadDuration, labelText(idleTimeoutLabel))
 		return nil
 	}
 	if next.MaxUnlock, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(maxUnlockLabel))); err != nil {
-		m.fail = tr(tVaultSettingBadDuration, maxUnlockLabel)
+		m.fail = tr(tVaultSettingBadDuration, labelText(maxUnlockLabel))
 		return nil
 	}
 	if next.AdminTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(adminTimeoutLabel))); err != nil {
-		m.fail = tr(tVaultSettingBadDuration, adminTimeoutLabel)
+		m.fail = tr(tVaultSettingBadDuration, labelText(adminTimeoutLabel))
 		return nil
 	}
 	if next.RetentionDays, err = strconv.Atoi(strings.TrimSpace(m.fieldValue(logRetentionLabel))); err != nil {
-		m.fail = tr(tVaultSettingBadNumber, logRetentionLabel)
+		m.fail = tr(tVaultSettingBadNumber, labelText(logRetentionLabel))
 		return nil
 	}
 	if next == *shown {
@@ -450,11 +450,12 @@ func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd 
 	m.writes++
 	m.busy = tr(tBusyChangingPassphrase)
 	svc := m.svc
+	unlockAgain := tr(tVaultUnlockAgain)
 	return func() tea.Msg {
 		// A passphrase is changed because the old one should no longer open the vault; a vault process
 		// unlocked with it would keep the vault open regardless, so it is locked first, the way 'qatlas
 		// vault passphrase' already does.
-		note := svc.LockVaultProcess(context.Background(), "", "unlock it again with 'qatlas vault unlock'")
+		note := svc.LockVaultProcess(context.Background(), "", unlockAgain)
 		return vaultActionMsg{
 			action: vaultActionPassphrase, err: v.ChangePassphrase(current, newPassphrase), procNote: note,
 		}
@@ -488,11 +489,12 @@ func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {
 	m.writes++
 	m.busy = tr(tBusyDecrypting)
 	svc := m.svc
+	noUnlock := tr(tVaultNoUnlocking)
 	return func() tea.Msg {
 		// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
 		// therefore asked to lock, any more; it would hold the secrets until its idle timeout. Locking first
 		// mirrors 'qatlas vault decrypt'.
-		note := svc.LockVaultProcess(context.Background(), "", "the unencrypted vault needs no unlocking")
+		note := svc.LockVaultProcess(context.Background(), "", noUnlock)
 		return vaultActionMsg{action: vaultActionDecrypt, err: v.Decrypt(passphrase), procNote: note}
 	}
 }
