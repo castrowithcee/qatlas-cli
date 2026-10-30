@@ -181,7 +181,7 @@ func TestUpdateNoLongerRefusesWindows(t *testing.T) {
 	server := releaseServer(t, "v1.1.0", archive, "")
 	defer server.Close()
 	_, executable := installedPrefix(t)
-	c := &Client{BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", GOOS: "windows", GOARCH: "amd64", Executable: executable}
+	c := &Client{BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", SigningKeys: testKeys(t), GOOS: "windows", GOARCH: "amd64", Executable: executable}
 	_, err := c.Update(context.Background())
 	var unsupported *UnsupportedInstallationError
 	if errors.As(err, &unsupported) && strings.Contains(unsupported.Reason, "not supported yet") {
