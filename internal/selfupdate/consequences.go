@@ -56,7 +56,7 @@ func consequences(goos string, others int, older bool) string {
 		b.WriteString("A running vault process is locked first, whatever the update behaviour is, because an " +
 			"older version cannot take over an unlocked vault; 'qatlas vault unlock' unlocks it again.")
 	} else {
-		b.WriteString("A running vault process is handed over to the new version if the release is signed and the " +
+		b.WriteString("A running vault process is handed over to the new version if the " +
 			"update behaviour is handover, and locked first otherwise.")
 	}
 	if others > 0 {

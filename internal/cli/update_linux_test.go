@@ -157,7 +157,7 @@ func TestTUIUpdaterLocksFirst(t *testing.T) {
 	if err != nil || !result.Updated {
 		t.Fatalf("Update() = %+v, %v", result, err)
 	}
-	if note := updater.(interface{ Note() string }).Note(); !strings.Contains(note, "vault process was locked") {
+	if note := updater.(interface{ Note() string }).Note(); !strings.Contains(note, "locked itself") {
 		t.Errorf("note = %q", note)
 	}
 }
