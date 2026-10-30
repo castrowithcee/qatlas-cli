@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -407,5 +408,25 @@ func TestCapitalUpdateActsAndLowercaseLettersDoNot(t *testing.T) {
 	press(t, m, "n")
 	if m.screen != screenNav || fake.updates != 0 {
 		t.Errorf("n after U = screen %v updates %d, want nothing installed", m.screen, fake.updates)
+	}
+}
+
+// F8 removes a payload field: no binding may take it, and a stored one falls back to the standard with a
+// warning.
+func TestRemoveFieldKeyIsNoBinding(t *testing.T) {
+	keepKeys(t)
+	for _, name := range uiprefs.Actions {
+		_, err := uiprefs.DefaultKeys().Check(name, "f8")
+		if err == nil || !strings.Contains(err.Error(), "already the key of removefield") {
+			t.Errorf("Check(%s, f8) = %v, want a refusal naming the other action", name, err)
+		}
+	}
+	path := uiprefs.Path(t.TempDir())
+	if err := os.WriteFile(path, []byte("keys:\n  lock: F8\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, warnings := uiprefs.Load(path)
+	if got.Keys.Lock != uiprefs.DefaultKeys().Lock || len(warnings) != 1 || !strings.Contains(warnings[0], "keys.lock") {
+		t.Fatalf("keys %+v, warnings %v, want the standard lock key and one warning", got.Keys, warnings)
 	}
 }

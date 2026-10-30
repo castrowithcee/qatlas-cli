@@ -118,7 +118,7 @@ func (m *Model) payloadRows() []int {
 }
 
 // payloadKey handles the keys that are specific to a payload form: enter on the new-field row adds a field,
-// ctrl+d on a value row removes it.
+// F8 on a value row removes it. The row is a text line, so ctrl+d stays its delete-to-the-right.
 func (m *Model) payloadKey(key tea.KeyPressMsg) bool {
 	switch current := m.fields[m.focus]; {
 	case current.kind == fieldPayloadNew && keyIs(key, actEnter):
@@ -366,7 +366,7 @@ func (m *Model) payloadKeys() string {
 	case fieldPayloadNew:
 		return "enter add field · tab next field · " + formKeys
 	case fieldMasked:
-		return "ctrl+d remove field · tab next field · enter next · " + formKeys
+		return "F8 remove field · tab next field · enter next · " + formKeys
 	}
 	return ""
 }

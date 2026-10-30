@@ -671,7 +671,7 @@ func visualTargetPicker(t *testing.T, m *Model) {
 	}
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	deliver(m, cmd)
-	pump(t, m, "tab", "down", "down", "tab")
+	pump(t, m, "tab", "space", "down", "down", "space")
 }
 
 // visualSetupSummary walks the guided setup of a new connection to its summary.

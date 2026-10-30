@@ -318,12 +318,16 @@ func TestThePickerOpensALevelAndGoesBack(t *testing.T) {
 		}
 	}
 	pump(t, m, "left")
-	if len(m.targetPick.levels) != 1 || m.targetPick.top().list.query() != "b" {
-		t.Fatalf("left did not return to the first level with its search: %d levels", len(m.targetPick.levels))
+	if len(m.targetPick.levels) != 2 {
+		t.Fatalf("left went up a level: %d levels", len(m.targetPick.levels))
 	}
-	pump(t, m, "left")
-	if m.status != "Already on the top level" {
-		t.Errorf("left on the top level says %q", m.status)
+	pump(t, m, "esc")
+	if m.targetPick == nil || len(m.targetPick.levels) != 1 || m.targetPick.top().list.query() != "b" {
+		t.Fatalf("esc did not return to the first level with its search")
+	}
+	pump(t, m, "esc")
+	if m.targetPick != nil {
+		t.Errorf("esc on the top level left the picker open")
 	}
 }
 
@@ -347,7 +351,7 @@ func TestSeveralEntriesCanBeMarkedAndTakenTogether(t *testing.T) {
 	src := &listSource{list: pickPage(group("a"), group("b"), group("c"))}
 	m := pickerModel(t, src, "g/a")
 	openPicker(t, m)
-	pump(t, m, "down", "tab", "down", "tab")
+	pump(t, m, "tab", "down", "space", "down", "space")
 	if view := screenOf(m); !strings.Contains(view, "[x] Group b") || !strings.Contains(view, "2 marked") {
 		t.Fatalf("marks not shown:\n%s", view)
 	}
@@ -359,7 +363,7 @@ func TestSeveralEntriesCanBeMarkedAndTakenTogether(t *testing.T) {
 	// An entry the list holds already is refused and nothing of the choice is taken.
 	m2 := pickerModel(t, src, "g/a")
 	openPicker(t, m2)
-	pump(t, m2, "tab", "down", "tab", "enter")
+	pump(t, m2, "tab", "space", "down", "space", "enter")
 	if m2.targetPick == nil || len(m2.targetList.all) != 1 || !strings.Contains(m2.fail, "already in the list") {
 		t.Fatalf("a refused choice: picker open %v list %v error %q", m2.targetPick != nil, m2.targetList.all, m2.fail)
 	}
@@ -479,7 +483,7 @@ func TestF2InThePickerTakesTheMarksAndSaves(t *testing.T) {
 	src := &listSource{list: pickPage(group("a"), group("b"))}
 	m := pickerModel(t, src)
 	openPicker(t, m)
-	pump(t, m, "tab", "f2")
+	pump(t, m, "tab", "space", "f2")
 	if m.targetPick != nil || m.fail != "" {
 		t.Fatalf("F2 left the picker open %v or failed: %q", m.targetPick != nil, m.fail)
 	}
@@ -536,7 +540,7 @@ func TestAnAddressWithSeveralMatchesOffersThemToChoose(t *testing.T) {
 	if m.status != "Nothing lies below this entry" || len(m.targetPick.levels) != 1 {
 		t.Errorf("an address result opened a level: %q", m.status)
 	}
-	pump(t, m, "tab", "down", "tab", "enter")
+	pump(t, m, "tab", "space", "down", "space", "enter")
 	if got := strings.Join(m.targetList.all, ","); got != "g/a,g/b" {
 		t.Fatalf("list %q, want both matches", got)
 	}
@@ -782,8 +786,9 @@ func pickInSetup(t *testing.T, m *Model, take ...string) {
 	focusField(t, m, targetsLabel)
 	press(t, m, "enter", "n")
 	openPicker(t, m)
+	press(t, m, "tab")
 	for range take {
-		press(t, m, "tab", "down")
+		press(t, m, "space", "down")
 	}
 	pump(t, m, "enter")
 	if m.screen != screenTargets || m.targetPick != nil {
@@ -919,7 +924,7 @@ func TestThePickerTakesListEntriesAsExclusions(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, "as exclusions") {
 		t.Fatalf("the picker does not say it takes exclusions:\n%s", view)
 	}
-	pump(t, m, "tab", "down", "tab", "enter")
+	pump(t, m, "tab", "space", "down", "space", "enter")
 	if reach, out := exclusionState(m); !reflect.DeepEqual(reach, []string{"g/z"}) || !reflect.DeepEqual(out, []string{"g/a", "g/b"}) {
 		t.Fatalf("list %v / %v, error %q", reach, out, m.fail)
 	}
@@ -1005,5 +1010,63 @@ func TestTheNextKindKeySwitchesTheKind(t *testing.T) {
 	deliver(m, cmd)
 	if lv.kind() != "team" {
 		t.Errorf("ctrl+y left the kind %s, want team", lv.kind())
+	}
+}
+
+func TestTheTargetPickerTicksWithSpaceAndTabChangesTheZone(t *testing.T) {
+	src := &listSource{list: pickPage(group("a"), group("b"))}
+	m := pickerModel(t, src)
+	openPicker(t, m)
+	lv := m.targetPick.top()
+	if !lv.list.editing {
+		t.Fatal("the picker does not open on the search")
+	}
+	pump(t, m, "space")
+	if len(m.targetPick.marks) != 0 || lv.list.input.Value() != " " {
+		t.Fatalf("space in the search ticked %v or was not typed: %q", m.targetPick.marks, lv.list.input.Value())
+	}
+	pump(t, m, "backspace", "tab")
+	if lv.list.editing {
+		t.Fatal("tab did not leave the search for the entries")
+	}
+	pump(t, m, "space")
+	if len(m.targetPick.marks) != 1 {
+		t.Fatalf("space on an entry marks %v, want one", m.targetPick.marks)
+	}
+	pump(t, m, "space")
+	if len(m.targetPick.marks) != 0 {
+		t.Fatalf("a second space left marks %v", m.targetPick.marks)
+	}
+	pump(t, m, "shift+tab")
+	if !lv.list.editing {
+		t.Fatal("shift+tab did not return to the search")
+	}
+	pump(t, m, "tab", "x")
+	if !lv.list.editing || lv.list.input.Value() != "x" {
+		t.Fatalf("a letter on the entries did not lead into the search: %q", lv.list.input.Value())
+	}
+}
+
+func TestEscInTheTargetPickerAsksBeforeDroppingTicks(t *testing.T) {
+	src := &listSource{list: pickPage(group("a"), group("b"))}
+	m := pickerModel(t, src)
+	openPicker(t, m)
+	pump(t, m, "tab", "space", "esc")
+	if m.screen != screenLeave || m.targetPick == nil {
+		t.Fatalf("esc with ticks = screen %v, picker open %v, want the question", m.screen, m.targetPick != nil)
+	}
+	pump(t, m, "esc")
+	if m.screen != screenTargets || m.targetPick == nil || len(m.targetPick.marks) != 1 {
+		t.Fatalf("esc in the question dropped the ticks: screen %v", m.screen)
+	}
+	pump(t, m, "esc", "d")
+	if m.targetPick != nil || len(m.targetList.all) != 0 {
+		t.Fatalf("d did not discard the ticks: picker open %v, list %v", m.targetPick != nil, m.targetList.all)
+	}
+	m = pickerModel(t, src)
+	openPicker(t, m)
+	pump(t, m, "esc")
+	if m.targetPick != nil || m.screen == screenLeave {
+		t.Fatal("esc without ticks asked or kept the picker open")
 	}
 }

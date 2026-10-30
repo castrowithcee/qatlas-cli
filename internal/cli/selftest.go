@@ -48,8 +48,8 @@ func newSelftestCommand(opts *Options) *cobra.Command {
 			"log, and ignores --config, QATLAS_CONFIG, and QATLAS_CLI_HOME. Each scenario is a subcommand.\n\n" +
 			"The scratch directory lies in the system's temporary directory; --dir picks another base\n" +
 			"directory, which decides the file system that is measured. Progress goes to stderr, the result\n" +
-			"to stdout, as a table or, with --json, as one JSON document. A run ends with exit code 1 when\n" +
-			"it is interrupted with ctrl+c or SIGTERM. Nothing here is offered over MCP.",
+			"to stdout, as a table or, with --output json, as one JSON document. A run ends with exit code 1\n" +
+			"when it is interrupted with ctrl+c or SIGTERM. Nothing here is offered over MCP.",
 		Annotations: map[string]string{selfContainedAnnotation: "true"},
 		Args:        noArgs,
 		RunE:        func(c *cobra.Command, _ []string) error { return c.Help() },
@@ -117,6 +117,7 @@ func newSelftestScenarioCommand(opts *Options, scenario selftest.Scenario) *cobr
 	f.StringVar(&profile, "profile", "standard", "size of the run: standard or smoke")
 	f.StringVar(&dir, "dir", "", "base directory of the scratch directory, which decides the file system measured; default the system's temporary directory")
 	f.BoolVar(&asJSON, "json", false, "write the report as JSON (same as --output json)")
+	_ = f.MarkHidden("json") // kept as an alias of --output json for existing callers
 	return cmd
 }
 

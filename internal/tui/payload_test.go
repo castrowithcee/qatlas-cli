@@ -118,6 +118,9 @@ func (h *payloadHarness) startPayload(t *testing.T, name, storage, description s
 
 func ctrlD() tea.KeyPressMsg { return tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl} }
 
+// keyF8 is the key that removes the focused payload field.
+func keyF8() tea.KeyPressMsg { return tea.KeyPressMsg{Code: tea.KeyF8} }
+
 func TestPayloadSecretWithTwoFieldsIsStored(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -251,32 +254,32 @@ func TestPayloadFieldsAreAddedAndRemoved(t *testing.T) {
 		t.Fatalf("rows = %d, want 2", got)
 	}
 
-	// Remove the password row: focus it, then ctrl+d.
+	// Remove the password row: focus it, then F8.
 	press(t, h.m, "shift+tab")
 	if h.m.fields[h.m.focus].label != "password" {
 		t.Fatalf("focus on %q, want password", h.m.fields[h.m.focus].label)
 	}
-	h.m.Update(ctrlD())
+	h.m.Update(keyF8())
 	if got := len(h.m.payloadRows()); got != 2 {
-		t.Fatalf("ctrl+d removed the field without asking: rows %v", h.m.payloadRows())
+		t.Fatalf("F8 removed the field without asking: rows %v", h.m.payloadRows())
 	}
 	if !strings.Contains(strings.Join(strings.Fields(h.m.render()), " "), "y remove n/esc keep") {
 		t.Fatalf("the question is not shown:\n%s", h.m.render())
 	}
-	h.m.Update(ctrlD())
+	h.m.Update(keyF8())
 	h.press(t, "esc")
 	if got := len(h.m.payloadRows()); got != 2 {
 		t.Fatalf("esc removed the field: rows %v", h.m.payloadRows())
 	}
-	h.m.Update(ctrlD())
+	h.m.Update(keyF8())
 	h.press(t, "n")
 	if got := len(h.m.payloadRows()); got != 2 {
 		t.Fatalf("n removed the field: rows %v", h.m.payloadRows())
 	}
-	h.m.Update(ctrlD())
+	h.m.Update(keyF8())
 	h.press(t, "y")
 	if got := len(h.m.payloadRows()); got != 1 || h.m.fields[h.m.payloadRows()[0]].label != "username" {
-		t.Fatalf("after ctrl+d the value rows are %v", h.m.payloadRows())
+		t.Fatalf("after F8 the value rows are %v", h.m.payloadRows())
 	}
 	h.press(t, "f2")
 	if h.m.fail != "" {
@@ -317,7 +320,7 @@ func TestEditingAPayloadSecretKeepsEmptyValuesAndDeletesRemovedFields(t *testing
 	}
 	h.typeText(t, canaryPayload)
 	h.press(t, "tab")
-	h.m.Update(ctrlD())
+	h.m.Update(keyF8())
 	h.press(t, "y")
 	h.press(t, "f2")
 	if h.m.fail != "" {
@@ -646,5 +649,36 @@ func TestForwardBindingNoteNamesAConnectionCredentialOutsideTheVault(t *testing.
 	}
 	if note := m.forwardBindingNote(""); note != "" {
 		t.Errorf("the payload form against an encrypted vault: note %q, want none", note)
+	}
+}
+
+func TestCtrlDInAPayloadValueDeletesOneCharacterToTheRight(t *testing.T) {
+	h := newPayloadHarness(t, false)
+	h.startPayload(t, "billing", storageKeyring, "")
+	h.addField(t, "token", canaryPayload)
+	h.press(t, "shift+tab")
+	row := &h.m.fields[h.m.focus]
+	if row.label != "token" || row.input.Value() == "" {
+		t.Fatalf("focus on %q holding %d characters, want the typed value row", row.label, len(row.input.Value()))
+	}
+	before := len(row.input.Value())
+	row.input.SetCursor(0)
+	h.m.Update(ctrlD())
+	if h.m.payloadRemoveAsk || len(h.m.payloadRows()) != 1 {
+		t.Fatal("ctrl+d in the value asked to remove the field")
+	}
+	if got := len(h.m.fields[h.m.focus].input.Value()); got != before-1 {
+		t.Fatalf("ctrl+d left %d characters, want %d", got, before-1)
+	}
+}
+
+func TestCtrlDeleteDoesNotRemoveAPayloadField(t *testing.T) {
+	h := newPayloadHarness(t, false)
+	h.startPayload(t, "billing", storageKeyring, "")
+	h.addField(t, "token", canaryPayload)
+	h.press(t, "shift+tab")
+	h.m.Update(tea.KeyPressMsg{Code: tea.KeyDelete, Mod: tea.ModCtrl})
+	if h.m.payloadRemoveAsk || len(h.m.payloadRows()) != 1 {
+		t.Fatal("ctrl+delete asked to remove the field")
 	}
 }
