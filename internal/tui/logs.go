@@ -559,7 +559,7 @@ func orDash(s string) string {
 
 // estimateTokens approximates the tokens of a payload of n bytes at 3.5 bytes per token.
 func estimateTokens(n int64) string {
-	return fmt.Sprintf("~%d tok", n*2/7)
+	return tr(tUnitTokens, n*2/7)
 }
 
 // formatBytes shows a byte counter with its token estimate; a nil counter was not recorded.

@@ -60,9 +60,11 @@ func setLanguage(pref string) {
 	refreshKeyHelp()
 }
 
-// tr is the text of id in the current language; args are formatted into it.
+// tr is the text of id in the current language; args are formatted into it. A text names a key by the
+// placeholder of its action ("{enter}"), resolved against the keys in force before the arguments are
+// formatted in, so a rebinding shows and an argument that happens to hold braces stays as it is.
 func tr(id textID, args ...any) string {
-	text := i18n.Lookup(catalogs, uiLang, id)
+	text := keyPlaceholders(i18n.Lookup(catalogs, uiLang, id))
 	if len(args) == 0 {
 		return text
 	}

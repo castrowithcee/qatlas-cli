@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -66,9 +65,6 @@ func (m *Model) helpLines() []string {
 	return strings.Split(helptopics.Wrap(text, m.helpInner()), "\n")
 }
 
-// keysHeading is the first line of the list of keys; helpLine draws it as a heading.
-const keysHeading = "Keys in force on this device:"
-
 // isHeading reports whether a line of a topic is a heading: short, without indent, ending in a colon.
 func isHeading(line string) bool {
 	return strings.HasSuffix(line, ":") && !strings.HasPrefix(line, " ") && lipgloss.Width(line) <= 40
@@ -103,11 +99,6 @@ func (m *Model) helpHeadings() map[string]bool {
 	}
 	return headings
 }
-
-// macOSFunctionKeyNote explains why F2, used throughout the editor, might not reach it on a Mac
-// keyboard without fn held or the system setting turned on; every other host reaches them directly.
-const macOSFunctionKeyNote = "On macOS, hold fn for F-keys, or turn on 'Use F1, F2, etc. keys as standard " +
-	"function keys' in System Settings."
 
 // helpKeys is the key line of the help: at the foot of the overlay, with the keys in the accent colour, or, in
 // the workspace, the footer of the frame.
@@ -164,7 +155,7 @@ func (m *Model) helpFrame() (string, string, int) {
 	if m.helpOverlay() {
 		base = strip + "\n\n"
 	}
-	note := render(styles.hint, m.helpInner(), macOSFunctionKeyNote) + "\n\n"
+	note := render(styles.hint, m.helpInner(), tr(tMacFnNote)) + "\n\n"
 	lines := len(m.helpLines())
 	keys := "{left}/{right} topic · {up}/{down} scroll · {pageup}/{pagedown} page · {back}/{help} close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
@@ -182,7 +173,7 @@ func (m *Model) helpFrame() (string, string, int) {
 			room--
 			offset := m.help.offset()
 			first := min(offset+1, lines)
-			foot = "\n" + render(styles.hint, m.helpInner(), fmt.Sprintf("lines %d-%d of %d", first,
+			foot = "\n" + render(styles.hint, m.helpInner(), tr(tApprovalLines, first,
 				min(offset+max(room, 1), lines), lines)) + foot
 		}
 		return head, foot, room
@@ -223,7 +214,7 @@ func (m *Model) helpView() string {
 // keyListText names the keys of the global actions as they are bound now, so the help is right whatever the
 // preferences changed.
 func keyListText() string {
-	lines := []string{keysHeading}
+	lines := []string{tr(tKeysHeading)}
 	for _, r := range keyRows {
 		a := userActions[r.action]
 		key := keyName(keyOf(a))

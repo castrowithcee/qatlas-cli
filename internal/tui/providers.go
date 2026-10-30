@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -162,7 +161,7 @@ func (m *Model) providerTableFrame() (string, string) {
 		keys = "type to search · {up}/{down} move · {enter} next · {back} cancel setup"
 	}
 	var head strings.Builder
-	head.WriteString(m.boxTop(title, fmt.Sprintf("%d/%d (%d total)", min(t.list.cursor+1, shown), shown, total)))
+	head.WriteString(m.boxTop(title, tr(tPositionFiltered, min(t.list.cursor+1, shown), shown, total)))
 	head.WriteString(m.boxSearch(&t.list, tr(tLogPickSearch)))
 	current := t.name(t.current)
 	if t.current != "" {

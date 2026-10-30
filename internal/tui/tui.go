@@ -805,11 +805,11 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	m.list.stops = true
 	m.picker = newFilterList(m.choiceShown)
 	m.templateList = newFilterList(m.templateText)
-	m.templateList.input.Placeholder = "Type to search"
+	m.templateList.input.Placeholder = tr(tLogSearchPlaceholder)
 	m.versionList = newFilterList(m.versionText)
 	m.versionList.stops = true
-	m.versionList.input.Placeholder = "Type to search"
-	m.picker.input.Placeholder = "Type to search"
+	m.versionList.input.Placeholder = tr(tLogSearchPlaceholder)
+	m.picker.input.Placeholder = tr(tLogSearchPlaceholder)
 	m.targetList = newFilterList(func(target string) string { return target + " " + m.targetLabels[target] })
 	m.targetList.stops = true
 	m.targetInput = textField("", "", false).input
@@ -1415,7 +1415,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 	switch s {
 	case sectionDefaults:
 		if len(m.cfg.Connections) == 0 {
-			return tr(tDefaultsNeedConnection)
+			return tr(tDefaultsNeedConnection, int(sectionConnections.area())+1)
 		}
 	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
 		return tr(tSettingsNotList, m.section.title())
@@ -1424,7 +1424,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 	case sectionTokens:
 		return m.tokensBlocked()
 	case sectionLogs:
-		return "Logs shows what was invoked; there is nothing to add by hand."
+		return tr(tLogsNothingToAdd)
 	}
 	return ""
 }
@@ -1615,12 +1615,12 @@ func (m *Model) interrupt() tea.Cmd {
 	}
 	if m.export != nil && m.export.writing {
 		// The file is being written; quitting now could leave it half done.
-		m.status = "Wait until the export is written"
+		m.status = tr(tQuitWaitExport)
 		return nil
 	}
 	if m.imp != nil && m.imp.working != "" {
 		// The configuration and the secrets are being written; quitting now could leave them half done.
-		m.status = "Wait until the import is " + map[string]string{"reading": "read", "writing": "written"}[m.imp.working]
+		m.status = tr(map[string]textID{"reading": tQuitWaitImportRead, "writing": tQuitWaitImportWritten}[m.imp.working])
 		return nil
 	}
 	if m.payloadSaving || (m.wizard != nil && (m.wizard.saving || m.wizard.saved != "")) || !m.unsaved() {
@@ -2619,7 +2619,7 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
-			m.status = "Cancelled; the vault stays unlocked"
+			m.status = tr(tCancelledUnlocked)
 		}
 		return nil
 	}
@@ -2631,7 +2631,7 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 			return m.runVaultDecrypt(passphrase)
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
-			m.status = "Cancelled; the vault stays encrypted"
+			m.status = tr(tCancelledEncrypted)
 		}
 		return nil
 	}
@@ -2642,7 +2642,7 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 			return m.beginVaultMigrateWrite()
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.migratePlanConfirm, m.migrate, m.screen = false, nil, screenForm
-			m.status = "Cancelled; credentials.yaml was not touched"
+			m.status = tr(tMigrateUntouched)
 		}
 		return nil
 	}
@@ -2653,7 +2653,7 @@ func (m *Model) updateConfirm(key tea.KeyPressMsg) tea.Cmd {
 			return m.deleteLegacyCredentials()
 		case keyIs(key, actNo) || keyIs(key, actBack):
 			m.migrateDeleteConfirm, m.screen = false, screenForm
-			m.status = m.migrateResult + "; the file was kept"
+			m.status = tr(tMigrateFileKept, m.migrateResult)
 			m.migrate, m.migrateResult = nil, ""
 		}
 		return nil
@@ -3963,7 +3963,7 @@ func (m *Model) editorView() string {
 		if m.isPayloadForm() {
 			noun = tr(tFormPayloadSecret)
 		}
-		what := "New " + noun
+		what := tr(tFormNew, noun)
 		switch {
 		case m.section == sectionTokens && m.copyFrom == "":
 			what = tr(tFormNewToken)
@@ -4253,7 +4253,7 @@ func (m *Model) listFrame() (string, string) {
 		position := ""
 		switch {
 		case filtered:
-			position = fmt.Sprintf("%d/%d (%d total)", pos, shown, total)
+			position = tr(tPositionFiltered, pos, shown, total)
 		case total > 0:
 			position = fmt.Sprintf("%d/%d", pos, total)
 		}
@@ -4263,7 +4263,7 @@ func (m *Model) listFrame() (string, string) {
 		title := styles.title.Render(m.section.title())
 		switch {
 		case filtered:
-			title += fmt.Sprintf("  %d/%d (%d total)", pos, shown, total)
+			title += "  " + tr(tPositionFiltered, pos, shown, total)
 		case total > 0:
 			title += fmt.Sprintf("  %d/%d", pos, total)
 		}
@@ -5145,10 +5145,10 @@ func Run(opts Options) error {
 		prefs = uiprefs.Default()
 	}
 	setProfile(detectProfile(opts.Out))
+	setLanguage(prefs.Language)
 	known, themeWarning := knownTheme(prefs.Theme)
 	prefs.Theme = known
 	applyTheme(prefs.Theme)
-	setLanguage(prefs.Language)
 	model, err := New(opts.Service, opts.Store, opts.Tester, opts.Secrets, opts.Redactor)
 	if err != nil {
 		return err
@@ -5164,17 +5164,17 @@ func Run(opts Options) error {
 		warnings = append(warnings, themeWarning)
 	}
 	if err := prefs.Keys.WithDefaults().Validate(); err != nil {
-		warnings = append(warnings, "keys: "+err.Error()+", using the standard keys")
+		warnings = append(warnings, tr(tKeysInvalid, err.Error()))
 		prefs.Keys, model.prefs.Keys = uiprefs.DefaultKeys(), uiprefs.DefaultKeys()
 	}
 	applyKeys(prefs.Keys)
 	if start, ok := areaByName(prefs.Start); ok {
 		model.start = start
 	} else {
-		warnings = append(warnings, fmt.Sprintf("start %q is not an area, opening the Overview", prefs.Start))
+		warnings = append(warnings, tr(tStartUnknown, prefs.Start))
 	}
 	if len(warnings) > 0 {
-		model.status = "warning: " + warnings[0]
+		model.status = warningLine(warnings[0])
 	}
 	if predecessor != nil {
 		model.adopt(predecessor)
@@ -5210,11 +5210,10 @@ func (m *Model) confirmView() string {
 		return m.vaultLockConfirmView()
 	case m.decryptConfirm:
 		return m.questionText(question{
-			title: "Turn the vault's encryption off?",
-			consequence: "warning: every secret it holds is written back to disk unencrypted; anyone who can " +
-				"read this machine's files can then read them",
-			warn: true,
-			keys: "{yes} turn off · {no}/{back} keep it encrypted · {command} cmds · {help} help",
+			title:       tr(tDecryptTitle),
+			consequence: tr(tDecryptConsequence),
+			warn:        true,
+			keys:        "{yes} turn off · {no}/{back} keep it encrypted · {command} cmds · {help} help",
 		})
 	case m.migratePlanConfirm:
 		return m.migratePlanView()

@@ -12,7 +12,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
@@ -798,11 +797,11 @@ func workingWait(working string) string {
 
 // storeText names a secret store of the core ("vault", "keyring") in the editor's language.
 func storeText(store string) string {
-	if uiLang == i18n.German && store == config.CredentialTypeVault {
-		return "Tresor"
-	}
-	if uiLang == i18n.German && store == config.CredentialTypeKeyring {
-		return "Keyring"
+	switch store {
+	case config.CredentialTypeVault:
+		return tr(tStoreVault)
+	case config.CredentialTypeKeyring:
+		return tr(tStoreKeyring)
 	}
 	return store
 }

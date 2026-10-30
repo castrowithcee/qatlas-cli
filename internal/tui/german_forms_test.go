@@ -413,6 +413,11 @@ func englishFragments(text string) []string {
 	return out
 }
 
+// wholeWords reports whether fragment occurs in text with no letter directly before or after it.
+func wholeWords(text, fragment string) bool {
+	return regexp.MustCompile(`(^|\PL)` + regexp.QuoteMeta(fragment) + `(\PL|$)`).MatchString(text)
+}
+
 // No screen of the forms shows an English multi-word text of the catalog in German. Texts that the core and the
 // provider descriptors supply are not in the catalog and so not looked for.
 func TestGermanFormsShowNoEnglishCatalogText(t *testing.T) {
@@ -432,7 +437,9 @@ func TestGermanFormsShowNoEnglishCatalogText(t *testing.T) {
 			continue
 		}
 		for _, fragment := range englishFragments(english) {
-			if strings.Contains(text, fragment) && !strings.Contains(german, fragment) {
+			// A fragment is the English text only where it stands as words: "Connection test" is not found in
+			// the German "Connection testen".
+			if wholeWords(text, fragment) && !strings.Contains(german, fragment) {
 				t.Errorf("German screens show the English text %q (key %q)", fragment, id)
 			}
 		}

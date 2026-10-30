@@ -420,7 +420,7 @@ func (m *Model) updateTokenScreens(key tea.KeyPressMsg) (tea.Cmd, bool) {
 // created.
 func (m *Model) tokenDetailView() string {
 	name := m.tokenDetail
-	heading := "Token " + name
+	heading := tr(tTokenHeading, name)
 	title := m.wrapped(styles.title, heading) + "\n\n"
 	entry, ok, unavailable := m.tokenByName(name)
 	if unavailable != "" {
