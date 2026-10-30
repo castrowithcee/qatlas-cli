@@ -65,7 +65,11 @@ func (m *Model) vaultSegments() []string {
 		if m.adminTimeout() > 0 && m.AdminSessionActive() {
 			admin = statusOK
 		}
-		return []string{statusMark(statusOK, tr(tVaultUnlocked)), statusMark(admin, m.adminHeaderText())}
+		unlocked := tr(tVaultUnlocked)
+		if state == vault.StateLocked && !m.vaultProcessEndsAt.IsZero() {
+			unlocked = tr(tVaultUnlockedUntil, unlockDeadlineText(m.vaultProcessEndsAt, time.Now()))
+		}
+		return []string{statusMark(statusOK, unlocked), statusMark(admin, m.adminHeaderText())}
 	case state == vault.StateLocked:
 		return []string{statusMark(statusWarn, tr(tVaultLocked))}
 	}
@@ -294,7 +298,7 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 		// The update behaviour row can only be read now; rebuilding drops nothing, the form is unedited.
 		m.openVaultForm()
 	}
-	m.vaultProcessUnlocked = false
+	m.vaultProcessUnlocked, m.vaultProcessEndsAt = false, time.Time{}
 	if cmd := m.startVaultProcess(); cmd != nil {
 		return cmd
 	}
@@ -429,7 +433,7 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	m.endAdminSession()
 	m.RefreshAdminTimeout()
-	m.vaultProcessUnlocked = false
+	m.vaultProcessUnlocked, m.vaultProcessEndsAt = false, time.Time{}
 	if msg.err != nil {
 		m.fail = tr(tVaultProcessNotLocked, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
 		return nil
@@ -438,9 +442,22 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 	return nil
 }
 
+// unlockDeadlineText is the local time of t, with the date only when it is not today.
+func unlockDeadlineText(t, now time.Time) string {
+	t, now = t.Local(), now.Local()
+	if t.YearDay() == now.YearDay() && t.Year() == now.Year() {
+		return t.Format("15:04")
+	}
+	return t.Format("2006-01-02 15:04")
+}
+
 // vaultProcessCheckMsg carries the result of asking a vault process whether it holds the locked vault open,
 // purely for the header (see checkVaultProcess); it is never used to read or write a secret.
-type vaultProcessCheckMsg struct{ unlocked bool }
+type vaultProcessCheckMsg struct {
+	unlocked bool
+	// endsAt is the process's hard unlock deadline; zero without a maximum unlock duration.
+	endsAt time.Time
+}
 
 // checkVaultProcess asks, off the event loop, whether a vault process holds the vault open right now (not where
 // this platform runs no vault process), so the header can show "unlocked" for a vault this process itself has not unlocked. It asks only
@@ -461,8 +478,8 @@ func (m *Model) checkVaultProcess() tea.Cmd {
 		if err != nil {
 			return vaultProcessCheckMsg{}
 		}
-		_, err = client.Status(context.Background())
-		return vaultProcessCheckMsg{unlocked: err == nil}
+		status, err := client.Status(context.Background())
+		return vaultProcessCheckMsg{unlocked: err == nil, endsAt: status.UnlockEndsAt}
 	}
 }
 

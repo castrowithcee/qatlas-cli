@@ -28,6 +28,7 @@ type shownSettings = vault.Settings
 const (
 	updateBehaviourLabel = "update behaviour"
 	idleTimeoutLabel     = "idle timeout"
+	maxUnlockLabel       = "max unlock time"
 	adminTimeoutLabel    = "admin timeout"
 	logRetentionLabel    = "log retention"
 )
@@ -91,8 +92,8 @@ func (m *Model) vaultFields() []field {
 }
 
 // vaultSettingFields are the rows of the settings stored authenticated in the encrypted vault's settings.age,
-// never in config.yaml: the update behaviour, the idle timeout, the admin session timeout, and the log
-// retention. They are editable only while this run holds the vault unlocked, the only time the stored values
+// never in config.yaml: the update behaviour, the idle timeout, the maximum unlock time, the admin session
+// timeout, and the log retention. They are editable only while this run holds the vault unlocked, the only time the stored values
 // can be read and a change written; otherwise they are read-only rows that name why. An untrusted settings.age
 // shows the safe values with a warning, and saving replaces it.
 func (m *Model) vaultSettingFields() []field {
@@ -111,25 +112,27 @@ func (m *Model) vaultSettingFields() []field {
 			string(settings.Update)).withHint(tr(tUpdateBehaviourHint)).withDetail(tr(tUpdateBehaviourDetail))
 		idle := textField(idleTimeoutLabel, vault.FormatTimeout(settings.IdleTimeout), false).
 			withHint(tr(tVaultIdleHint)).withDetail(tr(tVaultIdleDetail))
+		maxUnlock := textField(maxUnlockLabel, vault.FormatTimeout(settings.MaxUnlock), false).
+			withHint(tr(tVaultMaxUnlockHint)).withDetail(tr(tVaultMaxUnlockDetail))
 		admin := textField(adminTimeoutLabel, vault.FormatTimeout(settings.AdminTimeout), false).
 			withHint(tr(tVaultAdminHint)).withDetail(tr(tVaultAdminDetail))
 		retention := textField(logRetentionLabel, strconv.Itoa(settings.RetentionDays), false).
 			withHint(tr(tVaultRetentionHint)).withDetail(tr(tVaultRetentionDetail))
-		rows := []*field{&behaviour, &idle, &admin, &retention}
+		rows := []*field{&behaviour, &idle, &maxUnlock, &admin, &retention}
 		if untrusted {
 			for _, f := range rows {
 				f.hint = tr(tVaultSettingsUntrustedHint)
 				f.detail = tr(tVaultSettingsUntrustedDetail, f.detail)
 			}
 		}
-		return []field{behaviour, idle, admin, retention}
+		return []field{behaviour, idle, maxUnlock, admin, retention}
 	case vault.StateLocked:
 		reason = tr(tVaultLockedUnlockKey)
 	default:
 		reason = tr(tVaultNeedsPassphrase)
 	}
-	rows := make([]field, 0, 4)
-	for _, label := range []string{updateBehaviourLabel, idleTimeoutLabel, adminTimeoutLabel, logRetentionLabel} {
+	rows := make([]field, 0, 5)
+	for _, label := range []string{updateBehaviourLabel, idleTimeoutLabel, maxUnlockLabel, adminTimeoutLabel, logRetentionLabel} {
 		rows = append(rows, textField(label, tr(tNotAvailable), true).withHint(reason))
 	}
 	return rows
@@ -224,6 +227,10 @@ func (m *Model) saveVault() tea.Cmd {
 	var err error
 	if next.IdleTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(idleTimeoutLabel))); err != nil {
 		m.fail = tr(tVaultSettingBadDuration, idleTimeoutLabel)
+		return nil
+	}
+	if next.MaxUnlock, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(maxUnlockLabel))); err != nil {
+		m.fail = tr(tVaultSettingBadDuration, maxUnlockLabel)
 		return nil
 	}
 	if next.AdminTimeout, err = time.ParseDuration(strings.TrimSpace(m.fieldValue(adminTimeoutLabel))); err != nil {

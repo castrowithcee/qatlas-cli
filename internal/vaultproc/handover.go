@@ -296,9 +296,9 @@ func (s *Server) snapshot() (vault.Snapshot, bool) {
 			secrets[credential][role] = string(value)
 		}
 	}
-	locksAt := s.locksAt
+	locksAt, unlocked := s.locksAt, s.unlocked
 	return vault.Snapshot{Identity: id.String(), Secrets: secrets, Bindings: copyBindings(s.bindings),
-		LocksAt: &locksAt}, true
+		LocksAt: &locksAt, UnlockedAt: &unlocked, MaxUnlock: s.MaxUnlock}, true
 }
 
 // verifyRelease checks the release files the way 'qatlas update' does, by itself: the signature over
