@@ -370,3 +370,17 @@ func TestEmitKeepsEveryRowAndTheInput(t *testing.T) {
 		t.Errorf("input value = %q, want it unchanged", got)
 	}
 }
+
+// The --agent help names what the flag does, so an agent reading the flag table learns its effects.
+func TestAgentFlagHelpNamesEffects(t *testing.T) {
+	opts := &Options{}
+	flag := newRootCommand(opts, sharedRegistry()).PersistentFlags().Lookup("agent")
+	if flag == nil {
+		t.Fatal("flag --agent missing")
+	}
+	for _, word := range []string{"compact", "next steps", "progress", "--yes", "tui"} {
+		if !strings.Contains(flag.Usage, word) {
+			t.Errorf("--agent help %q lacks %q", flag.Usage, word)
+		}
+	}
+}
