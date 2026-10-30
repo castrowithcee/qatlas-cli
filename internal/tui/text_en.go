@@ -1088,6 +1088,7 @@ var textEN = map[textID]string{
 	tTargetTheNewIsNotComplete:                                     "the new %s is not complete yet: choose %s by typing it or with {enter}, or {back} to leave it; nothing was saved",
 	tTargetOneOf:                                                   "one of %s",
 	tTargetOr:                                                      " or ",
+	tFooterKeysOr:                                                  " or ",
 	tTargetFilterOrType:                                            "filter or type: ",
 	tTargetAddA:                                                    "Add a %s",
 	tTargetBuildANewTargetStep:                                     "build a new target step by step, or type it",
