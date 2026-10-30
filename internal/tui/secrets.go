@@ -634,7 +634,7 @@ func vaultFirstSecretHint() string { return tr(tVaultFirstSecretHint) }
 func (m *Model) vaultOfferPrompt() promptDialog {
 	o := m.vaultOffer
 	d := promptDialog{title: o.title, input: m.inputLine("  ", o.input), field: true, hint: o.hint,
-		keys: "enter ok · {back} cancel, nothing saved"}
+		keys: "{enter} ok · {back} cancel, nothing saved"}
 	if o.confirming {
 		d.title, d.hint = tr(tVaultConfirmTitle), tr(tVaultConfirmHint)
 	}
@@ -923,9 +923,9 @@ func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 // the storage row now names.
 func (m *Model) secretKeys() string {
 	if m.credentialType() == config.CredentialTypeVault {
-		return footerKeys("enter store in the " + placeVault + " · {delete} remove")
+		return footerKeys("{enter} store in the " + placeVault + " · {delete} remove")
 	}
-	return footerKeys("enter store in " + storageKeyring + " · {delete} remove")
+	return footerKeys("{enter} store in " + storageKeyring + " · {delete} remove")
 }
 
 // secretRowKey handles the keys of a focused secret row.

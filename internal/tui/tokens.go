@@ -481,7 +481,7 @@ func (m *Model) tokenDetailView() string {
 	}
 	facts = append(facts, fact("created", entry.token.Created.Local().Format("2006-01-02 15:04"), lipgloss.NewStyle()))
 	lines := factLinesIn(facts, inner, column, func(s string) string { return s })
-	return m.frameDetail(heading, state, lines) + "\n" + m.keyHint("V reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help")
+	return m.frameDetail(heading, state, lines) + "\n" + m.keyHint("{reveal} reveal/hide · {delete} revoke · {back} back · {command} cmds · {help} help")
 }
 
 // tokenRevokeView draws the question asked before a token is revoked.
@@ -490,6 +490,6 @@ func (m *Model) tokenRevokeView() string {
 		title:       tr(tTokenRevokeTitle, m.tokenRevoke),
 		consequence: tr(tTokenRevokeConsequence),
 		danger:      true,
-		keys:        "y revoke · n/{back} keep · {command} cmds · {help} help",
+		keys:        "{yes} revoke · {no}/{back} keep · {command} cmds · {help} help",
 	})
 }

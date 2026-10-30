@@ -296,6 +296,6 @@ func (m *Model) updateView() string {
 		title:       tr(tUpdateQuestion, m.release.Latest),
 		consequence: tr(tUpdateConsequence),
 		details:     details,
-		keys:        "y update · n/{back} cancel · {command} cmds · {help} help",
+		keys:        "{yes} update · {no}/{back} cancel · {command} cmds · {help} help",
 	})
 }

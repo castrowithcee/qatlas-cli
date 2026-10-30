@@ -197,12 +197,15 @@ func logStatusTone(cell string) lipgloss.Style {
 	return styles.cell
 }
 
+// logResultOK is the result cell of a call that went through.
+const logResultOK = "ok"
+
 // logResultTone colours the result of a call: ok in the success colour, anything but ok in the failure colour.
 func logResultTone(cell string) lipgloss.Style {
-	switch cell {
-	case "ok":
+	if cell == logResultOK {
 		return styles.ok
-	case "-", "":
+	}
+	if cell == "-" || cell == "" {
 		return styles.hint
 	}
 	return styles.fail
@@ -1280,43 +1283,43 @@ func (m *Model) logKeys() string {
 		// The short form names the same keys with shorter words.
 		switch {
 		case lv.stats && lv.sessions && !lv.list.editing:
-			return "up/down scroll · M or s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+			return "{up}/{down} scroll · {sessions} or {summary} rows · {filter} filter · {search} search · {area} section · {command} cmds · {help} help · {quit} quit"
 		case lv.stats && !lv.list.editing:
-			return "s rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+			return "{summary} rows · {filter} filter · {search} search · {area} section · {command} cmds · {help} help · {quit} quit"
 		case lv.list.editing:
-			return "type to search · up/down move · enter keep · {back} clear"
+			return "type to search · {up}/{down} move · {enter} keep · {back} clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · enter open · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "{left}/{right} mode · {enter} open · {next} next · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "{enter} date · {next} next · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 		case lv.focus == logFocusTabs:
-			return "left/right tab · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "{left}/{right} tab · {next} next · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 		case len(lv.list.matches) == 0 || lv.heat:
-			return "tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+			return "{next} next · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 		}
-		return "enter detail · tab next · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "{enter} detail · {next} next · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	}
 	if lv.stats && lv.sessions && m.screen != screenNav && !lv.list.editing {
-		return "up/down scroll · M or s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+		return "{up}/{down} scroll · {sessions} or {summary} or {back} back to the rows · {filter} filter · {search} search · {area} section · {command} cmds · {help} help · {quit} quit"
 	}
 	if lv.stats && m.screen != screenNav && !lv.list.editing {
-		return "s or {back} back to the rows · f filter · / search · 1-8 section · {command} cmds · {help} help · q quit"
+		return "{summary} or {back} back to the rows · {filter} filter · {search} search · {area} section · {command} cmds · {help} help · {quit} quit"
 	}
 	switch {
 	case m.screen == screenNav:
 		return m.navKeys()
 	case lv.list.editing:
-		return "type to search · up/down move · enter keep search · {back} clear search"
+		return "type to search · {up}/{down} move · {enter} keep search · {back} clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · enter open · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "{left}/{right} change mode · {enter} open · {next} next field · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "{enter} or {left}/{right} change the date · {next} next field · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	case lv.focus == logFocusTabs:
-		return "left/right change tab · tab next field · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "{left}/{right} change tab · {next} next field · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	case len(lv.list.matches) == 0 || lv.heat:
-		return "tab next field · left/right change · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+		return "{next} next field · {left}/{right} change · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	}
-	keys := "enter details · tab next field · left/right change · f filter · s summary · M MCP sessions · / search · 1-8 section · {back} back · {command} cmds · {help} help · q quit"
+	keys := "{enter} details · {next} next field · {left}/{right} change · {filter} filter · {summary} summary · {sessions} MCP sessions · {search} search · {area} section · {back} back · {command} cmds · {help} help · {quit} quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "{back} back", "{back} clear search", 1)
 	}
@@ -1497,14 +1500,14 @@ func (m *Model) logDetailView() string {
 	// The fields are laid out first and shown from the scroll position on, so a long message scrolls and
 	// nothing is cut; a longer text gains the position line and the scroll keys.
 	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
-	keys := "{back} back · 1-8 section · {command} cmds · {help} help"
+	keys := "{back} back · {area} section · {command} cmds · {help} help"
 	// The lines after the last field are the key line and the notes, and at least the empty line the view
 	// ends in.
 	tail := func(keys string) int { return strings.Count(m.keyHint(keys)+m.notes(), "\n") + 1 }
 	room := m.height - strings.Count(head, "\n") - tail(keys)
 	position := ""
 	if total := len(lines); total > room {
-		keys = "up/down scroll · " + keys
+		keys = "{up}/{down} scroll · " + keys
 		room = max(m.height-strings.Count(head, "\n")-tail(keys)-1, 1)
 		lv.page = room
 		lines = lv.view.window(lines, room, false)
@@ -1630,9 +1633,9 @@ func (m *Model) logDateDialogView() string {
 	if d.err != "" {
 		b.WriteString(m.indentedWith(styles.fail, tr(tNoteError, d.err)) + "\n")
 	}
-	keys := "enter apply · {back} cancel"
+	keys := "{enter} apply · {back} cancel"
 	if len(d.inputs) == 2 {
-		keys = "enter apply · tab next field · {back} cancel"
+		keys = "{enter} apply · {next} next field · {back} cancel"
 	}
 	b.WriteString(m.keyHint(keys))
 	return b.String()
@@ -1675,9 +1678,9 @@ func (m *Model) logPickFrame() (string, string) {
 	if shown == 0 {
 		head.WriteString(m.wrapped(styles.hint, tr(tLogPickNone, p.list.query())) + "\n")
 	}
-	keys := "type to search · up/down move · enter choose · {back} close"
+	keys := "type to search · {up}/{down} move · {enter} choose · {back} close"
 	if p.filter >= 0 {
-		keys = "type to search · up/down move · enter keep this value · {back} back to the filters"
+		keys = "type to search · {up}/{down} move · {enter} keep this value · {back} back to the filters"
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }

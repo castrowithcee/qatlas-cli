@@ -156,10 +156,10 @@ func (m *Model) providerTableFrame() (string, string) {
 	t := &m.providers
 	shown, total := len(t.list.matches), len(t.list.all)
 	title := tr(tProviderChooseProvider)
-	keys := "type to search · up/down move · enter choose · {back} cancel"
+	keys := "type to search · {up}/{down} move · {enter} choose · {back} cancel"
 	if w := m.wizard; w != nil {
 		title = tr(tProviderSetupStepOfChooseProvider, w.step+1, setupSteps)
-		keys = "type to search · up/down move · enter next · {back} cancel setup"
+		keys = "type to search · {up}/{down} move · {enter} next · {back} cancel setup"
 	}
 	var head strings.Builder
 	head.WriteString(m.boxTop(title, fmt.Sprintf("%d/%d (%d total)", min(t.list.cursor+1, shown), shown, total)))

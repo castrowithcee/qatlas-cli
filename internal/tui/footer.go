@@ -76,11 +76,12 @@ func isSectionRange(key string) bool {
 // isNavigation reports whether the first word of a group names moving through the screen rather than
 // acting on it.
 func isNavigation(key string) bool {
-	switch key {
-	case "up/down", "left/right", "←/→", "↑/↓", keyOf(actNext), "pgup/pgdown", "home/end":
-		return true
+	for _, pair := range [][2]action{{actUp, actDown}, {actLeft, actRight}, {actPageUp, actPageDown}, {actHome, actEnd}} {
+		if key == keyLabel(pair[0])+"/"+keyLabel(pair[1]) {
+			return true
+		}
 	}
-	return false
+	return key == keyName(keyOf(actNext))
 }
 
 // footerItems splits the key text of a screen into its groups and ranks them. A screen that names no keys

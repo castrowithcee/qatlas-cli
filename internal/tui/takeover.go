@@ -61,6 +61,6 @@ func (m *Model) settingsTakeoverView() string {
 		title:       tr(tTakeoverTitle),
 		consequence: tr(tTakeoverConsequence),
 		details:     []string{strings.Join(lines, "\n")},
-		keys:        "y take over · n/{back} keep the vault's settings · {command} cmds · {help} help",
+		keys:        "{yes} take over · {no}/{back} keep the vault's settings · {command} cmds · {help} help",
 	})
 }

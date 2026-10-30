@@ -350,11 +350,11 @@ func (m *Model) selftestKeys() string {
 	st := m.st
 	switch {
 	case !st.done && st.cancelling:
-		return "ctrl+c quit when done · {command} cmds · {help} help"
+		return "{forcequit} quit when done · {command} cmds · {help} help"
 	case !st.done:
 		return "{back} cancel · {command} cmds · {help} help"
 	case st.report != nil:
-		return "up/down scroll · W save as file · {back} close · {command} cmds · {help} help"
+		return "{up}/{down} scroll · {write} save as file · {back} close · {command} cmds · {help} help"
 	}
 	return "{back} close · {command} cmds · {help} help"
 }

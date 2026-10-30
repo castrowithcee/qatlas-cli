@@ -56,7 +56,7 @@ func (m *Model) dialogButtons(keys string, danger bool, labels map[string]string
 			kind = buttonDanger
 		}
 		first, _, _ := strings.Cut(group, " ")
-		focused := first == keyOf(actEnter) || strings.HasPrefix(group, first+" or enter ")
+		focused := first == keyOf(actEnter) || strings.HasPrefix(group, first+" or "+keyLabel(actEnter)+" ")
 		buttons = append(buttons, dialogButton{key: key, label: label, kind: kind, focused: focused})
 	}
 	return buttons

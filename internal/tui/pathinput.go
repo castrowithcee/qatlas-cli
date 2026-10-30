@@ -326,7 +326,7 @@ func (m *Model) hitPathRows(lines []string, y0, x0 int) {
 // pathKeys is the key line of a path prompt: keys, with the suggestion keys in front while there are any.
 func pathKeys(p *pathField, keys string) string {
 	if len(p.matches) > 0 {
-		return "tab complete · up/down switch · " + keys
+		return "{next} complete · {up}/{down} switch · " + keys
 	}
 	return keys
 }

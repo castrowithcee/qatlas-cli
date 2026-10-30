@@ -338,36 +338,11 @@ func (m *Model) press(key tea.KeyPressMsg) tea.Cmd {
 
 // pressName is press for a key named as a footer names it.
 func (m *Model) pressName(name string) tea.Cmd {
-	key, ok := keyByName(name)
+	key, ok := keyPress(name)
 	if !ok {
 		return nil
 	}
 	return m.press(key)
-}
-
-// keyByName is the key press a footer's key name stands for, for the keys a dialog's buttons use.
-func keyByName(name string) (tea.KeyPressMsg, bool) {
-	switch name {
-	case keyOf(actEnter):
-		return tea.KeyPressMsg{Code: tea.KeyEnter}, true
-	case keyOf(actBack):
-		return tea.KeyPressMsg{Code: tea.KeyEscape}, true
-	case keyOf(actNext):
-		return tea.KeyPressMsg{Code: tea.KeyTab}, true
-	}
-	if key, ok := functionKeys[strings.ToUpper(name)]; ok {
-		return tea.KeyPressMsg{Code: key}, true
-	}
-	if runes := []rune(name); len(runes) == 1 && runes[0] > ' ' && !(runes[0] >= '0' && runes[0] <= '9') {
-		return tea.KeyPressMsg{Code: runes[0], Text: name}, true
-	}
-	return tea.KeyPressMsg{}, false
-}
-
-// functionKeys are the function keys a dialog may name.
-var functionKeys = map[string]rune{
-	"F2": tea.KeyF2, "F3": tea.KeyF3, "F4": tea.KeyF4, "F6": tea.KeyF6, "F7": tea.KeyF7, "F8": tea.KeyF8,
-	"F9": tea.KeyF9,
 }
 
 // footerSpan is one key group of a footer line: the cells it stands in and the key it names.
@@ -387,7 +362,7 @@ type footerLine struct {
 func footerKey(group string) string {
 	word, _, _ := strings.Cut(group, " ")
 	word, _, _ = strings.Cut(word, "/")
-	if _, ok := keyByName(word); ok {
+	if _, ok := keyPress(word); ok {
 		return word
 	}
 	return ""
@@ -458,7 +433,7 @@ func (m *Model) backShown() bool {
 	if m.backdrop || m.infoOpen || m.keyCapture || m.dd != nil || m.testResultShown() {
 		return false
 	}
-	if _, ok := keyByName(keyOf(actBack)); !ok {
+	if _, ok := keyPress(keyOf(actBack)); !ok {
 		return false
 	}
 	switch m.screen {
@@ -500,7 +475,7 @@ func (m *Model) backShown() bool {
 // pressBack is a press of the key bound to esc; the click on the back button and the climb out of a deeper
 // screen use it so they meet every rule the key meets.
 func (m *Model) pressBack() tea.Cmd {
-	key, ok := keyByName(keyOf(actBack))
+	key, ok := keyPress(keyOf(actBack))
 	if !ok {
 		return nil
 	}
@@ -1023,7 +998,12 @@ type keysMsg []tea.KeyPressMsg
 type heldKeyMsg struct{ id int }
 
 // fragmentEsc is the filter state after a lone escape; it names that state, not a key to dispatch on.
-const fragmentEsc = "esc"
+const (
+	fragmentEsc     = "esc"
+	fragmentBracket = "["
+	fragmentDouble  = "[["
+	fragmentPending = "tail"
+)
 
 // fragmentFilter drops the pieces of a mouse report that the terminal delivered in more than one read with a
 // pause between them longer than the input reader waits: the reader then reports the start it has as an
@@ -1038,7 +1018,7 @@ type fragmentFilter struct {
 	now  func() time.Time
 	send func(tea.Msg) // delivers heldKeyMsg to the event loop; without it nothing is held back
 
-	state string // fragmentEsc or "[" when that key came last, "tail" while a report lacks its end
+	state string // fragmentEsc or fragmentBracket when that key came last, fragmentPending while a report lacks its end
 	at    time.Time
 	held  *tea.KeyPressMsg
 	id    int
@@ -1072,15 +1052,15 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 		f.held = nil
 		// The hold is over: a head arriving now is text, whatever the window says, so no race remains
 		// between this timer and the window comparison.
-		if f.state == "[" {
+		if f.state == fragmentBracket {
 			f.state = ""
 		}
 		return key
 	}
 	if unknown, ok := unknownSequence(msg); ok && (reportStart.MatchString(unknown) || unknown == "\x1b[[") {
-		f.state, f.at = "tail", f.now()
+		f.state, f.at = fragmentPending, f.now()
 		if unknown == "\x1b[[" {
-			f.state = "[["
+			f.state = fragmentDouble
 		}
 		if held := f.held; held != nil {
 			f.held = nil
@@ -1101,7 +1081,7 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	if last != "" && at.Sub(f.at) > fragmentWindow {
 		last = ""
 	}
-	if last == "[[" {
+	if last == fragmentDouble {
 		if fn, ok := linuxFunctionKey(key); ok {
 			return fn
 		}
@@ -1115,18 +1095,18 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	}
 	var n int
 	switch last {
-	case "[":
+	case fragmentBracket:
 		if plain && strings.HasPrefix(text, "<") {
 			n = len(fragmentHead.FindString(text))
 		}
-	case "tail":
+	case fragmentPending:
 		if plain {
 			n = len(fragmentTail.FindString(text))
 		}
 	}
 	if n > 0 {
 		if piece := text[:n]; !strings.HasSuffix(piece, "M") && !strings.HasSuffix(piece, "m") {
-			f.state, f.at = "tail", at
+			f.state, f.at = fragmentPending, at
 		}
 		if n == len(text) {
 			return nil
@@ -1139,7 +1119,7 @@ func (f *fragmentFilter) filter(_ tea.Model, msg tea.Msg) tea.Msg {
 	case key.Code == tea.KeyEscape && key.Mod == 0:
 		f.state, f.at = fragmentEsc, at
 	case f.send != nil && (key.Code == '[' && key.Mod == tea.ModAlt || last == fragmentEsc && text == "["):
-		f.state, f.at = "[", at
+		f.state, f.at = fragmentBracket, at
 		f.held = &key
 		f.id++
 		id, send := f.id, f.send

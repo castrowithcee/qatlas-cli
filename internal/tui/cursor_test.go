@@ -104,12 +104,12 @@ func TestTheCursorStandsInTheCommandPalette(t *testing.T) {
 	}
 	// An empty field shows its placeholder with the cursor on the first cell behind the prompt.
 	before, at := cursorAt(t, m)
-	if !strings.HasSuffix(before, " / ") || at != "s" {
+	if !strings.HasSuffix(before, " : ") || at != "s" {
 		t.Errorf("empty palette: before %q, at %q, want the placeholder's first cell behind the prompt", before, at)
 	}
 	typeText(t, m, "ser")
 	before, at = cursorAt(t, m)
-	if !strings.HasSuffix(before, " / ser") || at != " " {
+	if !strings.HasSuffix(before, " : ser") || at != " " {
 		t.Errorf("palette with text: before %q, at %q", before, at)
 	}
 	press(t, m, "left")

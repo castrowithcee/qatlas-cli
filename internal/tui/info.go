@@ -419,7 +419,7 @@ func (m *Model) infoView() string {
 	scroll := ""
 	if position != "" {
 		lines = append(lines, styles.hint.Render(position))
-		scroll = footerText("up/down scroll") + " · "
+		scroll = footerKeys("{up}/{down} scroll") + " · "
 	}
 	// The copy key is named only where it fits beside the others on the line.
 	if withCopy := scroll + footerKeys("{copy} copy") + " · " + keys; lipgloss.Width(withCopy) <= inner {

@@ -50,7 +50,7 @@ func TestLogDetailScrollsALongResult(t *testing.T) {
 	open("op.long")
 	view := screenOf(m)
 	assertViewFits(t, view, 80, 18)
-	if !hasPosition(view) || strings.Contains(view, "response") || !strings.Contains(view, "up/down scroll") {
+	if !hasPosition(view) || strings.Contains(view, "response") || !strings.Contains(view, "↑/↓ scroll") {
 		t.Fatalf("a long entry does not offer to scroll:\n%s", view)
 	}
 	press(t, m, "end")
@@ -170,7 +170,7 @@ func TestInfoOverlayScrolls(t *testing.T) {
 	}
 	m.infoShown = infoSubject{title: "Long", long: longText(300)}
 	view := m.render()
-	if !hasPosition(view) || !strings.Contains(view, "up/down scroll") || strings.Contains(view, "word299") {
+	if !hasPosition(view) || !strings.Contains(view, "↑/↓ scroll") || strings.Contains(view, "word299") {
 		t.Fatalf("a long explanation does not offer to scroll:\n%s", view)
 	}
 	press(t, m, "end")

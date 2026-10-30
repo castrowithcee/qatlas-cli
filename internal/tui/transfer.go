@@ -617,7 +617,7 @@ func (m *Model) exportSelectFrame() (string, string) {
 		head += p.text(styles.hint, tr(tExportAllTicked))
 	}
 	head += p.blank()
-	return head, p.closing() + m.keyHint("up/down move · space tick · {save} or enter next · {back} cancel · {command} cmds · {help} help") + m.notes()
+	return head, p.closing() + m.keyHint("{up}/{down} move · {space} tick · {save} or {enter} next · {back} cancel · {command} cmds · {help} help") + m.notes()
 }
 
 // exportTyping reports whether the export reads text now.
@@ -693,16 +693,16 @@ func (m *Model) exportView() string {
 			note = p.hint(reason)
 		}
 		b.WriteString(p.blank() + note + p.bottom())
-		return b.String() + m.keyHint("up/down move · {save} or enter choose · {back} back · {command} cmds · {help} help") + m.notes()
+		return b.String() + m.keyHint("{up}/{down} move · {save} or {enter} choose · {back} back · {command} cmds · {help} help") + m.notes()
 	case exportPlainConfirm:
 		p := m.dialogPanelOf()
 		return p.top(tr(tExportPlainTitle), "") + p.blank() +
 			p.text(styles.warning, warnMark+" "+tr(tExportPlainWarn)) + p.bottom() +
-			m.keyHint("y write unencrypted · n/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
+			m.keyHint("{yes} write unencrypted · {no}/{back} back, nothing written · {command} cmds · {help} help") + m.notes()
 	}
-	title, question, keys := tr(tExportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
+	title, question, keys := tr(tExportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · {up}/{down} scroll · {command} cmds · {help} help"
 	if e.step == exportResult {
-		title, question, keys = tr(tExportWrittenTitle), "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
+		title, question, keys = tr(tExportWrittenTitle), "", "{enter} or {back} done · {up}/{down} scroll · {command} cmds · {help} help"
 	}
 	if e.writing {
 		keys = tr(tWorkWritingWait)
@@ -723,7 +723,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 			input: m.inputLine("  ", e.input.Model),
 			field: true,
 			hint:  tr(tExportPassHint),
-			keys:  "{save} or enter ok · {back} back, nothing written",
+			keys:  "{save} or {enter} ok · {back} back, nothing written",
 		}
 		if e.confirming {
 			d.title, d.hint = tr(tExportPassConfirmTitle), tr(tVaultConfirmHint)
@@ -735,7 +735,7 @@ func (m *Model) exportPrompt() (promptDialog, bool) {
 			input: m.pathLines("  ", &e.input),
 			field: true,
 			hint:  tr(tExportFileHint),
-			keys:  pathKeys(&e.input, "{save} or enter preview · {back} back"),
+			keys:  pathKeys(&e.input, "{save} or {enter} preview · {back} back"),
 		}, true
 	}
 	return promptDialog{}, false
@@ -823,9 +823,9 @@ func (m *Model) exportLeaveView() string {
 	if m.export != nil && m.export.step == exportPreview {
 		save = "{save} write"
 	}
-	title, discard, why := tr(tExportLeaveTitle), "d discard", tr(tExportLeaveWhy)
+	title, discard, why := tr(tExportLeaveTitle), "{discard} discard", tr(tExportLeaveWhy)
 	if m.leaveQuit {
-		title, discard, why = tr(tExportQuitTitle), "d discard and quit", tr(tTransferQuitWhy)
+		title, discard, why = tr(tExportQuitTitle), "{discard} discard and quit", tr(tTransferQuitWhy)
 	}
 	keys := save + " · " + discard + " · {back} keep editing · {command} cmds · {help} help"
 	if m.export != nil && m.export.step == exportPlainConfirm {

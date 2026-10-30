@@ -2,6 +2,7 @@ package tui
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -20,6 +21,16 @@ func (t theme) canvasPrefix() string {
 	return prefix
 }
 
+// resetCodes are the SGR parameters that drop a colour; extendedCodes open a colour with arguments.
+var (
+	resetCodes    = []string{"", "0", "39", "49"}
+	extendedCodes = []string{"38", "48"}
+)
+
+// sgrIndexed is the mode parameter that makes 38 and 48 take one more argument (a palette index); any other
+// mode takes four (a true colour).
+const sgrIndexed = "5"
+
 var sgrSequence = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 // resetsColour reports whether an SGR sequence drops the background or the foreground: a full reset (also
@@ -27,11 +38,12 @@ var sgrSequence = regexp.MustCompile("\x1b\\[[0-9;]*m")
 func resetsColour(seq string) bool {
 	params := strings.Split(seq[2:len(seq)-1], ";")
 	for i := 0; i < len(params); i++ {
-		switch params[i] {
-		case "", "0", "39", "49":
+		p := params[i]
+		if slices.Contains(resetCodes, p) {
 			return true
-		case "38", "48":
-			if i+1 < len(params) && params[i+1] == "5" {
+		}
+		if slices.Contains(extendedCodes, p) {
+			if i+1 < len(params) && params[i+1] == sgrIndexed {
 				i += 2
 			} else {
 				i += 4

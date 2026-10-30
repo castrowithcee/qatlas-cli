@@ -271,7 +271,7 @@ func (m *Model) versionQuestionView() string {
 		warn:        e.Older,
 		details: []string{m.wrapped(plain, strings.TrimSpace(m.updateText)), "",
 			m.wrapped(plain, after)},
-		keys: "y install · n/{back} cancel · {command} cmds · {help} help",
+		keys: "{yes} install · {no}/{back} cancel · {command} cmds · {help} help",
 	})
 }
 
@@ -286,7 +286,7 @@ func (m *Model) restoreQuestionView() string {
 		warn:        true,
 		details: []string{m.wrapped(plain, tr(tVersionRestoreOffer, name,
 			at.UTC().Format("2006-01-02 15:04 UTC"), version))},
-		keys: "y restore and install · n/{back} cancel · {command} cmds · {help} help",
+		keys: "{yes} restore and install · {no}/{back} cancel · {command} cmds · {help} help",
 	})
 }
 
@@ -404,7 +404,7 @@ func (m *Model) versionFrame() (string, string) {
 	if shown == 0 {
 		head.WriteString(m.boxText(styles.hint, tr(tVersionsNoMatch, l.query())))
 	}
-	keys := "type to search · up/down move · enter choose · {back} close"
+	keys := "type to search · {up}/{down} move · {enter} choose · {back} close"
 	if l.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
