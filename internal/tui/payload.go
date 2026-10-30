@@ -364,9 +364,9 @@ func (m *Model) forwardBindingNote(connCredential string) string {
 func (m *Model) payloadKeys() string {
 	switch m.fields[m.focus].kind {
 	case fieldPayloadNew:
-		return "enter add field · tab next field · " + formKeys
+		return "{enter} add field · {next} next field · " + formKeys
 	case fieldMasked:
-		return "F8 remove field · tab next field · enter next · " + formKeys
+		return "{removefield} remove field · {next} next field · {enter} next · " + formKeys
 	}
 	return ""
 }

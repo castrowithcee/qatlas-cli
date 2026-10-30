@@ -305,7 +305,7 @@ func (m *Model) templateView() string {
 		})
 		b.WriteString(text + "\n")
 	}
-	b.WriteString(m.boxBottom() + m.keyHint("up/down move · enter choose · {back} cancel · {command} cmds · {help} help") + m.notes())
+	b.WriteString(m.boxBottom() + m.keyHint("{up}/{down} move · {enter} choose · {back} cancel · {command} cmds · {help} help") + m.notes())
 	return b.String()
 }
 
@@ -333,7 +333,7 @@ func (m *Model) templateFrame() (string, string) {
 	if shown == 0 {
 		head.WriteString(m.boxText(styles.hint, tr(tTemplateNoEntryMatchesEscGoes, l.query())))
 	}
-	keys := "type to search · up/down move · enter choose · {back} back"
+	keys := "type to search · {up}/{down} move · {enter} choose · {back} back"
 	if l.query() == "" {
 		keys += " · {command} cmds · {help} help"
 	}
@@ -399,13 +399,13 @@ func (m *Model) setupPrefill(step int, page []field) {
 		// The rows stand grouped by section, so they are found by their label.
 		for i := range page {
 			switch page[i].label {
-			case "name":
+			case nameLabel:
 				page[i].input.SetValue(freeCopyName(w.template, taken))
 			case targetsLabel:
 				// A copy is never broader than its template: the exclusions come along.
 				page[i] = targetsFieldOf(conn).withHint(page[i].hint).withDetail(page[i].detail).inSection(page[i].section)
 				page[i].labels = nil
-			case "description":
+			case descriptionLabel:
 				page[i].input.SetValue(conn.Description)
 			}
 		}

@@ -39,4 +39,4 @@
 ║   [2m? unverified[m  [2m2026-02-11 16:27+00[m  [2mCLI[m  -       nextcloud.files.list    cloud-files     [1mok[m               [2m-[m      339ms                            ║
 ║   [2m? unverified[m  [2m2026-02-11 08:40+00[m  [2mMCP[m  -       todoist.tasks.create    tasks-personal  [1mok[m               [2m-[m      370ms                            ║
 ╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
-[1menter[m[2m open[m  [1mf[m[2m filter[m  [1ms[m[2m summary[m  [1mM[m[2m MCP sessions[m  [1m/[m[2m search[m  [1m1-8[m[2m section[m  [1mesc[m[2m back[m  [1m:[m[2m cmds[m  [1m?[m[2m help[m  [1mq[m[2m quit[m            [1mleft/right[m[2m change mode[m  [2m1/180 · 0%[m
+[1menter[m[2m open[m  [1mf[m[2m filter[m  [1ms[m[2m summary[m  [1mM[m[2m MCP sessions[m  [1m/[m[2m search[m  [1m1-6[m[2m section[m  [1mesc[m[2m back[m  [1m:[m[2m cmds[m  [1m?[m[2m help[m  [1mq[m[2m quit[m   [1m←/→[m[2m change mode[m  [1mtab[m[2m next field[m  [2m1/180 · 0%[m

@@ -726,21 +726,21 @@ func (m *Model) pickFrame() (string, string) {
 		head.WriteString(m.boxText(styles.hint, tr(tPickNoEntryMatches, lv.list.query())))
 	}
 
-	keys := "type to search · up/down move · enter take"
+	keys := "type to search · {up}/{down} move · {enter} take"
 	if _, ok := lv.current(); ok && p.url == "" && len(m.pickKindsUnder(lv.kind())) > 0 {
-		keys += " · right open"
+		keys += " · {right} open"
 	}
 	if m.targetMetadata().Multiple {
 		if lv.list.editing {
-			keys += " · tab entries"
+			keys += " · {next} entries"
 		} else {
-			keys += " · space tick · tab search"
+			keys += " · {space} tick · {next} search"
 		}
 	}
 	if len(lv.kinds) > 1 {
 		keys += " · {nextkind} next kind"
 	}
-	keys += " · {save} save · esc "
+	keys += " · {save} save · {back} "
 	if len(p.levels) > 1 {
 		keys += "level up"
 	} else {

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -38,6 +39,7 @@ const (
 	actSpace    action = "space"
 	actSearch   action = "search"
 	actQuit     action = "quit"
+	actArea     action = "area"
 
 	actVimUp    action = "vimup"
 	actVimDown  action = "vimdown"
@@ -149,6 +151,7 @@ var keyDefs = []struct {
 	{actEnter, levelMove, []string{"enter"}, tKeyHelpEnter},
 	{actSpace, levelMove, []string{"space"}, tKeyHelpSpace},
 	{actSearch, levelMove, []string{"/"}, tKeyHelpSearch},
+	{actArea, levelMove, areaKeys(), tKeyHelpArea},
 
 	{actVimUp, levelVim, []string{"k"}, tKeyHelpUp},
 	{actVimDown, levelVim, []string{"j"}, tKeyHelpDown},
@@ -161,6 +164,15 @@ var keyDefs = []struct {
 	{actYes, levelConfirm, []string{"y"}, tKeyHelpYes},
 	{actNo, levelConfirm, []string{"n"}, tKeyHelpNo},
 	{actDiscard, levelConfirm, []string{"d"}, tKeyHelpDiscard},
+}
+
+// areaKeys are the digits that open the areas, one per area in the order of the tab line.
+func areaKeys() []string {
+	var keys []string
+	for a := area(0); a < areaCount; a++ {
+		keys = append(keys, strconv.Itoa(int(a)+1))
+	}
+	return keys
 }
 
 // keymap is the key table as bindings. Dispatch and footers read it alone; setKeys and refreshKeyHelp are
@@ -239,19 +251,29 @@ func keyOf(a action) string {
 // keyIs reports whether the key press triggers the action. An unbound action never matches.
 func keyIs(msg tea.KeyPressMsg, a action) bool { return key.Matches(msg, keymap[a]) }
 
-// keyName is how a footer spells a key: function keys capitalized, everything else as bound.
+// arrowNames are the glyphs a footer draws for the arrow keys.
+var arrowNames = map[string]string{"up": "↑", "down": "↓", "left": "←", "right": "→"}
+
+// keyName is how a footer spells a key: function keys capitalized, arrows as glyphs, everything else as bound.
 func keyName(k string) string {
 	if len(k) >= 2 && k[0] == 'f' && strings.Trim(k[1:], "0123456789") == "" {
 		return "F" + k[1:]
+	}
+	if glyph, ok := arrowNames[k]; ok {
+		return glyph
 	}
 	return k
 }
 
 // keyLabel is how a footer names the keys of an action, joined by "/": function keys capitalized,
-// everything else as bound, the second info key last.
+// everything else as bound, the second info key last. A run of three or more digits is written as a range.
 func keyLabel(a action) string {
+	keys := keymap[a].Keys()
+	if len(keys) > 2 && digitRun(keys) {
+		return keys[0] + "-" + keys[len(keys)-1]
+	}
 	var names []string
-	for _, k := range keymap[a].Keys() {
+	for _, k := range keys {
 		names = append(names, keyName(k))
 	}
 	if a == actInfo && infoExtra != "" {
@@ -260,15 +282,40 @@ func keyLabel(a action) string {
 	return strings.Join(names, "/")
 }
 
-// footerPlaceholders are the names a footer text may use for a bound key, e.g. "{save} save".
-var footerPlaceholders = []struct {
-	name string
-	act  action
-}{
-	{"{save}", actSave}, {"{help}", actHelp}, {"{info}", actInfo}, {"{command}", actCommand},
-	{"{lock}", actLock}, {"{back}", actBack}, {"{delete}", actDelete}, {"{copy}", actCopy},
-	{"{nextkind}", actNextKind},
+// digitRun reports whether keys are the single digits n, n+1, n+2 and so on.
+func digitRun(keys []string) bool {
+	for i, k := range keys {
+		if len(k) != 1 || k[0] < '0' || k[0] > '9' || k[0] != keys[0][0]+byte(i) {
+			return false
+		}
+	}
+	return true
 }
+
+// keyPress is the key press a key name of the table stands for, for the keys a footer button may send.
+func keyPress(name string) (tea.KeyPressMsg, bool) {
+	switch name {
+	case keyOf(actEnter):
+		return tea.KeyPressMsg{Code: tea.KeyEnter}, true
+	case keyOf(actBack):
+		return tea.KeyPressMsg{Code: tea.KeyEscape}, true
+	case keyOf(actNext):
+		return tea.KeyPressMsg{Code: tea.KeyTab}, true
+	}
+	if len(name) >= 2 && (name[0] == 'F' || name[0] == 'f') {
+		if n, err := strconv.Atoi(name[1:]); err == nil && n >= 1 && n <= 12 {
+			return tea.KeyPressMsg{Code: tea.KeyF1 + rune(n-1)}, true
+		}
+	}
+	if runes := []rune(name); len(runes) == 1 && runes[0] > ' ' && runes[0] < 0x7f && !(runes[0] >= '0' && runes[0] <= '9') {
+		return tea.KeyPressMsg{Code: runes[0], Text: name}, true
+	}
+	return tea.KeyPressMsg{}, false
+}
+
+// footerPlaceholder is the name a footer text uses for the keys of an action, e.g. "{save} save": the action
+// in braces, so every action of the table can be named and none by hand.
+func footerPlaceholder(a action) string { return "{" + string(a) + "}" }
 
 // footerKeys replaces the key placeholders of a footer text with the current key names, so a footer
 // follows the keymap while a screen-local key stays a plain literal in its text.
@@ -280,8 +327,10 @@ func keyPlaceholders(text string) string {
 	if !strings.Contains(text, "{") {
 		return text
 	}
-	for _, p := range footerPlaceholders {
-		text = strings.ReplaceAll(text, p.name, keyLabel(p.act))
+	for _, d := range keyDefs {
+		if p := footerPlaceholder(d.act); strings.Contains(text, p) {
+			text = strings.ReplaceAll(text, p, keyLabel(d.act))
+		}
 	}
 	return text
 }

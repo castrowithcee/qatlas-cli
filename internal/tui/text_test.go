@@ -105,7 +105,7 @@ func TestEnglishIsTheDefaultAndFallback(t *testing.T) {
 	if got := labelText("a label nobody translated"); got != "a label nobody translated" {
 		t.Errorf("an untranslated label = %q, want it as it is", got)
 	}
-	if got := footerText("x unknown · q quit"); got != "x unknown · q Ende" {
+	if got := footerText("x unknown · {quit} quit"); got != "x unknown · {quit} Ende" {
 		t.Errorf("footerText = %q", got)
 	}
 }

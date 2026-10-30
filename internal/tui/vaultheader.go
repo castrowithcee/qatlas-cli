@@ -117,9 +117,9 @@ func (m *Model) vaultLockKeyHint() string {
 	case err != nil:
 		return ""
 	case m.vaultDisplayUnlocked(state):
-		return keyLabel(actLock) + " lock vault"
+		return footerPlaceholder(actLock) + " lock vault"
 	case state == vault.StateLocked:
-		return keyLabel(actLock) + " unlock vault"
+		return footerPlaceholder(actLock) + " unlock vault"
 	}
 	return ""
 }
@@ -227,7 +227,7 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyPressMsg) tea.Cmd {
 // also starts admin mode, not the other way round.
 func (m *Model) vaultUnlockPrompt() promptDialog {
 	d := promptDialog{title: tr(tUnlockTitle), input: m.inputLine("  ", m.vaultUnlock.input), field: true,
-		hint: m.vaultUnlockHint(), keys: "enter unlock · {back} cancel"}
+		hint: m.vaultUnlockHint(), keys: "{enter} unlock · {back} cancel"}
 	if m.restartNote != "" {
 		d.notice = m.indented(m.restartNote)
 	}
@@ -394,7 +394,7 @@ func (m *Model) vaultLockConfirmView() string {
 	return m.questionText(question{
 		title:       tr(tLockTitle),
 		consequence: tr(tLockConsequence),
-		keys:        "y lock · n/{back} stay unlocked · {command} cmds · {help} help",
+		keys:        "{yes} lock · {no}/{back} stay unlocked · {command} cmds · {help} help",
 	})
 }
 

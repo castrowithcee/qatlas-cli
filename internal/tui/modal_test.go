@@ -307,7 +307,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	if !strings.Contains(view, "connections.c00.service") || strings.Contains(view, "connections.c59.service") {
 		t.Fatalf("the full screen does not start at the first line:\n%s", view)
 	}
-	for _, keys := range []string{"y rename", "n/esc cancel", "up/down scroll"} {
+	for _, keys := range []string{"y rename", "n/esc cancel", "↑/↓ scroll"} {
 		if !strings.Contains(view, keys) {
 			t.Errorf("the key line lacks %q:\n%s", keys, view)
 		}

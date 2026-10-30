@@ -273,7 +273,7 @@ func TestNewAsksEmptyOrFromExistingWithSearch(t *testing.T) {
 	}
 	view := screenOf(m)
 	for _, want := range []string{"Guided setup", "(*) empty", "( ) from existing connection…",
-		"up/down move", "enter choose", "esc cancel"} {
+		"↑/↓ move", "enter choose", "esc cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not show %q:\n%s", want, view)
 		}

@@ -438,9 +438,9 @@ func (m *Model) overviewView() string {
 
 // overviewKeys is the key line of the Overview, with the focus on the tab line or on the lines.
 func (m *Model) overviewKeys() string {
-	keys := "←/→ move · down open · 1-6 open · g setup · {command} cmds · {help} help · q quit"
+	keys := "{left}/{right} move · {down} open · {area} open · {setup} setup · {command} cmds · {help} help · {quit} quit"
 	if m.screen == screenList {
-		keys = "up/down move · enter open · 1-6 areas · {back}/tab areas · g setup · {command} cmds · {help} help · q quit"
+		keys = "{up}/{down} move · {enter} open · {area} areas · {back}/{next} areas · {setup} setup · {command} cmds · {help} help · {quit} quit"
 	}
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)

@@ -175,11 +175,11 @@ func (m *Model) adminAuthPrompt() promptDialog {
 	a := m.adminAuth
 	title := tr(tAdminTitleSave)
 	hint := m.adminSessionHint()
-	keys := "enter ok · {back} cancel, nothing saved"
+	keys := "{enter} ok · {back} cancel, nothing saved"
 	if a.locked {
 		title = tr(tAdminTitleUnlock)
 		hint = tr(tAdminHintUnlock)
-		keys = "enter unlock · {back} cancel, nothing saved"
+		keys = "{enter} unlock · {back} cancel, nothing saved"
 	}
 	return promptDialog{title: title, input: m.inputLine("  ", a.input), field: true, hint: hint, keys: keys}
 }

@@ -352,7 +352,7 @@ func (m *Model) renameView() string {
 		p := m.dialogPanelOf()
 		return p.top(tr(tRenameTitle, kindText(r.kind), apply(r.old)), "") + p.blank() +
 			p.styled(m.inputLineIn(p.room, "  ", r.input)) + p.hint(tr(tRenameNewName)) + p.bottom() +
-			m.keyHint("enter dry run · {back} cancel") + m.notes()
+			m.keyHint("{enter} dry run · {back} cancel") + m.notes()
 	}
 	// What does not fit scrolls between the sentence and the keys; the modal shows the whole plan or, when
 	// that is too tall, leaves the room to this full screen.
@@ -372,21 +372,21 @@ func (m *Model) renameView() string {
 func (m *Model) renameQuestion() question {
 	r := m.rename
 	apply := m.redactor.Apply
-	title, confirm := tr(tRenameQuestion, kindText(r.kind), apply(r.old), apply(r.plan.New)), "y rename"
+	title, confirm := tr(tRenameQuestion, kindText(r.kind), apply(r.old), apply(r.plan.New)), "{yes} rename"
 	switch {
 	case r.plan.Revert:
 		title = tr(tRenameRevertQuestion, apply(r.old), apply(r.plan.New))
-		confirm = "y put back"
+		confirm = "{yes} put back"
 	case r.plan.Adopt:
 		title = tr(tRenameAdoptQuestion, kindText(r.kind), apply(r.old), apply(r.plan.New))
-		confirm = "y adopt"
+		confirm = "{yes} adopt"
 	}
 	consequence := tr(tRenameDryRun)
 	if n := len(r.plan.LapsedTokens); n > 0 {
 		consequence += tr(tRenameLapsedTokens, n)
 	}
 	q := question{title: title, consequence: consequence,
-		keys: confirm + " · n/{back} cancel · up/down scroll · {command} cmds · {help} help"}
+		keys: confirm + " · {no}/{back} cancel · {up}/{down} scroll · {command} cmds · {help} help"}
 	for _, line := range m.renameLines(r.plan) {
 		style := styles.hint
 		if strings.HasPrefix(line, tr(tRenameLabelWarning)) {

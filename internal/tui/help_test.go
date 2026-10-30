@@ -160,7 +160,7 @@ func TestHelpIsAPanelOverTheScreenWhereThereIsRoom(t *testing.T) {
 				t.Errorf("%dx%d: NO_COLOR still emits escape sequences", size.width, size.height)
 			}
 			if framed && !noColor {
-				if !strings.Contains(view, colourOf(styles.footKey)+"left/right") {
+				if !strings.Contains(view, colourOf(styles.footKey)+"←/→") {
 					t.Errorf("%dx%d: the keys are not in the accent colour:\n%q", size.width, size.height, view)
 				}
 				// The list of keys comes with its heading in bold.

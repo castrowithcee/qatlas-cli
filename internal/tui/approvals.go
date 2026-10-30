@@ -281,11 +281,11 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 	inner, _ := m.detailInner()
 	facts := m.approvalFacts(change)
 	lines := factLinesIn(facts, inner, factColumn(facts, inner), func(s string) string { return s })
-	keys := "o logs · y approve · n/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
+	keys := "{logs} logs · {yes} approve · {no}/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
 	if len(lines) > 0 && approvalHasKept(change) {
-		keys = "space unchanged · " + keys
+		keys = "{space} unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "space fold unchanged · o logs · y approve · n/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
+			keys = "{space} fold unchanged · {logs} logs · {yes} approve · {no}/{back} back, stays open · {copy} copy · {command} cmds · {help} help"
 		}
 	}
 	room := m.approvalRoom(keys, len(lines))
@@ -295,7 +295,7 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 	foot := m.keyHint(keys)
 	if len(lines) > room {
 		foot = "\n" + m.wrapped(styles.hint, tr(tApprovalLines, offset+1,
-			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
+			min(offset+room, len(lines)), len(lines))) + m.keyHint("{up}/{down} scroll · "+keys)
 	}
 	return m.frameDetail(heading, m.approvalMark(change), shown) + "\n" + foot
 }
@@ -305,7 +305,7 @@ func (m *Model) approvalChangeView(heading string, change approval.Change) strin
 func (m *Model) approvalRoom(keys string, lines int) int {
 	room := m.height - m.detailChrome() - strings.Count(m.keyHint(keys), "\n") - 1
 	if lines > room {
-		longer := m.keyHint("up/down scroll · " + keys)
+		longer := m.keyHint("{up}/{down} scroll · " + keys)
 		room = m.height - m.detailChrome() - strings.Count(longer, "\n") - 2
 	}
 	return max(room, 1)
@@ -318,7 +318,7 @@ func (m *Model) approveAllConfirmView() string {
 	q := question{
 		title:       tr(tApproveAllTitle, len(report.Open)),
 		consequence: tr(tApproveAllConsequence),
-		keys:        "y approve all · n/{back} cancel · {command} cmds · {help} help",
+		keys:        "{yes} approve all · {no}/{back} cancel · {command} cmds · {help} help",
 	}
 	if stale := report.RevocableStale(); len(stale) > 0 {
 		q.details = append(q.details, m.indented(tr(tApproveAllStale, len(stale))))

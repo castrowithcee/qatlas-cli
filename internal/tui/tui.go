@@ -279,6 +279,13 @@ const (
 	profileCustom = "custom"
 )
 
+// The labels of rows that dependent rows and the template copy look up.
+const (
+	serviceLabel     = "service"
+	nameLabel        = "name"
+	descriptionLabel = "description"
+)
+
 // The state row of a connection form: a disabled connection keeps its selection but serves nothing.
 const (
 	stateLabel    = "state"
@@ -1995,7 +2002,7 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 		default:
 			m.providerChosen(previous)
 		}
-	case "service":
+	case serviceLabel:
 		m.targetChosen()
 	case accessLabel:
 		m.accessModeChosen()
@@ -3812,10 +3819,11 @@ func wrap(i, n int) int {
 
 // sectionShortcut is the digit of an area: the section it opens on.
 func sectionShortcut(key string) (section, bool) {
-	if len(key) != 1 || key[0] < '1' || key[0] > '0'+byte(areaCount) {
+	at := slices.Index(keymap[actArea].Keys(), key)
+	if at < 0 || at >= int(areaCount) {
 		return 0, false
 	}
-	return areaSections[key[0]-'1'][0], true
+	return areaSections[at][0], true
 }
 
 // View is the Bubble Tea entry point; all drawing lives in render. The alternate screen is requested in every
@@ -3897,7 +3905,7 @@ func (m *Model) workspaceView() string {
 	width, height := lipgloss.Width(view), lipgloss.Height(view)
 	way := "{back} leave, asking first if anything changed"
 	if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
-		way = "q quit"
+		way = "{quit} quit"
 	}
 	return m.boundView(wrapCells(tr(tResizeLine,
 		width+m.termWidth-m.width, height+m.termHeight-m.height, footerKeys(way)), m.width))
@@ -3982,20 +3990,20 @@ func (m *Model) editorView() string {
 		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
 			b.WriteString("\n" + m.wrapped(styles.hint, m.copyNote()) + "\n")
 		}
-		keys := "enter next · tab next field · " + formKeys
+		keys := "{enter} next · {next} next field · " + formKeys
 		switch m.fields[m.focus].kind {
 		case fieldChoice:
-			keys = "enter choose · left/right switch · tab next field · " + formKeys
+			keys = "{enter} choose · {left}/{right} switch · {next} next field · " + formKeys
 		case fieldMultiChoice, fieldToolList:
-			keys = "enter open · tab next field · " + formKeys
+			keys = "{enter} open · {next} next field · " + formKeys
 		case fieldProvider:
-			keys = "enter choose provider in the table · tab next field · " + formKeys
+			keys = "{enter} choose provider in the table · {next} next field · " + formKeys
 		case fieldTargets, fieldPaths:
-			keys = "enter edit list · right/left expand/collapse · tab next field · " + formKeys
+			keys = "{enter} edit list · {right}/{left} expand/collapse · {next} next field · " + formKeys
 		case fieldVaultAction:
-			keys = "enter run · tab next field · " + formKeys
+			keys = "{enter} run · {next} next field · " + formKeys
 		case fieldKey:
-			keys = "enter press new key · d standard · tab next field · " + formKeys
+			keys = "{enter} press new key · {delete} standard · {next} next field · " + formKeys
 		}
 		if m.keyCapture {
 			keys = "press the new key · {back} cancel"
@@ -4007,9 +4015,9 @@ func (m *Model) editorView() string {
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
-				keys = "{save} save credential first · tab next field · " + leaveKeys
+				keys = "{save} save credential first · {next} next field · " + leaveKeys
 			} else {
-				keys = m.secretKeys() + " · tab next field · " + formKeys
+				keys = m.secretKeys() + " · {next} next field · " + formKeys
 			}
 		}
 		if m.wizard != nil {
@@ -4020,18 +4028,18 @@ func (m *Model) editorView() string {
 			keys = strings.ReplaceAll(keys, " save", " create")
 		}
 		if m.section == sectionTransfer || m.section == sectionUpdate || m.section == sectionSelftest {
-			keys = "enter run · tab next field · " + leaveKeys
+			keys = "{enter} run · {next} next field · " + leaveKeys
 		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, tr(tFormRemoveTheField, m.shownLabel(m.fields[m.focus].label))) + "\n")
-			keys = "y remove · n/{back} keep · {command} cmds · {help} help"
+			keys = "{yes} remove · {no}/{back} keep · {command} cmds · {help} help"
 		}
 		if !m.payloadRemoveAsk && m.infoWorks() {
 			keys += " · {info} info"
 		}
 		if len(m.formSections()) >= 2 && !m.payloadRemoveAsk && !m.keyCapture {
 			// The key to the sections is named only where that costs no extra footer line.
-			if with := keys + " · pgup/pgdn section"; len(m.keyHintLines(with)) <= len(m.keyHintLines(keys)) {
+			if with := keys + " · {pageup}/{pagedown} section"; len(m.keyHintLines(with)) <= len(m.keyHintLines(keys)) {
 				keys = with
 			}
 		}
@@ -4062,7 +4070,7 @@ func (m *Model) secretPrompt() promptDialog {
 		input: m.inputLine("  ", m.secretInput),
 		field: true,
 		hint:  tr(tFormMaskedGoesInto, where),
-		keys:  "enter store · {back} cancel",
+		keys:  "{enter} store · {back} cancel",
 	}
 }
 
@@ -4105,10 +4113,10 @@ func (m *Model) leaveView() string {
 		title, warning = tr(tLeaveSubTitle), tr(tLeaveSubWarning, sub)
 		why = tr(tLeaveSubWhy)
 	}
-	discard := "d discard"
+	discard := "{discard} discard"
 	if m.leaveQuit {
 		title = tr(tLeaveQuitTitle)
-		discard = "d discard and quit"
+		discard = "{discard} discard and quit"
 		why = tr(tLeaveQuitWhy)
 	}
 	return m.questionText(question{
@@ -4295,44 +4303,44 @@ func (m *Model) listFrame() (string, string) {
 	case m.screen == screenNav:
 		keys = m.navKeys()
 	case m.list.editing:
-		keys = "type to filter · up/down move · enter keep filter · {back} clear filter"
+		keys = "type to filter · {up}/{down} move · {enter} keep filter · {back} clear filter"
 	case m.noticeFocused():
-		keys = "enter review · up/{back} rows · {command} cmds · {help} help · q quit"
+		keys = "{enter} review · {up}/{back} rows · {command} cmds · {help} help · {quit} quit"
 	case m.barFocus > 0:
 		keys = m.barKeys()
 	case m.detailFocused() && m.detailPane.more:
-		keys = "←/→ tab · tab next · shift+tab rows · up/down move · pgup/pgdn scroll · enter edit · {back} rows · {command} cmds · {help} help · q quit"
+		keys = "{left}/{right} tab · {next} next · {prev} rows · {up}/{down} move · {pageup}/{pagedown} scroll · {enter} edit · {back} rows · {command} cmds · {help} help · {quit} quit"
 	case m.detailFocused():
-		keys = "←/→ tab · tab next · shift+tab rows · up/down move · enter edit · {back} rows · {command} cmds · {help} help · q quit"
+		keys = "{left}/{right} tab · {next} next · {prev} rows · {up}/{down} move · {enter} edit · {back} rows · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "{enter} unlock · " + back + " · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · A approve all · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "{enter} details · {approveall} approve all · " + back + " · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionTokens && m.vaultLocked():
-		keys = "enter unlock · n new · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "{enter} unlock · {new} new · " + back + " · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && total == 0:
-		keys = back + " · {command} cmds · {help} help · q quit"
+		keys = back + " · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · p duplicate · enter show · {delete} revoke · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "{search} filter · {new} new · {duplicate} duplicate · {enter} show · {delete} revoke · " + back + " · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · ←/→ fold · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · t test · g setup · " +
+		keys = "{search} filter · {left}/{right} fold · {new} new · {duplicate} duplicate · {enter}/{edit} edit/fold · {rename} rename · {delete} delete · {test} test · {setup} setup · " +
 			back +
-			" · {command} cmds · {help} help · q quit"
+			" · {command} cmds · {help} help · {quit} quit"
 	case m.section == sectionCredentials:
-		keys = "/ filter · ←/→ fold · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · g setup · " +
-			back + " · {command} cmds · {help} help · q quit"
+		keys = "{search} filter · {left}/{right} fold · {new} new · {duplicate} duplicate · {enter}/{edit} edit/fold · {rename} rename · {delete} delete · {setup} setup · " +
+			back + " · {command} cmds · {help} help · {quit} quit"
 	case m.templateSection(m.section):
-		keys = "/ filter · n new · p duplicate · enter/e edit/fold · r rename · {delete} delete · g setup · " + back +
-			" · {command} cmds · {help} help · q quit"
+		keys = "{search} filter · {new} new · {duplicate} duplicate · {enter}/{edit} edit/fold · {rename} rename · {delete} delete · {setup} setup · " + back +
+			" · {command} cmds · {help} help · {quit} quit"
 	default:
-		keys = "/ filter · n new · enter/e edit · {delete} delete · g setup · " + back + " · {command} cmds · {help} help · q quit"
+		keys = "{search} filter · {new} new · {enter}/{edit} edit · {delete} delete · {setup} setup · " + back + " · {command} cmds · {help} help · {quit} quit"
 	}
 	if hint := m.vaultLockKeyHint(); hint != "" && !m.list.editing {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		// The first esc clears the filter, so the areas keep their digits only.
-		keys = strings.Replace(keys, "1-6/{back} areas", "1-6 areas", 1) + " · {back} clear filter"
+		keys = strings.Replace(keys, "{area}/{back} areas", "{area} areas", 1) + " · {back} clear filter"
 	}
 	notice := m.findingsNotice(finds)
 	foot := notice + m.keyHint(keys)
@@ -4398,7 +4406,7 @@ func (m *Model) tableRoom() int {
 // down (like enter and tab) moves the focus into the workspace below it; up does nothing here, so it is left
 // out of the hint. Kept short enough to still wrap into two lines at the minimum terminal width.
 func (m *Model) navKeys() string {
-	keys := "←/→ move · down open · 1-6 open · n new · g setup · {command} cmds · {help} help · q quit"
+	keys := "{left}/{right} move · {down} open · {area} open · {new} new · {setup} setup · {command} cmds · {help} help · {quit} quit"
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
@@ -4408,9 +4416,9 @@ func (m *Model) navKeys() string {
 // backToSectionsHint names the keys that take the focus from the list back to the tab line.
 func (m *Model) backToSectionsHint() string {
 	if m.listBarShown() && m.screen == screenList {
-		return "tab bar · 1-6/{back} areas"
+		return "{next} bar · {area}/{back} areas"
 	}
-	return "1-6/{back}/tab areas"
+	return "{area}/{back}/{next} areas"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -4553,7 +4561,7 @@ func (m *Model) pickerFrame() (string, string) {
 	}
 	head.WriteString(m.boxTop(title, ""))
 	head.WriteString(m.boxSearch(&m.picker, tr(tLogPickSearch)))
-	keys := "type to search · up/down move · enter choose · {back} cancel"
+	keys := "type to search · {up}/{down} move · {enter} choose · {back} cancel"
 	if m.pickerMarks != nil {
 		ticked := 0
 		for _, choice := range m.picker.all {
@@ -4566,12 +4574,12 @@ func (m *Model) pickerFrame() (string, string) {
 		}
 		if m.pickerGroups == nil {
 			if m.pickerEffects != nil {
-				keys = "type to search · up/down move · space tick, on an effect row all its tools · enter keep · {back} cancel"
+				keys = "type to search · {up}/{down} move · {space} tick, on an effect row all its tools · {enter} keep · {back} cancel"
 			}
 			head.WriteString(m.boxText(styles.hint, tr(tFormTickedOf, ticked, total)))
-			keys = "type to search · up/down move · space tick · enter keep · {back} cancel"
+			keys = "type to search · {up}/{down} move · {space} tick · {enter} keep · {back} cancel"
 		} else {
-			keys = "type to search · up/down move · space tick row, group or effect · left/right fold group · enter keep · {back} cancel"
+			keys = "type to search · {up}/{down} move · {space} tick row, group or effect · {left}/{right} fold group · {enter} keep · {back} cancel"
 		}
 	} else {
 		head.WriteString(m.boxText(styles.hint, tr(tLogPickCurrent, m.choiceShown(f.value()))))
@@ -4722,7 +4730,7 @@ func (m *Model) viewFits(view string) bool {
 // additional room reveals the requested size. Rendering it does not change the screen, focus, form, or
 // test state, so resizing back resumes exactly where the user was.
 func (m *Model) resizeView() string {
-	way := "q quit"
+	way := "{quit} quit"
 	if m.screen != screenNav && m.screen != screenList {
 		way = "{back} leave"
 	}
@@ -5187,7 +5195,7 @@ func (m *Model) profileConfirmView() string {
 		title:       tr(tFormReplaceTheAccessAndTool, profile.ID),
 		consequence: tr(tFormEveryTickStaysChangeableAfterwards),
 		details:     []string{m.indented(profileText(metadata, profile))},
-		keys:        "y replace the ticks · n/{back} keep them · {command} cmds · {help} help",
+		keys:        "{yes} replace the ticks · {no}/{back} keep them · {command} cmds · {help} help",
 	})
 }
 
@@ -5205,7 +5213,7 @@ func (m *Model) confirmView() string {
 			consequence: "warning: every secret it holds is written back to disk unencrypted; anyone who can " +
 				"read this machine's files can then read them",
 			warn: true,
-			keys: "y turn off · n/{back} keep it encrypted · {command} cmds · {help} help",
+			keys: "{yes} turn off · {no}/{back} keep it encrypted · {command} cmds · {help} help",
 		})
 	case m.migratePlanConfirm:
 		return m.migratePlanView()
@@ -5222,7 +5230,7 @@ func (m *Model) confirmView() string {
 	case m.pendingProfile != "":
 		return m.profileConfirmView()
 	}
-	const keys = "y remove · n/{back} keep · {command} cmds · {help} help"
+	const keys = "{yes} remove · {no}/{back} keep · {command} cmds · {help} help"
 	if m.confirmRole != "" {
 		consequence := tr(tFormItIsRemovedFromThe)
 		if m.credentialType() != config.CredentialTypeVault {

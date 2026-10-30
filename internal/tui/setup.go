@@ -652,11 +652,11 @@ func (m *Model) summaryView() string {
 	keys := "{save} save · {back} back · {command} cmds · {help} help"
 	switch {
 	case w.saving:
-		keys = "ctrl+c quit · {command} cmds · {help} help"
+		keys = "{forcequit} quit · {command} cmds · {help} help"
 	case w.saved != "" && m.testing:
 		keys = "{back} cancel test · {command} cmds · {help} help"
 	case w.saved != "":
-		keys = "t test connection · {back} connections list · {command} cmds · {help} help"
+		keys = "{test} test connection · {back} connections list · {command} cmds · {help} help"
 	}
 	var tail strings.Builder
 	if w.saved != "" {

@@ -121,8 +121,13 @@ func (m *Model) helpKeys(keys string) string {
 // keyLineCount is how many lines the key line takes in the overlay, whatever is logged for the mouse.
 func (m *Model) keyLineCount(keys string) int {
 	log := m.footerLog
+	width := m.width
 	m.footerLog = nil
-	defer func() { m.footerLog = log }()
+	if m.helpOverlay() {
+		// Outside a render the model has the width of the terminal; the overlay wraps its keys to its own.
+		m.width = m.helpInner()
+	}
+	defer func() { m.footerLog, m.width = log, width }()
 	return len(m.keyHintLines(keys))
 }
 
@@ -161,7 +166,7 @@ func (m *Model) helpFrame() (string, string, int) {
 	}
 	note := render(styles.hint, m.helpInner(), macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
-	keys := "left/right topic · up/down scroll · pgup/pgdown page · {back}/{help} close"
+	keys := "{left}/{right} topic · {up}/{down} scroll · {pageup}/{pagedown} page · {back}/{help} close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
 	// that gains the position line, which itself takes one of those lines.
 	layout := func(head string) (string, string, int) {

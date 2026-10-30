@@ -207,7 +207,7 @@ func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	if got := m.credentialType(); got != before {
 		t.Errorf("left moved to %q, want back to %q", got, before)
 	}
-	if view := screenOf(m); !strings.Contains(flatText(view), "enter choose") || !strings.Contains(view, "left/right switch") {
+	if view := screenOf(m); !strings.Contains(flatText(view), "enter choose") || !strings.Contains(view, "←/→ switch") {
 		t.Errorf("the key line does not name both ways:\n%s", view)
 	}
 }
@@ -410,7 +410,7 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 			t.Fatalf("esc in the picker left screen %v at step %d", m.screen, m.wizard.step)
 		}
 	}
-	if view := screenOf(m); !strings.Contains(flatText(view), "enter choose F2 next") && strings.Contains(view, "left/right switch") && strings.Contains(view, "tab next field") {
+	if view := screenOf(m); !strings.Contains(flatText(view), "enter choose F2 next") && strings.Contains(view, "←/→ switch") && strings.Contains(view, "tab next field") {
 		t.Errorf("the key line does not name F2 next:\n%s", view)
 	}
 	press(t, m, "tab")

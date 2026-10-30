@@ -285,7 +285,7 @@ func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 	useColour(t)
 	m := paletteModel(t, 150, 42)
 	view := ansi.Strip(m.render())
-	for _, want := range []string{"Command Palette", "/ search or run a command…", "Open Connections (2)", "close"} {
+	for _, want := range []string{"Command Palette", ": search or run a command…", "Open Connections", "close"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("palette lacks %q:\n%s", want, view)
 		}
@@ -319,7 +319,7 @@ func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 	}
 	press(t, m, "c", "o", "n")
 	view = ansi.Strip(m.render())
-	if strings.Contains(view, "search or run a command") || !strings.Contains(view, "/ con") {
+	if strings.Contains(view, "search or run a command") || !strings.Contains(view, ": con") {
 		t.Errorf("typed text not in the field:\n%s", view)
 	}
 }

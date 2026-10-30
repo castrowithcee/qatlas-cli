@@ -222,6 +222,6 @@ func (m *Model) restartView() string {
 		consequence: tr(tRestartConsequence),
 		danger:      true,
 		details:     []string{m.wrapped(lipgloss.NewStyle(), tr(tRestartDetail))},
-		keys:        "y restart and discard · n/{back} not now · {command} cmds · {help} help",
+		keys:        "{yes} restart and discard · {no}/{back} not now · {command} cmds · {help} help",
 	})
 }

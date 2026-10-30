@@ -480,9 +480,9 @@ func TestFootersNameTheHelpAndCommandsWhereTheyWork(t *testing.T) {
 	f.append("cli", "", "op.one", "wiki", "success")
 	lm := f.model(true, f.localToday())
 	lm.Update(tea.WindowSizeMsg{Width: 70, Height: 30})
-	want(lm, "the Logs screen", "1-8 section", ": cmds", "? help", "q quit")
+	want(lm, "the Logs screen", "1-6 section", ": cmds", "? help", "q quit")
 	press(t, lm, "down", "enter")
-	want(lm, "the log detail", "1-8 section", ": cmds", "? help")
+	want(lm, "the log detail", "1-6 section", ": cmds", "? help")
 }
 
 func TestLeftOnTheActivityRowsDoesNotGoBack(t *testing.T) {

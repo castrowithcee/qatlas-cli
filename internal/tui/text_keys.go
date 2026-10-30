@@ -225,6 +225,7 @@ const (
 	tKeyHelpEnter                            textID = "keyhelp.enter"
 	tKeyHelpSpace                            textID = "keyhelp.space"
 	tKeyHelpSearch                           textID = "keyhelp.search"
+	tKeyHelpArea                             textID = "keyhelp.area"
 	tKeyHelpQuit                             textID = "keyhelp.quit"
 	tKeyHelpYes                              textID = "keyhelp.yes"
 	tKeyHelpNo                               textID = "keyhelp.no"

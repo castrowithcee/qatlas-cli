@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
 )
@@ -34,7 +35,7 @@ func TestDefaultKeymapKeepsTheKnownKeys(t *testing.T) {
 		actSummary: "s", actFilter: "f", actRevert: "B", actSessions: "M", actLogs: "o", actDuplicate: "p",
 		actTest: "t", actUpdate: "U", actWrite: "W",
 		actRemoveField: "f8", actSuggestPrev: "ctrl+p", actSuggestNext: "ctrl+n", actNextKind: "ctrl+y",
-		actReload: "ctrl+r",
+		actReload: "ctrl+r", actArea: "1",
 	}
 	if len(keymap) != len(want) {
 		t.Fatalf("keymap has %d actions, want %d", len(keymap), len(want))
@@ -182,7 +183,7 @@ func TestKeyHelpFollowsTheLanguageAndTheKeys(t *testing.T) {
 	if h := keymap[actSave].Help(); h.Key != "F2" || h.Desc != "Speichern" {
 		t.Errorf("German save help = %+v", h)
 	}
-	if h := keymap[actUp].Help(); h.Key != "up" || h.Desc != "Hoch" {
+	if h := keymap[actUp].Help(); h.Key != "↑" || h.Desc != "Hoch" {
 		t.Errorf("German up help = %+v", h)
 	}
 	applyKeys(uiprefs.Keys{Save: "f4", Info: "f3"})
@@ -249,10 +250,6 @@ func TestCheckRefusesTheKeysOfTheTable(t *testing.T) {
 // of a String() with one.
 var keyLiteral = regexp.MustCompile(`^\s*case\s+(?:(?:"[^"]*"|[\w.]+\([^()]*\)|[\w.]+)\s*,\s*)*"[^"]*"\s*[,:]|\.String\(\)\s*[!=]=\s*"`)
 
-// nonKeySwitches are files whose string cases are no keys (names, colour codes, footer groups, filter
-// states). TestTableKeysAreNeverLiterals still covers them for every key of the table.
-var nonKeySwitches = []string{"canvas.go", "footer.go", "logs.go", "mouse.go", "template.go", "tui.go"}
-
 // tableKeys are the key names the keymap owns: every default key of every action. No file but keymap.go
 // spells one as a key value.
 func tableKeys() []string {
@@ -267,16 +264,14 @@ func tableKeys() []string {
 	return keys
 }
 
-// Key values live in the keymap: outside it, only the files of nonKeySwitches may switch on strings, and
-// even those never on a key of the table.
+// Key values live in the keymap: no file outside it switches on a string that could be a key value.
 func TestKeyLiteralsStayInTheKeymap(t *testing.T) {
 	for _, f := range keyLiteralFindings(t, "*.go") {
 		t.Errorf("%s", f)
 	}
 }
 
-// The keys of the table have no literal anywhere: a case item or a comparison that spells one fails, in a
-// file of nonKeySwitches as much as in any other.
+// The keys of the table have no literal anywhere: a case item or a comparison that spells one fails.
 func TestTableKeysAreNeverLiterals(t *testing.T) {
 	for _, f := range tableKeyFindings(t, "*.go") {
 		t.Errorf("%s", f)
@@ -323,7 +318,7 @@ func tableKeyFindings(t *testing.T, glob string) []string {
 	return found
 }
 
-// keyLiteralFindings lists the key literals of the files matching glob, except the files of nonKeySwitches.
+// keyLiteralFindings lists the key literals of the files matching glob.
 func keyLiteralFindings(t *testing.T, glob string) []string {
 	t.Helper()
 	files, err := filepath.Glob(glob)
@@ -332,7 +327,7 @@ func keyLiteralFindings(t *testing.T, glob string) []string {
 	}
 	var found []string
 	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" || slices.Contains(nonKeySwitches, f) {
+		if strings.HasSuffix(f, "_test.go") || f == "keymap.go" {
 			continue
 		}
 		src, err := os.ReadFile(f)
@@ -393,4 +388,103 @@ func TestNoDefaultKeyLiesOnAMultiplexerKey(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The shortcut column of the command line shows the binding in force, also after a rebinding, and the
+// descriptions name no key.
+func TestPaletteShortcutsFollowTheKeymap(t *testing.T) {
+	rebind(t, actQuit, "x")
+	rebind(t, actSetup, "ctrl+x")
+	m := paletteModel(t, 150, 42)
+	m.prefs.Icons = uiprefs.IconsNone
+	view := ansi.Strip(m.render())
+	for _, name := range []string{"Start the guided setup", "Open Connections"} {
+		line := lineWith(view, name)
+		if line == "" {
+			t.Fatalf("palette lacks %q:\n%s", name, view)
+		}
+		if strings.Contains(line, "(") {
+			t.Errorf("the description names a key: %q", line)
+		}
+	}
+	if line := lineWith(view, "Start the guided setup"); !shortcutIs(line, "ctrl+x") {
+		t.Errorf("the setup shortcut is not the bound key: %q", line)
+	}
+	if line := lineWith(view, "Open Connections"); !shortcutIs(line, "2") {
+		t.Errorf("the area shortcut is not its digit: %q", line)
+	}
+	typeText(t, m, "quit")
+	if line := lineWith(ansi.Strip(m.render()), "Leave the editor"); !shortcutIs(line, "x") || strings.Contains(line, "(") {
+		t.Errorf("the quit row = %q", line)
+	}
+	if !strings.Contains(view, ": search or run a command…") {
+		t.Errorf("the input line does not start with the colon:\n%s", view)
+	}
+}
+
+func lineWith(view, text string) string {
+	for _, l := range strings.Split(view, "\n") {
+		if strings.Contains(l, text) {
+			return l
+		}
+	}
+	return ""
+}
+
+// A footer names every fixed key through the table: a rebound key, an arrow and a digit range show as bound.
+func TestFooterNamesFixedKeysFromTheTable(t *testing.T) {
+	rebind(t, actQuit, "x")
+	rebind(t, actNew, "N")
+	rebind(t, actUp, "ctrl+u")
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m.screen, m.section, m.navSub = screenNav, sectionOverview, false
+	foot := flatText(m.render())
+	for _, want := range []string{"x quit", "1-6 open"} {
+		if !strings.Contains(foot, want) {
+			t.Errorf("the footer lacks %q:\n%s", want, foot)
+		}
+	}
+	if strings.Contains(foot, "q quit") {
+		t.Errorf("the footer still names the old quit key:\n%s", foot)
+	}
+	if got := keyLabel(actUp) + "/" + keyLabel(actDown); got != "ctrl+u/↓" {
+		t.Errorf("label = %q", got)
+	}
+	if got := footerKeys("{up}/{down} move · {area} open · {pageup}/{pagedown} page"); got != "ctrl+u/↓ move · 1-6 open · pgup/pgdown page" {
+		t.Errorf("footerKeys = %q", got)
+	}
+	if got := keyLabel(actLeft) + keyLabel(actRight); got != "←→" {
+		t.Errorf("arrows = %q", got)
+	}
+}
+
+// The header names help and the command line through the binding in force.
+func TestHeaderNamesTheBoundCommandKey(t *testing.T) {
+	rebind(t, actCommand, "ctrl+k")
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	if head := ansi.Strip(m.headerHints()); !strings.Contains(head, "[ctrl+k] cmd") || strings.Contains(head, "[:]") {
+		t.Errorf("header = %q", head)
+	}
+}
+
+// Every key a click on a footer group may send is read from the same names the footer draws.
+func TestFooterButtonsReadKeyNamesFromTheTable(t *testing.T) {
+	for name, code := range map[string]rune{"enter": tea.KeyEnter, "esc": tea.KeyEscape, "tab": tea.KeyTab, "F2": tea.KeyF2, "F8": tea.KeyF8} {
+		if k, ok := keyPress(name); !ok || k.Code != code {
+			t.Errorf("keyPress(%q) = %v, %v", name, k, ok)
+		}
+	}
+	for _, name := range []string{"↑", "←", "1", "up", "F13", "1-6"} {
+		if _, ok := keyPress(name); ok {
+			t.Errorf("keyPress(%q) is a button key", name)
+		}
+	}
+}
+
+// shortcutIs reports whether the shortcut column of a palette row, the last cell before the frame, is key.
+func shortcutIs(line, key string) bool {
+	fields := strings.Fields(line)
+	return len(fields) >= 2 && fields[len(fields)-2] == key
 }

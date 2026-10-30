@@ -710,29 +710,29 @@ func (m *Model) importView() string {
 			b.WriteString(p.tableRow(i == e.modeCursor, truncateCells(tr(row.text), p.cells())) + "\n")
 		}
 		b.WriteString(p.blank() + p.hint(tr(tImportModeNote)) + p.bottom())
-		return b.String() + m.importKeys("up/down move · {save} or enter preview · {back} back · {command} cmds · {help} help") + m.notes()
+		return b.String() + m.importKeys("{up}/{down} move · {save} or {enter} preview · {back} back · {command} cmds · {help} help") + m.notes()
 	}
-	title, question, keys := tr(tImportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · up/down scroll · {command} cmds · {help} help"
+	title, question, keys := tr(tImportPreviewTitle), tr(tTransferPreviewQuestion), "{save} write · {back} back · {up}/{down} scroll · {command} cmds · {help} help"
 	lines := e.lines
 	switch e.step {
 	case importPreview:
 		if e.plan != nil {
 			if created, replaced, _ := e.plan.Count(); created+replaced == 0 {
-				keys = "{back} back · up/down scroll · {command} cmds · {help} help"
+				keys = "{back} back · {up}/{down} scroll · {command} cmds · {help} help"
 			}
 		}
 	case importResult:
-		title, question, keys = tr(tImportWrittenTitle), "", "enter or {back} done · up/down scroll · {command} cmds · {help} help"
+		title, question, keys = tr(tImportWrittenTitle), "", "{enter} or {back} done · {up}/{down} scroll · {command} cmds · {help} help"
 		if e.pendingApprove || e.pendingDelete {
-			keys = "enter, {save} or {back} next question · up/down scroll · {command} cmds · {help} help"
+			keys = "{enter}, {save} or {back} next question · {up}/{down} scroll · {command} cmds · {help} help"
 		}
 	case importApprove:
 		title, question, keys = tr(tImportWrittenTitle), tr(tImportApproveQuestion),
-			"y approve · n/{back} not now, nothing is approved · up/down scroll · {command} cmds · {help} help"
+			"{yes} approve · {no}/{back} not now, nothing is approved · {up}/{down} scroll · {command} cmds · {help} help"
 		lines = append(slices.Clone(lines), e.toApprove...)
 	case importDelete:
 		title, question, keys = tr(tImportWrittenTitle), tr(tImportDeleteQuestion, m.redactor.Apply(e.path)),
-			"y delete the file · n/{back} keep it · up/down scroll · {command} cmds · {help} help"
+			"{yes} delete the file · {no}/{back} keep it · {up}/{down} scroll · {command} cmds · {help} help"
 	}
 	if e.working != "" {
 		keys = workingWait(e.working)
@@ -754,7 +754,7 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 			input: m.pathLines("  ", &e.input),
 			field: true,
 			hint:  tr(tImportFileHint),
-			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or enter next · {back} cancel, nothing imported")),
+			keys:  m.importDialogKeys(pathKeys(&e.input, "{save} or {enter} next · {back} cancel, nothing imported")),
 		}, true
 	case importPassphrase:
 		return promptDialog{
@@ -762,7 +762,7 @@ func (m *Model) importPrompt() (promptDialog, bool) {
 			input: m.inputLine("  ", e.input.Model),
 			field: true,
 			hint:  tr(tImportPassHint),
-			keys:  m.importDialogKeys("{save} or enter ok · {back} back, nothing imported"),
+			keys:  m.importDialogKeys("{save} or {enter} ok · {back} back, nothing imported"),
 		}, true
 	}
 	return promptDialog{}, false
@@ -818,9 +818,9 @@ func (m *Model) importLeaveView() string {
 	if m.imp != nil && m.imp.step == importPreview {
 		save = "{save} write"
 	}
-	title, discard, why := tr(tImportLeaveTitle), "d discard", tr(tImportLeaveWhy)
+	title, discard, why := tr(tImportLeaveTitle), "{discard} discard", tr(tImportLeaveWhy)
 	if m.leaveQuit {
-		title, discard, why = tr(tImportQuitTitle), "d discard and quit", tr(tTransferQuitWhy)
+		title, discard, why = tr(tImportQuitTitle), "{discard} discard and quit", tr(tTransferQuitWhy)
 	}
 	return m.questionText(question{title: title, consequence: why, danger: true,
 		details: []string{m.indentedWith(styles.warning, tr(tImportLeaveWarn)),

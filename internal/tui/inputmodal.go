@@ -148,6 +148,6 @@ func (m *Model) testPrompt() promptDialog {
 	return promptDialog{
 		title: "Connection test",
 		input: strings.TrimLeft(m.testLine(), "\n"),
-		keys:  "enter or {back} close",
+		keys:  "{enter} or {back} close",
 	}
 }

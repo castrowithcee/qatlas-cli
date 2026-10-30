@@ -42,14 +42,15 @@ type commandLine struct {
 // commands is the register, in the order an empty line lists it.
 func (m *Model) commands() []command {
 	var list []command
+	keys := keymap[actArea].Keys()
 	for a := area(0); a < areaCount; a++ {
 		title := strings.ToLower(a.key())
 		first := areaSections[a][0]
 		list = append(list, command{
 			name:        "go " + title,
-			desc:        tr(tCmdGoArea, a.title(), int(a)+1),
+			desc:        tr(tCmdGoArea, a.title()),
 			icon:        areaIcons[a],
-			shortcut:    func() string { return fmt.Sprint(int(a) + 1) },
+			shortcut:    func() string { return keyName(keys[a]) },
 			aliases:     []string{title},
 			unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
 			run:         func(m *Model) tea.Cmd { return m.openSection(first) },
@@ -68,7 +69,7 @@ func (m *Model) commands() []command {
 			}
 			list = append(list, command{
 				name:        "go " + name,
-				desc:        tr(tCmdGoSection, a.title(), s.title(), int(a)+1),
+				desc:        tr(tCmdGoSection, a.title(), s.title()),
 				aliases:     aliases,
 				hidden:      true,
 				unavailable: onScreens("switch areas", screenNav, screenList, screenLogs),
@@ -81,6 +82,7 @@ func (m *Model) commands() []command {
 		command{
 			name:        "setup",
 			desc:        tr(tCmdSetup),
+			shortcut:    shortcutOf(actSetup),
 			aliases:     []string{"guided setup", "new connection"},
 			unavailable: onScreens("start the setup", screenNav, screenList),
 			run:         func(m *Model) tea.Cmd { m.askSetupTemplate(); return nil },
@@ -111,9 +113,10 @@ func (m *Model) commands() []command {
 			run: func(m *Model) tea.Cmd { return m.openFindings() },
 		},
 		command{
-			name:    "update",
-			desc:    tr(tCmdUpdate),
-			aliases: []string{"upgrade"},
+			name:     "update",
+			desc:     tr(tCmdUpdate),
+			shortcut: shortcutOf(actUpdate),
+			aliases:  []string{"upgrade"},
 			unavailable: func(m *Model) string {
 				if r := onScreens("update", screenNav, screenList)(m); r != "" {
 					return r
@@ -165,7 +168,7 @@ func (m *Model) commands() []command {
 		command{
 			name:        "lock vault",
 			desc:        tr(tCmdLock),
-			shortcut:    func() string { return keyName(keyOf(actLock)) },
+			shortcut:    shortcutOf(actLock),
 			aliases:     []string{"lock"},
 			unavailable: (*Model).lockUnavailable,
 			run:         func(m *Model) tea.Cmd { return m.handleVaultLockKey() },
@@ -173,19 +176,23 @@ func (m *Model) commands() []command {
 		command{
 			name:        "help",
 			desc:        tr(tCmdHelp),
-			shortcut:    func() string { return keyName(keyOf(actHelp)) },
+			shortcut:    shortcutOf(actHelp),
 			unavailable: func(m *Model) string { return "" },
 			run:         func(m *Model) tea.Cmd { m.openHelp(); return nil },
 		},
 		command{
 			name:        "quit",
 			desc:        tr(tCmdQuit),
+			shortcut:    shortcutOf(actQuit),
 			aliases:     []string{"exit"},
 			unavailable: onScreens("quit", screenNav, screenList, screenLogs),
 			run:         func(m *Model) tea.Cmd { return m.quit() },
 		},
 	)
 }
+
+// shortcutOf is the shortcut column of a command: the keys bound to the action now.
+func shortcutOf(a action) func() string { return func() string { return keyLabel(a) } }
 
 // onScreens is the availability of a command whose key works on these screens only.
 func onScreens(what string, screens ...screen) func(m *Model) string {
@@ -256,10 +263,14 @@ func matchCommands(list []command, query string) []command {
 	return append(append(groups[0], groups[1]...), groups[2]...)
 }
 
+// commandPrompt opens the input line of the command line. It is a prompt symbol, not the key that opens
+// the line, which may be rebound.
+const commandPrompt = ": "
+
 // openCommandLine shows the command line over the current screen.
 func (m *Model) openCommandLine() {
 	in := newTextInput()
-	in.Prompt = "/ "
+	in.Prompt = commandPrompt
 	in.Placeholder = tr(tCmdPlaceholder)
 	in.Focus()
 	m.cmdline = &commandLine{from: m.screen, input: in}
@@ -314,7 +325,7 @@ func (m *Model) updateCommandLine(key tea.KeyPressMsg) tea.Cmd {
 func (m *Model) commandLineView() string {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
-	foot := m.keyHint("type to search · up/down or tab choose · enter run · {back} close")
+	foot := m.keyHint("type to search · {up}/{down} or {next} choose · {enter} run · {back} close")
 	if cl.msg != "" {
 		foot = "\n" + m.wrapped(styles.fail, tr(tNoteError, cl.msg)) + foot
 	}
@@ -354,7 +365,7 @@ const paletteMaxRows = 12
 func (m *Model) paletteLines(inner, room int) ([]string, []int) {
 	cl := m.cmdline
 	matches := matchCommands(m.commands(), cl.input.Value())
-	foot := strings.Split(strings.TrimLeft(m.keyHint("type to search · up/down or tab choose · enter run · {back} close"), "\n"), "\n")
+	foot := strings.Split(strings.TrimLeft(m.keyHint("type to search · {up}/{down} or {next} choose · {enter} run · {back} close"), "\n"), "\n")
 	var msg []string
 	if cl.msg != "" {
 		msg = strings.Split(render(styles.fail, inner, tr(tNoteError, cl.msg)), "\n")

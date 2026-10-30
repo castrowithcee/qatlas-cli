@@ -496,7 +496,7 @@ func (m *Model) addFrame() (string, string) {
 	}
 	var head strings.Builder
 	label := tr(tTargetFilterOrType)
-	keys := "type to filter or to type a target · up/down move · enter choose · " + save + " · {back} cancel entry"
+	keys := "type to filter or to type a target · {up}/{down} move · {enter} choose · " + save + " · {back} cancel entry"
 	if a.kind < 0 {
 		head.WriteString(p.top(tr(tTargetAddA, metadata.Label), ""))
 		hint := tr(tTargetBuildANewTargetStep)
@@ -518,9 +518,9 @@ func (m *Model) addFrame() (string, string) {
 		}
 		head.WriteString(p.text(styles.hint, tr(tTargetSoFarForms, so, strings.Join(forms, ", "))))
 		label = tr(tTargetValue)
-		keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} step back"
+		keys = "type a value or filter · {up}/{down} move · {enter} choose · " + save + " · {back} step back"
 		if len(a.history) <= 1 {
-			keys = "type a value or filter · up/down move · enter choose · " + save + " · {back} cancel entry"
+			keys = "type a value or filter · {up}/{down} move · {enter} choose · " + save + " · {back} cancel entry"
 		}
 	}
 	if m.targetAsExclusion {

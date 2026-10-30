@@ -342,12 +342,12 @@ func (m *Model) findingsView() string {
 	p := m.dialogPanelOf()
 	head := p.top(tr(tFindTitle), fmt.Sprintf("%d/%d", s.cursor+1, len(s.items))) + p.blank()
 	f := s.items[s.cursor]
-	keys := "up/down choose"
+	keys := "{up}/{down} choose"
 	switch {
 	case f.canRevert():
-		keys += " · enter finish · B put back"
+		keys += " · {enter} finish · {revert} put back"
 	case f.action() != "":
-		keys += " · enter " + f.action()
+		keys += " · {enter} " + f.action()
 	}
 	keys += " · {back} back · {command} cmds · {help} help"
 	foot := m.wrapped(styles.hint, m.findingDetail(f))

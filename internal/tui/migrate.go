@@ -164,7 +164,7 @@ func (m *Model) migratePlanView() string {
 	q := question{
 		title:       tr(tMigrateTitle),
 		consequence: tr(tMigrateMoves, countNoun(len(p.plan))),
-		keys:        "y migrate · n/{back} cancel, nothing is written · {command} cmds · {help} help",
+		keys:        "{yes} migrate · {no}/{back} cancel, nothing is written · {command} cmds · {help} help",
 	}
 	for _, row := range migrateRows(p.plan) {
 		q.details = append(q.details, "    "+row)
@@ -337,7 +337,7 @@ func (m *Model) migrateResultView() string {
 		consequence: m.migrateResult,
 		danger:      true,
 		details:     []string{"  " + statusMark(statusOK, tr(tStatusDone))},
-		keys:        "y delete · n/{back} keep the file · {command} cmds · {help} help",
+		keys:        "{yes} delete · {no}/{back} keep the file · {command} cmds · {help} help",
 	})
 }
 

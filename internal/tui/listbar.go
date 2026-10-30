@@ -159,9 +159,9 @@ type barPart struct {
 func searchContent(l *filterList, room int) string {
 	switch {
 	case l.editing:
-		return "/ " + inputView(fitInput(l.input, max(room-3, 1)))
+		return keyLabel(actSearch) + " " + inputView(fitInput(l.input, max(room-3, 1)))
 	case l.query() != "":
-		return "/ " + truncateCells(l.query(), max(room-3, 1))
+		return keyLabel(actSearch) + " " + truncateCells(l.query(), max(room-3, 1))
 	}
 	return ""
 }
@@ -349,6 +349,6 @@ func (m *Model) updateBar(key tea.KeyPressMsg) (tea.Cmd, bool) {
 
 // barKeys is the key line while the filter bar has the focus.
 func (m *Model) barKeys() string {
-	return "←/→ change · enter open · tab next · shift+tab previous · down rows · / filter · n new · 1-6/{back}/up areas · " +
-		"{command} cmds · {help} help · q quit"
+	return "{left}/{right} change · {enter} open · {next} next · {prev} previous · {down} rows · {search} filter · {new} new · {area}/{back}/{up} areas · " +
+		"{command} cmds · {help} help · {quit} quit"
 }
