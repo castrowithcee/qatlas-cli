@@ -152,7 +152,7 @@ func TestUpdateReportsArchiveProgress(t *testing.T) {
 	}
 	var last int64
 	client := &Client{
-		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", SigningKeys: testKeys(t),
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,
 		Progress: func(done, total int64) { last = done },
 	}

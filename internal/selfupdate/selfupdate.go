@@ -99,9 +99,9 @@ type Client struct {
 // Release names the files of the verified release a hook of Client may read: copies in a private directory
 // that exists until Update returns.
 type Release struct {
-	// Signed reports that Signature holds a valid signature over Checksums.
+	// Signed reports that Signature holds a valid signature over Checksums. It is always true.
 	Signed bool
-	// Checksums, Signature, and Archive are absolute paths; Signature is empty for a release without one.
+	// Checksums, Signature, and Archive are absolute paths.
 	Checksums, Signature, Archive string
 	// ArchiveName is the archive's file name in the release, which Checksums lists it by.
 	ArchiveName string
@@ -116,23 +116,8 @@ func New(version string) *Client { return &Client{Version: version, BaseURL: tes
 
 // Check reports whether GitHub has a newer stable release without downloading an artifact.
 func (c *Client) Check(ctx context.Context) (Result, error) {
-	current, err := c.currentVersion()
-	if err != nil {
-		return Result{}, err
-	}
-	release, err := c.latest(ctx)
-	if err != nil {
-		return Result{}, err
-	}
-	latest, err := parseSemver(release.TagName)
-	if err != nil {
-		return Result{}, fmt.Errorf("latest release has an invalid version: %w", err)
-	}
-	return Result{
-		Current:         c.Version,
-		Latest:          release.TagName,
-		UpdateAvailable: current.compare(latest) < 0,
-	}, nil
+	result, _, err := c.checkWithRelease(ctx)
+	return result, err
 }
 
 // Update installs the newest stable release when it is newer than the running version.
@@ -181,21 +166,21 @@ func (c *Client) prepareRelease(ctx context.Context, result Result, rel release)
 	if err != nil {
 		return nil, fmt.Errorf("download checksums: %w", err)
 	}
-	var signature []byte
-	if signatureURL != "" {
-		signature, err = c.download(ctx, signatureURL, maxMetadataBytes, nil)
-		if err != nil {
-			return nil, fmt.Errorf("download checksums signature: %w", err)
-		}
-		keys := c.SigningKeys
-		if keys == nil {
-			keys = releaseverify.TrustedKeys()
-		}
-		if err := releaseverify.VerifyChecksums(checksums, signature, keys); err != nil {
-			return nil, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
-		}
-		result.Signed = true
+	if signatureURL == "" {
+		return nil, fmt.Errorf("release %s is not signed, nothing was changed", result.Latest)
 	}
+	signature, err := c.download(ctx, signatureURL, maxMetadataBytes, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download checksums signature: %w", err)
+	}
+	keys := c.SigningKeys
+	if keys == nil {
+		keys = releaseverify.TrustedKeys()
+	}
+	if err := releaseverify.VerifyChecksums(checksums, signature, keys); err != nil {
+		return nil, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
+	}
+	result.Signed = true
 	want, err := releaseverify.ChecksumFor(checksums, archiveName)
 	if err != nil {
 		return nil, err
@@ -279,12 +264,41 @@ func (c *Client) checkWithRelease(ctx context.Context) (Result, release, error) 
 	if err != nil {
 		return Result{}, release{}, err
 	}
+	if !hasSignature(r) {
+		// The newest release cannot be installed; offer the newest signed stable one instead.
+		if r, err = c.newestSigned(ctx); err != nil {
+			return Result{}, release{}, err
+		}
+		if r.TagName == "" {
+			return Result{Current: c.Version, Latest: c.Version}, release{}, nil
+		}
+	}
 	latest, err := parseSemver(r.TagName)
 	if err != nil {
 		return Result{}, release{}, fmt.Errorf("latest release has an invalid version: %w", err)
 	}
 	result := Result{Current: c.Version, Latest: r.TagName, UpdateAvailable: current.compare(latest) < 0}
 	return result, r, nil
+}
+
+// newestSigned returns the newest signed stable release, or the zero release when there is none.
+func (c *Client) newestSigned(ctx context.Context) (release, error) {
+	all, err := c.releases(ctx)
+	if err != nil {
+		return release{}, err
+	}
+	var best release
+	var bestV semver
+	for _, r := range all {
+		v, ok := eligible(r)
+		if !ok || r.Prerelease {
+			continue
+		}
+		if best.TagName == "" || v.compare(bestV) > 0 {
+			best, bestV = r, v
+		}
+	}
+	return best, nil
 }
 
 func (c *Client) currentVersion() (semver, error) {

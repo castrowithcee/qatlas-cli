@@ -34,9 +34,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"4 Access, 5 Library, and 6 Settings, below it, for an area with several parts, an option bar\n" +
 			"(Access: Tokens, Approvals; Library: Services, Credentials; Settings: General, then after a bar\n" +
 			"Vault, Defaults, Transfer, Update, Self-test), and below that the workspace with the list, form,\n" +
-			"or setup step of the active part. The tab line has the\n" +
-			"same place at every width; the active area and part are in brackets, and a terminal too narrow\n" +
-			"for all names shows the other areas by their numbers and only the active part. Below 40x13 the\n" +
+			"or setup step of the active part. The tab line has the same place at every width; the active\n" +
+			"area and part are a filled area, in brackets only without colour, and a terminal too narrow for\n" +
+			"all names shows the other areas by their numbers and only the active part. Below 40x13 the\n" +
 			"editor asks for a larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens on the Overview with the focus on the tab line. The Overview shows the number of\n" +
 			"connections, services, credentials, agent tokens, and open approvals (tokens and approvals need an\n" +
@@ -168,8 +168,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
 			"General (6, first part of Settings) holds the preferences of this device: the theme (terminal,\n" +
-			"the default, takes the colors of the terminal; qatlas dark and qatlas light paint the whole\n" +
-			"screen; NO_COLOR wins over all of them), the\n" +
+			"the default, takes the colors of the terminal; every other theme paints the whole screen;\n" +
+			"NO_COLOR wins over all of them), the\n" +
 			"start view (the area the editor opens on the next start), icons (unicode, the default, an\n" +
 			"emoji or symbol beside each area name; nerdfont, a Nerd Font icon there that needs the font; or\n" +
 			"none), and language (english, deutsch, or system, which\n" +

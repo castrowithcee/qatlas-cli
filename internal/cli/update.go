@@ -29,7 +29,7 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 			"(checksums.txt.sig, an SSH signature checked against the release keys built into qatlas)\n" +
 			"and the selected archive with its published SHA-256 checksum, and replaces a direct\n" +
 			"<prefix>/bin/qatlas installation. A release with an invalid signature is refused and nothing is\n" +
-			"changed; a release without a signature is still installed, and the output says signed: false.\n" +
+			"changed, and so is a release without a signature. Only signed releases are offered or installed.\n" +
 			"It also refreshes qatlas.1 in the same prefix. On Windows the installation is\n" +
 			"<prefix>\\bin\\qatlas.exe: the running file is renamed to qatlas.exe.old, the new one takes its place\n" +
 			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
@@ -60,13 +60,12 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 			"running qatlas processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +
 			"an agent runs it only after the user approved the update, and then with --yes.\n\n" +
-			"A vault process that holds the vault unlocked would not serve the new program. When the release\n" +
-			"is signed and the update behaviour is handover (the default, see 'qatlas vault handover'), the\n" +
-			"vault process verifies the release itself and hands the unlocked vault over to the new program,\n" +
-			"so running agents go on without an unlock. In every other case, an unsigned release, the\n" +
-			"setting lock, or a handover that cannot be prepared, it is locked right before qatlas is\n" +
-			"replaced; 'qatlas vault unlock' unlocks the vault again. The command says which of the two\n" +
-			"happened. Should the process not lock, the update goes ahead and the warning names its process\n" +
+			"A vault process that holds the vault unlocked would not serve the new program. When the update\n" +
+			"behaviour is handover (the default, see 'qatlas vault handover'), the vault process verifies the\n" +
+			"release itself and hands the unlocked vault over to the new program, so running agents go on\n" +
+			"without an unlock. In every other case, the setting lock or a handover that cannot be prepared,\n" +
+			"it is locked right before qatlas is replaced; 'qatlas vault unlock' unlocks the vault again. The\n" +
+			"command says which of the two happened. Should the process not lock, the update goes ahead and the warning names its process\n" +
 			"id and how to end it. On Windows there is no handover: the vault process is always locked, whatever the\n" +
 			"update behaviour says, and the command says so. A release with an invalid signature is refused\n" +
 			"before anything is touched.",
@@ -341,8 +340,6 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 		// Windows has no handover, so neither the update behaviour nor the signature matters here: the vault
 		// process is locked.
 		why = "because Windows locks the vault process instead of handing it over, before qatlas was replaced"
-	} else if !release.Signed {
-		why = "because the release is not signed, before qatlas was replaced"
 	} else if client, err := vaultproc.ProcessClientOf(v); err == nil {
 		behaviour, handover, err := client.PrepareHandover(contextOrBackground(ctx), vaultproc.ReleaseFiles{
 			Checksums: release.Checksums, Signature: release.Signature, Archive: release.Archive,

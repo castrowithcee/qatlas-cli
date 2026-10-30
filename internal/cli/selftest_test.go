@@ -57,3 +57,18 @@ func TestSelftestRejectsUnknownProfile(t *testing.T) {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
 }
+
+// --json stays accepted as an alias of --output json, but help names only --output json.
+func TestSelftestJSONFlagIsHiddenAlias(t *testing.T) {
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "selftest", "storage", "--help")
+	if code != exitOK {
+		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+	if strings.Contains(stdout, "--json") {
+		t.Errorf("help lists --json:\n%s", stdout)
+	}
+	root := newRootCommand(&Options{}, defaultRegistry())
+	if c, _, err := root.Find([]string{"selftest"}); err != nil || !strings.Contains(c.Long, "--output json") {
+		t.Errorf("selftest help does not name --output json (err %v)", err)
+	}
+}
