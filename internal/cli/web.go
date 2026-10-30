@@ -100,10 +100,10 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			defer cancel()
 
 			url := server.URL()
-			fmt.Fprintf(c.OutOrStdout(), "qatlas: open %s to couple this browser (valid once, expires soon)\n", url)
+			fmt.Fprintf(c.ErrOrStderr(), "qatlas: open %s to couple this browser (valid once, expires soon)\n", url)
 			if checkInteractive() {
 				if required, err := server.AdminPassphraseRequired(); err == nil && required {
-					fmt.Fprintln(c.OutOrStdout(),
+					fmt.Fprintln(c.ErrOrStderr(),
 						"qatlas: press enter here to approve the coupled browser with the vault passphrase")
 				}
 			}
@@ -115,7 +115,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				fmt.Fprintln(c.ErrOrStderr(), "qatlas: could not open a browser automatically; use the URL above")
 			}
 
-			go runTerminalAdmin(ctx, c.InOrStdin(), c.OutOrStdout(), server)
+			go runTerminalAdmin(ctx, c.InOrStdin(), c.ErrOrStderr(), server)
 
 			return server.Run(ctx)
 		},
@@ -147,7 +147,7 @@ func webSecrets(opts *Options) (*secret.Resolver, error) {
 // never accepts the passphrase as a command line argument, an environment variable, or a file. It returns
 // once stdin reaches its end; ctx cancellation alone does not interrupt an in-flight read, since the
 // process is exiting either way once the server itself stops.
-func runTerminalAdmin(ctx context.Context, stdin io.Reader, stdout io.Writer, server *web.Server) {
+func runTerminalAdmin(ctx context.Context, stdin io.Reader, stderr io.Writer, server *web.Server) {
 	if !checkInteractive() {
 		return
 	}
@@ -157,27 +157,27 @@ func runTerminalAdmin(ctx context.Context, stdin io.Reader, stdout io.Writer, se
 			return
 		}
 		if !server.SessionCoupled() {
-			fmt.Fprintln(stdout, "qatlas: no browser is coupled yet; open the URL above first")
+			fmt.Fprintln(stderr, "qatlas: no browser is coupled yet; open the URL above first")
 			continue
 		}
 		if required, err := server.AdminPassphraseRequired(); err == nil && !required {
-			fmt.Fprintln(stdout, "qatlas: this vault has no passphrase; the coupled browser needs no approval")
+			fmt.Fprintln(stderr, "qatlas: this vault has no passphrase; the coupled browser needs no approval")
 			continue
 		}
 		passphrase, err := readVaultPassphrase("vault passphrase: ")
 		if err != nil {
-			fmt.Fprintln(stdout, "qatlas: could not read the passphrase on this terminal")
+			fmt.Fprintln(stderr, "qatlas: could not read the passphrase on this terminal")
 			continue
 		}
 		if err := server.VerifyAndGrantAdmin(passphrase); err != nil {
 			if errors.Is(err, vault.ErrWrongPassphrase) {
-				fmt.Fprintln(stdout, "qatlas: wrong passphrase")
+				fmt.Fprintln(stderr, "qatlas: wrong passphrase")
 			} else {
-				fmt.Fprintln(stdout, "qatlas: admin approval refused")
+				fmt.Fprintln(stderr, "qatlas: admin approval refused")
 			}
 			continue
 		}
-		fmt.Fprintln(stdout, "qatlas: admin approval granted to the coupled browser")
+		fmt.Fprintln(stderr, "qatlas: admin approval granted to the coupled browser")
 	}
 }
 
