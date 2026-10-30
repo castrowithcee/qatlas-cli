@@ -91,15 +91,15 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 		return nil
 	}
 
-	stdout := &syncBuffer{}
-	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	stderr := &syncBuffer{}
 	codeCh := make(chan int, 1)
 	go func() {
-		codeCh <- run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "--config", path}, stdout,
-			&stderr)
+		codeCh <- run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "--config", path}, &stdout,
+			stderr)
 	}()
 
-	waitForOutput(t, stdout, "http://127.0.0.1:")
+	waitForOutput(t, stderr, "http://127.0.0.1:")
 
 	if runtime.GOOS == "windows" {
 		// os.Process.Signal(syscall.SIGINT) is not supported on Windows, so the signal-triggered stop
@@ -125,6 +125,9 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 		t.Fatal("'qatlas web' did not stop after SIGINT")
 	}
 
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout must stay empty, got %q", stdout.String())
+	}
 	if strings.Contains(stdout.String(), webSyntheticSecret) || strings.Contains(stderr.String(), webSyntheticSecret) {
 		t.Fatalf("synthetic secret leaked to process output: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
@@ -188,12 +191,12 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 			secret.NewFile(filepath.Join(dir, secret.FileName)), red).WithVault(vault.New(dir), vault.ReadPassphrase),
 	}
 
-	stdout := &syncBuffer{}
-	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	stderr := &syncBuffer{}
 	codeCh := make(chan int, 1)
 	go func() {
 		codeCh <- run(newRootCommand(opts, sharedRegistry()), opts, []string{"web", "--config", configIn(dir)},
-			stdout, &stderr)
+			&stdout, stderr)
 	}()
 	t.Cleanup(func() {
 		process, err := os.FindProcess(os.Getpid())
@@ -206,9 +209,9 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 		}
 	})
 
-	couplingURL := waitForURL(t, stdout)
+	couplingURL := waitForURL(t, stderr)
 
-	waitForOutput(t, stdout, "press enter here to approve the coupled browser")
+	waitForOutput(t, stderr, "press enter here to approve the coupled browser")
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -260,7 +263,10 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	waitForOutput(t, stdout, "admin approval granted")
+	waitForOutput(t, stderr, "admin approval granted")
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout must stay empty, got %q", stdout.String())
+	}
 	if strings.Contains(stdout.String(), webAdminSyntheticPassphrase) || strings.Contains(stderr.String(), webAdminSyntheticPassphrase) {
 		t.Fatalf("synthetic passphrase leaked to process output: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
@@ -285,14 +291,14 @@ func TestRunTerminalAdminWithoutCoupledSession(t *testing.T) {
 
 	stdinR, stdinW := io.Pipe()
 	t.Cleanup(func() { stdinW.Close() })
-	stdout := &syncBuffer{}
-	go runTerminalAdmin(ctx, stdinR, stdout, srv)
+	stderr := &syncBuffer{}
+	go runTerminalAdmin(ctx, stdinR, stderr, srv)
 
 	if _, err := stdinW.Write([]byte("\n")); err != nil {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	waitForOutput(t, stdout, "no browser is coupled yet")
+	waitForOutput(t, stderr, "no browser is coupled yet")
 }
 
 // TestRunTerminalAdminWrongPassphrase confirms a wrong passphrase on the terminal path is reported as
@@ -329,14 +335,14 @@ func TestRunTerminalAdminWrongPassphrase(t *testing.T) {
 
 	stdinR, stdinW := io.Pipe()
 	t.Cleanup(func() { stdinW.Close() })
-	stdout := &syncBuffer{}
-	go runTerminalAdmin(ctx, stdinR, stdout, srv)
+	stderr := &syncBuffer{}
+	go runTerminalAdmin(ctx, stdinR, stderr, srv)
 
 	if _, err := stdinW.Write([]byte("\n")); err != nil {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	waitForOutput(t, stdout, "wrong passphrase")
+	waitForOutput(t, stderr, "wrong passphrase")
 }
 
 // postAdminForm posts the admin passphrase form the way a real browser would: with the Origin header a
@@ -357,25 +363,25 @@ func postAdminForm(t *testing.T, client *http.Client, adminURL, origin, csrf, pa
 // webOutputTimeout bounds waits for output that depends on scrypt or on slow CI scheduling.
 const webOutputTimeout = 30 * time.Second
 
-// waitForOutput polls stdout until it contains want and fails with the output so far on timeout.
-func waitForOutput(t *testing.T, stdout *syncBuffer, want string) {
+// waitForOutput polls buf until it contains want and fails with the output so far on timeout.
+func waitForOutput(t *testing.T, buf *syncBuffer, want string) {
 	t.Helper()
 	deadline := time.Now().Add(webOutputTimeout)
 	for time.Now().Before(deadline) {
-		if strings.Contains(stdout.String(), want) {
+		if strings.Contains(buf.String(), want) {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("output never contained %q, stdout: %s", want, stdout.String())
+	t.Fatalf("output never contained %q, output: %s", want, buf.String())
 }
 
-func waitForURL(t *testing.T, stdout *syncBuffer) string {
+func waitForURL(t *testing.T, buf *syncBuffer) string {
 	t.Helper()
 	deadline := time.Now().Add(webOutputTimeout)
 	for time.Now().Before(deadline) {
-		if idx := strings.Index(stdout.String(), "http://127.0.0.1:"); idx >= 0 {
-			rest := stdout.String()[idx:]
+		if idx := strings.Index(buf.String(), "http://127.0.0.1:"); idx >= 0 {
+			rest := buf.String()[idx:]
 			end := strings.IndexAny(rest, " \n)")
 			if end < 0 {
 				end = len(rest)
