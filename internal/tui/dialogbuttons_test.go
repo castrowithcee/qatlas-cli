@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"github.com/castrowithcee/qatlas-cli/internal/i18n"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -125,5 +126,26 @@ func TestPassphraseDialogFitsTheSmallestTerminalWithButtonsInModals(t *testing.T
 	sizedModel(m, minimumWidth, minimumHeight-1)
 	if !strings.Contains(m.render(), "Resize") {
 		t.Error("a terminal below the minimum does not ask for more room")
+	}
+}
+
+func TestDialogButtonsLabelAndFocusInBothLanguages(t *testing.T) {
+	m, _, _ := newModel(t)
+	cases := []struct {
+		lang  i18n.Lang
+		keys  string
+		label string
+	}{
+		{i18n.English, "{enter} or {back} close", "Close"},
+		{i18n.English, "{save} or {enter} next", "Next"},
+		{i18n.German, "{enter} or {back} close", "Schließen"},
+		{i18n.German, "{save} or {enter} next", "Weiter"},
+	}
+	for _, c := range cases {
+		useLanguage(t, c.lang)
+		buttons := m.dialogButtons(c.keys, false, nil)
+		if len(buttons) != 1 || buttons[0].label != c.label || !buttons[0].focused {
+			t.Errorf("%s %q: buttons %+v, want one focused %q", c.lang, c.keys, buttons, c.label)
+		}
 	}
 }

@@ -1106,6 +1106,7 @@ var textDE = map[textID]string{
 	tTargetTheNewIsNotComplete:                                     "Das neue %s ist noch nicht vollständig: %s eintippen oder mit {enter} wählen, oder mit {back} verlassen; nichts gespeichert",
 	tTargetOneOf:                                                   "eines von %s",
 	tTargetOr:                                                      " oder ",
+	tFooterKeysOr:                                                  " oder ",
 	tTargetFilterOrType:                                            "Filtern oder tippen: ",
 	tTargetAddA:                                                    "%s hinzufügen",
 	tTargetBuildANewTargetStep:                                     "neues Target Schritt für Schritt bauen oder eintippen",

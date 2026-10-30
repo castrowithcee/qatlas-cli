@@ -56,7 +56,7 @@ func (m *Model) dialogButtons(keys string, danger bool, labels map[string]string
 			kind = buttonDanger
 		}
 		first, _, _ := strings.Cut(group, " ")
-		focused := first == keyOf(actEnter) || strings.HasPrefix(group, first+" or "+keyLabel(actEnter)+" ")
+		focused := first == keyOf(actEnter) || strings.HasPrefix(group, first+tr(tFooterKeysOr)+keyLabel(actEnter)+" ")
 		buttons = append(buttons, dialogButton{key: key, label: label, kind: kind, focused: focused})
 	}
 	return buttons
@@ -65,7 +65,7 @@ func (m *Model) dialogButtons(keys string, danger bool, labels map[string]string
 // buttonLabel is the action of a key group as a button label: "n/esc cancel, nothing saved" gives "Cancel".
 func buttonLabel(group string) string {
 	_, action, _ := strings.Cut(group, " ")
-	if rest, ok := strings.CutPrefix(action, "or "); ok {
+	if rest, ok := strings.CutPrefix(action, strings.TrimLeft(tr(tFooterKeysOr), " ")); ok {
 		_, action, _ = strings.Cut(rest, " ")
 	}
 	action, _, _ = strings.Cut(action, ",")

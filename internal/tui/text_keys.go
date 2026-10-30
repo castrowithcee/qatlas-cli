@@ -884,6 +884,7 @@ const (
 	tTargetTheNewIsNotComplete               textID = "TargetTheNewIsNotComplete"
 	tTargetOneOf                             textID = "TargetOneOf"
 	tTargetOr                                textID = "TargetOr"
+	tFooterKeysOr                            textID = "FooterKeysOr"
 	tTargetFilterOrType                      textID = "TargetFilterOrType"
 	tTargetAddA                              textID = "TargetAddA"
 	tTargetBuildANewTargetStep               textID = "TargetBuildANewTargetStep"
