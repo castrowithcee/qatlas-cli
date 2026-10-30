@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-28
+updated: 2026-10-30
 ---
 
 # Set up Matomo
@@ -185,6 +185,15 @@ Plugin `CustomAlerts`.
 | List alerts, list triggered alerts | View on the websites; shows only the alerts of the token's user |
 | List the alerts of all users (`ifSuperUserReturnAllAlerts`) | Super User |
 | Read an alert or its past values, delete an alert | Only the creator of the alert, even a Super User |
+
+### Funnels
+
+Premium plugin `Funnels`; the plugin needs a licence.
+
+| Tools | Matomo right |
+| --- | --- |
+| List funnels, read a funnel | View on the website, expected; Matomo's reference does not state it |
+| Test a URL against steps, list the pattern types | View on at least one website, expected; the connection must bind a website |
 
 ### Instance settings and reference data
 
