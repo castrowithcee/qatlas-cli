@@ -788,10 +788,10 @@ func invokeRecordedSessionsGet(ctx context.Context, resolved *config.Resolved, s
 }
 
 func sessionRecordingsOperations() []capability.Operation {
-	return []capability.Operation{
+	return append([]capability.Operation{
 		{Descriptor: sessionRecordingsList, Handler: capability.Handler(invokeSessionRecordingsList)},
 		{Descriptor: sessionRecordingsGet, Handler: capability.Handler(invokeSessionRecordingsGet)},
 		{Descriptor: recordedSessionsList, Handler: capability.Handler(invokeRecordedSessionsList)},
 		{Descriptor: recordedSessionsGet, Handler: capability.Handler(invokeRecordedSessionsGet)},
-	}
+	}, sessionRecordingChangeOperations()...)
 }
