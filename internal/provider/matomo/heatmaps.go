@@ -534,9 +534,9 @@ func recordedMetadata(raw json.RawMessage) (map[string]any, bool) {
 }
 
 func heatmapsOperations() []capability.Operation {
-	return append([]capability.Operation{
+	return append(append([]capability.Operation{
 		{Descriptor: heatmapsList, Handler: capability.Handler(invokeHeatmapsList)},
 		{Descriptor: heatmapsGet, Handler: capability.Handler(invokeHeatmapsGet)},
 		{Descriptor: recordedHeatmapsGet, Handler: capability.Handler(invokeRecordedHeatmapsGet)},
-	}, heatmapOptionsOperations()...)
+	}, heatmapOptionsOperations()...), heatmapChangeOperations()...)
 }

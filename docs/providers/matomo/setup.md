@@ -191,7 +191,7 @@ Plugin `CustomAlerts`.
 | Tools | Matomo right |
 | --- | --- |
 | Funnels (premium plugin `Funnels`, licence needed): list, read, test a URL against steps, list the pattern types | View on the website (any one website for the last two, on a connection that binds a website), expected; Matomo's reference does not state it |
-| Funnels: create, replace, delete | Write on the website, expected; not stated |
+| Funnels: create, replace, delete; heatmaps: create, replace, copy | Write on the website, expected; not stated (a copy: also on each destination website) |
 | Heatmaps (premium plugin `HeatmapSessionRecording`, licence needed): list, read, recorded behavior | View on the website, expected; the reference does not state it |
 | Heatmap options | View on any website for device and heatmap types; write on at least one website for statuses, page rules, sample limits, and the URL test, which are otherwise named as unavailable; the connection must bind a website |
 

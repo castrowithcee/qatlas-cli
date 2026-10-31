@@ -252,7 +252,7 @@ The [tracking tools](tracking.md) are in no profile and are offered only via
 | [scheduled reports](scheduled-reports.md) | listing scheduled e-mail reports, rendering one as text, pausing one, deleting one |
 | [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [funnels](funnels.md) | listing and reading the funnels of a website, testing a URL against funnel steps, pattern types, creating, replacing, and deleting funnels |
-| [heatmaps](heatmaps.md) | listing and reading heatmap configurations, recorded visitor behavior of a heatmap, heatmap options and the URL test of page rules |
+| [heatmaps](heatmaps.md) | listing, reading, creating, replacing, and copying heatmap configurations, recorded visitor behavior of a heatmap, heatmap options and the URL test of page rules |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 | [tracking](tracking.md) | recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, content impressions and interactions, several of these in one bulk request, and requests of AI chatbots |
 | [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, deleting, and publishing versions, tags, triggers, and variables and where they are used, changing triggers, tags, and variables of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
