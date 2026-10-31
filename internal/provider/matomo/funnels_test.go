@@ -94,7 +94,7 @@ func TestFunnelToolsAreRegisteredAsOpenReadsInNoProfile(t *testing.T) {
 			t.Errorf("profile %s selects a funnel tool", profile.ID)
 		}
 	}
-	for _, id := range []string{"save", "set", "delete", "add"} {
+	for _, id := range []string{"set", "add"} {
 		if _, _, found := reg.Lookup("matomo.funnels." + id); found {
 			t.Errorf("matomo.funnels.%s exists", id)
 		}

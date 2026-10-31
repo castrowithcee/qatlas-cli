@@ -192,8 +192,8 @@ Premium plugin `Funnels`; the plugin needs a licence.
 
 | Tools | Matomo right |
 | --- | --- |
-| List funnels, read a funnel | View on the website, expected; Matomo's reference does not state it |
-| Test a URL against steps, list the pattern types | View on at least one website, expected; the connection must bind a website |
+| List funnels, read a funnel, test a URL against steps, list the pattern types | View on the website (any one website for the last two, on a connection that binds a website), expected; Matomo's reference does not state it |
+| Create, replace, delete funnels | Write on the website, expected; not stated |
 
 ### Instance settings and reference data
 
