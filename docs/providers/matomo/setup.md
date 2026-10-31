@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-30
+updated: 2026-10-31
 ---
 
 # Set up Matomo
@@ -186,14 +186,14 @@ Plugin `CustomAlerts`.
 | List the alerts of all users (`ifSuperUserReturnAllAlerts`) | Super User |
 | Read an alert or its past values, delete an alert | Only the creator of the alert, even a Super User |
 
-### Funnels
-
-Premium plugin `Funnels`; the plugin needs a licence.
+### Funnels and heatmaps
 
 | Tools | Matomo right |
 | --- | --- |
-| List funnels, read a funnel, test a URL against steps, list the pattern types | View on the website (any one website for the last two, on a connection that binds a website), expected; Matomo's reference does not state it |
-| Create, replace, delete funnels | Write on the website, expected; not stated |
+| Funnels (premium plugin `Funnels`, licence needed): list, read, test a URL against steps, list the pattern types | View on the website (any one website for the last two, on a connection that binds a website), expected; Matomo's reference does not state it |
+| Funnels: create, replace, delete | Write on the website, expected; not stated |
+| Heatmaps (premium plugin `HeatmapSessionRecording`, licence needed): list, read, recorded behavior | View on the website, expected; the reference does not state it |
+| Heatmap options | View on any website for device and heatmap types; write on at least one website for statuses, page rules, sample limits, and the URL test, which are otherwise named as unavailable; the connection must bind a website |
 
 ### Instance settings and reference data
 
