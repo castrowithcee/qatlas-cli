@@ -129,10 +129,7 @@ var funnelsTestSteps = capability.Descriptor{
 		"connection that binds a website",
 	Tags: []string{"matomo", "funnels", "patterns", "test"}, Risk: readRisk(funnelsSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,` +
-		`"maxLength":2048},"steps":{"type":"array","minItems":1,"maxItems":20,"items":{"type":"object",` +
-		`"properties":{"pattern_type":{"type":"string","pattern":"` + patternTypePattern + `"},` +
-		`"pattern":{"type":"string","minLength":1,"maxLength":2048},"name":{"type":"string","maxLength":512},` +
-		`"required":{"type":"boolean"}},"required":["pattern_type","pattern"],"additionalProperties":false}}},` +
+		`"maxLength":2048},"steps":` + funnelStepsSchema(1, maxTestSteps) + `},` +
 		`"required":["url","steps"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"result":{}},"required":["result"],` +
 		`"additionalProperties":false}`),
@@ -522,13 +519,8 @@ func invokeFunnelsTestSteps(ctx context.Context, resolved *config.Resolved, secr
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "test funnel steps"
 	var args struct {
-		URL   string `json:"url"`
-		Steps []struct {
-			PatternType string  `json:"pattern_type"`
-			Pattern     string  `json:"pattern"`
-			Name        *string `json:"name"`
-			Required    *bool   `json:"required"`
-		} `json:"steps"`
+		URL   string            `json:"url"`
+		Steps []funnelStepInput `json:"steps"`
 	}
 	if err := decodeArguments(raw, &args); err != nil {
 		return nil, err
@@ -536,25 +528,9 @@ func invokeFunnelsTestSteps(ctx context.Context, resolved *config.Resolved, secr
 	if args.URL == "" || utf8.RuneCountInString(args.URL) > maxUrlLength {
 		return nil, invalidArgument("url must hold 1 to 2048 characters")
 	}
-	if len(args.Steps) < 1 || len(args.Steps) > maxTestSteps {
-		return nil, invalidArgument("steps must hold 1 to 20 step definitions")
-	}
 	params := url.Values{"url": {args.URL}}
-	for i, step := range args.Steps {
-		if !patternTypeOK(step.PatternType) || step.Pattern == "" || utf8.RuneCountInString(step.Pattern) > maxUrlLength ||
-			step.Name != nil && utf8.RuneCountInString(*step.Name) > maxStringLength {
-			return nil, invalidArgument("each step needs a pattern_type of lowercase letters and underscores and a " +
-				"pattern of 1 to 2048 characters; a name holds at most 512")
-		}
-		key := "steps[" + strconv.Itoa(i) + "]"
-		params.Set(key+"[pattern_type]", step.PatternType)
-		params.Set(key+"[pattern]", step.Pattern)
-		if step.Name != nil {
-			params.Set(key+"[name]", *step.Name)
-		}
-		if step.Required != nil {
-			params.Set(key+"[required]", flagValue(step.Required))
-		}
+	if err := funnelStepParams(params, args.Steps, 1, maxTestSteps); err != nil {
+		return nil, err
 	}
 	if err := websiteBound(resolved); err != nil {
 		return nil, err
@@ -568,6 +544,47 @@ func invokeFunnelsTestSteps(ctx context.Context, resolved *config.Resolved, secr
 		return nil, err
 	}
 	return &FunnelTestResult{Result: boundedAnswer(answer)}, nil
+}
+
+// funnelStepsSchema describes the steps of a funnel as an input: the members a step needs to match.
+func funnelStepsSchema(minItems, maxItems int) string {
+	return `{"type":"array","minItems":` + strconv.Itoa(minItems) + `,"maxItems":` + strconv.Itoa(maxItems) +
+		`,"items":{"type":"object","properties":{"pattern_type":{"type":"string","pattern":"` + patternTypePattern +
+		`"},"pattern":{"type":"string","minLength":1,"maxLength":2048},"name":{"type":"string","maxLength":512},` +
+		`"required":{"type":"boolean"}},"required":["pattern_type","pattern"],"additionalProperties":false}}`
+}
+
+// funnelStepInput is a step as a caller defines it. The position of a step is its place in the list.
+type funnelStepInput struct {
+	PatternType string  `json:"pattern_type"`
+	Pattern     string  `json:"pattern"`
+	Name        *string `json:"name"`
+	Required    *bool   `json:"required"`
+}
+
+// funnelStepParams checks the steps and adds them to the request as steps[N][member].
+func funnelStepParams(params url.Values, steps []funnelStepInput, minSteps, maxSteps int) error {
+	if len(steps) < minSteps || len(steps) > maxSteps {
+		return invalidArgument("steps must hold " + strconv.Itoa(minSteps) + " to " + strconv.Itoa(maxSteps) +
+			" step definitions")
+	}
+	for i, step := range steps {
+		if !patternTypeOK(step.PatternType) || step.Pattern == "" || utf8.RuneCountInString(step.Pattern) > maxUrlLength ||
+			step.Name != nil && utf8.RuneCountInString(*step.Name) > maxStringLength {
+			return invalidArgument("each step needs a pattern_type of lowercase letters and underscores and a " +
+				"pattern of 1 to 2048 characters; a name holds at most 512")
+		}
+		key := "steps[" + strconv.Itoa(i) + "]"
+		params.Set(key+"[pattern_type]", step.PatternType)
+		params.Set(key+"[pattern]", step.Pattern)
+		if step.Name != nil {
+			params.Set(key+"[name]", *step.Name)
+		}
+		if step.Required != nil {
+			params.Set(key+"[required]", flagValue(step.Required))
+		}
+	}
+	return nil
 }
 
 func patternTypeOK(value string) bool {
@@ -600,10 +617,10 @@ func invokeFunnelOptionsList(ctx context.Context, resolved *config.Resolved, sec
 }
 
 func funnelsOperations() []capability.Operation {
-	return []capability.Operation{
+	return append([]capability.Operation{
 		{Descriptor: funnelsList, Handler: capability.Handler(invokeFunnelsList)},
 		{Descriptor: funnelsGet, Handler: capability.Handler(invokeFunnelsGet)},
 		{Descriptor: funnelsTestSteps, Handler: capability.Handler(invokeFunnelsTestSteps)},
 		{Descriptor: funnelOptionsList, Handler: capability.Handler(invokeFunnelOptionsList)},
-	}
+	}, funnelsChangeOperations()...)
 }
