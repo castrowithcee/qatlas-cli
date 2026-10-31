@@ -198,6 +198,9 @@ func Register(reg *capability.Registry) error {
 	if err := reg.Register(Provider, funnelsOperations()...); err != nil {
 		return err
 	}
+	if err := reg.Register(Provider, heatmapsOperations()...); err != nil {
+		return err
+	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: versionGet, Handler: capability.Handler(invokeVersionGet)},
 		capability.Operation{Descriptor: sitesList, Handler: capability.Handler(invokeSitesList)},
