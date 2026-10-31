@@ -12,7 +12,7 @@ updated: 2026-10-31
 The heatmap tools of the [Matomo provider](README.md). They need the premium plugin HeatmapSessionRecording; an
 instance without it refuses all of them as an unsupported capability, after one plugin check and without further
 requests. The tools are in no [setup profile](README.md#setup-profiles). Reports of the plugin are read with
-`matomo.reports.get` like any other report. Session recordings are not part of these tools.
+`matomo.reports.get` like any other report. Session recordings have their own [tools](session-recordings.md).
 
 ## Tools
 
