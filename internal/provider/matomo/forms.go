@@ -585,5 +585,5 @@ func formsOperations() []capability.Operation {
 		{Descriptor: formsList, Handler: capability.Handler(invokeFormsList)},
 		{Descriptor: formsGet, Handler: capability.Handler(invokeFormsGet)},
 		{Descriptor: formsRealtime, Handler: capability.Handler(invokeFormsRealtime)},
-	}, formOptionsOperations()...)
+	}, append(formOptionsOperations(), formChangeOperations()...)...)
 }
