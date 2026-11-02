@@ -793,5 +793,5 @@ func sessionRecordingsOperations() []capability.Operation {
 		{Descriptor: sessionRecordingsGet, Handler: capability.Handler(invokeSessionRecordingsGet)},
 		{Descriptor: recordedSessionsList, Handler: capability.Handler(invokeRecordedSessionsList)},
 		{Descriptor: recordedSessionsGet, Handler: capability.Handler(invokeRecordedSessionsGet)},
-	}, sessionRecordingChangeOperations()...)
+	}, append(sessionRecordingChangeOperations(), sessionRecordingStateOperations()...)...)
 }
