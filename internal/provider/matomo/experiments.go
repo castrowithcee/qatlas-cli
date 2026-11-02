@@ -444,8 +444,8 @@ func invokeExperimentsGet(ctx context.Context, resolved *config.Resolved, secret
 }
 
 func experimentsOperations() []capability.Operation {
-	return append([]capability.Operation{
+	return append(append([]capability.Operation{
 		{Descriptor: experimentsList, Handler: capability.Handler(invokeExperimentsList)},
 		{Descriptor: experimentsGet, Handler: capability.Handler(invokeExperimentsGet)},
-	}, append(experimentOptionsOperations(), experimentTemplatesOperations()...)...)
+	}, append(experimentOptionsOperations(), experimentTemplatesOperations()...)...), experimentChangeOperations()...)
 }
