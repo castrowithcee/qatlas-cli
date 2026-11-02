@@ -56,6 +56,9 @@ func excludeEnvironment(t *testing.T, calls *[]call, changes *[]string, landing 
 		case path == "/scenarios":
 			rows := []string{}
 			for _, id := range []int64{10, 11, 12, 13} {
+				if want := r.URL.Query()["id[]"]; len(want) == 1 && want[0] != strconv.FormatInt(id, 10) {
+					continue
+				}
 				rows = append(rows, scenarioInFolder(id, ownTeam, excludeFolders[id]))
 			}
 			return jsonResponse(200, `{"scenarios":[`+strings.Join(rows, ",")+`]}`), nil
@@ -73,6 +76,8 @@ func excludeEnvironment(t *testing.T, calls *[]call, changes *[]string, landing 
 			return jsonResponse(200, `{"hook":`+hookJSONOf(id, ownTeam, scenario, "H")+`}`), nil
 		case len(parts) >= 2 && parts[0] == "hooks":
 			return jsonResponse(200, `{"hookLogs":[],"queue":[],"hooks":[]}`), nil
+		case len(parts) >= 2 && parts[0] == "scenarios" && len(r.URL.Query()["cols[]"]) > 0:
+			return jsonResponse(400, `{"message":"Bad Request","code":"SC400"}`), nil
 		case len(parts) >= 2 && parts[0] == "scenarios":
 			id, _ := strconv.ParseInt(parts[1], 10, 64)
 			return jsonResponse(200, `{"scenario":`+scenarioInFolder(id, ownTeam, excludeFolders[id])+`}`), nil

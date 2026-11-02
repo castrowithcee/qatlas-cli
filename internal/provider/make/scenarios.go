@@ -189,7 +189,7 @@ type scenarioJSON struct {
 }
 
 // ScenarioSummary is the stable, scope-checked view of one scenario, shared by scenarios.list and
-// scenarios.get: Make's own detail endpoint answers with the same object shape a list entry already has.
+// scenarios.get: read through the list endpoint, so the object shape is exactly a list entry's.
 type ScenarioSummary struct {
 	ID            int64           `json:"id"`
 	Name          string          `json:"name"`
@@ -302,20 +302,13 @@ func (c *Client) ListScenarios(ctx context.Context, offset, limit int, filter Sc
 	if err := filter.validate(); err != nil {
 		return nil, err
 	}
-	query := url.Values{
-		"teamId":     {strconv.FormatInt(c.scope.teamID, 10)},
-		"pg[offset]": {strconv.Itoa(offset)},
-		"pg[limit]":  {strconv.Itoa(limit)},
-		"cols[]":     scenarioColumns,
-	}
 	if excluded, err := c.inExcludedFolder(ctx, op, filter.FolderID); err != nil {
 		return nil, err
 	} else if excluded {
 		return &ScenariosPage{Scenarios: []ScenarioSummary{}, Offset: offset}, nil
 	}
-	filter.apply(query)
 	var page scenariosPageJSON
-	if err := c.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
+	if err := c.get(ctx, op, "/scenarios", c.scenarioListQuery(offset, limit, filter), &page, needRead); err != nil {
 		return nil, err
 	}
 	summaries := make([]ScenarioSummary, 0, len(page.Scenarios))
@@ -337,6 +330,18 @@ func (c *Client) ListScenarios(ctx context.Context, offset, limit int, filter Sc
 	}, nil
 }
 
+// scenarioListQuery is the one query shape of "GET /scenarios": the bound team and every documented column.
+func (c *Client) scenarioListQuery(offset, limit int, filter ScenarioFilter) url.Values {
+	query := url.Values{
+		"teamId":     {strconv.FormatInt(c.scope.teamID, 10)},
+		"pg[offset]": {strconv.Itoa(offset)},
+		"pg[limit]":  {strconv.Itoa(limit)},
+		"cols[]":     scenarioColumns,
+	}
+	filter.apply(query)
+	return query
+}
+
 type scenarioArguments struct {
 	ScenarioID int64 `json:"scenario_id"`
 }
@@ -354,8 +359,7 @@ func invokeScenariosGet(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	scenario, err := client.fetchScenarioQuery(ctx, "get scenario", input.ScenarioID,
-		url.Values{"cols[]": scenarioColumns})
+	scenario, err := client.readScenarioInFull(ctx, "get scenario", input.ScenarioID)
 	if err != nil {
 		return nil, err
 	}
@@ -366,19 +370,46 @@ func invokeScenariosGet(ctx context.Context, resolved *config.Resolved, secrets 
 	return &summary, nil
 }
 
-// fetchScenario reads exactly one scenario by ID, the same read scenarios.get, scenarios.blueprint, and
-// runs.list/runs.get all use to confirm live that a scenario_id argument belongs to the bound team before
-// any of that scenario's content, blueprint, or run history is returned.
-func (c *Client) fetchScenario(ctx context.Context, op string, scenarioID int64) (*scenarioJSON, error) {
-	return c.fetchScenarioQuery(ctx, op, scenarioID, nil)
+// readScenarioInFull reads one scenario with every documented column. Make rejects the column list on
+// "GET /scenarios/{id}" with HTTP 400, so the row comes from the list endpoint, filtered by the bound team
+// and the id. A trashed scenario appears there only with deleted=true, hence the second lookup. When neither
+// finds it, the detail read without columns tells a missing scenario (Make's 404) and one of another team
+// (refused by the scope check) apart; an in-team scenario the list did not return is a provider
+// inconsistency, never a silent success.
+func (c *Client) readScenarioInFull(ctx context.Context, op string, scenarioID int64) (*scenarioJSON, error) {
+	trashed := true
+	for _, deleted := range []*bool{nil, &trashed} {
+		var page scenariosPageJSON
+		query := c.scenarioListQuery(0, 1, ScenarioFilter{IDs: []int64{scenarioID}, Deleted: deleted})
+		if err := c.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
+			return nil, err
+		}
+		if len(page.Scenarios) == 0 {
+			continue
+		}
+		if page.Scenarios[0].ID != scenarioID {
+			return nil, invalidResponse(op, "Make answered with a scenario other than the one requested")
+		}
+		return &page.Scenarios[0], nil
+	}
+	scenario, err := c.fetchScenario(ctx, op, scenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.verifyScenarioScope(ctx, scenario); err != nil {
+		return nil, err
+	}
+	return nil, invalidResponse(op, "Make did not list a scenario of the bound team that it reads by id")
 }
 
-// fetchScenarioQuery is fetchScenario with a query, for the one tool that asks for every column.
-func (c *Client) fetchScenarioQuery(ctx context.Context, op string, scenarioID int64, query url.Values) (*scenarioJSON, error) {
+// fetchScenario reads exactly one scenario by ID without a column list, the read scenarios.blueprint and
+// runs.list/runs.get use to confirm live that a scenario_id argument belongs to the bound team before any of
+// that scenario's blueprint or run history is returned.
+func (c *Client) fetchScenario(ctx context.Context, op string, scenarioID int64) (*scenarioJSON, error) {
 	var wrapper struct {
 		Scenario scenarioJSON `json:"scenario"`
 	}
-	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), query, &wrapper, needRead); err != nil {
+	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), nil, &wrapper, needRead); err != nil {
 		return nil, err
 	}
 	if wrapper.Scenario.ID != scenarioID {

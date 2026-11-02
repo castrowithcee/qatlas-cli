@@ -56,7 +56,7 @@ func TestFolderScopeProvesMembershipFromTheReadScenario(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []call
-			env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+			env := newEnvironment(t, &calls, asMake(func(r *http.Request) (*http.Response, error) {
 				if r.Method != http.MethodGet {
 					t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
 				}
@@ -64,7 +64,7 @@ func TestFolderScopeProvesMembershipFromTheReadScenario(t *testing.T) {
 					return jsonResponse(200, folderTreeJSON), nil
 				}
 				return jsonResponse(200, `{"scenario":`+scenarioInFolder(tt.scenario, ownTeam, tt.folder)+`}`), nil
-			})
+			}))
 			args := fmt.Sprintf(`{"scenario_id":%d}`, tt.scenario)
 			for _, op := range []string{scenariosGet.ID, scenariosBlueprint.ID, runsList.ID} {
 				calls = nil
@@ -356,12 +356,12 @@ func TestFolderScopeReadsTheTreeAtMostOnce(t *testing.T) {
 		reads  int
 	}{{ownFolder, 0}, {0, 0}, {grandchildFolder, 1}, {siblingFolder, 1}} {
 		var calls []call
-		env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		env := newEnvironment(t, &calls, asMake(func(r *http.Request) (*http.Response, error) {
 			if r.URL.Path == apiPath+"/scenarios-folders" {
 				return jsonResponse(200, folderTreeJSON), nil
 			}
 			return jsonResponse(200, `{"scenario":`+scenarioInFolder(ownScenario, ownTeam, tt.folder)+`}`), nil
-		})
+		}))
 		_, _ = env.invoke(scenariosGet.ID, "folder", fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
 		reads := 0
 		for _, c := range calls {
