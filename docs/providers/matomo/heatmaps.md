@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the Matomo heatmap tools: listing and reading heatmap configurations, creating, replacing, and copying them, reading the recorded visitor behavior of a heatmap, listing the heatmap options, the binding of a heatmap and of the destination websites of a copy to the connection's targets, the removal of the token from view addresses, how missing rights affect the options tool, the plugin requirement, and the limits of what the HeatmapSessionRecording reference proves.
+  Describes the Matomo heatmap tools: listing and reading heatmap configurations, creating, replacing, copying, pausing, resuming, and ending them, reading the recorded visitor behavior of a heatmap, listing the heatmap options, the binding of a heatmap and of the destination websites of a copy to the connection's targets, the removal of the token from view addresses, how missing rights affect the options tool, the plugin requirement, and the limits of what the HeatmapSessionRecording reference proves.
 type: knowledge
 edit: shared
 created: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-02
 ---
 
 # Matomo heatmaps
@@ -25,6 +25,9 @@ requests. The tools are in no [setup profile](README.md#setup-profiles). Reports
 | `matomo.heatmaps.add` | creates a heatmap (effect `create`) |
 | `matomo.heatmaps.update` | replaces the configuration of a heatmap (effect `update`) |
 | `matomo.heatmaps.duplicate` | copies a heatmap to other websites (effect `create`) |
+| `matomo.heatmaps.pause` | pauses the recording of a heatmap (effect `update`) |
+| `matomo.heatmaps.resume` | resumes the recording of a paused heatmap (effect `update`) |
+| `matomo.heatmaps.end` | ends the recording of a heatmap (effect `update`) |
 
 - `matomo.heatmaps.list` asks Matomo for the recorded page copy (`page_treemirror`) only when
   `includePageTreeMirror` is true, because it is large; Matomo's own default would include it. The copy is untrusted
@@ -50,6 +53,9 @@ requests. The tools are in no [setup profile](README.md#setup-profiles). Reports
 - `matomo.heatmaps.duplicate` needs `idDestinationSites`, 1 to 20 different websites, and does not default to the
   source website as Matomo does. Each copy is a new heatmap, so a repeated call copies again. The answer carries
   what Matomo returns, bounded.
+- `matomo.heatmaps.pause`, `matomo.heatmaps.resume`, and `matomo.heatmaps.end` take only `idSite` and `idSiteHsr`
+  and change the state of the recording, not the configuration or the collected data. The reference does not say
+  whether an ended heatmap can be resumed. All three are idempotent in effect.
 - Every change needs the confirmation of the caller and is sent exactly once. After a result that is unclear (no
   answer in time, a reset connection, an answer Qatlas cannot read) the error says the change may have been
   applied and is never repeated; read the heatmaps with `matomo.heatmaps.list` or `matomo.heatmaps.get` before
@@ -72,8 +78,8 @@ All tools but `matomo.heatmap-options.list` take `idSite`, which must be inside 
 ([Scope](README.md#scope)) and is checked before any secret is read. A heatmap ID is not tied to a
 website, so the answer must carry the website it belongs to: the one read that delivers a heatmap also proves it,
 and a heatmap of another website, or an answer without a website, is not shown. In a list, such rows are dropped.
-`matomo.recorded-heatmaps.get`, `matomo.heatmaps.update`, and `matomo.heatmaps.duplicate` read the configuration
-first as this proof and read or write further only when the heatmap belongs to the website; `matomo.heatmaps.add`
+`matomo.recorded-heatmaps.get`, `matomo.heatmaps.update`, `matomo.heatmaps.duplicate`, and the pause, resume, and
+end tools read the configuration first as this proof and read or write further only when the heatmap belongs to the website; `matomo.heatmaps.add`
 needs no read. Every website in `idDestinationSites` of a copy must be inside the targets too: one outside them
 refuses the whole call before any secret is read and any request, and the message names no website. A refused heatmap ends as `not-found` and names no other website.
 `matomo.heatmap-options.list` reads no website data; it needs a connection that binds at least one website.
@@ -99,7 +105,8 @@ connection's targets also satisfies Matomo, and the options reveal nothing of th
   `testUrlMatchPages`, nor for the data of a scroll heatmap, and does not show the member `page_treemirror` or the
   array form `matchPageRules[N][member]` of the request; both, and the limits of 20 rules and 100 page rules, are
   assumptions. The two options with an example are device types and heatmap types.
-- The reference gives `addHeatmap` an ID as answer and `updateHeatmap` the generic success form; the form of the
+- The reference gives `addHeatmap` an ID as answer and `updateHeatmap`, `pauseHeatmap`, `resumeHeatmap`, and
+  `endHeatmap` the generic success form (its exact JSON form is an assumption, as no example is given); the form of the
   answer of `duplicateHeatmap` is described only in words. The tools take the ID or the success form, and for a copy an
   object that does not report `success` as false. The limits of 255 characters for name and description, 0.1 to
   100 for `sampleRate`, 1 to 99999 for the breakpoints, and 20 destination websites are Qatlas's own.
