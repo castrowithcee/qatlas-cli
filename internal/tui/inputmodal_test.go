@@ -192,14 +192,15 @@ func TestPathModalCompletes(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, _ := toolsModel(t, reg, nil)
 	sizedModel(m, 100, 30)
-	root := t.TempDir()
-	treeOf(t, root, "alpha/")
+	// Typed below the home directory, the path stays short enough not to wrap in the modal, however long the
+	// temporary directory is.
+	treeOf(t, tempHome(t), "alpha/")
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "gh")
 	openPathList(t, m)
 	press(t, m, "n")
-	typeText(t, m, filepath.Join(root, "al"))
+	typeText(t, m, "~"+string(filepath.Separator)+"al")
 
 	view := m.render()
 	if !inModal(view, "Add path") || !inModal(view, "alpha") || !inModal(view, "tab complete") {

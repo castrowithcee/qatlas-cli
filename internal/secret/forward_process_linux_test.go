@@ -14,7 +14,7 @@ import (
 // A locked encrypted vault hands a forward credential out through the vault process, to the connection that
 // releases it and was approved so, and to no other.
 func TestResolveForwardedFromTheVaultProcess(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 	dir := t.TempDir()
 	v := vault.New(dir)
 	if err := v.Set(credName, role, canaryVault, func(string) (string, error) { return processPassphrase, nil }); err != nil {
