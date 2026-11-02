@@ -30,7 +30,7 @@ var (
 )
 
 // heatmapChangeRisk is the risk of every heatmap change: confirmed, open to the instance, and about the heatmap
-// configuration of a website. No change deletes anything.
+// configuration of a website.
 func heatmapChangeRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
 	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
 		OpenWorld: true, DataSensitivity: heatmapsSensitive}

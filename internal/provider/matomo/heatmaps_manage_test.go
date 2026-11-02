@@ -27,6 +27,10 @@ const heatmapConnections = `
   heatmap-writer-two: {service: matomo, credential: token, effects: [read, create, update], targets: [site/2]}
   heatmap-writer-both: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1, site/2]}
   heatmap-reader: {service: matomo, credential: token, effects: [read]}
+  heatmap-deleter: {service: matomo, credential: token, tools: [matomo.heatmaps.delete, matomo.heatmaps.delete-screenshot]}
+  heatmap-deleter-two: {service: matomo, credential: token, tools: [matomo.heatmaps.delete, matomo.heatmaps.delete-screenshot], targets: [site/2]}
+  heatmap-deleter-both: {service: matomo, credential: token, tools: [matomo.heatmaps.delete, matomo.heatmaps.delete-screenshot], targets: [site/1, site/2]}
+  heatmap-effects-delete: {service: matomo, credential: token, effects: [read, create, update, delete]}
 `
 
 func newHeatmapChangeEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
