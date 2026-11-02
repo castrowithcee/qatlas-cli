@@ -49,10 +49,10 @@ func TestScenariosListAndGetCarryEveryDocumentedField(t *testing.T) {
 		`"updatedByUser":{"id":2,"name":"B","email":"b@example.test"}`)
 	var calls []call
 	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
-		if r.URL.Path == apiPath+"/scenarios" {
-			return jsonResponse(200, `{"scenarios":[`+scenario+`]}`), nil
+		if r.URL.Path != apiPath+"/scenarios" {
+			t.Errorf("unexpected request to %s", r.URL.Path)
 		}
-		return jsonResponse(200, `{"scenario":`+scenario+`}`), nil
+		return jsonResponse(200, `{"scenarios":[`+scenario+`]}`), nil
 	})
 	list, err := env.invoke(scenariosList.ID, "open", `{}`)
 	if err != nil {
@@ -73,6 +73,9 @@ func TestScenariosListAndGetCarryEveryDocumentedField(t *testing.T) {
 		"deleted":           `true`, "deleted_at": `"2026-01-04T00:00:00Z"`,
 		"created_by_user": `{"email":"a@example.test","id":1,"name":"A"}`,
 		"updated_by_user": `{"email":"b@example.test","id":2,"name":"B"}`,
+	}
+	if jsonOf(t, firstScenario(t, list)) != jsonOf(t, decodeObject(t, get)) {
+		t.Errorf("get = %s, want the list row %s", get, jsonOf(t, firstScenario(t, list)))
 	}
 	for name, tool := range map[string]map[string]any{"list": firstScenario(t, list), "get": decodeObject(t, get)} {
 		for key, expected := range want {
