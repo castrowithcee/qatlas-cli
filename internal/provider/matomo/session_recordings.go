@@ -24,6 +24,7 @@ const (
 )
 
 const (
+	idVisitSchema           = `"idVisit":{"type":"integer","minimum":1,"maximum":9007199254740991}`
 	idRecordedSessionSchema = `"idLogHsr":{"type":"integer","minimum":1,"maximum":9007199254740991}`
 	recordingProps          = `"idSiteHsr":{"type":"integer"},"idSite":{"type":"integer"},"name":{"type":"string"},` +
 		`"sample_rate":{"type":"string"},"sample_limit":{"type":"integer"},"match_page_rules":{"type":"array",` +
@@ -793,5 +794,6 @@ func sessionRecordingsOperations() []capability.Operation {
 		{Descriptor: sessionRecordingsGet, Handler: capability.Handler(invokeSessionRecordingsGet)},
 		{Descriptor: recordedSessionsList, Handler: capability.Handler(invokeRecordedSessionsList)},
 		{Descriptor: recordedSessionsGet, Handler: capability.Handler(invokeRecordedSessionsGet)},
-	}, append(sessionRecordingChangeOperations(), sessionRecordingStateOperations()...)...)
+	}, append(sessionRecordingChangeOperations(), append(sessionRecordingStateOperations(),
+		sessionRecordingDeleteOperations()...)...)...)
 }

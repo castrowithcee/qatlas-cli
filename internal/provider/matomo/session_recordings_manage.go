@@ -23,7 +23,7 @@ var (
 )
 
 // recordingChangeRisk is the risk of every session recording change: confirmed, open to the instance, and about the
-// recording configuration of a website. No change deletes anything.
+// recording configuration of a website. The deletions of recorded sessions override the sensitivity.
 func recordingChangeRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
 	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
 		OpenWorld: true, DataSensitivity: sessionRecordingsSensitive}
