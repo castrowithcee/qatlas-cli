@@ -201,6 +201,9 @@ func Register(reg *capability.Registry) error {
 	if err := reg.Register(Provider, heatmapsOperations()...); err != nil {
 		return err
 	}
+	if err := reg.Register(Provider, formsOperations()...); err != nil {
+		return err
+	}
 	if err := reg.Register(Provider, sessionRecordingsOperations()...); err != nil {
 		return err
 	}
