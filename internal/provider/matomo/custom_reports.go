@@ -394,36 +394,45 @@ func invokeCustomReportsGet(ctx context.Context, resolved *config.Resolved, secr
 	if err != nil {
 		return nil, err
 	}
-	params := url.Values{"idSite": {strconv.Itoa(site)}, "idCustomReport": {strconv.Itoa(*args.IDCustomReport)}}
-	var answer json.RawMessage
-	if err := client.call(ctx, op, customReportsRequirement(customReportsGet.ID),
-		"CustomReports.getConfiguredReport", params, &answer); err != nil {
+	report, err := client.fetchCustomReport(ctx, op, customReportsRequirement(customReportsGet.ID), bound, site, *args.IDCustomReport)
+	if err != nil {
 		return nil, err
-	}
-	if emptyAnswer(answer) {
-		return nil, customReportNotFound(op)
-	}
-	trimmed := bytes.TrimSpace(answer)
-	var row customReportJSON
-	if !bytes.HasPrefix(trimmed, []byte("{")) || json.Unmarshal(trimmed, &row) != nil {
-		return nil, provider.InvalidResponse(op, "Matomo returned an invalid custom report")
-	}
-	report, belongs, ok := row.report(bound, site)
-	if !ok {
-		return nil, provider.InvalidResponse(op, "Matomo returned an invalid custom report")
-	}
-	if !belongs {
-		return nil, customReportNotFound(op)
-	}
-	if report.ID != *args.IDCustomReport {
-		return nil, provider.InvalidResponse(op, "Matomo returned another custom report than asked for")
 	}
 	return &report, nil
 }
 
+// fetchCustomReport is the one read that both proves a report belongs to the website and delivers it: the report
+// ID counts across websites, and a report counts only when all its websites lie inside the targets.
+func (c *Client) fetchCustomReport(ctx context.Context, op string, req requirement, bound scope, site, id int) (CustomReport, error) {
+	params := url.Values{"idSite": {strconv.Itoa(site)}, "idCustomReport": {strconv.Itoa(id)}}
+	var answer json.RawMessage
+	if err := c.call(ctx, op, req, "CustomReports.getConfiguredReport", params, &answer); err != nil {
+		return CustomReport{}, err
+	}
+	if emptyAnswer(answer) {
+		return CustomReport{}, customReportNotFound(op)
+	}
+	trimmed := bytes.TrimSpace(answer)
+	var row customReportJSON
+	if !bytes.HasPrefix(trimmed, []byte("{")) || json.Unmarshal(trimmed, &row) != nil {
+		return CustomReport{}, provider.InvalidResponse(op, "Matomo returned an invalid custom report")
+	}
+	report, belongs, ok := row.report(bound, site)
+	if !ok {
+		return CustomReport{}, provider.InvalidResponse(op, "Matomo returned an invalid custom report")
+	}
+	if !belongs {
+		return CustomReport{}, customReportNotFound(op)
+	}
+	if report.ID != id {
+		return CustomReport{}, provider.InvalidResponse(op, "Matomo returned another custom report than asked for")
+	}
+	return report, nil
+}
+
 func customReportsOperations() []capability.Operation {
-	return append([]capability.Operation{
+	return append(append([]capability.Operation{
 		{Descriptor: customReportsList, Handler: capability.Handler(invokeCustomReportsList)},
 		{Descriptor: customReportsGet, Handler: capability.Handler(invokeCustomReportsGet)},
-	}, append(customReportOptionsOperations(), customMetricsOperations()...)...)
+	}, customReportChangeOperations()...), append(customReportOptionsOperations(), customMetricsOperations()...)...)
 }
