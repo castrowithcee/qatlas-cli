@@ -231,7 +231,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 `matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`,
 `matomo.capabilities.remove`, and the two `matomo.ldap-users.*` tools (target `instance`) are in no profile either and are offered only via `tools`.
 The [tracking tools](tracking.md) are in no profile and are offered only via
-`tools`, because they write raw data that cannot be undone. The [funnel tools](funnels.md), the [heatmap tools](heatmaps.md), and the [session recording tools](session-recordings.md) are in no profile; the delete tools of funnels and heatmaps are offered only via `tools`.
+`tools`, because they write raw data that cannot be undone. The [funnel tools](funnels.md), the [heatmap tools](heatmaps.md), and the [session recording tools](session-recordings.md) are in no profile; the delete tools of funnels, heatmaps, and session recordings are offered only via `tools`.
 
 ## Tools
 
@@ -253,7 +253,7 @@ The [tracking tools](tracking.md) are in no profile and are offered only via
 | [custom alerts](alerts.md) | listing and reading the user's alerts, their triggered entries and past values, deleting an alert |
 | [funnels](funnels.md) | listing and reading the funnels of a website, testing a URL against funnel steps, pattern types, creating, replacing, and deleting funnels |
 | [heatmaps](heatmaps.md) | listing, reading, creating, replacing, copying, pausing, resuming, ending, and deleting heatmaps and their screenshots, recorded visitor behavior of a heatmap, heatmap options and the URL test of page rules |
-| [session recordings](session-recordings.md) | listing, reading, creating, replacing, pausing, resuming, and ending session recording configurations, recorded sessions of a recording, events of one recorded session |
+| [session recordings](session-recordings.md) | listing, reading, creating, replacing, pausing, resuming, ending, and deleting session recording configurations, recorded sessions of a recording, events of one recorded session, deleting recorded sessions and page views |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |
 | [tracking](tracking.md) | recording page views, events, internal searches, downloads or outlinks, goal conversions, e-commerce orders and cart updates, content impressions and interactions, several of these in one bulk request, and requests of AI chatbots |
 | [Tag Manager](tag-manager.md) | containers and their creation, update, and deletion, versions and their export, creating, renaming, deleting, and publishing versions, tags, triggers, and variables and where they are used, changing triggers, tags, and variables of the draft, embed code and installation steps, catalog of contexts, environments, and templates |
