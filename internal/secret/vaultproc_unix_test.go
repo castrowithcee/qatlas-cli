@@ -24,14 +24,7 @@ const processPassphrase = "synthetic-passphrase-41c7"
 // fails the test when it is consulted at all.
 func processFixture(t *testing.T) (*Resolver, string) {
 	t.Helper()
-	// t.TempDir() nests the full test name, which below the long per-user temporary directory of macOS
-	// overflows a socket path; os.MkdirTemp keeps this one short.
-	runtimeDir, err := os.MkdirTemp("", "qv")
-	if err != nil {
-		t.Fatalf("MkdirTemp() = %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
-	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 	dir := t.TempDir()
 	offer := func(string) (string, error) { return processPassphrase, nil }
 	v := vault.New(dir)
@@ -46,6 +39,24 @@ func processFixture(t *testing.T) (*Resolver, string) {
 	r := NewWith(func(string) string { return "" }, nil, nil, &redact.Redactor{}).WithVault(vault.New(dir), ask)
 	r.process = true
 	return r, dir
+}
+
+// shortRuntimeDir is a new runtime directory of the test's own for the vault socket. t.TempDir() nests the
+// full test name, which overflows a socket path below a long temporary directory such as the per-user one of
+// macOS or a long GOTMPDIR. The directory made here and the socket name below it take 48 of the 103 bytes a
+// socket path may have, so a temporary directory longer than the rest gives way to /tmp.
+func shortRuntimeDir(t *testing.T) string {
+	t.Helper()
+	base := ""
+	if len(os.TempDir()) > 55 {
+		base = "/tmp"
+	}
+	dir, err := os.MkdirTemp(base, "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
 
 // startProcess serves the vault in dir from this test process, the way 'qatlas vault unlock' hands it to a

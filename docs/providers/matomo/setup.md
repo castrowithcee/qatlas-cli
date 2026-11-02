@@ -186,15 +186,15 @@ Plugin `CustomAlerts`.
 | List the alerts of all users (`ifSuperUserReturnAllAlerts`) | Super User |
 | Read an alert or its past values, delete an alert | Only the creator of the alert, even a Super User |
 
-### Funnels, heatmaps, and forms
+### Funnels, heatmaps, forms, A/B tests, and custom reports
 
 | Tools | Matomo right |
 | --- | --- |
 | Funnels (premium plugin `Funnels`, licence needed): list, read, test a URL against steps, list the pattern types | View on the website (any one website for the last two, on a connection that binds a website), expected; Matomo's reference does not state it |
-| Funnels: create, replace, delete; heatmaps: create, replace, copy, pause, resume, end, delete, delete screenshot; session recordings: create, replace, pause, resume, end, delete, delete recorded session, delete recorded page view; forms: create, update, archive, delete | Write on the website, expected; not stated (a copy: also on each destination website) |
+| Funnels: create, replace, delete; heatmaps: create, replace, copy, pause, resume, end, delete, delete screenshot; session recordings: create, replace, pause, resume, end, delete, delete recorded session, delete recorded page view; A/B tests: create, replace, delete; custom reports: create, replace, copy, pause, resume; forms: create, update, archive, delete | Write on the website, expected; not stated (custom reports: write, per the plugin changelog; a copy: also on each destination website) |
 | Heatmaps and session recordings (premium plugin `HeatmapSessionRecording`, licence needed): list, read, recorded behavior and sessions | View on the website, expected; the reference does not state it |
 | Heatmap options | View on any website for device and heatmap types; write on at least one website for statuses, page rules, sample limits, and the URL test, which are otherwise named as unavailable; the connection must bind a website |
-| Forms (premium plugin `FormAnalytics`, licence needed): list, read, real-time counters and most popular forms, options | View on the website, expected; the reference does not state it; the connection must bind a website |
+| Forms (`FormAnalytics`), A/B tests (`AbTesting`), and custom reports (`CustomReports`), premium plugins, licence needed: forms list, read, real-time, options; experiment read; custom report list, read, options | View on the website, expected; the reference does not state it (custom reports: stated by Matomo's demo); the connection must bind a website. Experiment lists, options, and code templates: write on the website, as the public demo answers. Custom report options: view for categories, write on at least one website for report types, a logged-in user for dimensions and metrics (level not stated), Super User and target `instance` for the metrics of a custom metric; custom metrics list: Super User, target `instance` |
 
 ### Instance settings and reference data
 
