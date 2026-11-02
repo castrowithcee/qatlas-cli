@@ -3,7 +3,9 @@ package makeapi
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,6 +16,43 @@ import (
 func scenarioJSONOf(id, teamID int64, name string) string {
 	return fmt.Sprintf(`{"id":%d,"name":%q,"teamId":%d,"description":"","isActive":true,"islocked":false,`+
 		`"isPaused":false}`, id, name, teamID)
+}
+
+// asMake makes a fake that answers "GET /scenarios/{id}" with {"scenario":...} behave like Make for a read by
+// id: the detail endpoint rejects a column list with HTTP 400, and "GET /scenarios" with id[] answers a page
+// holding the scenario the detail handler knows, if it belongs to the requested team and is not trashed
+// (the list returns a trashed scenario only with deleted=true, which this helper never answers).
+func asMake(detail func(*http.Request) (*http.Response, error)) func(*http.Request) (*http.Response, error) {
+	return func(r *http.Request) (*http.Response, error) {
+		query := r.URL.Query()
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == apiPath+"/scenarios" && len(query["id[]"]) == 1:
+			if query.Get("deleted") == "true" {
+				return jsonResponse(200, `{"scenarios":[]}`), nil
+			}
+			clone := r.Clone(r.Context())
+			clone.URL = &url.URL{Scheme: r.URL.Scheme, Host: r.URL.Host, Path: r.URL.Path + "/" + query.Get("id[]")}
+			response, err := detail(clone)
+			if err != nil || response.StatusCode != http.StatusOK {
+				return jsonResponse(200, `{"scenarios":[]}`), nil
+			}
+			body, _ := io.ReadAll(response.Body)
+			var wrapper struct {
+				Scenario json.RawMessage `json:"scenario"`
+			}
+			var team struct {
+				TeamID int64 `json:"teamId"`
+			}
+			if json.Unmarshal(body, &wrapper) != nil || json.Unmarshal(wrapper.Scenario, &team) != nil ||
+				strconv.FormatInt(team.TeamID, 10) != query.Get("teamId") {
+				return jsonResponse(200, `{"scenarios":[]}`), nil
+			}
+			return jsonResponse(200, `{"scenarios":[`+string(wrapper.Scenario)+`]}`), nil
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, apiPath+"/scenarios/") && len(query["cols[]"]) > 0:
+			return jsonResponse(400, `{"message":"Bad Request","code":"SC400","detail":"Expected union value"}`), nil
+		}
+		return detail(r)
+	}
 }
 
 func scenariosPageJSONOf(scenarios ...string) string {
@@ -86,29 +125,42 @@ func TestScenariosListPaginatesAndDefensivelyFiltersByScope(t *testing.T) {
 // configured allow-list never reaches a request at all.
 func TestScenariosGetVerifiesLiveTeamMembershipAndAllowList(t *testing.T) {
 	var calls []call
-	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+	env := newEnvironment(t, &calls, asMake(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != apiPath+"/scenarios/"+strconv.FormatInt(ownScenario, 10) {
 			t.Fatalf("unexpected request to %s", r.URL.Path)
 		}
 		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
-	})
+	}))
 	result, err := env.invoke(scenariosGet.ID, "open", fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
 	if err != nil || !strings.Contains(result, "Own") {
 		t.Fatalf("invoke() = %s, %v", result, err)
 	}
+	// get never asks the detail endpoint for columns (Make answers that with HTTP 400) and scopes every list
+	// request by the bound team.
+	for _, c := range calls {
+		if c.path != apiPath+"/scenarios" || c.query.Get("teamId") != itoa64(ownTeam) ||
+			c.query.Get("id[]") != itoa64(ownScenario) ||
+			strings.Join(c.query["cols[]"], ",") != strings.Join(scenarioColumns, ",") {
+			t.Fatalf("calls = %+v, want only team-scoped list reads by id with every column", calls)
+		}
+	}
 
-	// A scenario Make itself reports as belonging to a foreign team is refused, and the refusal never names
-	// the foreign team.
+	// A scenario of a foreign team is refused as an invalid request without naming the foreign team.
 	calls = nil
-	env = newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+	env = newEnvironment(t, &calls, asMake(func(r *http.Request) (*http.Response, error) {
 		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, foreignTeam, "Foreign")+`}`), nil
-	})
+	}))
 	_, err = env.invoke(scenariosGet.ID, "open", fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
 	if !isInvalidRequest(err) {
 		t.Fatalf("err = %v, want an invalid request", err)
 	}
 	if err != nil && strings.Contains(err.Error(), strconv.FormatInt(foreignTeam, 10)) {
 		t.Fatalf("error named the foreign team: %v", err)
+	}
+	for _, c := range calls {
+		if c.path == apiPath+"/scenarios" && c.query.Get("teamId") != itoa64(ownTeam) {
+			t.Fatalf("a list request was not scoped by the bound team: %+v", c)
+		}
 	}
 
 	// A scenario_id outside a configured scenario allow-list is refused locally: no request is ever sent.
@@ -120,6 +172,62 @@ func TestScenariosGetVerifiesLiveTeamMembershipAndAllowList(t *testing.T) {
 	_, err = env.invoke(scenariosGet.ID, "scenario", fmt.Sprintf(`{"scenario_id":%d}`, foreignScenario))
 	if !isInvalidRequest(err) || len(calls) != 0 {
 		t.Fatalf("err = %v, calls = %+v, want a local refusal with no request", err, calls)
+	}
+}
+
+// A scenario Make does not know is not-found, a trashed one stays readable through deleted=true, and an
+// in-team scenario that the list withholds but the detail endpoint returns is a provider inconsistency.
+func TestScenariosGetMissingTrashedAndInconsistentScenario(t *testing.T) {
+	args := fmt.Sprintf(`{"scenario_id":%d}`, ownScenario)
+
+	var calls []call
+	env := newEnvironment(t, &calls, asMake(func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(404, `{"message":"Not Found","code":"SC404"}`), nil
+	}))
+	if _, err := env.invoke(scenariosGet.ID, "open", args); classOf(err) != provider.ClassNotFound {
+		t.Fatalf("missing: err = %v, want not-found", err)
+	}
+
+	calls = nil
+	trashed := scenarioWith(`"deleted":true,"deletedAt":"2026-01-04T00:00:00Z"`)
+	env = newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != apiPath+"/scenarios" {
+			t.Fatalf("unexpected request to %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("deleted") != "true" {
+			return jsonResponse(200, `{"scenarios":[]}`), nil
+		}
+		return jsonResponse(200, `{"scenarios":[`+trashed+`]}`), nil
+	})
+	out, err := env.invoke(scenariosGet.ID, "open", args)
+	if err != nil {
+		t.Fatalf("trashed: err = %v", err)
+	}
+	entry := decodeObject(t, out)
+	if entry["deleted"] != true || entry["deleted_at"] != "2026-01-04T00:00:00Z" {
+		t.Fatalf("trashed: result = %s, want the deleted fields", out)
+	}
+	if len(calls) != 2 || calls[1].query.Get("deleted") != "true" || calls[1].query.Get("teamId") != itoa64(ownTeam) {
+		t.Fatalf("trashed: calls = %+v, want the deleted=true lookup of the bound team after the plain one", calls)
+	}
+
+	calls = nil
+	env = newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path == apiPath+"/scenarios" {
+			return jsonResponse(200, `{"scenarios":[]}`), nil
+		}
+		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
+	})
+	if _, err := env.invoke(scenariosGet.ID, "open", args); classOf(err) != provider.ClassInvalidResponse {
+		t.Fatalf("inconsistent: err = %v, want invalid-response", err)
+	}
+
+	calls = nil
+	env = newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		return jsonResponse(200, `{"scenarios":[`+scenarioJSONOf(ownScenario+1, ownTeam, "Other")+`]}`), nil
+	})
+	if _, err := env.invoke(scenariosGet.ID, "open", args); classOf(err) != provider.ClassInvalidResponse {
+		t.Fatalf("other id: err = %v, want invalid-response", err)
 	}
 }
 
