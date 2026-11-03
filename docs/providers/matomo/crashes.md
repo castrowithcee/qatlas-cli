@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo crash tools: listing and reading the crashes of a website, crash groups, and crash types, ignoring, merging, and unmerging crashes, the binding of a crash to the connection's targets, the plugin requirement, the rights the public demo reports, and the limits of what the CrashAnalytics reference proves.
+  Describes the Matomo crash tools: listing and reading the crashes of a website, ignored crashes, crash groups, crash types, merge candidates, the visit context of a crash, and the real-time crash reports, ignoring, merging, and unmerging crashes, the binding of a crash to the connection's targets, the plugin requirement, the rights the public demo reports, and the limits of what the CrashAnalytics reference proves.
 type: knowledge
 edit: shared
 created: 2026-11-03
@@ -12,8 +12,7 @@ updated: 2026-11-03
 The tools for crashes of the [Matomo provider](README.md). They need the premium plugin CrashAnalytics; an
 instance without it refuses all of them as an unsupported capability, after one plugin check and without further
 requests. The tools are in no [setup profile](README.md#setup-profiles). The reports of the plugin, which take a
-period, are read with `matomo.reports.get` like any other report. The list of ignored crashes, merge candidates, the
-visit context of a crash, and the real-time methods are not offered as reads.
+period, are read with `matomo.reports.get` like any other report.
 
 ## Tools
 
@@ -23,6 +22,10 @@ visit context of a crash, and the real-time methods are not offered as reads.
 | `matomo.crashes.get` | reads one crash of a website with its page address and category |
 | `matomo.crash-groups.list` | reads the groups of merged crashes of a website in batches |
 | `matomo.crash-types.list` | reads the different crash types of a website in batches |
+| `matomo.crashes.list-ignored` | reads the crashes of a website that are ignored when tracking, in batches |
+| `matomo.crashes.merge-candidates` | searches the crash messages of a website for crashes to merge, in batches |
+| `matomo.crashes.visit-context` | reads the visits that met one crash in a period, with the actions before it |
+| `matomo.crashes.recent` | reads one real-time report: the counters (`overview`) or the `top`, `new`, `reappeared`, or `disappeared` crashes |
 | `matomo.crashes.set-ignored` | changes whether a crash is ignored when tracking; `ignore` is true when omitted |
 | `matomo.crashes.merge` | merges 2 to 100 different crashes into one |
 | `matomo.crashes.unmerge` | unmerges the group of a parent crash |
@@ -32,11 +35,23 @@ visit context of a crash, and the real-time methods are not offered as reads.
 - Every batch reads the list from its first row and cuts the batch out on the Qatlas side, because the public demo
   applied Matomo's offset twice and skipped rows. A list therefore reaches at most the first 10000 crashes, and a late
   batch of a website with long stack traces can exceed the 4 MiB answer limit and end as `invalid-provider-response`.
-- `matomo.crash-groups.list` needs a write right on the website, other than the other crash tools.
+- `matomo.crash-groups.list` and `matomo.crashes.merge-candidates` need a write right on the website, other than the
+  other crash tools. The search only reads and merges nothing.
+- `matomo.crashes.recent` takes `lastMinutes` from 1 through 720: the reference caps it at 12 hours and the public demo
+  refuses a higher value. Its rows carry the crash ID, message (`label`), source, counters, and a segment, but no
+  website, so they are shown for the website asked for; a row that names another website is dropped. `overview` is one
+  row and takes no paging.
+- `matomo.crashes.visit-context` and `matomo.crashes.merge-candidates` page the way the crash list does: they ask
+  Matomo for the start of the answer and cut the batch out on the Qatlas side.
 - The three change tools need `confirm`, send exactly one change request, and never repeat it. After a timeout, a
   reset connection, a server error, or an unreadable answer the outcome is unclear and the error names the read that
   settles it. `merge` is the only one declared not idempotent: Matomo documents neither which crash becomes the parent
   nor what a merge does with a crash that is already merged. `set-ignored` and `unmerge` are idempotent in effect.
+
+**Personal data.** The visit context holds visits with visitor IDs, IP addresses, user IDs, locations, and the
+addresses and titles of the actions before the crash. It carries the data classification of the
+[live tools](live.md) and the same members and bounds as `matomo.visits.list`, up to 50 actions per visit; it is in no
+profile like the other crash tools. Members that the visit model does not know are never passed on.
 
 Crash messages, script and page addresses, types, and stack traces are untrusted provider data. They are shortened
 (stack traces to 4096 bytes), an address is returned as text and never fetched, and a group shows at most 100
@@ -53,6 +68,12 @@ the crash list of the website once and asks for the summary only when the list h
 crash of another website, one the list does not show, and one outside its first 10000 rows end as `not-found` without
 naming another website. A summary that names another website is not shown either. On a website with thousands of
 crashes this read can exceed the 4 MiB answer limit, and the tool then ends as `invalid-provider-response`.
+
+`matomo.crashes.visit-context` proves the crash with the same one read of the crash list before it reads the context; a
+crash that read does not show for the website is `not-found` and no context is requested. `excludeIdLogCrashes` of
+`matomo.crashes.merge-candidates` needs no proof: an ID there only removes rows, so an ID of another website removes
+nothing that is shown. A row of the merge search, the ignored list, or the visit context that names another website, or
+none, is dropped.
 
 The change tools bind their crashes the same way, with one read before the single change and no change when the read
 does not show them (`not-found`). Which read depends on the tool:
@@ -76,6 +97,17 @@ Merge and unmerge check on the Matomo side whether the crashes belong to the sam
   website for the crash list, the summary, and the crash types, and with a write right for the crash groups. The rights
   are not proven per method. The change tools are expected to need a write right on the website, as the crash groups
   and the merge candidates do; the demo allows only reads, so no change was sent to any instance.
+- The visit context needs, on the public demo, a right on the segment `visitId`; the level is not known. Without it the
+  tool ends as `permission`. The demo refuses the merge search without a write right.
+- The answers of `searchCrashMessagesForMerge` and `getCrashVisitContext` are not verified: the demo refused both and the
+  reference shows no shape. The merge search is read as crash rows that name their website like the crash list. The
+  visit context is read as a list of visits in the form of the visit log with the actions in `actionDetails`; a row
+  without a website is dropped, so another shape shows fewer or no events instead of a wrong one. The rows of
+  `getIgnoredCrashes` and of the new, reappeared, and disappeared reports are assumed likewise: the demo holds no
+  such row, and those reports are assumed to share the form of the top report.
+- The reference does not state whether `limit` and `offset` of the merge search or `filter_offset` of the visit context
+  apply once or twice on the server, so both are asked from the start. The default of `fetchRecentActions` is 1 in the
+  signature and unset in the OpenAPI description; the tool always sends it.
 - The signatures come from the 6.x reference. The Marketplace lists CrashAnalytics 5.0.19 for Matomo 5; the
   signatures are not verified for Matomo 5. No version is checked per method, and an instance that lacks one ends as
   an unsupported capability.

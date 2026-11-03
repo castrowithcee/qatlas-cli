@@ -72,6 +72,15 @@ func crashAnswers(extra answers) answers {
 		"CrashAnalytics.getCrashGroups": fixed(`{"112":[` + crashReferenceList + `,{"idlogcrash":119,"idsite":1,"message":"child"},` +
 			crashForeignList + `,` + crashNoSiteList + `],"30":[` + crashForeignList + `],"7":{"0":{"idlogcrash":7,"idsite":2,"message":"keyed"}}}`),
 		"CrashAnalytics.getCrashTypes": fixed(crashDemoTypes),
+		// Assumed forms, see crashes_more_test.go.
+		"CrashAnalytics.getIgnoredCrashes":           fixed(crashIgnoredList),
+		"CrashAnalytics.searchCrashMessagesForMerge": fixed(crashMergeList),
+		"CrashAnalytics.getCrashVisitContext":        fixed(crashVisitContext),
+		"CrashAnalytics.getLastCrashesOverview":      fixed(crashRecentOverview),
+		"CrashAnalytics.getLastTopCrashes":           fixed(crashRecentTop),
+		"CrashAnalytics.getLastNewCrashes":           fixed(crashRecentTop),
+		"CrashAnalytics.getLastReappearedCrashes":    fixed(crashRecentTop),
+		"CrashAnalytics.getLastDisappearedCrashes":   fixed(crashRecentTop),
 	}, extra))
 }
 
@@ -80,17 +89,28 @@ var crashCalls = []struct{ tool, arguments string }{
 	{"matomo.crashes.get", `{"idSite":1,"idLogCrash":105}`},
 	{"matomo.crash-groups.list", `{"idSite":1}`},
 	{"matomo.crash-types.list", `{"idSite":1}`},
+	{"matomo.crashes.list-ignored", `{"idSite":1}`},
+	{"matomo.crashes.merge-candidates", `{"idSite":1,"searchTerm":"undefined"}`},
+	{"matomo.crashes.visit-context", `{"idSite":1,"idLogCrash":105,"period":"day","date":"yesterday"}`},
+	{"matomo.crashes.recent", `{"idSite":1,"kind":"top"}`},
 }
 
 // crashFirst is the method a tool asks first once the instance is proven.
 var crashFirst = map[string]string{"matomo.crashes.list": "CrashAnalytics.getAllCrashes", "matomo.crashes.get": "CrashAnalytics.getAllCrashes",
-	"matomo.crash-groups.list": "CrashAnalytics.getCrashGroups", "matomo.crash-types.list": "CrashAnalytics.getCrashTypes"}
+	"matomo.crash-groups.list": "CrashAnalytics.getCrashGroups", "matomo.crash-types.list": "CrashAnalytics.getCrashTypes",
+	"matomo.crashes.list-ignored": "CrashAnalytics.getIgnoredCrashes", "matomo.crashes.merge-candidates": "CrashAnalytics.searchCrashMessagesForMerge",
+	"matomo.crashes.visit-context": "CrashAnalytics.getAllCrashes", "matomo.crashes.recent": "CrashAnalytics.getLastTopCrashes"}
 
 func TestCrashToolsAreRegisteredAsOpenReadsInNoProfile(t *testing.T) {
 	reg := registry(t)
 	for _, c := range crashCalls {
 		d, _, found := reg.Lookup(c.tool)
-		if !found || d.Risk != readRisk(crashesSensitive) || d.Risk.Idempotency != capability.IdempotencySafe ||
+		sensitivity := crashesSensitive
+		if c.tool == "matomo.crashes.visit-context" {
+			// Visits carry the personal data the live tools carry, and are classified like them.
+			sensitivity = liveSensitivity
+		}
+		if !found || d.Risk != readRisk(sensitivity) || d.Risk.Idempotency != capability.IdempotencySafe ||
 			d.Risk.Confirmation != capability.ConfirmationNone || !d.Risk.OpenWorld || d.RequiresToolAllowList ||
 			d.Risk.Effect != capability.EffectRead || d.Risk.DataSensitivity == "" {
 			t.Errorf("%s: found %t, %+v", c.tool, found, d)
