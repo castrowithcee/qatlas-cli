@@ -22,9 +22,10 @@ type UnknownConnectionError struct {
 }
 
 func (e *UnknownConnectionError) Error() string {
-	message := fmt.Sprintf("unknown connection %q", e.Name)
+	message := fmt.Sprintf("unknown connection %q; a connection is named by its name or id", e.Name)
 	if e.Suggestion != "" {
-		message = fmt.Sprintf("unknown connection %q (did you mean %q?)", e.Name, e.Suggestion)
+		message = fmt.Sprintf("unknown connection %q (did you mean %q?); a connection is named by its name or id",
+			e.Name, e.Suggestion)
 	}
 	if e.MayBeBound {
 		message += "; a connection can also be bound to the paths of other projects and is unknown outside them"

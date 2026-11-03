@@ -1318,13 +1318,13 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`, "", ""},
 		{cli("invoke", "fake.pages.get", "--connection", "primry"),
 			mcp("qatlas.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
-			`unknown-connection: unknown connection "primry" (did you mean "primary"?)`,
+			`unknown-connection: unknown connection "primry" (did you mean "primary"?); a connection is named by its name or id`,
 			"; list the configured connections with 'qatlas connections fake'",
 			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
 		{cli("describe", "fake.pages.get", "--connection", "absent"),
 			mcp("qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`),
-			`unknown-connection: unknown connection "absent"`,
+			`unknown-connection: unknown connection "absent"; a connection is named by its name or id`,
 			"; list the configured connections with 'qatlas connections fake'",
 			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
@@ -1337,16 +1337,16 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 	}
 	// A search names no tool, so its step names the connection overview, of the provider where it names one.
 	if got, want := mcp("qatlas.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
-		`"absent"; call qatlas.search with list connections for the configured connections`; got != want {
+		`"absent"; a connection is named by its name or id; call qatlas.search with list connections for the configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
 	if got, want := mcp("qatlas.search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
-		`unknown connection "absent"; call qatlas.search with list connections and provider fake for the `+
+		`unknown connection "absent"; a connection is named by its name or id; call qatlas.search with list connections and provider fake for the `+
 		`configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
 	if got, want := cli("tools", "fake", "--connection", "absent"), `qatlas: unknown-connection: unknown `+
-		`connection "absent"; list the configured connections with 'qatlas connections fake'`; got != want {
+		`connection "absent"; a connection is named by its name or id; list the configured connections with 'qatlas connections fake'`; got != want {
 		t.Errorf("CLI tools = %q, want %q", got, want)
 	}
 

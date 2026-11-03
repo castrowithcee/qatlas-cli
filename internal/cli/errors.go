@@ -209,7 +209,7 @@ func errorDetailFor(err error, redactor *redact.Redactor) any {
 	connections := make([]application.ConnectionRef, len(refs))
 	for i, connection := range refs {
 		connections[i] = application.ConnectionRef{
-			Name: redactor.Apply(connection.Name), Description: redactor.Apply(connection.Description),
+			Name: redactor.Apply(connection.Name), ID: connection.ID, Description: redactor.Apply(connection.Description),
 		}
 	}
 	return &errorDetail{
