@@ -197,7 +197,7 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 	for _, answer := range []string{"n", "esc"} {
 		m := startedWith(t, newerRelease())
 		r := withRestart(t, m, true)
-		press(t, m, "5", "n")
+		press(t, m, "2", "n")
 		typeText(t, m, "typed")
 		m.Update(updateDoneMsg{result: newerRelease().update})
 		if m.screen != screenRestart || r.command != nil {
@@ -218,7 +218,7 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 
 	m := startedWith(t, newerRelease())
 	r := withRestart(t, m, true)
-	press(t, m, "5", "n")
+	press(t, m, "2", "n")
 	typeText(t, m, "typed")
 	m.Update(updateDoneMsg{result: newerRelease().update})
 	_, cmd := m.Update(keyMsg("y"))
@@ -233,7 +233,7 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 	// An untouched form drops nothing.
 	m = startedWith(t, newerRelease())
 	r = withRestart(t, m, true)
-	press(t, m, "5", "n")
+	press(t, m, "2", "n")
 	m.Update(updateDoneMsg{result: newerRelease().update})
 	if m.screen != screenForm || r.command == nil {
 		t.Errorf("an unchanged form asked: screen %v", m.screen)

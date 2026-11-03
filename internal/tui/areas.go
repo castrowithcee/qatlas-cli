@@ -15,10 +15,10 @@ type area int
 
 const (
 	areaOverview area = iota
+	areaLibrary
 	areaConnections
 	areaActivity
 	areaAccess
-	areaLibrary
 	areaSettings
 	areaCount
 )
@@ -26,12 +26,12 @@ const (
 // key is the English name of the area: the name the start view is kept under and the commands are named
 // after, whatever language the editor draws in.
 func (a area) key() string {
-	return [...]string{"Overview", "Connections", "Activity", "Access", "Library", "Settings"}[a]
+	return [...]string{"Overview", "Library", "Connections", "Activity", "Access", "Settings"}[a]
 }
 
 // title is the name of the area as drawn.
 func (a area) title() string {
-	return tr([...]textID{tAreaOverview, tAreaConnections, tAreaActivity, tAreaAccess, tAreaLibrary, tAreaSettings}[a])
+	return tr([...]textID{tAreaOverview, tAreaLibrary, tAreaConnections, tAreaActivity, tAreaAccess, tAreaSettings}[a])
 }
 
 // areaByName finds the area whose English name is name, ignoring case.
@@ -47,10 +47,10 @@ func areaByName(name string) (area, bool) {
 // areaSections are the sections of each area in sub-tab order; the first one is what the area opens on.
 var areaSections = [areaCount][]section{
 	areaOverview:    {sectionOverview},
+	areaLibrary:     {sectionServices, sectionCredentials},
 	areaConnections: {sectionConnections},
 	areaActivity:    {sectionLogs},
 	areaAccess:      {sectionTokens, sectionApprovals},
-	areaLibrary:     {sectionServices, sectionCredentials},
 	areaSettings:    {sectionGeneral, sectionVault, sectionDefaults, sectionTransfer, sectionUpdate, sectionSelftest},
 }
 

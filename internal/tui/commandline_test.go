@@ -147,7 +147,7 @@ func TestEmptyCommandLineListsOnlyTheAreas(t *testing.T) {
 			got = append(got, c.name)
 		}
 	}
-	want := "go overview|go connections|go activity|go access|go library|go settings"
+	want := "go overview|go library|go connections|go activity|go access|go settings"
 	if strings.Join(got, "|") != want {
 		t.Errorf("go commands = %v, want %s", got, want)
 	}
@@ -293,7 +293,7 @@ func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 	lines := strings.Split(view, "\n")
 	for _, l := range lines {
 		if strings.Contains(l, "Open Connections") {
-			if !strings.HasSuffix(strings.TrimRight(l, " │"), "2") && !strings.Contains(l, "2 │") {
+			if !strings.HasSuffix(strings.TrimRight(l, " │"), "3") && !strings.Contains(l, "3 │") {
 				t.Errorf("shortcut not at the right: %q", l)
 			}
 			if !strings.Contains(l, "> ") && !strings.Contains(l, "  ") {

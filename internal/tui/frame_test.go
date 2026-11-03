@@ -277,7 +277,7 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 			t.Errorf("header %q lacks %q", header, want)
 		}
 	}
-	if !strings.Contains(ansi.Strip(tabs), "[5 Library]") {
+	if !strings.Contains(ansi.Strip(tabs), "[2 Library]") {
 		t.Errorf("tab line %q does not mark the active tab", tabs)
 	}
 	if plain := ansi.Strip(footer); !strings.Contains(plain, "? help") || !strings.Contains(plain, "/ filter") {

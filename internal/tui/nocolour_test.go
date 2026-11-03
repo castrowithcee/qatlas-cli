@@ -98,7 +98,7 @@ func TestNoColourProfilesKeepTheFocusReadable(t *testing.T) {
 			} else if strings.Contains(view, "\x1b") {
 				t.Errorf("the view holds escape sequences:\n%q", view)
 			}
-			for _, want := range []string{"╔", "║", "╝", ">", "[2 Connections]"} {
+			for _, want := range []string{"╔", "║", "╝", ">", "[3 Connections]"} {
 				if !strings.Contains(plain, want) {
 					t.Errorf("the view lacks %q:\n%s", want, plain)
 				}

@@ -326,9 +326,9 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	}
 
 	// Opening a section again starts without the filter.
-	press(t, m, "5", "/")
+	press(t, m, "2", "/")
 	typeText(t, m, "chat")
-	press(t, m, "enter", "esc", "esc", "5")
+	press(t, m, "enter", "esc", "esc", "2")
 	if m.list.query() != "" || len(shownEntries(m)) != 2 {
 		t.Errorf("a reopened section kept an old filter %q", m.list.query())
 	}

@@ -57,10 +57,10 @@ var iconTable = [iconCount]iconEntry{
 // areaIcons is the meaning of each area's icon.
 var areaIcons = [areaCount]iconID{
 	areaOverview:    iconOverview,
+	areaLibrary:     iconLibrary,
 	areaConnections: iconConnections,
 	areaActivity:    iconActivity,
 	areaAccess:      iconAccess,
-	areaLibrary:     iconLibrary,
 	areaSettings:    iconSettings,
 }
 

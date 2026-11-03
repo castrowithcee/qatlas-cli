@@ -76,7 +76,7 @@ func TestQuestionIsCentredOverItsBackground(t *testing.T) {
 	if !strings.Contains(lines[0], "Qatlas") {
 		t.Errorf("the background header is gone:\n%s", view)
 	}
-	if !strings.Contains(view, "[5 Library]") {
+	if !strings.Contains(view, "[2 Library]") {
 		t.Errorf("the background tab line is gone:\n%s", view)
 	}
 	for _, line := range lines {

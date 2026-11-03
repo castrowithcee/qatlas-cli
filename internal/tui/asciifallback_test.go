@@ -132,7 +132,7 @@ func TestVisualSnapshotsASCII(t *testing.T) {
 	fixtures, err := filepath.Abs(visualDir)
 	mustNoError(t, err)
 	dark := uiprefs.ThemeQatlasDark
-	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	connections := func(t *testing.T, m *Model) { pump(t, m, "3") }
 	shots := []asciiShot{
 		{visualShot{"90-overview-ascii", 80, 24, dark, false, func(*testing.T, *Model) {}}, "c"},
 		{visualShot{"91-connections-ascii-no-color", 80, 24, dark, true, connections}, "dumb"},

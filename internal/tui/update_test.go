@@ -223,7 +223,7 @@ func TestUpdateFailuresAreReported(t *testing.T) {
 func TestUIsTextInAForm(t *testing.T) {
 	fake := newerRelease()
 	m := startedWith(t, fake)
-	press(t, m, "5", "n")
+	press(t, m, "2", "n")
 	typeText(t, m, "u")
 	if m.screen != screenForm || m.fieldValue("name") != "u" || fake.updates != 0 {
 		t.Errorf("u in a form was not typed: screen %v name %q", m.screen, m.fieldValue("name"))
@@ -263,7 +263,7 @@ func TestTheBannerKeepsTheFrameInLine(t *testing.T) {
 			// tab line.
 			covered := screen == "question" && tt.height < 28 ||
 				screen == "help" && tt.width >= modalMinWidth && tt.height >= modalMinHeight
-			if !strings.Contains(lines[1], "[5 Library]") ||
+			if !strings.Contains(lines[1], "[2 Library]") ||
 				!covered && (!strings.Contains(lines[2], "[Services]") || !strings.Contains(lines[3], "─")) {
 				t.Errorf("%dx%d %s: the tab line, option bar and rule do not follow the banner: %q", tt.width, tt.height, screen, lines[1:4])
 			}

@@ -52,7 +52,7 @@ func TestGeneralSavesWithoutAdminSession(t *testing.T) {
 		t.Fatalf("status %q fail %q, want it saved", m.status, m.fail)
 	}
 	got, warnings := uiprefs.Load(path)
-	want := uiprefs.Prefs{Theme: uiprefs.ThemeQatlasLight, Start: "connections", Icons: uiprefs.IconsNerdFont,
+	want := uiprefs.Prefs{Theme: uiprefs.ThemeQatlasLight, Start: "library", Icons: uiprefs.IconsNerdFont,
 		Language: uiprefs.LanguageEnglish, Keys: uiprefs.DefaultKeys()}
 	if got != want || len(warnings) != 0 {
 		t.Fatalf("stored = %+v %v, want %+v", got, warnings, want)

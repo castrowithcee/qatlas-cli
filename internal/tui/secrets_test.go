@@ -781,7 +781,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 
 	// Opening the list asks the store where every keyring role resolves from.
 	m.screen = screenNav
-	press(t, m, "5", "tab")
+	press(t, m, "2", "tab")
 	_, cmd := m.Update(keyMsg("right"))
 	if cmd == nil {
 		t.Fatal("opening the credentials list asked the store nothing")
