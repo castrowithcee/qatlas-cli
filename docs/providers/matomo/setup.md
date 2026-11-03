@@ -222,6 +222,13 @@ Plugin `CustomAlerts`.
 | Users flow (premium plugin `UsersFlow`, licence needed): list data sources | View on the website. Stated by Matomo's public demo |
 | Users flow: list the actions of an interaction step | View on the website, expected |
 
+### Conversion exports
+
+| Tools | Matomo right |
+| --- | --- |
+| Conversion exports (premium plugin `AdvertisingConversionExport`, licence needed): list, read | Write on at least one website. Stated by Matomo's public demo for the list |
+| Conversion exports: delete | Write on the website, expected |
+
 ### Instance settings and reference data
 
 | Tools | Matomo right |
