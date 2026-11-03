@@ -586,10 +586,10 @@ func invokeCrashTypesList(ctx context.Context, resolved *config.Resolved, secret
 }
 
 func crashesOperations() []capability.Operation {
-	return []capability.Operation{
+	return append([]capability.Operation{
 		{Descriptor: crashesList, Handler: capability.Handler(invokeCrashesList)},
 		{Descriptor: crashesGet, Handler: capability.Handler(invokeCrashesGet)},
 		{Descriptor: crashGroupsList, Handler: capability.Handler(invokeCrashGroupsList)},
 		{Descriptor: crashTypesList, Handler: capability.Handler(invokeCrashTypesList)},
-	}
+	}, crashChangeOperations()...)
 }
