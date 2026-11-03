@@ -259,7 +259,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.heatmaps.add" || tool.ID == "matomo.heatmaps.update" || tool.ID == "matomo.heatmaps.duplicate" ||
 			tool.ID == "matomo.heatmaps.pause" || tool.ID == "matomo.heatmaps.resume" || tool.ID == "matomo.heatmaps.end" ||
 			tool.ID == "matomo.custom-reports.add" || tool.ID == "matomo.custom-reports.update" || tool.ID == "matomo.custom-reports.duplicate" || tool.ID == "matomo.custom-reports.pause" ||
-			tool.ID == "matomo.custom-reports.delete" || tool.ID == "matomo.custom-metrics.save" || tool.ID == "matomo.custom-metrics.delete" || tool.ID == "matomo.roll-ups.add" || tool.ID == "matomo.roll-ups.update" ||
+			tool.ID == "matomo.custom-reports.delete" || tool.ID == "matomo.custom-metrics.save" || tool.ID == "matomo.custom-metrics.delete" || tool.ID == "matomo.roll-ups.add" || tool.ID == "matomo.roll-ups.update" || tool.ID == "matomo.channel-attribution.set" ||
 			tool.ID == "matomo.heatmaps.delete" || tool.ID == "matomo.heatmaps.delete-screenshot" ||
 			tool.ID == "matomo.forms.add" || tool.ID == "matomo.forms.update" || tool.ID == "matomo.forms.archive" || tool.ID == "matomo.forms.delete" ||
 			tool.ID == "matomo.crashes.set-ignored" || tool.ID == "matomo.crashes.merge" || tool.ID == "matomo.crashes.unmerge" ||
@@ -290,7 +290,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 244 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 246 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",
