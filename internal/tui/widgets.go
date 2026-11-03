@@ -16,8 +16,15 @@ type panelOpts struct {
 }
 
 // frameChars returns the frame characters: rounded, or double for a focused frame without colour, where the
-// colour of the frame cannot show the focus.
+// colour of the frame cannot show the focus. Without UTF-8 the frame is ASCII: '+-|', and '#=#' for the
+// focused one without colour, where '=' and the heavy '#' sides stay apart from the plain frame.
 func frameChars(focused bool) (h, v string, corners [4]string) {
+	if !utf8Terminal() {
+		if focused && noColour() {
+			return "=", "#", [4]string{"#", "#", "#", "#"}
+		}
+		return "-", "|", [4]string{"+", "+", "+", "+"}
+	}
 	if focused && noColour() {
 		return "═", "║", [4]string{"╔", "╗", "╚", "╝"}
 	}

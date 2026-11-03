@@ -37,6 +37,10 @@ func TestMain(m *testing.M) {
 		return vaultproc.Status{}, vaultproc.ErrUnsupported
 	}
 	vaultTickInterval = time.Millisecond
+	// The screens are tested with their UTF-8 glyphs, whatever locale the machine has; a test that needs a
+	// terminal without UTF-8 sets its own environment.
+	os.Setenv("LC_ALL", "C.UTF-8")
+	os.Setenv("TERM", "xterm-256color")
 	os.Exit(m.Run())
 }
 
