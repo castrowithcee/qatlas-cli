@@ -354,27 +354,31 @@ func visitOf(r row, actions bool) map[string]any {
 
 // visitFields describes the result of visits.list from the member tables.
 func visitFields() []capability.Field {
-	fields := []capability.Field{{Name: "visits", Description: "Visits of this batch, newest first, only of the " +
-		"website asked for"}}
+	return visitFieldsAt("visits", "Visits of this batch, newest first, only of the website asked for")
+}
+
+// visitFieldsAt describes a list of visits and their actions under root from the member tables.
+func visitFieldsAt(root, description string) []capability.Field {
+	fields := []capability.Field{{Name: root, Description: description}}
 	for _, m := range visitMembers {
-		fields = append(fields, capability.Field{Name: "visits[]." + m.to, Description: m.doc})
+		fields = append(fields, capability.Field{Name: root + "[]." + m.to, Description: m.doc})
 	}
-	fields = append(fields, capability.Field{Name: "visits[].custom_dimensions", Description: "Visit-scope custom " +
+	fields = append(fields, capability.Field{Name: root + "[].custom_dimensions", Description: "Visit-scope custom " +
 		"dimensions as dimensionN to value, up to 30, untrusted"},
-		capability.Field{Name: "visits[].actions", Description: "Only with include_actions: up to 50 actions of the " +
+		capability.Field{Name: root + "[].actions", Description: "Only when actions are asked for: up to 50 actions of the " +
 			"visit, oldest first"},
-		capability.Field{Name: "visits[].actions_truncated", Description: "True when the visit has more actions than are returned"})
+		capability.Field{Name: root + "[].actions_truncated", Description: "True when the visit has more actions than are returned"})
 	for _, m := range actionMembers {
-		fields = append(fields, capability.Field{Name: "visits[].actions[]." + m.to, Description: m.doc})
+		fields = append(fields, capability.Field{Name: root + "[].actions[]." + m.to, Description: m.doc})
 	}
 	fields = append(fields,
-		capability.Field{Name: "visits[].actions[].product_view_categories", Description: "Categories of the viewed " +
+		capability.Field{Name: root + "[].actions[].product_view_categories", Description: "Categories of the viewed " +
 			"product, up to 5, untrusted"},
-		capability.Field{Name: "visits[].actions[].item_details", Description: "Items of an order or cart, up to 50"},
-		capability.Field{Name: "visits[].actions[].custom_dimensions", Description: "Action-scope custom dimensions " +
+		capability.Field{Name: root + "[].actions[].item_details", Description: "Items of an order or cart, up to 50"},
+		capability.Field{Name: root + "[].actions[].custom_dimensions", Description: "Action-scope custom dimensions " +
 			"as dimensionN to value, up to 30, untrusted"})
 	for _, m := range itemMembers {
-		fields = append(fields, capability.Field{Name: "visits[].actions[].item_details[]." + m.to, Description: m.doc})
+		fields = append(fields, capability.Field{Name: root + "[].actions[].item_details[]." + m.to, Description: m.doc})
 	}
 	return fields
 }

@@ -591,5 +591,5 @@ func crashesOperations() []capability.Operation {
 		{Descriptor: crashesGet, Handler: capability.Handler(invokeCrashesGet)},
 		{Descriptor: crashGroupsList, Handler: capability.Handler(invokeCrashGroupsList)},
 		{Descriptor: crashTypesList, Handler: capability.Handler(invokeCrashTypesList)},
-	}, crashChangeOperations()...)
+	}, append(crashReadOperations(), crashChangeOperations()...)...)
 }
