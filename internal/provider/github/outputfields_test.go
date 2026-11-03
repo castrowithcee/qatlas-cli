@@ -33,6 +33,7 @@ var outputSamples = map[string]any{
 	"github.commits.get":                           CommitDetail{},
 	"github.commits.list":                          CommitList{},
 	"github.commits.search":                        CommitSearchList{},
+	"github.branches.delete":                       BranchDeleted{},
 	"github.contents.delete":                       DeletedContents{},
 	"github.contents.get":                          ContentsResult{},
 	"github.contents.put":                          WrittenContents{},

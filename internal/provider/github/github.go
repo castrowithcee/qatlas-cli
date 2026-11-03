@@ -47,7 +47,8 @@
 // whose tools list names it, github.contents.delete deletes one; only on a connection whose tools list names
 // it, github.files.push writes several files as one commit through the Git Data API, fast-forward only, so a
 // branch that moved since it was read is refused with nothing written; none of the four ever touches a path
-// below .github/workflows/, which the listed-only workflow maintainer covers instead. github.repositories.
+// below .github/workflows/, which the listed-only workflow maintainer covers instead. Only on a connection
+// whose tools list names it, github.branches.delete deletes one branch other than the default branch. github.repositories.
 // create makes one new repository, under the token's own account or an organization the connection names as
 // an owner target; github.repositories.fork forks a repository a connection allows the same way,
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes

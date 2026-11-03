@@ -16,6 +16,7 @@ var currentToolIDs = []string{
 	"github.actions-permissions.update",
 	"github.blame.get",
 	"github.branches.create",
+	"github.branches.delete",
 	"github.branches.list",
 	"github.code-quality-findings.get",
 	"github.code-scanning-alerts.get",
@@ -219,7 +220,7 @@ func TestRegistryHoldsExactlyTheCurrentToolIDs(t *testing.T) {
 	sort.Strings(got)
 	want := append([]string(nil), currentToolIDs...)
 	sort.Strings(want)
-	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 194 {
+	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 195 {
 		t.Errorf("registry holds %d tools, differing from the expected %d IDs", len(got), len(want))
 	}
 	if err := reg.ValidateRenames(); err != nil {

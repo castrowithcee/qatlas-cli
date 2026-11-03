@@ -108,13 +108,15 @@ which stays `read`, unchanged.
 | Tool | Does |
 | --- | --- |
 | `github.branches.create` | creates one branch from a branch, a tag, or a commit SHA |
+| `github.branches.delete` | deletes one branch other than the default branch; offered only where a connection's `tools` list names it |
 | `github.contents.put` | creates a new file, or updates an existing one while `sha` names its current blob |
 | `github.contents.delete` | deletes one file with its current blob `sha`; offered only where a connection's `tools` list names it |
 | `github.files.push` | writes 1 to 100 files as one commit on an existing branch; offered only where a connection's `tools` list names it |
 
-`github.contents.delete` is listed only because deleting a file the wrong branch relied on cannot be undone;
-`github.files.push` is listed only because several files land in one commit that cannot be undone by halves.
-All four refuse a `path` below `.github/workflows/`, matched without regard to case, which the
+`github.contents.delete` is listed only because deleting a file the wrong branch relied on cannot be undone,
+and `github.branches.delete` for the same reason. `github.files.push` is listed only because several files land
+in one commit that cannot be undone by halves.
+The four other tools refuse a `path` below `.github/workflows/`, matched without regard to case, which the
 [workflow file tools](actions.md) maintain instead with their own token requirement; none of the
 four ever answers with a file's content, only its path, its blob SHA, and the commit GitHub made.
 
@@ -123,6 +125,13 @@ default branch, resolved through the same commits route `github.commits.get` use
 at a real commit; the answer names the branch actually used when `from` was left out. A branch name already
 taken answers `invalid-request` with a clear message instead of a second attempt, since GitHub refuses to
 create it with HTTP 422; `from` naming no commit, branch, or tag GitHub holds answers `not-found`.
+
+`github.branches.delete` takes `branch` as a plain name: an empty name or one with a `refs/heads/` prefix is
+`invalid-request`. The repository's default branch is read first and refused with `invalid-request` without any
+call to the ref, even where GitHub would protect it itself. With `expected_sha`, the branch's ref is read first
+and a branch that points elsewhere is refused with its current SHA and nothing is deleted. The answer names the
+`sha` read. The delete is sent once. A missing branch (HTTP 422 or 404) answers `not-found`, a protected branch
+or a ruleset refusal answers `permission`, and an unclear outcome is reported, never repeated.
 
 `github.contents.put` takes the complete new `content` as UTF-8 text, at most 512 KiB, a `message` of at most
 1000 characters, and `branch` (the repository's default branch when left out). `sha` is the blob SHA of the
@@ -156,8 +165,8 @@ effect until referenced. The answer names `parent_sha`, the commit the branch wa
 paths written in the order given, never any file's content.
 
 The terminal editor's setup profile `repository-writer` (not recommended) selects the read eight plus
-`github.branches.create` and `github.contents.put`; `github.contents.delete` and `github.files.push` are in no
-profile, offered only where a connection's `tools` list names them, like
+`github.branches.create` and `github.contents.put`. `github.branches.delete`, `github.contents.delete`, and
+`github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
 [`github.releases.delete`](releases.md#releases).
 
 ## Search

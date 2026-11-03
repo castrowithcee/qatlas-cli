@@ -305,6 +305,8 @@ type contentsWriteArguments struct {
 	Message string `json:"message"`
 	SHA     string `json:"sha"`
 	Branch  string `json:"branch"`
+	// ExpectedSHA is used by github.branches.delete only.
+	ExpectedSHA string `json:"expected_sha"`
 }
 
 // contentsWriteHandler decodes and checks the arguments and the repository before a credential is resolved,
@@ -347,6 +349,10 @@ func contentsWriteOperations() []capability.Operation {
 				return c.deleteContents(ctx, a)
 			})},
 		{Descriptor: filesPush, Handler: capability.Handler(invokeFilesPush)},
+		{Descriptor: branchesDelete, Handler: contentsWriteHandler(branchesDelete.ID, checkBranchesDeleteArguments,
+			func(ctx context.Context, c *Client, a *contentsWriteArguments) (any, error) {
+				return c.deleteBranch(ctx, a)
+			})},
 	}
 }
 
