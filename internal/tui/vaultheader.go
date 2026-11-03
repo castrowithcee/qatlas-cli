@@ -294,9 +294,11 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 	m.startAdminSession()
 	m.status = tr(tVaultNowUnlocked)
 	m.beginSettingsTakeover()
-	if m.section == sectionVault && m.screen == screenForm && m.formState() == m.pristine {
+	if m.section == sectionVault && (m.screen == screenForm || m.pagePreview()) && m.formState() == m.pristine {
 		// The update behaviour row can only be read now; rebuilding drops nothing, the form is unedited.
+		back := m.screen
 		m.openVaultForm()
+		m.screen = back
 	}
 	m.vaultProcessUnlocked, m.vaultProcessEndsAt = false, time.Time{}
 	if cmd := m.startVaultProcess(); cmd != nil {

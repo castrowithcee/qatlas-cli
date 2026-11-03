@@ -136,8 +136,6 @@ var textEN = map[textID]string{
 	tStatusFailed:                          "failed",
 	tStatusRunning:                         "running",
 	tStatusCancelled:                       "cancelled",
-	tSettingsNotList:                       "%s is a settings page, not a list; press {enter} to open it.",
-	tSettingsNotListShort:                  "A settings page, not a list: press {enter} to open it.",
 	tExportHint:                            "{enter} writes an export file",
 	tExportDetail:                          "{enter} chooses what to write into an export file, optionally with secrets; needs the admin session",
 	tImportHint:                            "{enter} previews an export file",

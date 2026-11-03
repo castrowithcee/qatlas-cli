@@ -129,8 +129,6 @@ const (
 	tIconsDetail                             textID = "IconsDetail"
 	tLanguageHint                            textID = "LanguageHint"
 	tLanguageDetail                          textID = "LanguageDetail"
-	tSettingsNotList                         textID = "SettingsNotList"
-	tSettingsNotListShort                    textID = "SettingsNotListShort"
 	tExportHint                              textID = "ExportHint"
 	tExportDetail                            textID = "ExportDetail"
 	tImportHint                              textID = "ImportHint"
