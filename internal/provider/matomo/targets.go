@@ -182,7 +182,8 @@ var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.I
 	privacySettingsSetReportDeletionSchedule.ID: true, bruteForceIPsUnblock.ID: true, smsSettingsGet.ID: true,
 	smsPhoneNumbersRemove.ID: true, smsCredentialsDelete.ID: true, smsDelegationSet.ID: true, aiProvidersGetSettings.ID: true,
 	aiProvidersDisconnect.ID: true, ldapUsersCount.ID: true, ldapUsersList.ID: true, customMetricsList.ID: true,
-	customMetricsSave.ID: true, customMetricsDelete.ID: true}
+	customMetricsSave.ID: true, customMetricsDelete.ID: true, rollUpsList.ID: true, rollUpsAdd.ID: true,
+	rollUpsUpdate.ID: true}
 
 // reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide
 // tool needs the instance target, and the website tools need a binding that reaches websites. A binding to the
@@ -190,6 +191,10 @@ var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.I
 func reaches(tool string, targets []string) (bool, []string) {
 	bound, err := parseScope(targets)
 	if instanceTools[tool] {
+		// Roll-ups are bound to websites as well: their own website and their sources must lie inside the targets.
+		if tool == rollUpsList.ID || tool == rollUpsAdd.ID || tool == rollUpsUpdate.ID {
+			return err == nil && bound.instance && bound.reachesSites(), []string{formInstance, formSites, formSite}
+		}
 		return err == nil && bound.instance, []string{formInstance}
 	}
 	if err != nil {

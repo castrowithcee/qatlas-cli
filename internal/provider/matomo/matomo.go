@@ -213,6 +213,9 @@ func Register(reg *capability.Registry) error {
 	if err := reg.Register(Provider, customReportsOperations()...); err != nil {
 		return err
 	}
+	if err := reg.Register(Provider, rollUpsOperations()...); err != nil {
+		return err
+	}
 	if err := reg.Register(Provider, sessionRecordingsOperations()...); err != nil {
 		return err
 	}
