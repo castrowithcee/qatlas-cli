@@ -215,6 +215,13 @@ Plugin `CustomAlerts`.
 | Channel attribution (premium plugin `MultiChannelConversionAttribution`, licence needed): read | View on the website. Stated by Matomo's public demo for the goal list and the campaign dimension combinations, expected for the attribution of a goal |
 | Channel attribution: turn the attribution of a goal on or off | Write on the website, expected |
 
+### Users flow
+
+| Tools | Matomo right |
+| --- | --- |
+| Users flow (premium plugin `UsersFlow`, licence needed): list data sources | View on the website. Stated by Matomo's public demo |
+| Users flow: list the actions of an interaction step | View on the website, expected |
+
 ### Instance settings and reference data
 
 | Tools | Matomo right |

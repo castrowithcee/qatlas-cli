@@ -53,6 +53,12 @@ a report that is missing there is not available. Subtable reports are listed onl
 - The catalog is held for five minutes per instance and token, website, and language within a process. Only
   structure is held, no report data and no token; a failure is not held. A goal or plugin change shows after at
   most that long.
+- The reports of the premium plugins UsersFlow (`getUsersFlow`, `getUsersFlowPretty`), Cohorts, MediaAnalytics,
+  SearchEngineKeywordsPerformance, FormAnalytics, Funnels, and CrashAnalytics are read through the catalog of the
+  instance like any other report. Without a test access it is not shown that an instance lists them in its catalog.
+  The releases of Cohorts, MediaAnalytics, and SearchEngineKeywordsPerformance are not checked.
+  SearchEngineKeywordsPerformance imports the data of search engines; the connection to them is not controlled
+  through the API.
 - `matomo.segments.fields` lists the segment fields of a website (identifier, name, type, category, and the
   operators of the segment syntax that fit the type) in batches, filtered by `category`.
   `matomo.segments.suggest-values` reads frequent values of one field; they are visitor data, at most 100, and
