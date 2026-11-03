@@ -79,7 +79,8 @@ func activityLog(t *testing.T) *logFixture {
 func heatRows(view string) string {
 	var rows []string
 	for _, line := range strings.Split(view, "\n") {
-		line = strings.TrimLeft(strings.TrimPrefix(strings.TrimPrefix(strings.TrimLeft(line, " "), "│"), "║"), " ")
+		line = strings.TrimLeft(strings.TrimLeft(line, " "), "│║|#")
+		line = strings.TrimLeft(line, " ")
 		for _, month := range strings.Split(textEN[tHeatMonths], ",") {
 			if strings.HasPrefix(line, month+" ") && len(line) > len(month)+3 && line[len(month)+1] >= '0' && line[len(month)+1] <= '3' {
 				rows = append(rows, line)
@@ -127,7 +128,7 @@ func TestLogsHeatmapShowsLevelsLegendAndTotals(t *testing.T) {
 			}
 			for _, want := range []string{"less", "more", "outside retention", "altered", "gap in the chain",
 				"Calls 18 · success 88% · errors 2"} {
-				if !strings.Contains(view, want) {
+				if want = asciiOnly(want); !strings.Contains(view, want) {
 					t.Errorf("the heatmap lacks %q:\n%s", want, view)
 				}
 			}
@@ -217,7 +218,7 @@ func TestLogsHeatmapLevelsFollowQuartiles(t *testing.T) {
 }
 
 func TestLogsHeatmapFollowsTheFilters(t *testing.T) {
-	t.Setenv("LC_ALL", "C")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
 	m := heatModel(t, activityLog(t))
 	m.logs.filters[logFilterResult] = "denied"
 	m.logs.applyFilters()
@@ -313,7 +314,7 @@ func TestLogsHeatmapFitsSmallTerminals(t *testing.T) {
 }
 
 func TestOverviewShowsTheHeatmapAndRecentCallsAfterLoading(t *testing.T) {
-	t.Setenv("LC_ALL", "C")
+	t.Setenv("LC_ALL", "en_US.UTF-8")
 	f := activityLog(t)
 	m := overviewModel(t, f.model(false, f.localToday()))
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 46})
