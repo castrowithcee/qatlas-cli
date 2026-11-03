@@ -193,5 +193,6 @@ func invokeCustomMetricsList(ctx context.Context, resolved *config.Resolved, sec
 }
 
 func customMetricsOperations() []capability.Operation {
-	return []capability.Operation{{Descriptor: customMetricsList, Handler: capability.Handler(invokeCustomMetricsList)}}
+	return append([]capability.Operation{{Descriptor: customMetricsList, Handler: capability.Handler(invokeCustomMetricsList)}},
+		customMetricChangeOperations()...)
 }

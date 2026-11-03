@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo custom report tools: listing and reading the configured custom reports of a website, the custom metrics of the instance and their websites, the options reports are built from, creating, replacing, copying, pausing, and resuming reports, the website and instance targets, the rights, the plugin requirement, and the limits of what the CustomReports reference proves.
+  Describes the Matomo custom report tools: listing and reading the configured custom reports of a website, the custom metrics of the instance and their websites, the options reports are built from, creating, replacing, copying, pausing, resuming, and deleting reports, creating, changing, and deleting custom metrics, the website and instance targets, the rights, the plugin requirement, and the limits of what the CustomReports reference proves.
 type: knowledge
 edit: shared
 created: 2026-11-02
@@ -12,8 +12,8 @@ updated: 2026-11-02
 The tools for the configuration of custom reports and custom metrics of the [Matomo provider](README.md). They
 need the premium plugin CustomReports; an instance without it refuses all of them as an unsupported capability,
 after one plugin check and without further requests. The tools are in no [setup profile](README.md#setup-profiles).
-The data of a custom report is read with `matomo.reports.get` like any other report. Deleting reports and creating or
-changing custom metrics is not offered.
+The data of a custom report is read with `matomo.reports.get` like any other report. The two delete tools are offered
+only via a connection's `tools` list.
 
 ## Tools
 
@@ -27,6 +27,9 @@ changing custom metrics is not offered.
 | `matomo.custom-reports.update` | replaces the whole configuration of a custom report |
 | `matomo.custom-reports.duplicate` | copies a custom report to one or more websites (not idempotent) |
 | `matomo.custom-reports.pause` | pauses a custom report, or with `resume` true resumes it |
+| `matomo.custom-reports.delete` | deletes a custom report of a website (idempotent in effect, listed-only) |
+| `matomo.custom-metrics.save` | creates a custom metric of the instance, or with `idCustomMetric` replaces it (not idempotent) |
+| `matomo.custom-metrics.delete` | deletes a custom metric of the instance (idempotent in effect, listed-only) |
 
 - `matomo.custom-reports.list` takes `skipCategoryMetadata`, which keeps only the category ID of each report.
 - `matomo.custom-metrics.list` takes `kind`, which chooses the method: `metrics` for the custom metrics
@@ -37,11 +40,12 @@ changing custom metrics is not offered.
   and the metrics a custom metric can be built from. Answers the reference gives no example for are returned as
   Matomo gives them, shortened.
 
-## Changing reports
+## Changing reports and metrics
 
 The change tools need `confirm`, send one request, and never repeat it: after an unclear result (timeout, reset
 connection, server error, unreadable answer) the error says so and points to `matomo.custom-reports.list` or
-`matomo.custom-reports.get` to read the report before trying again.
+`matomo.custom-reports.get` (for metrics `matomo.custom-metrics.list`) to read the report or metric before trying
+again.
 
 - `update` replaces the report as a whole. `name`, `reportType`, and `metricIds` are required; an optional setting
   that is not passed (also `subCategoryReportIds` and `multipleIdSites`) is not sent, so Matomo applies its default
@@ -49,6 +53,12 @@ connection, server error, unreadable answer) the error says so and points to `ma
   to keep.
 - `pause` calls exactly one method per call: `pauseCustomReport`, or `resumeCustomReport` when `resume` is true.
 - `duplicate` takes `idDestinationSites`; the source website is the only destination when it is omitted.
+- `matomo.custom-metrics.save` calls exactly one method per call: `addCustomMetric` without `idCustomMetric`,
+  `updateCustomMetric` with it. `name` and `formula` are required; `formatType`, `decimals`, and `description` are
+  sent only when passed, so an update that leaves one out may reset it to Matomo's default. Only the form of
+  `formatType` (up to 32 letters, digits, underscore, dot, hyphen) and the range of `decimals` (0 to 10) are checked
+  here; Matomo decides the values. Its create effect also covers the change of a metric.
+- `matomo.custom-reports.delete` addresses one website, never the shared reports of "all websites".
 - Identifiers (report type, metrics, dimensions, category, subcategory) hold letters, digits, underscore, dot, and
   hyphen; `segmentFilter` has the form of the segment tools. Reports of "all websites" are not offered, so `idSite`
   is always one website.
@@ -68,14 +78,17 @@ A report ID is not tied to a website in the request, so the answer must carry th
 of another website, or an answer without a website, is not shown and ends as `not-found` without naming another
 website; in a list such rows are dropped. A report that spans several websites (`multipleIdSites`) is shown only
 when every website it names is inside the targets; one that names a website outside them, or in a form that cannot
-be read as website IDs, is dropped from the list and is `not-found` when read by ID. `update`, `duplicate`, and `pause` read the report
+be read as website IDs, is dropped from the list and is `not-found` when read by ID. `update`, `duplicate`, `pause`, and `delete` read the report
 once under this rule before the change; a report that does not pass is `not-found` and nothing is changed.
 
 Custom metrics belong to the instance and carry no website. `matomo.custom-metrics.list` needs the target
 `instance` ([Scope](README.md#scope)) and Super User rights, and is checked before any secret is read. The rows of
 the websites cover the whole instance and are filtered by the website targets of the connection: rows of other
 websites are dropped without a mention, so a batch can be empty while `has_more` is true. A connection that binds
-no website is refused for `kind` `websites`.
+no website is refused for `kind` `websites`. `matomo.custom-metrics.save` and `matomo.custom-metrics.delete` need
+the target `instance` and Super User rights (expected) the same way. Before an update or a deletion the metric is
+looked up once in the list of custom metrics (`getCustomMetrics`); a metric that is not in it is `not-found` and
+nothing is changed.
 
 ## Rights of the options tool
 
@@ -95,10 +108,13 @@ option (unsupported plugin or method, rate limit, timeout, an unreadable answer)
   no version is checked per method, and an instance that lacks one ends as an unsupported capability.
   By the plugin changelog `multipleIdSites` exists from CustomReports 5.2.0, pausing from 5.3.0, and copying from
   5.4.4.
-- The reference gives no example for the change methods. Assumed answers: `addCustomReport` the ID of the new
-  report, `updateCustomReport`, `pauseCustomReport`, and `resumeCustomReport` the generic success form,
+- The reference gives no example for the change methods. Assumed answers: `addCustomReport` and `addCustomMetric`
+  the ID of the new report or metric, `updateCustomReport`, `pauseCustomReport`, `resumeCustomReport`,
+  `deleteCustomReport`, `updateCustomMetric`, and `deleteCustomMetric` the generic success form,
   `duplicateCustomReport` an answer that does not say it failed, or an ID; any other form ends as an unclear result.
-  The write right on the website is evidenced by the changelog entry of 5.6.2 ("missing write access").
+  The write right on the website is evidenced by the changelog entry of 5.6.2 ("missing write access"); the Super
+  User right for changing custom metrics is expected from their instance scope. The reference lists the custom
+  metric methods only in the legacy reference, without allowed `formatType` values or a range for `decimals`.
 - The shapes of the answers of `getCustomMetrics`, `getWebsiteMetricsForCustomMetric`, `getAvailableReportTypes`,
   `getAvailableDimensions`, `getAvailableMetrics`, and `getAvailableMetricsForCustomMetric` are not verified; they
   are returned as Matomo gives them, shortened, and a website row of `getWebsiteMetricsForCustomMetric` must carry
