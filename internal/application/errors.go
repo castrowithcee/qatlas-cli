@@ -95,9 +95,20 @@ func editDistance(a, b string) int {
 type ConnectionAmbiguousError struct {
 	Operation   string
 	Connections []ConnectionRef
+	// Selector is set where the value of connection is the name of one connection and the id of another;
+	// Connections then holds those two, each with its id.
+	Selector string
 }
 
 func (e *ConnectionAmbiguousError) Error() string {
+	if e.Selector != "" {
+		forms := make([]string, len(e.Connections))
+		for i, connection := range e.Connections {
+			forms[i] = connection.Name + "|" + connection.ID
+		}
+		return fmt.Sprintf("connection %q is the name of one connection and the id of another: %s; pass the form name|id to choose",
+			e.Selector, strings.Join(forms, ", "))
+	}
 	return fmt.Sprintf("tool %q has multiple matching connections: %s", e.Operation, candidates(e.Connections))
 }
 

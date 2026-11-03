@@ -65,10 +65,10 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 		Use:   "connections [provider]",
 		Short: "List the configured connections and what each one may do",
 		Long: "Connections lists every configured connection, or those of one provider, sorted by provider\n" +
-			"and name. Each one is published with its name, which --connection takes, its provider, the\n" +
-			"one-line description its owner maintains, which is empty where there is none, the effects its\n" +
-			"effects it offers, separated by spaces (with a tools list, the effects of the listed tools), and\n" +
-			"how its tools list shapes what it offers:\n\n" +
+			"and name. Each one is published with its name and its id, which --connection takes alone or\n" +
+			"as name|id, its provider, the one-line description its owner maintains, which is empty where\n" +
+			"there is none, the effects it offers, separated by spaces (with a tools list, the effects of the\n" +
+			"listed tools), and how its tools list shapes what it offers:\n\n" +
 			"  all-permitted  no tools list: every tool of its effects, except a tool whose contract says\n" +
 			"                 requires_tool_allow_list\n" +
 			"  listed         only the tools its tools list names\n" +

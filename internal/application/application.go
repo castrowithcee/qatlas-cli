@@ -344,6 +344,10 @@ func (c *Core) groupBy(request SearchRequest, descriptors []capability.Descripto
 // reading every page yields each match exactly once.
 func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 	c.scope()
+	request, err := c.withConnectionName(request)
+	if err != nil {
+		return SearchResponse{}, err
+	}
 	limit := request.Limit
 	if limit <= 0 || limit > maxSearchResults {
 		limit = maxSearchResults
@@ -600,7 +604,10 @@ const StateDisabled = "disabled"
 // approval-required while the vault has not approved the connection as it is configured now, or the code of
 // a vault process that runs but cannot be asked, and empty for every other connection of the list.
 type ConnectionSummary struct {
-	Name        string  `json:"name"`
+	Name string `json:"name"`
+	// ID is the stable id a request may name instead of the name; absent for a connection of an older
+	// configuration that has none yet.
+	ID          string  `json:"id,omitempty"`
 	Provider    string  `json:"provider"`
 	Description string  `json:"description"`
 	Effects     string  `json:"effects"`
@@ -721,7 +728,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 			tools = ToolsListed
 		}
 		summary := ConnectionSummary{
-			Name: name, Provider: owner, Description: connection.Description,
+			Name: name, ID: connection.ID, Provider: owner, Description: connection.Description,
 			Effects: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
 			ForwardSecrets: c.forwardRefs(name, unusable != nil),
 		}
@@ -785,6 +792,10 @@ func (r ToolsResponse) TOONPayload() any {
 // one; the bounded Search response stays the contract of the request-bound agent surface.
 func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 	c.scope()
+	request, err := c.withConnectionName(request)
+	if err != nil {
+		return ToolsResponse{}, err
+	}
 	descriptors, err := c.catalog(request, "", 0)
 	if err != nil {
 		return ToolsResponse{}, err
@@ -964,7 +975,9 @@ type DescribeRequest struct {
 // for the directories tools may read files from, Write for those they may write files to. It is the one
 // place discovery names a path, so a caller knows where a tool may work.
 type ConnectionRef struct {
-	Name        string    `json:"name"`
+	Name string `json:"name"`
+	// ID is set only on the candidates of an ambiguous selector, where the name alone cannot choose.
+	ID          string    `json:"id,omitempty"`
 	Description string    `json:"description"`
 	Files       *FilesRef `json:"files,omitempty"`
 	// ForwardSecrets lists the forward credentials the route releases, as ConnectionSummary does.
@@ -1019,16 +1032,20 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 	}
 	connections := c.connectionRefs(descriptor)
 	if request.Connection != "" {
-		resolved, err := c.connection(request.Connection)
+		name, err := c.connectionName(request.Connection)
+		if err != nil {
+			return DescribeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
+		}
+		resolved, err := c.connection(name)
 		if err != nil {
 			return DescribeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
 		}
 		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
 			return DescribeResponse{}, &capability.UnsupportedError{
-				Connection: request.Connection, Capability: request.Operation, Reason: reason,
+				Connection: name, Capability: request.Operation, Reason: reason,
 			}
 		}
-		connections = []ConnectionRef{c.connectionRefFor(request.Connection, descriptor)}
+		connections = []ConnectionRef{c.connectionRefFor(name, descriptor)}
 	}
 	return DescribeResponse{Operation: PublishedDescriptor(descriptor), Connections: connections}, nil
 }
@@ -1086,6 +1103,10 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	resolved, err = c.selectConnection(request.Connection, descriptor)
 	if err != nil {
 		return InvokeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
+	}
+	if request.Connection != "" {
+		// The log and the response name the connection, whichever selector the caller used.
+		request.Connection = resolved.Name
 	}
 	if c.policy != nil {
 		if err := c.policy(ctx, request, descriptor, resolved); err != nil {
@@ -1320,12 +1341,16 @@ func (c *Core) operation(id string, version int) (capability.Descriptor, capabil
 
 func (c *Core) selectConnection(explicit string, descriptor capability.Descriptor) (*config.Resolved, error) {
 	if explicit != "" {
-		resolved, err := c.connection(explicit)
+		name, err := c.connectionName(explicit)
+		if err != nil {
+			return nil, err
+		}
+		resolved, err := c.connection(name)
 		if err != nil {
 			return nil, err
 		}
 		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
-			return nil, &capability.UnsupportedError{Connection: explicit, Capability: descriptor.ID, Reason: reason}
+			return nil, &capability.UnsupportedError{Connection: name, Capability: descriptor.ID, Reason: reason}
 		}
 		return resolved, nil
 	}
@@ -1377,16 +1402,80 @@ func unknownConnectionOf(err error, provider, operation string) error {
 	return err
 }
 
+// connectionName resolves what a caller passed as connection to the name of a connection of the current
+// project view. The form name|id selects by id and ignores the name, which may be outdated. A plain value
+// is a name or an id; one that is the name of one connection and the id of another is refused, never
+// guessed. Only the view of the current project is searched, so a connection of another project answers as
+// unknown exactly as it does by name.
+func (c *Core) connectionName(selector string) (string, error) {
+	if _, id, hasID := strings.Cut(selector, "|"); hasID {
+		if name, ok := c.connectionNameByID(id); ok {
+			return name, nil
+		}
+		return "", c.unknownConnection(selector)
+	}
+	_, byName := c.config.Connections[selector]
+	idName, byID := c.connectionNameByID(selector)
+	switch {
+	case byName && byID && idName != selector:
+		named, identified := c.connectionRef(selector), c.connectionRef(idName)
+		named.ID, identified.ID = c.config.Connections[selector].ID, c.config.Connections[idName].ID
+		return "", &ConnectionAmbiguousError{
+			Selector: selector, Connections: []ConnectionRef{named, identified},
+		}
+	case byName:
+		return selector, nil
+	case byID:
+		return idName, nil
+	}
+	return "", c.unknownConnection(selector)
+}
+
+// connectionNameByID finds the connection with this id. A connection without an id, as an older
+// configuration has, is never found this way, and an empty value finds none.
+func (c *Core) connectionNameByID(id string) (string, bool) {
+	if id == "" {
+		return "", false
+	}
+	for name, connection := range c.config.Connections {
+		if connection.ID == id {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// withConnectionName replaces the connection filter of a search by the name it selects. A value that
+// selects nothing stays as it is, so the catalog reports it where it always did; only an ambiguous one fails here.
+func (c *Core) withConnectionName(request SearchRequest) (SearchRequest, error) {
+	if request.Connection == "" {
+		return request, nil
+	}
+	name, err := c.connectionName(request.Connection)
+	var ambiguous *ConnectionAmbiguousError
+	if errors.As(err, &ambiguous) {
+		return request, err
+	}
+	if err == nil {
+		request.Connection = name
+	}
+	return request, nil
+}
+
+func (c *Core) unknownConnection(selector string) error {
+	names := make([]string, 0, len(c.config.Connections))
+	for known := range c.config.Connections {
+		names = append(names, known)
+	}
+	return &capability.UnknownConnectionError{
+		Name: selector, Suggestion: Suggest(selector, names), MayBeBound: c.all.UsesPaths(),
+	}
+}
+
 func (c *Core) connection(name string) (*config.Resolved, error) {
 	connection, ok := c.config.Connections[name]
 	if !ok {
-		names := make([]string, 0, len(c.config.Connections))
-		for known := range c.config.Connections {
-			names = append(names, known)
-		}
-		return nil, &capability.UnknownConnectionError{
-			Name: name, Suggestion: Suggest(name, names), MayBeBound: c.all.UsesPaths(),
-		}
+		return nil, c.unknownConnection(name)
 	}
 	service := c.config.Services[connection.Service]
 	resolved := &config.Resolved{
