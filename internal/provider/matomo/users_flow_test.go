@@ -147,6 +147,18 @@ func TestUsersFlowInteractionActionsSendEveryParameterAndBoundTheRows(t *testing
 	}
 }
 
+func TestUsersFlowExamplesRunThroughTheirHandlers(t *testing.T) {
+	var calls []call
+	env := newFlowEnvironment(t, &calls, flowAnswers(nil).handler(t))
+	for _, descriptor := range []capability.Descriptor{usersFlowGetDataSources, usersFlowListInteractionActions} {
+		for _, example := range descriptor.Examples {
+			if _, err := env.invoke(descriptor.ID, "uf-two", string(example.Arguments)); err != nil {
+				t.Errorf("%s example %q: %v", descriptor.ID, example.Description, err)
+			}
+		}
+	}
+}
+
 func TestUsersFlowInteractionActionsCapRowsAndDepth(t *testing.T) {
 	rows := make([]string, maxReportItems+5)
 	for i := range rows {

@@ -151,8 +151,8 @@ var usersFlowListInteractionActions = capability.Descriptor{
 		{Name: "rows", Description: "The rows as Matomo lists them, at most 200; members such as label, " +
 			"nb_visits, and nb_proceeded as Matomo names them, texts untrusted and shortened, nesting limited"},
 		{Name: "has_more", Description: "True when Matomo answered more rows than returned"}},
-	Examples: []capability.Example{{Description: "The first step of last month", Arguments: json.RawMessage(
-		`{"idSite":1,"period":"month","date":"previous1","interactionPosition":1}`)}},
+	Examples: []capability.Example{{Description: "The first step of the last 30 days", Arguments: json.RawMessage(
+		`{"idSite":1,"period":"range","date":"previous30","interactionPosition":1}`)}},
 }
 
 // FlowActionsResult is the answer of users-flow.list-interaction-actions.
