@@ -202,6 +202,13 @@ Plugin `CustomAlerts`.
 | --- | --- |
 | Roll-ups (premium plugin `RollUpReporting`, licence needed): list, create, change | Super User and target `instance` with websites; the roll-up and its source websites must lie inside the targets. Stated by Matomo's public demo for list and change, expected for create |
 
+### Channel attribution
+
+| Tools | Matomo right |
+| --- | --- |
+| Channel attribution (premium plugin `MultiChannelConversionAttribution`, licence needed): read | View on the website. Stated by Matomo's public demo for the goal list and the campaign dimension combinations, expected for the attribution of a goal |
+| Channel attribution: turn the attribution of a goal on or off | Write on the website, expected |
+
 ### Instance settings and reference data
 
 | Tools | Matomo right |
