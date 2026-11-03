@@ -231,7 +231,7 @@ eight `matomo.global-settings.set-*` tools, the [operations tools](instance.md#o
 `matomo.users.logout` (target `instance`) are in no profile; `matomo.trusted-hosts.set` is offered only via `tools`; `matomo.users.delete` (target `instance`), `matomo.access.set`, `matomo.capabilities.add`,
 `matomo.capabilities.remove`, and the two `matomo.ldap-users.*` tools (target `instance`) are in no profile either and are offered only via `tools`.
 The [tracking tools](tracking.md) are in no profile and are offered only via
-`tools`, because they write raw data that cannot be undone. The [funnel tools](funnels.md), the [heatmap tools](heatmaps.md), the [form tools](forms.md), the [A/B test tools](ab-tests.md), the [custom report tools](custom-reports.md) (`matomo.custom-metrics.list` has the target `instance`), and the [session recording tools](session-recordings.md) are in no profile; the delete tools of funnels, heatmaps, forms, A/B tests, and session recordings are offered only via `tools`.
+`tools`, because they write raw data that cannot be undone. The [funnel tools](funnels.md), the [heatmap tools](heatmaps.md), the [form tools](forms.md), the [A/B test tools](ab-tests.md), the [custom report tools](custom-reports.md) (`matomo.custom-metrics.list` has the target `instance`), and the [session recording tools](session-recordings.md) are in no profile; the delete tools of funnels, heatmaps, forms, A/B tests, and session recordings and the start tool of A/B tests are offered only via `tools`.
 
 ## Tools
 
@@ -254,7 +254,7 @@ The [tracking tools](tracking.md) are in no profile and are offered only via
 | [funnels](funnels.md) | listing and reading the funnels of a website, testing a URL against funnel steps, pattern types, creating, replacing, and deleting funnels |
 | [heatmaps](heatmaps.md) | listing, reading, creating, replacing, copying, pausing, resuming, ending, and deleting heatmaps and their screenshots, recorded visitor behavior of a heatmap, heatmap options and the URL test of page rules |
 | [forms](forms.md) | listing and reading the forms of a website, real-time counters and most popular forms, form options with the auto-creation settings and goals, creating, updating, archiving, and deleting forms |
-| [A/B tests](ab-tests.md) | listing and reading the A/B test experiments of a website, experiment options, the JavaScript snippets of experiments and the tracker, and creating, replacing, and deleting experiments |
+| [A/B tests](ab-tests.md) | listing and reading the A/B test experiments of a website, experiment options, the JavaScript snippets of experiments and the tracker, and creating, replacing, deleting, starting, finishing, and archiving experiments |
 | [custom reports](custom-reports.md) | listing and reading the configured custom reports of a website, the custom metrics of the instance and their websites, the options custom reports are built from; creating, replacing, copying, pausing, and resuming custom reports |
 | [session recordings](session-recordings.md) | listing, reading, creating, replacing, pausing, resuming, ending, and deleting session recording configurations, recorded sessions of a recording, events of one recorded session, deleting recorded sessions and page views |
 | [mobile messaging](mobile-messaging.md) | SMS settings, removing phone numbers and SMS credentials, SMS delegation |

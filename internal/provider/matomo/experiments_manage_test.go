@@ -24,6 +24,8 @@ const experimentConnections = `
   exp-writer: {service: matomo, credential: token, effects: [read, create, update]}
   exp-writer-one: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1]}
   exp-writer-two: {service: matomo, credential: token, effects: [read, create, update], targets: [site/2]}
+  exp-starter: {service: matomo, credential: token, tools: [matomo.experiments.start]}
+  exp-starter-two: {service: matomo, credential: token, tools: [matomo.experiments.start], targets: [site/2]}
   exp-reader: {service: matomo, credential: token, effects: [read]}
   exp-deleter: {service: matomo, credential: token, tools: [matomo.experiments.delete]}
   exp-deleter-two: {service: matomo, credential: token, tools: [matomo.experiments.delete], targets: [site/2]}
@@ -49,6 +51,10 @@ func experimentChangeAnswers(extra answers) answers {
 		"AbTesting.addExperiment":    fixed(`{"value":12}`),
 		"AbTesting.updateExperiment": fixed(`{"result":"success","message":"ok"}`),
 		"AbTesting.deleteExperiment": fixed(`{"result":"success","message":"ok"}`),
+		// Assumption: the reference documents the lifecycle methods only as GenericSuccess; the form follows the core convention.
+		"AbTesting.startExperiment":   fixed(`{"result":"success","message":"ok"}`),
+		"AbTesting.finishExperiment":  fixed(`{"result":"success","message":"ok"}`),
+		"AbTesting.archiveExperiment": fixed(`{"result":"success","message":"ok"}`),
 	}, extra))
 }
 
@@ -67,6 +73,9 @@ var experimentChanges = []struct{ tool, connection, arguments, method, reads str
 	{"matomo.experiments.add", "exp-writer", experimentAddArguments, "AbTesting.addExperiment", ""},
 	{"matomo.experiments.update", "exp-writer", experimentUpdateArguments, "AbTesting.updateExperiment", "AbTesting.getExperiment"},
 	{"matomo.experiments.delete", "exp-deleter", experimentDeleteArguments, "AbTesting.deleteExperiment", "AbTesting.getExperiment"},
+	{"matomo.experiments.start", "exp-starter", experimentDeleteArguments, "AbTesting.startExperiment", "AbTesting.getExperiment"},
+	{"matomo.experiments.finish", "exp-writer", experimentDeleteArguments, "AbTesting.finishExperiment", "AbTesting.getExperiment"},
+	{"matomo.experiments.archive", "exp-writer", experimentDeleteArguments, "AbTesting.archiveExperiment", "AbTesting.getExperiment"},
 }
 
 func TestExperimentChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
@@ -76,9 +85,12 @@ func TestExperimentChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		idempotency capability.Idempotency
 		listedOnly  bool
 	}{
-		"matomo.experiments.add":    {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
-		"matomo.experiments.update": {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
-		"matomo.experiments.delete": {capability.EffectDelete, capability.IdempotencyIdempotent, true},
+		"matomo.experiments.add":     {capability.EffectCreate, capability.IdempotencyNonIdempotent, false},
+		"matomo.experiments.update":  {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
+		"matomo.experiments.delete":  {capability.EffectDelete, capability.IdempotencyIdempotent, true},
+		"matomo.experiments.start":   {capability.EffectUpdate, capability.IdempotencyIdempotent, true},
+		"matomo.experiments.finish":  {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
+		"matomo.experiments.archive": {capability.EffectUpdate, capability.IdempotencyIdempotent, false},
 	}
 	for id, tc := range want {
 		d, _, found := reg.Lookup(id)
@@ -244,6 +256,9 @@ func TestExperimentChangeRefusesAnExperimentOfAnotherWebsiteAfterOneReadWithoutM
 	for _, c := range []struct{ tool, connection, mutation string }{
 		{"matomo.experiments.update", "exp-writer", "AbTesting.updateExperiment"},
 		{"matomo.experiments.delete", "exp-deleter", "AbTesting.deleteExperiment"},
+		{"matomo.experiments.start", "exp-starter", "AbTesting.startExperiment"},
+		{"matomo.experiments.finish", "exp-writer", "AbTesting.finishExperiment"},
+		{"matomo.experiments.archive", "exp-writer", "AbTesting.archiveExperiment"},
 	} {
 		for _, id := range []string{"55", "6", "5", "99", "8"} {
 			var calls []call
@@ -323,6 +338,14 @@ func TestExperimentChangeRefusesBeforeSecretAndRequest(t *testing.T) {
 		{"matomo.experiments.delete", "exp-deleter", `{"idSite":1,"idExperiment":0}`},
 		{"matomo.experiments.delete", "exp-deleter", `{"idSite":1,"idExperiment":2147483648}`},
 		{"matomo.experiments.delete", "exp-deleter", `{"idSite":1,"idExperiment":4,"module":"API"}`},
+		{"matomo.experiments.start", "exp-starter-two", experimentDeleteArguments},
+		{"matomo.experiments.start", "exp-starter", `{"idSite":1}`},
+		{"matomo.experiments.start", "exp-starter", `{"idSite":1,"idExperiment":0}`},
+		{"matomo.experiments.start", "exp-starter", `{"idSite":1,"idExperiment":4,"module":"API"}`},
+		{"matomo.experiments.finish", "exp-writer-two", experimentDeleteArguments},
+		{"matomo.experiments.finish", "exp-writer", `{"idSite":1,"idExperiment":4,"method":"x"}`},
+		{"matomo.experiments.archive", "exp-writer-two", experimentDeleteArguments},
+		{"matomo.experiments.archive", "exp-writer", `{"idSite":1}`},
 	}
 	for _, c := range cases {
 		_, err := env.change(c.tool, c.connection, c.arguments)
@@ -417,6 +440,46 @@ func TestExperimentChangeToolsAreUnsupportedWithoutThePluginAndSendNothingFurthe
 		_, err := env.change(c.tool, c.connection, c.arguments)
 		if !isUnsupported(err) || methods(calls) != "API.getMatomoVersion API.isPluginActivated" {
 			t.Errorf("%s: err = %v, requests = %s", c.tool, err, methods(calls))
+		}
+	}
+}
+
+func TestExperimentStateToolsSendOneRequestAfterOneRead(t *testing.T) {
+	for _, c := range []struct{ tool, connection, method, flag string }{
+		{"matomo.experiments.start", "exp-starter", "AbTesting.startExperiment", "started"},
+		{"matomo.experiments.finish", "exp-writer", "AbTesting.finishExperiment", "finished"},
+		{"matomo.experiments.archive", "exp-writer", "AbTesting.archiveExperiment", "archived"},
+	} {
+		var calls []call
+		env := newExperimentChangeEnvironment(t, &calls, experimentChangeAnswers(nil).handler(t))
+		if _, err := env.invoke(c.tool, c.connection, experimentDeleteArguments); err == nil ||
+			!strings.Contains(err.Error(), "confirm") || len(calls) != 0 {
+			t.Fatalf("%s without confirm: err = %v, requests = %d", c.tool, err, len(calls))
+		}
+		result, err := env.change(c.tool, c.connection, experimentDeleteArguments)
+		var out map[string]any
+		if err != nil || json.Unmarshal([]byte(result), &out) != nil || out["idSite"] != float64(1) ||
+			out["idExperiment"] != float64(4) || out[c.flag] != true || len(out) != 3 {
+			t.Fatalf("%s: result = %s, err = %v", c.tool, result, err)
+		}
+		if got := methods(calls); got != "API.getMatomoVersion API.isPluginActivated AbTesting.getExperiment "+c.method {
+			t.Errorf("%s: requests = %s", c.tool, got)
+		}
+		form := lastCall(calls, c.method).form
+		if form.Get("idSite") != "1" || form.Get("idExperiment") != "4" || form.Get("format") != "JSON" ||
+			form.Get("module") != "API" || form.Get("method") != c.method || len(form) != 5 {
+			t.Errorf("%s: form = %v", c.tool, form)
+		}
+	}
+}
+
+func TestExperimentStartIsReachableOnlyThroughTheToolsList(t *testing.T) {
+	var calls []call
+	env := newExperimentChangeEnvironment(t, &calls, experimentChangeAnswers(nil).handler(t))
+	for _, connection := range []string{"exp-effects-delete", "exp-writer"} {
+		if _, err := env.change("matomo.experiments.start", connection, experimentDeleteArguments); err == nil ||
+			len(calls) != 0 || *env.reads != 0 {
+			t.Errorf("%s: err = %v, requests = %d", connection, err, len(calls))
 		}
 	}
 }

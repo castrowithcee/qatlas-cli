@@ -262,6 +262,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == "matomo.heatmaps.delete" || tool.ID == "matomo.heatmaps.delete-screenshot" ||
 			tool.ID == "matomo.forms.add" || tool.ID == "matomo.forms.update" || tool.ID == "matomo.forms.archive" || tool.ID == "matomo.forms.delete" ||
 			tool.ID == "matomo.experiments.add" || tool.ID == "matomo.experiments.update" || tool.ID == "matomo.experiments.delete" ||
+			tool.ID == "matomo.experiments.start" || tool.ID == "matomo.experiments.finish" || tool.ID == "matomo.experiments.archive" ||
 			tool.ID == "matomo.session-recordings.add" || tool.ID == "matomo.session-recordings.update" ||
 			tool.ID == "matomo.session-recordings.pause" || tool.ID == "matomo.session-recordings.resume" || tool.ID == "matomo.session-recordings.end" ||
 			tool.ID == "matomo.session-recordings.delete" || tool.ID == "matomo.recorded-sessions.delete-session" || tool.ID == "matomo.recorded-sessions.delete-pageview" ||
@@ -287,7 +288,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, found := metadata.RecommendedProfile()
-	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 224 {
+	if !found || profile.ID != "read" || len(profile.Tools) != 24 || len(metadata.Tools) != 227 {
 		t.Fatalf("profile = %+v, tools = %+v", profile, metadata.Tools)
 	}
 	for _, id := range []string{"matomo.version.get", "matomo.sites.list", "matomo.sites.get", "matomo.reports.list",

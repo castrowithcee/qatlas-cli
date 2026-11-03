@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Matomo A/B test tools: listing and reading experiments, the experiment options, the code templates, creating, replacing, and deleting experiments, the binding of an experiment to the connection's targets, how missing rights affect the options tool, the plugin requirement, and the limits of what the AbTesting reference proves.
+  Describes the Matomo A/B test tools: listing and reading experiments, the experiment options, the code templates, creating, replacing, deleting, starting, finishing, and archiving experiments, the binding of an experiment to the connection's targets, how missing rights affect the options tool, the plugin requirement, and the limits of what the AbTesting reference proves.
 type: knowledge
 edit: shared
 created: 2026-11-02
@@ -11,9 +11,9 @@ updated: 2026-11-02
 
 The tools for A/B test experiments of the [Matomo provider](README.md). They need the premium plugin
 AbTesting; an instance without it refuses all of them as an unsupported capability, after one plugin check and
-without further requests. The tools are in no [setup profile](README.md#setup-profiles); the delete tool is
-offered only where a connection's `tools` list names it. Reports of the plugin are read with `matomo.reports.get`
-like any other report. Starting, finishing, and archiving experiments is not offered.
+without further requests. The tools are in no [setup profile](README.md#setup-profiles); the delete and start tools are
+offered only where a connection's `tools` list names them; starting changes what visitors of the website see.
+Reports of the plugin are read with `matomo.reports.get` like any other report.
 
 ## Tools
 
@@ -26,6 +26,9 @@ like any other report. Starting, finishing, and archiving experiments is not off
 | `matomo.experiments.add` | creates an experiment; it is not started |
 | `matomo.experiments.update` | replaces the whole definition of an experiment |
 | `matomo.experiments.delete` | deletes an experiment |
+| `matomo.experiments.start` | starts an experiment immediately |
+| `matomo.experiments.finish` | finishes an experiment, which then accepts no new tracking requests |
+| `matomo.experiments.archive` | archives an experiment, so that it is no longer available in reports, segments, or updates |
 
 - `matomo.experiments.list` lists all experiments. `active` lists only the active ones, and `statuses` (1 to 10
   different statuses) only those of these statuses. The two cannot be combined, so each call asks one method.
@@ -35,7 +38,7 @@ like any other report. Starting, finishing, and archiving experiments is not off
 - Answers of the option methods and of the list methods have no documented example; the options are returned as
   Matomo gives them, shortened.
 
-- The three change tools need `confirm`, send one request, and never repeat it: after a timeout, a reset
+- The six change tools need `confirm`, send one request, and never repeat it: after a timeout, a reset
   connection, a server error, or an unreadable answer they say the outcome is unclear and name the read that settles
   it. `add` is not idempotent, so a repeated call creates a second experiment.
 - `matomo.experiments.update` replaces the definition as a whole, as the reference requires all but five of its
@@ -50,7 +53,7 @@ experiment shows at most 100 targets, success metrics, and variations per kind.
 
 ## Targets
 
-For `update` and `delete`, one read of the experiment proves it belongs to the website before the change request is
+For `update`, `delete`, `start`, `finish`, and `archive`, one read of the experiment proves it belongs to the website before the change request is
 sent; an experiment of another website, or one without a website, ends as `not-found` and nothing is changed.
 `idSite` must be inside the targets ([Scope](README.md#scope)) and is checked before any secret is read; a website
 outside them is refused without naming it. An experiment ID is not tied to a website in the request, so the answer
@@ -73,8 +76,8 @@ option ends the whole call.
   `includedTargets[N][attribute|type|value|inverted]`, and metrics as `successMetrics[N]`, after the members the read
   methods report. This format is not verified against an instance.
 - The answers of the change methods have no documented example. `addExperiment` is taken to return the new ID and the
-  other two the generic success form; any other answer ends as unclear. The rights of the change methods (a write
-  right on the website) are expected, not proven, and a refusal by Matomo ends as a permission error.
+  others the generic success form; any other answer ends as unclear. The rights of the change methods (a write
+  right on the website, the role the [permissions guide](https://developer.matomo.org/guides/permissions) names for changes) are expected, not proven per method, and a refusal by Matomo ends as a permission error.
 - The bounds of `mdeRelative` and `percentageParticipants` (1 to 100), of the texts, and of the metric names are
   Qatlas's own and narrower than the reference. Dates are accepted only as `YYYY-MM-DD HH:MM:SS`; the reference's
   `false` for no date is expressed by leaving the argument out.
