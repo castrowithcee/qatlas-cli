@@ -158,7 +158,7 @@ func TestOverviewNamesOpenApprovalsAndEnterOpensThem(t *testing.T) {
 
 	view := strings.Join(strings.Fields(m.render()), " ")
 	assertCard(t, m, overviewItem{label: "Approvals", value: "1"})
-	if want := "open Access > Approvals (4)"; !strings.Contains(view, want) {
+	if want := "open Access > Approvals (5)"; !strings.Contains(view, want) {
 		t.Fatalf("the Overview does not show %q:\n%s", want, m.render())
 	}
 	for _, label := range []string{"Approvals", "open Access"} {

@@ -16,12 +16,12 @@ var formScreens = []struct {
 	name string
 	open func(t *testing.T, m *Model)
 }{
-	{"connection", func(t *testing.T, m *Model) { pump(t, m, "2", "enter") }},
+	{"connection", func(t *testing.T, m *Model) { pump(t, m, "3", "enter") }},
 	{"service", func(t *testing.T, m *Model) { openSectionByName(t, m, sectionServices); m.openForm("") }},
 	{"credential", func(t *testing.T, m *Model) { openSectionByName(t, m, sectionCredentials); m.openForm("") }},
 	{"token", func(t *testing.T, m *Model) { openSectionByName(t, m, sectionTokens); m.openForm("") }},
 	{"settings", func(t *testing.T, m *Model) { openSectionByName(t, m, sectionGeneral) }},
-	{"setup step", func(t *testing.T, m *Model) { pump(t, m, "2"); m.startSetup(); pump(t, m, "enter") }},
+	{"setup step", func(t *testing.T, m *Model) { pump(t, m, "3"); m.startSetup(); pump(t, m, "enter") }},
 }
 
 // Every form is usable at the smallest size and without colour: it fits, it is not replaced by the resize
@@ -66,7 +66,7 @@ func TestAFormTooTallForFramesFallsBackWithoutLosingTheFocus(t *testing.T) {
 	mustNoError(t, err)
 	visualSetup(t, false)
 	m := visualModel(t, fixtures, 80, 24, uiprefs.ThemeQatlasDark)
-	pump(t, m, "2", "enter")
+	pump(t, m, "3", "enter")
 	for range m.fields {
 		view := ansi.Strip(m.render())
 		label := labelText(m.fields[m.focus].label)

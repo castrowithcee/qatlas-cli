@@ -119,7 +119,7 @@ func TestClickOnATabAndAPartOfTheOptionBar(t *testing.T) {
 	if m.section != sectionVault || !m.navSub {
 		t.Fatalf("after the click on Vault: section %v navSub %v", m.section, m.navSub)
 	}
-	clickOn(t, m, "2 Connections")
+	clickOn(t, m, "3 Connections")
 	if m.section != sectionConnections {
 		t.Errorf("the Connections tab opened %v", m.section)
 	}
@@ -1152,13 +1152,13 @@ func TestBackButtonStandsOnTheDetailScreensOfAccess(t *testing.T) {
 	if !backInHeader(m) {
 		t.Errorf("approval detail has no back button:\n%s", frameLines(m)[0])
 	}
-	clickOn(t, m, "2 Connections")
+	clickOn(t, m, "3 Connections")
 	if m.section != sectionConnections || m.screen != screenNav || m.approvalDetail != "" {
 		t.Errorf("tab click from the approval detail: section %v screen %v detail %q", m.section, m.screen, m.approvalDetail)
 	}
 	m.openSection(sectionTokens)
 	m.tokenDetail, m.screen = "ci-valid", screenConfirm
-	clickOn(t, m, "2 Connections")
+	clickOn(t, m, "3 Connections")
 	if m.section != sectionConnections || m.screen != screenNav || m.tokenDetail != "" {
 		t.Errorf("tab click from the token detail: section %v screen %v detail %q", m.section, m.screen, m.tokenDetail)
 	}

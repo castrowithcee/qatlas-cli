@@ -117,7 +117,7 @@ func TestHelpScrollsWithinTheWorkspace(t *testing.T) {
 // Where keys are text, ? is text: in a form and in the filter of a list.
 func TestQuestionMarkIsTextWhereTextIsTyped(t *testing.T) {
 	m, _, _ := newModel(t)
-	press(t, m, "5", "n")
+	press(t, m, "2", "n")
 	typeText(t, m, "a?b")
 	if m.screen != screenForm || m.fieldValue("name") != "a?b" {
 		t.Errorf("? in a form left it or was not typed: screen %v name %q", m.screen, m.fieldValue("name"))

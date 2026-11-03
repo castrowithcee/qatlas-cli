@@ -569,7 +569,7 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	for _, size := range []int{160, 80} {
 		m.Update(tea.WindowSizeMsg{Width: size, Height: 28})
 		m.section, m.screen = sectionOverview, screenNav
-		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Access > Approvals (4)") {
+		if view := strings.Join(strings.Fields(m.render()), " "); !strings.Contains(view, "open Access > Approvals (5)") {
 			t.Errorf("%d columns: open approvals are not the next step:\n%s", size, m.render())
 		}
 	}
@@ -617,7 +617,7 @@ func TestApprovalsSectionWhileLocked(t *testing.T) {
 func TestApprovalsNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.screen = screenNav
-	press(t, m, "4")
+	press(t, m, "5")
 	if m.screen != screenList || m.section != sectionTokens {
 		t.Fatalf("4 on the tab line = screen %v section %v, want the Tokens list", m.screen, m.section)
 	}

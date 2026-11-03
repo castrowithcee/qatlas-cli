@@ -579,7 +579,7 @@ func TestNarrowListFocus(t *testing.T) {
 }
 
 // areaLabels are how the tab line names the six areas in full.
-var areaLabels = []string{"1 Overview", "2 Connections", "3 Activity", "4 Access", "5 Library", "6 Settings"}
+var areaLabels = []string{"1 Overview", "2 Library", "3 Connections", "4 Activity", "5 Access", "6 Settings"}
 
 func TestLayoutsFitTheirTerminal(t *testing.T) {
 	m, _, _ := newEnvModel(t, map[string]string{
@@ -598,14 +598,14 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 		tabs string
 	}{
 		{name: "wide terminal", width: 160, height: 28,
-			tabs: "1 Overview   2 Connections   3 Activity   4 Access   [5 Library]  6 Settings"},
+			tabs: "1 Overview   [2 Library]  3 Connections   4 Activity   5 Access   6 Settings"},
 		{name: "standard terminal", width: 100, height: 24,
-			tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
+			tabs: "1 Overview [2 Library] 3 Connections 4 Activity 5 Access 6 Settings"},
 		{name: "names without gaps", width: 90, height: 24,
-			tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
-		{name: "standard width", width: 80, height: 24, tabs: "1 Overview 2 Connections 3 Activity 4 Access [5 Library] 6 Settings"},
-		{name: "names give way to digits", width: 60, height: 24, tabs: "1 2 3 4 [5 Library] 6"},
-		{name: "compact", width: 40, height: minimumHeight, tabs: "1 2 3 4 [5 Library] 6"},
+			tabs: "1 Overview [2 Library] 3 Connections 4 Activity 5 Access 6 Settings"},
+		{name: "standard width", width: 80, height: 24, tabs: "1 Overview [2 Library] 3 Connections 4 Activity 5 Access 6 Settings"},
+		{name: "names give way to digits", width: 60, height: 24, tabs: "1 [2 Library] 3 4 5 6"},
+		{name: "compact", width: 40, height: minimumHeight, tabs: "1 [2 Library] 3 4 5 6"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -734,9 +734,9 @@ func TestDirectSectionKeys(t *testing.T) {
 
 	// The tab line answers the digits as well, and n there opens the form of the section it stands on.
 	m.screen = screenNav
-	press(t, m, "2")
+	press(t, m, "3")
 	if m.screen != screenList || m.section != sectionConnections {
-		t.Fatalf("2 on the tab line = screen %v section %v", m.screen, m.section)
+		t.Fatalf("3 on the tab line = screen %v section %v", m.screen, m.section)
 	}
 	press(t, m, "n")
 	if m.screen != screenProviders || m.wizard == nil || m.fail != "" {
@@ -777,7 +777,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 		}
 	}
 
-	step("5", "n")
+	step("2", "n")
 	typeText(t, m, "wiki")
 	step("tab", "tab")
 	typeText(t, m, "https://wiki.example.invalid")
@@ -792,7 +792,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	step("tab")
 	typeText(t, m, "WIKI_SECRET")
 	// n in Connections is the guided setup; it reuses the service and the credential made above.
-	step("f2", "2", "n", "enter", "f2", "f2")
+	step("f2", "3", "n", "enter", "f2", "f2")
 	clearField(t, m)
 	typeText(t, m, "wiki")
 	step("f2", "f2", "f2")
@@ -816,7 +816,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 		t.Fatalf("saved configuration = %+v, %v", saved, err)
 	}
 	if view := m.render(); !strings.Contains(view, "wiki  active  wiki     read") ||
-		!strings.Contains(view, "[2 Connections]") {
+		!strings.Contains(view, "[3 Connections]") {
 		t.Errorf("the workspace or the tab line does not show the result:\n%s", view)
 	}
 }
@@ -978,17 +978,17 @@ func TestTheScreenReadsWithoutColour(t *testing.T) {
 	if strings.Contains(view, "\x1b") {
 		t.Fatalf("a terminal without colour got escape sequences:\n%q", view)
 	}
-	for _, want := range []string{"[2 Connections]", ">   wiki"} {
+	for _, want := range []string{"[3 Connections]", ">   wiki"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list in focus does not show %q:\n%s", want, view)
 		}
 	}
-	if strings.Contains(view, "> 1 Overview") || strings.Contains(view, "> [2 Connections]") {
+	if strings.Contains(view, "> 1 Overview") || strings.Contains(view, "> [3 Connections]") {
 		t.Errorf("the tab line is marked although the list has the focus:\n%s", view)
 	}
 	press(t, m, "shift+tab")
 	view = m.render()
-	if !strings.Contains(strings.Join(strings.Fields(view), " "), "> 1 Overview [2 Connections] 3 Activity") ||
+	if !strings.Contains(strings.Join(strings.Fields(view), " "), "> 1 Overview 2 Library [3 Connections] 4 Activity") ||
 		strings.Contains(view, "> wiki") ||
 		strings.Count(view, "> ") != 1 {
 		t.Errorf("the tab line in focus is not the one marked line:\n%s", view)
@@ -1056,7 +1056,7 @@ func TestResizePreservesState(t *testing.T) {
 		assertViewFits(t, view, max(size.width, minimumWidth), max(size.height, minimumHeight))
 		if m.activeScreenTooSmall() {
 			// A screen that cannot be shown takes no keys that change it.
-			press(t, m, "tab", "n", "5")
+			press(t, m, "tab", "n", "2")
 			if !strings.Contains(view, "Resize terminal") {
 				t.Errorf("%dx%d is too small for the form but shows no notice:\n%s", size.width, size.height, view)
 			}
@@ -1091,7 +1091,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 		if !strings.Contains(view, "q") {
 			t.Errorf("%dx%d resize view has no visible q key: %q", size.width, size.height, view)
 		}
-		press(t, m, "5", "n", "enter")
+		press(t, m, "2", "n", "enter")
 		if m.screen != screenNav || m.section != sectionDefaults {
 			t.Fatalf("%dx%d changed hidden state to screen %v section %v", size.width, size.height,
 				m.screen, m.section)
@@ -1110,7 +1110,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 
 	// The notice is not a new editor screen. A half-completed form remains intact behind it.
 	form, _, _ := newModel(t)
-	press(t, form, "5", "n")
+	press(t, form, "2", "n")
 	typeText(t, form, "draft-service")
 	press(t, form, "tab")
 	focus := form.focus
@@ -1118,7 +1118,7 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	if view := form.render(); !strings.Contains(view, "esc leave") {
 		t.Errorf("a tiny form view does not offer its way out:\n%s", view)
 	}
-	press(t, form, "tab", "n", "5", "q")
+	press(t, form, "tab", "n", "2", "q")
 	form.Update(tea.WindowSizeMsg{Width: 80, Height: 100})
 	if form.quitting || form.screen != screenForm || form.focus != focus || form.fieldValue("name") != "draft-service" {
 		t.Errorf("resize changed form state: quitting %v screen %v focus %d name %q", form.quitting, form.screen,
@@ -1852,9 +1852,9 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 	for _, want := range []string{
 		"g setup",
 		"1 Overview",
-		"2 Connections",
-		"3 Activity",
-		"4 Access",
+		"2 Library",
+		"3 Connections",
+		"4 Activity",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("first-run view does not contain %q:\n%s", want, view)

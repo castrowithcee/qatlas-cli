@@ -105,3 +105,25 @@ func TestNoColorWithAnyValueDrawsWithoutColour(t *testing.T) {
 		}
 	}
 }
+
+// A saved start view names the area, not its position, so every area opens itself after a reordering.
+func TestStartAreaSurvivesReordering(t *testing.T) {
+	for a := area(0); a < areaCount; a++ {
+		got, ok := areaByName(a.key())
+		if !ok || got != a {
+			t.Fatalf("areaByName(%q) = %v, %v, want %v", a.key(), got, ok, a)
+		}
+		m, _, _ := newModel(t)
+		m.start = a
+		m.Init()
+		if a != areaOverview && m.section != areaSections[a][0] {
+			t.Errorf("start %s opened section %v, want %v", a.key(), m.section, areaSections[a][0])
+		}
+	}
+	want := []string{"Overview", "Library", "Connections", "Activity", "Access", "Settings"}
+	for a, k := range want {
+		if area(a).key() != k {
+			t.Errorf("area %d = %s, want %s", a+1, area(a).key(), k)
+		}
+	}
+}

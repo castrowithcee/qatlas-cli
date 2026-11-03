@@ -89,7 +89,7 @@ func TestRebindingChangesFooterAndDispatchTogether(t *testing.T) {
 		t.Fatal("the new help key does not close the help")
 	}
 
-	press(t, m, "5", "n")
+	press(t, m, "2", "n")
 	if view := m.render(); !strings.Contains(view, "F5 save") || strings.Contains(view, "F2 save") {
 		t.Fatalf("the form footer does not follow the save key:\n%s", view)
 	}
@@ -410,7 +410,7 @@ func TestPaletteShortcutsFollowTheKeymap(t *testing.T) {
 	if line := lineWith(view, "Start the guided setup"); !shortcutIs(line, "ctrl+x") {
 		t.Errorf("the setup shortcut is not the bound key: %q", line)
 	}
-	if line := lineWith(view, "Open Connections"); !shortcutIs(line, "2") {
+	if line := lineWith(view, "Open Connections"); !shortcutIs(line, "3") {
 		t.Errorf("the area shortcut is not its digit: %q", line)
 	}
 	typeText(t, m, "quit")

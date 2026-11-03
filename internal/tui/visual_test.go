@@ -154,7 +154,7 @@ type visualShot struct {
 
 // activityHeatmap opens the Activity tab over every recorded day.
 func activityHeatmap(t *testing.T, m *Model) {
-	pump(t, m, "3")
+	pump(t, m, "4")
 	for m.logs.mode != logModeAll {
 		m.logs.focus = logFocusMode
 		pump(t, m, "right")
@@ -166,9 +166,9 @@ func activityHeatmap(t *testing.T, m *Model) {
 func visualShots() []visualShot {
 	dark, light := uiprefs.ThemeQatlasDark, uiprefs.ThemeQatlasLight
 	overview := func(*testing.T, *Model) {}
-	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	connections := func(t *testing.T, m *Model) { pump(t, m, "3") }
 	activityTable := func(t *testing.T, m *Model) {
-		pump(t, m, "3")
+		pump(t, m, "4")
 		for m.logs.mode != logModeAll {
 			m.logs.focus = logFocusMode
 			pump(t, m, "right")
@@ -187,7 +187,7 @@ func visualShots() []visualShot {
 			pump(t, m, "d")
 		}},
 		{"05-activity-table", 150, 42, dark, false, func(t *testing.T, m *Model) {
-			pump(t, m, "3")
+			pump(t, m, "4")
 			for m.logs.mode != logModeAll {
 				m.logs.focus = logFocusMode
 				pump(t, m, "right")
@@ -248,7 +248,7 @@ func visualShots() []visualShot {
 		{"32-activity-heatmap-no-color", 150, 42, dark, true, activityHeatmap},
 		{"33-activity-table", 80, 24, dark, false, activityTable},
 		{"34-activity-heatmap", 80, 24, dark, false, activityHeatmap},
-		{"35-activity-empty", 150, 42, dark, false, func(t *testing.T, m *Model) { pump(t, m, "3") }},
+		{"35-activity-empty", 150, 42, dark, false, func(t *testing.T, m *Model) { pump(t, m, "4") }},
 		{"50-provider-picker", 150, 42, dark, false, func(t *testing.T, m *Model) {
 			openSectionByName(t, m, sectionConnections)
 			m.openForm("")
@@ -335,7 +335,7 @@ type visualProfileShot struct {
 func visualProfileShots() []visualProfileShot {
 	dark, light := uiprefs.ThemeQatlasDark, uiprefs.ThemeQatlasLight
 	overview := func(*testing.T, *Model) {}
-	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	connections := func(t *testing.T, m *Model) { pump(t, m, "3") }
 	return []visualProfileShot{
 		{visualShot{"60-overview-256", 150, 42, dark, false, overview}, profile256},
 		{visualShot{"61-connections-256", 150, 42, dark, false, connections}, profile256},
@@ -359,7 +359,7 @@ type visualTerminalShot struct {
 func visualTerminalShots() []visualTerminalShot {
 	const darkFg, darkBg, lightFg, lightBg = "#cdd6f4", "#1e1e2e", "#24292f", "#ffffff"
 	overview := func(*testing.T, *Model) {}
-	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	connections := func(t *testing.T, m *Model) { pump(t, m, "3") }
 	details := func(t *testing.T, m *Model) {
 		connections(t, m)
 		pump(t, m, "down", "down", "tab", "right")
@@ -385,7 +385,7 @@ func visualTerminalShots() []visualTerminalShot {
 // visualBuiltinShots are the snapshots of a dark and a light built-in theme, numbered 80 to 89.
 func visualBuiltinShots() []visualProfileShot {
 	overview := func(*testing.T, *Model) {}
-	connections := func(t *testing.T, m *Model) { pump(t, m, "2") }
+	connections := func(t *testing.T, m *Model) { pump(t, m, "3") }
 	shot := func(name, theme string, show func(*testing.T, *Model)) visualProfileShot {
 		return visualProfileShot{visualShot{name, 150, 42, theme, false, show}, profileTrueColor}
 	}

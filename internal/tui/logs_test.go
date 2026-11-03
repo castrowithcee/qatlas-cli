@@ -107,7 +107,7 @@ func (f *logFixture) model(unlocked bool, day string) *Model {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m.logs.day = day
 	m.screen = screenNav
-	pump(f.t, m, "3")
+	pump(f.t, m, "4")
 	if m.screen != screenLogs || m.section != sectionLogs || !m.logs.loaded {
 		f.t.Fatalf("8 = screen %v section %v loaded %v, want the loaded Logs screen", m.screen, m.section,
 			m.logs.loaded)
@@ -145,7 +145,7 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 	m := f.model(true, f.localToday())
 
 	view := m.render()
-	for _, want := range []string{"[3 Activity]", "4 Access", "Mode: Day ▾", "Date: " + f.localToday() + " ▾",
+	for _, want := range []string{"[4 Activity]", "5 Access", "Mode: Day ▾", "Date: " + f.localToday() + " ▾",
 		"STATUS", "TIME", "WAY", "CLIENT", "TOOL", "CONNECTION", "RESULT", "DUR.", "codex", "MCP", "CLI",
 		"12ms", "Way: all ▾", "Client: all ▾", "Conn: all ▾", "Result: all ▾", "/ search…"} {
 		if !strings.Contains(view, want) {
@@ -380,18 +380,18 @@ func TestLogsKeys(t *testing.T) {
 	if m.screen != screenLogs {
 		t.Fatalf("esc from the help = screen %v, want the Logs screen", m.screen)
 	}
-	press(t, m, "2")
+	press(t, m, "3")
 	if m.screen != screenList || m.section != sectionConnections {
 		t.Errorf("2 from Logs = screen %v section %v, want Connections", m.screen, m.section)
 	}
-	pump(t, m, "3")
+	pump(t, m, "4")
 	press(t, m, "enter")
-	press(t, m, "5")
+	press(t, m, "2")
 	if m.screen != screenList || m.section != sectionServices {
 		t.Errorf("5 from the detail = screen %v section %v, want Services", m.screen, m.section)
 	}
 	m.screen = screenNav
-	pump(t, m, "3")
+	pump(t, m, "4")
 	press(t, m, "esc")
 	if m.screen != screenNav || m.section != sectionLogs {
 		t.Fatalf("esc = screen %v section %v", m.screen, m.section)
@@ -420,7 +420,7 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 	m.redactor.Add("canary-secret-value-77")
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.logs.day = f.localToday()
-	pump(t, m, "3")
+	pump(t, m, "4")
 	press(t, m, "enter")
 	for _, view := range []string{m.logDetailView(), func() string { m.screen = screenLogs; return m.render() }()} {
 		if strings.Contains(view, "\x1b[31m") || strings.Contains(view, "\u202e") {
@@ -640,7 +640,7 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 	const noVault = "There is no vault configured for this run."
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
-	pump(t, m, "4")
+	pump(t, m, "5")
 	if m.screen != screenList || m.section != sectionTokens {
 		t.Fatalf("4 = screen %v section %v", m.screen, m.section)
 	}
