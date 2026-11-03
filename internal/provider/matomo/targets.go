@@ -183,7 +183,7 @@ var instanceTools = map[string]bool{siteGroupsList.ID: true, globalSettingsGet.I
 	smsPhoneNumbersRemove.ID: true, smsCredentialsDelete.ID: true, smsDelegationSet.ID: true, aiProvidersGetSettings.ID: true,
 	aiProvidersDisconnect.ID: true, ldapUsersCount.ID: true, ldapUsersList.ID: true, customMetricsList.ID: true,
 	customMetricsSave.ID: true, customMetricsDelete.ID: true, rollUpsList.ID: true, rollUpsAdd.ID: true,
-	rollUpsUpdate.ID: true}
+	rollUpsUpdate.ID: true, activityLogList.ID: true, activityLogCount.ID: true, activityTypesList.ID: true}
 
 // reaches is the Reaches answer of the Matomo target: the version tool serves every binding, an instance-wide
 // tool needs the instance target, and the website tools need a binding that reaches websites. A binding to the
