@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
 
 // The values of the filter bar change what the list shows and in which order, and leave the configuration
@@ -166,4 +168,35 @@ func TestDetailPaneShowsTheLastTest(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, "Last test:") {
 		t.Errorf("the pane omits the last test:\n%s", view)
 	}
+}
+
+// The bar never panics and never draws a line wider than its width, at any width, focus and search state.
+func TestFilterBarFitsEveryWidth(t *testing.T) {
+	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections} {
+		for _, state := range []string{"idle", "focus", "query", "editing"} {
+			for w := 20; w <= 160; w++ {
+				m := newTableModel(t, 100)
+				openSectionByName(t, m, s)
+				switch state {
+				case "focus":
+					press(t, m, "tab")
+				case "query":
+					m.list.input.SetValue("wiki")
+					m.list.refilter()
+				case "editing":
+					press(t, m, "/")
+				}
+				if got := lipgloss.Width(m.barLine(w)); got > w {
+					t.Fatalf("section %v %s width %d: bar has %d cells", s, state, w, got)
+				}
+			}
+		}
+	}
+}
+
+// Opening Connections from Overview in a 58 cell window keeps the TUI running.
+func TestOverviewToConnectionsNarrowDoesNotCrash(t *testing.T) {
+	m := newTableModel(t, 58)
+	openSectionByName(t, m, sectionConnections)
+	assertViewFits(t, screenOf(m), 58, m.termHeight)
 }

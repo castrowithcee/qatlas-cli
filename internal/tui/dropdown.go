@@ -54,6 +54,12 @@ func dropdownWidth(label, value string) int {
 	return lipgloss.Width(dropdownText(label, value, 1<<20))
 }
 
+// dropdownMinWidth is the narrowest a field is drawn: dropdownText always keeps one cell for the value, so
+// planning must not cut a field below it. A field whose whole value is shorter stays that short.
+func dropdownMinWidth(label, value string) int {
+	return min(dropdownWidth(label, value), lipgloss.Width(dropdownText(label, "x", 0)))
+}
+
 // searchFieldMin is the narrowest search field worth drawing.
 const searchFieldMin = 14
 
