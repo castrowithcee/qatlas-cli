@@ -193,7 +193,7 @@ func (m *Model) barLayout(width int) (string, []barPart, string) {
 		for total > budget {
 			widest := -1
 			for i := range widths {
-				if widths[i] > dropdownWidth(labels[i], "") && (widest < 0 || widths[i] > widths[widest]) {
+				if widths[i] > dropdownMinWidth(labels[i], values[i]) && (widest < 0 || widths[i] > widths[widest]) {
 					widest = i
 				}
 			}
@@ -221,7 +221,7 @@ func (m *Model) barLayout(width int) (string, []barPart, string) {
 			used += 2 + lipgloss.Width(field)
 		}
 		if searchWidth > 0 {
-			b.WriteString(strings.Repeat(" ", width-used-searchWidth) + searchField(searchContent(&m.list, searchWidth), searchWidth))
+			b.WriteString(strings.Repeat(" ", max(width-used-searchWidth, 0)) + searchField(searchContent(&m.list, searchWidth), searchWidth))
 		}
 		return b.String(), parts
 	}
@@ -239,8 +239,8 @@ func (m *Model) barLayout(width int) (string, []barPart, string) {
 		return line, parts, ""
 	}
 	if focus >= 0 {
-		field := dropdownField(labels[focus], values[focus], true, width-2)
-		return barMarker(true) + field, []barPart{{focus, ansi.Strip(field)}}, ""
+		field := clipCells(dropdownField(labels[focus], values[focus], true, max(width-2, 1)), max(width-2, 0))
+		return clipCells(barMarker(true)+field, width), []barPart{{focus, ansi.Strip(field)}}, ""
 	}
 	if !idle {
 		return searchField(searchContent(&m.list, width), width), nil, ""
