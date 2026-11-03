@@ -243,10 +243,11 @@ func (m *Model) formRows(headings bool, entries []sectionEntry, only string) str
 			continue
 		}
 		var row string
+		focused := i == m.focus && !m.pagePreview()
 		if m.formBox {
-			row = m.boxedRow(i == m.focus, f, m.renderField(f, i == m.focus))
+			row = m.boxedRow(focused, f, m.renderField(f, focused))
 		} else {
-			row = m.flatRow(i == m.focus, f, m.renderField(f, i == m.focus))
+			row = m.flatRow(focused, f, m.renderField(f, focused))
 		}
 		if !f.readOnly {
 			y, index := m.formTop+strings.Count(b.String(), "\n"), i
@@ -256,7 +257,7 @@ func (m *Model) formRows(headings bool, entries []sectionEntry, only string) str
 		b.WriteString(row + "\n")
 		// A read-only field can never be the one focused, so its hint would never show; it explains
 		// itself in its own value instead (see renderField), the way a read-only tool list already does.
-		if i == m.focus && !f.readOnly {
+		if focused && !f.readOnly {
 			if hint := m.fieldHint(f); hint != "" {
 				line := m.hintLine(hint, m.moreBehind(f, hint))
 				m.hitInfoMark(line, m.formTop+strings.Count(b.String(), "\n"), m.formLeft, func() tea.Cmd {

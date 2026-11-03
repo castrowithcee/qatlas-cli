@@ -44,8 +44,8 @@ func TestVaultSectionInNavigation(t *testing.T) {
 }
 
 // Vault has no list between the tab line and its form: esc on the unchanged form returns directly to the
-// tab line in one step, the way esc on an unchanged list would for any other section, and 'n' is refused
-// with a reason rather than opening a broken, nameless form.
+// tab line in one step, the way esc on an unchanged list would for any other section, and 'n' opens nothing
+// rather than a broken, nameless form.
 func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 	m, _, _ := newModel(t)
 	openVaultSection(t, m)
@@ -56,8 +56,8 @@ func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 	}
 
 	press(t, m, "n")
-	if m.screen != screenNav || m.fail == "" {
-		t.Errorf("n on the Vault section = screen %v fail %q, want it refused with a reason", m.screen, m.fail)
+	if m.screen != screenNav {
+		t.Errorf("n on the Vault section = screen %v, want the tab line", m.screen)
 	}
 
 	// enter, down, and tab from the tab line all open the form directly, the same as they open a list's own

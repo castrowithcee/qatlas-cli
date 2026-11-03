@@ -247,8 +247,8 @@ func TestKeyCaptureEndsWhenTheResizeNoticeLeavesTheForm(t *testing.T) {
 
 	m, bound := setup()
 	press(t, m, "esc")
-	if m.keyCapture || m.screen == screenForm || len(m.fields) != 0 {
-		t.Fatalf("after esc in the notice: capture %v, screen %v, fields %d", m.keyCapture, m.screen, len(m.fields))
+	if m.keyCapture || m.screen != screenNav {
+		t.Fatalf("after esc in the notice: capture %v, screen %v", m.keyCapture, m.screen)
 	}
 	sizedModel(m, 100, 40)
 	press(t, m, "x")

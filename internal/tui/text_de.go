@@ -136,8 +136,6 @@ var textDE = map[textID]string{
 	tStatusFailed:                          "fehlgeschlagen",
 	tStatusRunning:                         "läuft",
 	tStatusCancelled:                       "abgebrochen",
-	tSettingsNotList:                       "%s ist eine Einstellungsseite, keine Liste; {enter} öffnet sie.",
-	tSettingsNotListShort:                  "Eine Einstellungsseite, keine Liste: {enter} öffnet sie.",
 	tExportHint:                            "{enter} schreibt eine Exportdatei",
 	tExportDetail:                          "{enter} wählt, was in eine Exportdatei geschrieben wird, wahlweise mit Secrets; braucht die Admin-Sitzung",
 	tImportHint:                            "{enter} zeigt eine Vorschau der Exportdatei",

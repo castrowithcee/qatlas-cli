@@ -1155,6 +1155,9 @@ func (m *Model) updateNav(key tea.KeyPressMsg) tea.Cmd {
 // flow as g, because it creates a missing service or credential on the way instead of sending the person to
 // the Library.
 func (m *Model) newEntry() tea.Cmd {
+	if m.section.isPage() {
+		return nil
+	}
 	if m.section == sectionConnections {
 		m.askSetupTemplate()
 		return nil
@@ -1190,6 +1193,13 @@ func (m *Model) focusList() tea.Cmd {
 	if m.section == sectionOverview {
 		m.screen = screenList
 		m.clearMessages()
+		return nil
+	}
+	if m.pagePreview() {
+		// The form is already what the preview shows; only the focus moves into it.
+		m.screen = screenForm
+		m.clearMessages()
+		m.applyFocus()
 		return nil
 	}
 	if m.section.isPage() {
@@ -1417,8 +1427,6 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		if len(m.cfg.Connections) == 0 {
 			return tr(tDefaultsNeedConnection, int(sectionConnections.area())+1)
 		}
-	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
-		return tr(tSettingsNotList, m.section.title())
 	case sectionApprovals:
 		return tr(tApprovalsNothingToAdd)
 	case sectionTokens:
@@ -2871,10 +2879,10 @@ func (m *Model) showList() tea.Cmd {
 	m.problems = problemState{}
 	if m.section.isPage() {
 		// A settings page has no list of its own, so "the list" a form or confirmation returns to is the
-		// level above it, the tab line; openSection is what opens the form directly on the way in (see
-		// enterPage).
+		// level above it, the tab line. Its form stays as the preview, rebuilt so it shows what is true now.
+		cmd := m.openPageForm()
 		m.focusNav()
-		return nil
+		return cmd
 	}
 	if m.section == sectionLogs {
 		m.screen = screenLogs
@@ -3917,7 +3925,11 @@ func (m *Model) workspaceView() string {
 // and however the screen was reached, so it never surprises with every hint at once. Validation errors and
 // warnings are not hints and stay visible regardless of focus.
 func (m *Model) editorView() string {
-	switch m.screen {
+	screen := m.screen
+	if m.pagePreview() {
+		screen = screenForm
+	}
+	switch screen {
 	case screenNav, screenList:
 		return m.listView()
 	case screenPicker:
@@ -3957,7 +3969,7 @@ func (m *Model) editorView() string {
 		return m.exportView()
 	}
 	var b strings.Builder
-	switch m.screen {
+	switch screen {
 	case screenForm:
 		noun := m.section.entry()
 		if m.isPayloadForm() {
@@ -4031,6 +4043,9 @@ func (m *Model) editorView() string {
 		if m.section == sectionTransfer || m.section == sectionUpdate || m.section == sectionSelftest {
 			keys = "{enter} run · {next} next field · " + leaveKeys
 		}
+		if m.pagePreview() {
+			keys = m.navKeys()
+		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(styles.warning, tr(tFormRemoveTheField, m.shownLabel(m.fields[m.focus].label))) + "\n")
 			keys = "{yes} remove · {no}/{back} keep · {command} cmds · {help} help"
@@ -4057,6 +4072,11 @@ func (m *Model) editorView() string {
 	}
 
 	b.WriteString(m.notes())
+	if m.pagePreview() {
+		// The free area of the workspace enters the form, as it does for the rows of a list.
+		top := m.workspaceTop()
+		m.addZone(0, top, m.width, top+m.height, m.zoneRows)
+	}
 	return b.String()
 }
 
@@ -4408,6 +4428,9 @@ func (m *Model) tableRoom() int {
 // out of the hint. Kept short enough to still wrap into two lines at the minimum terminal width.
 func (m *Model) navKeys() string {
 	keys := "{left}/{right} move · {down} open · {area} open · {new} new · {setup} setup · {command} cmds · {help} help · {quit} quit"
+	if m.section.isPage() {
+		keys = strings.Replace(keys, " · {new} new", "", 1)
+	}
 	if hint := m.vaultLockKeyHint(); hint != "" {
 		keys = strings.Replace(keys, " · {command}", " · "+hint+" · {command}", 1)
 	}
@@ -4801,8 +4824,6 @@ func (m *Model) emptyHelp() string {
 			return reason + tr(tDefaultsOptional)
 		}
 		return tr(tDefaultsEmpty)
-	case sectionVault, sectionGeneral, sectionTransfer, sectionUpdate, sectionSelftest:
-		return tr(tSettingsNotListShort)
 	case sectionApprovals:
 		_, unavailable := m.approvalsReport()
 		if unavailable != "" {
@@ -4825,7 +4846,7 @@ func (m *Model) emptyHelp() string {
 // focused one as fit. The hint of the focused row is one line, so rows farther away give way first.
 func (m *Model) fittedEditorView() string {
 	view := m.screenView()
-	if m.screen != screenForm || m.viewFits(view) {
+	if (m.screen != screenForm && !m.pagePreview()) || m.viewFits(view) {
 		return view
 	}
 	defer func() { m.window, m.formFlat = nil, false }()

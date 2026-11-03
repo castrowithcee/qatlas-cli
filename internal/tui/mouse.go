@@ -927,6 +927,11 @@ func (m *Model) hitLogs(head string, start, end int) {
 // clickSection is a click on a section of a form, in the list of sections or on its heading: the focus goes to
 // the first row of the section, as pgup and pgdown do.
 func (m *Model) clickSection(name string) tea.Cmd {
+	if m.pagePreview() {
+		m.screen = screenForm
+		m.clearMessages()
+		m.applyFocus()
+	}
 	if !m.formClickable() {
 		return nil
 	}
@@ -946,6 +951,15 @@ func (m *Model) formClickable() bool {
 // opens a choice, a list or the masked prompt of a secret it also does what enter does. A row that acts at
 // once (a vault action, the capture of a key) is only focused by the first click, and acts on the second.
 func (m *Model) clickField(i int) tea.Cmd {
+	if m.pagePreview() && i >= 0 && i < len(m.fields) && !m.fields[i].readOnly && !m.fields[i].hidden && !m.skipped(i) {
+		// From the preview a click only moves the focus into the form, to the row it hit.
+		m.screen = screenForm
+		m.clearMessages()
+		m.focus = i
+		m.applyFocus()
+		m.syncProfile()
+		return nil
+	}
 	if !m.formClickable() || i < 0 || i >= len(m.fields) {
 		return nil
 	}

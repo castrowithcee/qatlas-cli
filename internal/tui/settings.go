@@ -58,6 +58,12 @@ func (s section) pageTitle() string {
 	return s.title()
 }
 
+// pagePreview reports whether a settings page is chosen while the tab line keeps the focus: its form is
+// the preview, drawn without a focused row, and the first way into it only moves the focus there.
+func (m *Model) pagePreview() bool {
+	return m.screen == screenNav && m.section.isPage() && m.fields != nil
+}
+
 // openPageForm builds the form of the active settings page fresh, so it shows what is true now.
 func (m *Model) openPageForm() tea.Cmd {
 	if m.section == sectionVault {
