@@ -551,5 +551,6 @@ func customReportChangeOperations() []capability.Operation {
 		{Descriptor: customReportsUpdate, Handler: capability.Handler(invokeCustomReportsUpdate)},
 		{Descriptor: customReportsDuplicate, Handler: capability.Handler(invokeCustomReportsDuplicate)},
 		{Descriptor: customReportsPause, Handler: capability.Handler(invokeCustomReportsPause)},
+		{Descriptor: customReportsDelete, Handler: capability.Handler(invokeCustomReportsDelete)},
 	}
 }

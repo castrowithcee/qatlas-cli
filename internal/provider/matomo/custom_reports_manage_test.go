@@ -18,14 +18,19 @@ import (
 )
 
 // Assumptions, as the CustomReports reference gives no example for the write methods: addCustomReport answers the
-// ID of the new report (bare or as {"value":N}), updateCustomReport, pauseCustomReport, and resumeCustomReport
-// answer the generic success form {"result":"success","message":"ok"}, and duplicateCustomReport answers an
+// ID of the new report (bare or as {"value":N}), updateCustomReport, pauseCustomReport, resumeCustomReport, and
+// deleteCustomReport answer the generic success form {"result":"success","message":"ok"}, and duplicateCustomReport answers an
 // object whose form is only described in words, here with a member success and the ID of the new report.
 const customReportConnections = `
   cr-writer: {service: matomo, credential: token, effects: [read, create, update]}
   cr-writer-one: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1]}
   cr-writer-two: {service: matomo, credential: token, effects: [read, create, update], targets: [site/2]}
   cr-writer-both: {service: matomo, credential: token, effects: [read, create, update], targets: [site/1, site/2]}
+  cr-deleter: {service: matomo, credential: token, tools: [matomo.custom-reports.delete]}
+  cr-deleter-one: {service: matomo, credential: token, tools: [matomo.custom-reports.delete], targets: [site/1]}
+  cr-deleter-two: {service: matomo, credential: token, tools: [matomo.custom-reports.delete], targets: [site/2]}
+  cr-deleter-both: {service: matomo, credential: token, tools: [matomo.custom-reports.delete], targets: [site/1, site/2]}
+  cr-effects-delete: {service: matomo, credential: token, effects: [read, create, update, delete]}
 `
 
 func newCustomReportChangeEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
@@ -42,12 +47,21 @@ func newCustomReportChangeEnvironment(t *testing.T, calls *[]call, handler func(
 	return &environment{cfg: cfg, core: application.New(reg, cfg, resolver(red, &reads), red), red: red, reads: &reads}
 }
 
+// crConn names the connection that offers the tool: the listed-only delete tool needs one with a tools list.
+func crConn(tool, writer string) string {
+	if tool == "matomo.custom-reports.delete" {
+		return strings.Replace(writer, "cr-writer", "cr-deleter", 1)
+	}
+	return writer
+}
+
 func customReportChangeAnswers(extra answers) answers {
 	return customReportAnswers(with(answers{
 		"CustomReports.addCustomReport":       fixed(`{"value":15}`),
 		"CustomReports.updateCustomReport":    fixed(`{"result":"success","message":"ok"}`),
 		"CustomReports.duplicateCustomReport": fixed(`{"success":true,"idcustomreport":16}`),
 		"CustomReports.pauseCustomReport":     fixed(`{"result":"success","message":"ok"}`),
+		"CustomReports.deleteCustomReport":    fixed(`{"result":"success","message":"ok"}`),
 		"CustomReports.resumeCustomReport":    fixed(`{"result":"success","message":"ok"}`),
 	}, extra))
 }
@@ -65,6 +79,8 @@ var customReportChanges = []struct{ tool, arguments, method, reads string }{
 		"CustomReports.pauseCustomReport", "CustomReports.getConfiguredReport"},
 	{"matomo.custom-reports.pause", `{"idSite":1,"idCustomReport":1,"resume":true}`,
 		"CustomReports.resumeCustomReport", "CustomReports.getConfiguredReport"},
+	{"matomo.custom-reports.delete", `{"idSite":1,"idCustomReport":1}`,
+		"CustomReports.deleteCustomReport", "CustomReports.getConfiguredReport"},
 }
 
 func TestCustomReportChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
@@ -78,6 +94,7 @@ func TestCustomReportChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		"matomo.custom-reports.update":    {capability.EffectUpdate, capability.IdempotencyIdempotent},
 		"matomo.custom-reports.duplicate": {capability.EffectCreate, capability.IdempotencyNonIdempotent},
 		"matomo.custom-reports.pause":     {capability.EffectUpdate, capability.IdempotencyIdempotent},
+		"matomo.custom-reports.delete":    {capability.EffectDelete, capability.IdempotencyIdempotent},
 	}
 	for tool, w := range want {
 		d, _, found := reg.Lookup(tool)
@@ -86,7 +103,7 @@ func TestCustomReportChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
 		}
 		if d.Risk.Effect != w.effect || d.Risk.Idempotency != w.idempotency ||
 			d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld ||
-			d.Risk.DataSensitivity != customReportsSensitive || d.RequiresToolAllowList ||
+			d.Risk.DataSensitivity != customReportsSensitive || d.RequiresToolAllowList != (tool == "matomo.custom-reports.delete") ||
 			!strings.Contains(d.Description, "never repeated") {
 			t.Errorf("%s: risk = %+v, description %q", tool, d.Risk, d.Description)
 		}
@@ -103,7 +120,7 @@ func TestCustomReportChangeToolsAreRegisteredWithTheirRisk(t *testing.T) {
 			}
 		}
 	}
-	for _, other := range []string{"matomo.custom-reports.delete", "matomo.custom-reports.resume", "matomo.custom-metrics.add"} {
+	for _, other := range []string{"matomo.custom-reports.resume", "matomo.custom-metrics.add"} {
 		if _, _, found := reg.Lookup(other); found {
 			t.Errorf("%s is offered", other)
 		}
@@ -153,12 +170,14 @@ func TestCustomReportChangesSendOneRequestWithTheGivenParametersOnly(t *testing.
 			map[string]string{"idSite": "1", "idCustomReport": "1"}, `{"idCustomReport":1,"idSite":1,"paused":true}`},
 		{"matomo.custom-reports.pause", `{"idSite":1,"idCustomReport":1,"resume":true}`, "CustomReports.resumeCustomReport",
 			map[string]string{"idSite": "1", "idCustomReport": "1"}, `{"idCustomReport":1,"idSite":1,"paused":false}`},
+		{"matomo.custom-reports.delete", `{"idSite":1,"idCustomReport":1}`, "CustomReports.deleteCustomReport",
+			map[string]string{"idSite": "1", "idCustomReport": "1"}, `{"deleted":true,"idCustomReport":1,"idSite":1}`},
 	} {
 		calls = nil
-		if _, err := env.invoke(tc.tool, "cr-writer-both", tc.arguments); err == nil || !strings.Contains(err.Error(), "confirm") || len(calls) != 0 {
+		if _, err := env.invoke(tc.tool, crConn(tc.tool, "cr-writer-both"), tc.arguments); err == nil || !strings.Contains(err.Error(), "confirm") || len(calls) != 0 {
 			t.Fatalf("%s without confirm: err = %v, requests = %d", tc.tool, err, len(calls))
 		}
-		result, err := env.change(tc.tool, "cr-writer-both", tc.arguments)
+		result, err := env.change(tc.tool, crConn(tc.tool, "cr-writer-both"), tc.arguments)
 		if err != nil || result != tc.result {
 			t.Fatalf("%s %s: result = %s, err = %v", tc.tool, tc.arguments, result, err)
 		}
@@ -245,9 +264,15 @@ func TestCustomReportChangeRefusesBeforeSecretAndRequest(t *testing.T) {
 		{"matomo.custom-reports.pause", "cr-writer", `{"idSite":1}`},
 		{"matomo.custom-reports.pause", "cr-writer", `{"idSite":1,"idCustomReport":0}`},
 		{"matomo.custom-reports.pause", "cr-writer", `{"idSite":1,"idCustomReport":1,"resume":"yes"}`},
+		{"matomo.custom-reports.delete", "cr-writer-two", `{"idSite":1,"idCustomReport":1}`},
+		{"matomo.custom-reports.delete", "cr-writer-both", `{"idCustomReport":1}`},
+		{"matomo.custom-reports.delete", "cr-writer", `{"idSite":1}`},
+		{"matomo.custom-reports.delete", "cr-writer", `{"idSite":1,"idCustomReport":0}`},
+		{"matomo.custom-reports.delete", "cr-writer", `{"idSite":1,"idCustomReport":2147483648}`},
+		{"matomo.custom-reports.delete", "cr-writer", `{"idSite":1,"idCustomReport":1,"idSite2":3}`},
 		{"matomo.custom-reports.pause", "cr-writer", `{"idSite":1,"idCustomReport":1,"method":"CustomReports.deleteCustomReport"}`},
 	} {
-		_, err := env.change(c.tool, c.connection, c.arguments)
+		_, err := env.change(c.tool, crConn(c.tool, c.connection), c.arguments)
 		if err == nil {
 			t.Errorf("%s %s %s was accepted", c.tool, c.connection, c.arguments)
 		} else if strings.Contains(err.Error(), "site/") || strings.Contains(err.Error(), "idSite=1") ||
@@ -272,7 +297,7 @@ func TestCustomReportChangeRefusesAReportOfAnotherWebsiteAfterOneReadWithoutMuta
 		for _, id := range []string{"50", "51", "52", "53", "99"} {
 			calls = nil
 			arguments := strings.Replace(c.arguments, `"idCustomReport":1`, `"idCustomReport":`+id, 1)
-			_, err := env.change(c.tool, "cr-writer-both", arguments)
+			_, err := env.change(c.tool, crConn(c.tool, "cr-writer-both"), arguments)
 			if err == nil || classOf(err) != provider.ClassNotFound && classOf(err) != provider.ClassInvalidResponse ||
 				countMethod(calls, c.method) != 0 || countMethod(calls, c.reads) != 1 {
 				t.Errorf("%s report %s: requests = %s, err = %v", c.tool, id, methods(calls), err)
@@ -285,7 +310,7 @@ func TestCustomReportChangeRefusesAReportOfAnotherWebsiteAfterOneReadWithoutMuta
 		calls = nil
 		arguments := strings.Replace(strings.Replace(c.arguments, `"idCustomReport":1`, `"idCustomReport":8`, 1),
 			`"idDestinationSites":[1,2]`, `"idDestinationSites":[1]`, 1)
-		if _, err := env.change(c.tool, "cr-writer-one", arguments); err == nil || classOf(err) != provider.ClassNotFound ||
+		if _, err := env.change(c.tool, crConn(c.tool, "cr-writer-one"), arguments); err == nil || classOf(err) != provider.ClassNotFound ||
 			countMethod(calls, c.method) != 0 {
 			t.Errorf("%s spanning report: requests = %s, err = %v", c.tool, methods(calls), err)
 		}
@@ -296,7 +321,7 @@ func TestCustomReportChangeRequestsCarryTheBearerTokenOnlyInTheHeader(t *testing
 	var calls []call
 	env := newCustomReportChangeEnvironment(t, &calls, customReportChangeAnswers(nil).handler(t))
 	for _, c := range customReportChanges {
-		if _, err := env.change(c.tool, "cr-writer-both", c.arguments); err != nil {
+		if _, err := env.change(c.tool, crConn(c.tool, "cr-writer-both"), c.arguments); err != nil {
 			t.Fatalf("%s: %v", c.tool, err)
 		}
 	}
@@ -363,7 +388,7 @@ func TestCustomReportChangeMapsMatomoErrorsAndNeverRepeats(t *testing.T) {
 			clock := time.Now()
 			t.Cleanup(limiters.Replace(tokenValue, ratelimit.New(0, func() time.Time { return clock },
 				func(context.Context, time.Duration) error { return nil })))
-			_, err := env.change(c.tool, "cr-writer-both", c.arguments)
+			_, err := env.change(c.tool, crConn(c.tool, "cr-writer-both"), c.arguments)
 			if err == nil || strings.Contains(err.Error(), bodyCanary) || isUnsupported(err) != tc.unsupported ||
 				countMethod(calls, c.method) != 1 || strings.Contains(err.Error(), "never repeated") != tc.unclear ||
 				tc.class != "" && classOf(err) != tc.class {
@@ -396,9 +421,24 @@ func TestCustomReportChangeToolsAreUnsupportedWithoutThePluginAndSendNothingFurt
 		env := newCustomReportChangeEnvironment(t, &calls, with(customReportChangeAnswers(nil), answers{
 			"API.isPluginActivated": fixed(`{"value":false}`),
 		}).handler(t))
-		_, err := env.change(c.tool, "cr-writer-both", c.arguments)
+		_, err := env.change(c.tool, crConn(c.tool, "cr-writer-both"), c.arguments)
 		if !isUnsupported(err) || methods(calls) != "API.getMatomoVersion API.isPluginActivated" {
 			t.Errorf("%s: err = %v, requests = %s", c.tool, err, methods(calls))
 		}
+	}
+}
+
+func TestCustomReportDeleteIsReachableOnlyThroughTheToolsList(t *testing.T) {
+	const tool = "matomo.custom-reports.delete"
+	var calls []call
+	env := newCustomReportChangeEnvironment(t, &calls, customReportChangeAnswers(nil).handler(t))
+	if _, err := env.change(tool, "cr-effects-delete", `{"idSite":1,"idCustomReport":1}`); err == nil || len(calls) != 0 || *env.reads != 0 {
+		t.Errorf("through effects only: err = %v, requests = %d", err, len(calls))
+	}
+	if _, err := env.change(tool, "cr-deleter", `{"idSite":1,"idCustomReport":1}`); err != nil {
+		t.Errorf("through the tools list: %v", err)
+	}
+	if countMethod(calls, "CustomReports.deleteCustomReport") != 1 || countMethod(calls, "CustomReports.getConfiguredReport") != 1 {
+		t.Errorf("requests = %s", methods(calls))
 	}
 }
