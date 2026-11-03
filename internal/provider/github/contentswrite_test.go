@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -42,6 +43,9 @@ type fakeContentsWrite struct {
 	// instead of creating the object, to test how github.files.push reports a failure after some objects
 	// were already created, for both a permission refusal and an ambiguous server error.
 	failGitDataStatus int
+	// refDelete, when set, answers a DELETE of git/refs/heads/ instead of the default behavior (204 for a
+	// known branch, 422 Reference does not exist otherwise).
+	refDelete func(rw http.ResponseWriter)
 }
 
 func serveContentsWrite(t *testing.T) (*fakeGitHub, *fakeContentsWrite, string) {
@@ -128,6 +132,19 @@ func (w *fakeContentsWrite) route(rw http.ResponseWriter, r *http.Request) bool 
 		if branch == w.raceBranch {
 			w.refs[branch] = w.raceSHA
 		}
+	case r.Method == http.MethodDelete && strings.HasPrefix(rest, "git/refs/heads/"):
+		branch, _ := url.PathUnescape(strings.TrimPrefix(rest, "git/refs/heads/"))
+		if w.refDelete != nil {
+			w.refDelete(rw)
+			return true
+		}
+		if _, exists := w.refs[branch]; !exists {
+			rw.WriteHeader(http.StatusUnprocessableEntity)
+			fmt.Fprint(rw, `{"message":"Reference does not exist"}`)
+			return true
+		}
+		delete(w.refs, branch)
+		rw.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodPatch && strings.HasPrefix(rest, "git/refs/heads/"):
 		branch := strings.TrimPrefix(rest, "git/refs/heads/")
 		sha, _ := body["sha"].(string)
@@ -274,7 +291,7 @@ func contentsWriteConfig(base string) *config.Config {
 	repo.Effects = config.Effects()
 	cfg.Connections["repo"] = repo
 	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
-		Effects: config.Effects(), Tools: []string{contentsDelete.ID, filesPush.ID}}
+		Effects: config.Effects(), Tools: []string{contentsDelete.ID, filesPush.ID, branchesDelete.ID}}
 	cfg.Connections["project-only"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
 		Effects: config.Effects()}
 	return cfg
