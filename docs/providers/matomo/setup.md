@@ -202,6 +202,12 @@ Plugin `CustomAlerts`.
 | --- | --- |
 | Roll-ups (premium plugin `RollUpReporting`, licence needed): list, create, change | Super User and target `instance` with websites; the roll-up and its source websites must lie inside the targets. Stated by Matomo's public demo for list and change, expected for create |
 
+### Activity log
+
+| Tools | Matomo right |
+| --- | --- |
+| Activity log (premium plugin `ActivityLog`, licence needed): read and count entries, list activity types | Target `instance`. Matomo shows Super Users all entries and other users only their own, and sets a minimum level in the instance; the level is not checked beforehand and not stated by the reference |
+
 ### Channel attribution
 
 | Tools | Matomo right |
