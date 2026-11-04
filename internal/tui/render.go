@@ -236,6 +236,8 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = emptyValue(wordNone)
 	case f.kind == fieldChoice:
 		value = valueText(f.label, value)
+	case f.label == "id" && f.readOnly && value == "":
+		value = styles.hint.Render(f.hint)
 	case f.kind == fieldText && f.readOnly && f.hint != "":
 		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
 		// itself on its own row instead, the way a read-only tool list already does below.

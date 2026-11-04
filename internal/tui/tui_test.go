@@ -2156,6 +2156,10 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 		selectChoice(t, m, storageEnv)
 
 		for _, f := range m.fields {
+			if f.label == "id" {
+				// The id row of a new entry is a notice and takes no focus.
+				continue
+			}
 			focusField(t, m, f.label)
 			lines := formLines(m)
 			at := fieldLine(t, lines, f.label)
