@@ -26,7 +26,7 @@ To connect Matomo step by step, see [Set up Matomo](setup.md).
 A service needs `base_url`; there is no default, not even for Matomo Cloud. It is the address of the
 installation, `https://HOST[/PATH]`: an installation below a path is common, and a Matomo Cloud instance is
 `https://SUBDOMAIN.matomo.cloud`. Qatlas refuses any other form (no `https`, user information, query,
-fragment) before a secret is read, and `qatlas config validate` reports a missing address. A redirect is never
+fragment) before a secret is read, and `qconnect config validate` reports a missing address. A redirect is never
 followed. Every request is a `POST` to `<base_url>/index.php`.
 
 The credential provides `token`, a personal authentication token from Matomo under Personal, Security. Create it
@@ -59,7 +59,7 @@ Operating limits of the instance still apply and surface as authentication or pe
 - A Matomo Cloud subscription and payment data are not available through the instance API.
 - A premium plugin that is not installed, and every tool of a plugin that is not activated, is not available.
 
-A successful `qatlas connection test` reads the instance version, requires Matomo 5 or newer, and then reads
+A successful `qconnect connection test` reads the instance version, requires Matomo 5 or newer, and then reads
 each website the targets name once. It proves the token and those websites, not write rights or further
 methods.
 

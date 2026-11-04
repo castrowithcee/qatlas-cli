@@ -56,7 +56,7 @@ var deckAttachmentsUpload = capability.Descriptor{
 var deckAttachmentsDelete = capability.Descriptor{
 	ID: Provider + ".deck.attachments.delete", Version: 1, Title: "Delete a Nextcloud Deck card attachment",
 	Description: "Delete exactly one confirmed attachment of type deck_file of an active card of a bound Deck board; " +
-		"Deck keeps it as deleted, Qatlas does not restore it. Two reads precede exactly one request: the board " +
+		"Deck keeps it as deleted, Qatlas Connect does not restore it. Two reads precede exactly one request: the board " +
 		"stacks must show the card in the named stack and the attachment list of the card the attachment",
 	Tags: []string{"nextcloud", "deck", "cards", "attachments", "delete"}, Provider: Provider,
 	Risk: deckWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),

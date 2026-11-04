@@ -448,11 +448,11 @@ func TestFindAgentTokenOrder(t *testing.T) {
 	if value, source := find(env(nil)); value != "" || source != "" {
 		t.Errorf("without any token = %q from %q, want none", value, source)
 	}
-	homeFile := write(home, "QATLAS_AGENT_TOKEN=qat_home\n")
+	homeFile := write(home, "QCONNECT_AGENT_TOKEN=qat_home\n")
 	if value, source := find(env(nil)); value != "qat_home" || source != homeFile {
 		t.Errorf("with the home file alone = %q from %q, want the home token", value, source)
 	}
-	upper := write(filepath.Join(root, "repos"), "# comment\nOTHER=x\n QATLAS_AGENT_TOKEN = \"qat_repos\" \n")
+	upper := write(filepath.Join(root, "repos"), "# comment\nOTHER=x\n QCONNECT_AGENT_TOKEN = \"qat_repos\" \n")
 	if value, source := find(env(nil)); value != "qat_repos" || source != upper {
 		t.Errorf("with a file above = %q from %q, want the nearer one", value, source)
 	}
@@ -460,7 +460,7 @@ func TestFindAgentTokenOrder(t *testing.T) {
 	if value, source := find(env(nil)); value != "" || source != nearest {
 		t.Errorf("with a nearest file without the line = %q from %q, want none, decided there", value, source)
 	}
-	write(project, "QATLAS_AGENT_TOKEN=qat_project\n")
+	write(project, "QCONNECT_AGENT_TOKEN=qat_project\n")
 	if value, _ := find(env(nil)); value != "qat_project" {
 		t.Errorf("with the project file = %q, want the project token", value)
 	}
@@ -494,16 +494,16 @@ func TestFindAgentTokenLegacyPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	legacyHome := write(home, []string{"agent.env"}, "QATLAS_AGENT_TOKEN=qat_home_legacy\n")
+	legacyHome := write(home, []string{"agent.env"}, "QCONNECT_AGENT_TOKEN=qat_home_legacy\n")
 	if value, source, err := FindAgentToken(project, home, nil); err != nil || value != "qat_home_legacy" ||
 		source != legacyHome {
 		t.Errorf("legacy home file = %q from %q, %v, want it read", value, source, err)
 	}
-	legacyProject := write(project, []string{"agent.env"}, "QATLAS_AGENT_TOKEN=qat_project_legacy\n")
+	legacyProject := write(project, []string{"agent.env"}, "QCONNECT_AGENT_TOKEN=qat_project_legacy\n")
 	if value, source, _ := FindAgentToken(project, home, nil); value != "qat_project_legacy" || source != legacyProject {
 		t.Errorf("legacy project file = %q from %q, want the nearer legacy file", value, source)
 	}
-	current := write(project, []string{"connect", "agent.env"}, "QATLAS_AGENT_TOKEN=qat_project\n")
+	current := write(project, []string{"connect", "agent.env"}, "QCONNECT_AGENT_TOKEN=qat_project\n")
 	if value, source, _ := FindAgentToken(project, home, nil); value != "qat_project" || source != current {
 		t.Errorf("both files = %q from %q, want the current one", value, source)
 	}

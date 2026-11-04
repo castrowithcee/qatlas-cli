@@ -4,7 +4,7 @@
 // rows (Table), a heatmap of their days (Activity, activity.go), or the response sizes summed up per tool and
 // connection (Details; s toggles it, m shows the context cost of each MCP session instead); enter opens one
 // entry. Every row and the bar carry the status the hash chain and the check values give it, found by the same walk
-// 'qatlas vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
+// 'qconnect vault logs verify' makes (invokelog.VerifyLines) with the same checker. Reading and checking run as
 // a command, never on the event loop, and never ask for a passphrase: a locked vault leaves the check values
 // unchecked, which shows as unverified.
 package tui
@@ -359,7 +359,7 @@ type logsLoadedMsg struct {
 }
 
 // logVault is the vault whose logs directory the section reads: the run's own, or, for a run without one,
-// the vault beside the configuration, the same one 'qatlas vault logs verify' reads.
+// the vault beside the configuration, the same one 'qconnect vault logs verify' reads.
 func (m *Model) logVault() *vault.Vault {
 	if v := m.secrets.Vault(); v != nil {
 		return v
@@ -401,7 +401,7 @@ func (m *Model) loadLogs() tea.Cmd {
 // logUTCFileBounds selects every UTC day file that can overlap the chosen local days.
 func logUTCFileBounds(from, to string) (string, string) { return invokelog.UTCFileBounds(from, to) }
 
-// logChecker returns what checks the log's check values of v, the same way 'qatlas vault logs verify' does:
+// logChecker returns what checks the log's check values of v, the same way 'qconnect vault logs verify' does:
 // the key of a vault unlocked in this process; else a running vault process, which only ever answers
 // whether a check value matches; else nothing, since the editor never asks for the passphrase for this.
 // note says why there is no checker, and done clears a key this derived.

@@ -32,7 +32,7 @@ const (
 )
 
 const batchNote = "One to 60 records per call, sent as one request that is never repeated; Twenty may apply a batch " +
-	"in part, and Qatlas then reports an uncertain result instead of success. "
+	"in part, and Qatlas Connect then reports an uncertain result instead of success. "
 
 const batchIDsSchema = `{"type":"array","minItems":1,"maxItems":60,"uniqueItems":true,"items":` + recordIDSchema + `}`
 

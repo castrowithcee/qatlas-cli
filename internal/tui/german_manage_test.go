@@ -426,7 +426,7 @@ func updateGermanScreens() []germanScreen {
 			return m
 		}},
 		{"restart adopted with unlock", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 			m.adopt(&handoff{Version: handoffVersion, From: "v0.4.0", To: "v0.5.0", Unlocked: true})
 			return m

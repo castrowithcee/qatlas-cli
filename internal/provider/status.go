@@ -37,7 +37,7 @@ func ClassifyStatus(op string, status int, texts StatusTexts) *Error {
 		return &Error{Class: ClassTimeout, Op: op, Message: subject + " did not answer in time"}
 	case status >= 300 && status < 400:
 		return &Error{Class: ClassProviderError, Op: op,
-			Message: subject + " answered with a redirect, which Qatlas does not follow for this request"}
+			Message: subject + " answered with a redirect, which Qatlas Connect does not follow for this request"}
 	}
 	return &Error{Class: ClassProviderError, Op: op,
 		Message: subject + " rejected the operation (HTTP " + strconv.Itoa(status) + ")"}

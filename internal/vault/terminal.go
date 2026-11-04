@@ -15,7 +15,7 @@ import (
 // environment variable, or a file.
 //
 // It opens the terminal itself rather than reading the process's own standard input, so it still works
-// when standard input carries something else, such as the secret 'qatlas credential set' reads from a
+// when standard input carries something else, such as the secret 'qconnect credential set' reads from a
 // pipe. It reports ErrNoTerminal when the process is not interactive or no terminal can be opened for the
 // prompt, which is how a headless session, a CI job, and an agent are told apart from a person.
 func ReadPassphrase(prompt string) (string, error) {
@@ -37,7 +37,7 @@ func ReadPassphrase(prompt string) (string, error) {
 }
 
 // ReadConfirm asks a yes-or-no question on the controlling terminal and reads a plain, visible line back. It
-// is how commands such as 'qatlas vault migrate', 'credential delete' and 'vault token revoke' ask for the
+// is how commands such as 'qconnect vault migrate', 'credential delete' and 'vault token revoke' ask for the
 // explicit confirmation a destructive step needs ('vault decrypt' takes --confirm instead), kept apart from
 // ReadPassphrase because the answer is not a secret and is shown as typed. Only "y" or "yes", ignoring case
 // and surrounding space, counts as yes; anything else, including an empty line, is no. It reports ErrNoTerminal exactly like ReadPassphrase when no terminal can be opened.

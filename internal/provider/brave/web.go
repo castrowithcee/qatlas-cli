@@ -88,10 +88,10 @@ var webSearch = descriptor("web", "search", "Search the Brave web",
 			"has type and query"},
 		{Name: "units", Description: "metric or imperial; Brave decides when omitted"},
 		{Name: "goggles", Description: "Up to 3 goggles that re-rank the results, each an https address of a " +
-			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas does not"},
+			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas Connect does not"},
 		{Name: "extra_snippets", Description: "Whether web results carry up to 5 further excerpts"},
 		{Name: "summary", Description: "True asks Brave for the summarizer key of the query, returned as " +
-			"summarizer.key and query.summary_key. Qatlas offers no tool that uses it"},
+			"summarizer.key and query.summary_key. Qatlas Connect offers no tool that uses it"},
 		{Name: "enable_rich_callback", Description: "True asks for rich results of queries that have them, " +
 			"returned as rich.hint.callback_key. Needs the Search plan"},
 		{Name: "include_fetch_metadata", Description: "Whether results carry fetch metadata such as " +

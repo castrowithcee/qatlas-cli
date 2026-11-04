@@ -1,5 +1,5 @@
 // Package vaultmigrate carries the entries of a plaintext credentials.yaml into the vault: the logic
-// 'qatlas vault migrate' and the TUI's own migrate action in the vault section both run, so a plan is built
+// 'qconnect vault migrate' and the TUI's own migrate action in the vault section both run, so a plan is built
 // and written to the vault, verified, and its switched credentials moved to type vault, exactly the same
 // way whichever one asks. Only how a passphrase is asked, how an existing entry is verified, and how the
 // outcome and the question to delete credentials.yaml are shown differ: the CLI asks on its terminal, the
@@ -70,7 +70,7 @@ func Plan(cfg *config.Config, secrets KeyringStore, v *vault.Vault, entries map[
 					return nil, nil, nil, getErr
 				}
 				if found {
-					// A previous run, or 'qatlas credential set', already put this role in the vault; the
+					// A previous run, or 'qconnect credential set', already put this role in the vault; the
 					// plaintext file's copy must not overwrite it.
 					continue
 				}

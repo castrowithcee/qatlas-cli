@@ -35,12 +35,12 @@ const layoutTemplates = `
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Title}} · qatlas web</title>
+<title>{{.Title}} · qconnect web</title>
 <link rel="stylesheet" href="` + stylesheetPath + `">
 </head>
 <body>
 <header class="site-header"><div class="site-header-inner">
-<p class="site-title">qatlas</p>
+<p class="site-title">qconnect</p>
 <nav class="site-nav" aria-label="Main"><ul>
 <li><a href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>Overview</a></li>
 <li><a href="/#credentials"{{if eq .Nav "credentials"}} aria-current="page"{{end}}>Credentials</a></li>

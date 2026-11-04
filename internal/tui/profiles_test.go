@@ -276,7 +276,7 @@ func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 // saves the explicit ticks as changed there.
 func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	reg := wikiRegistry(t)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	secrets, _ := newResolver(t, dir, nil)
 	m, err := buildModel(config.NewStore(path, reg), nil, secrets, nil)

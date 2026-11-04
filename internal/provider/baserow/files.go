@@ -650,7 +650,7 @@ func mediaStatusFailure(op string, status int) *provider.Error {
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Baserow did not serve the file in time"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Baserow answered with a redirect, which Qatlas does not follow for this request"}
+			Message: "Baserow answered with a redirect, which Qatlas Connect does not follow for this request"}
 	}
 	return &provider.Error{Class: provider.ClassProviderError, Op: op,
 		Message: "Baserow did not serve the file (HTTP " + strconv.Itoa(status) + ")"}

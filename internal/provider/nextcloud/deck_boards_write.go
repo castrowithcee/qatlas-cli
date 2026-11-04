@@ -89,7 +89,7 @@ var deckBoardsUpdate = capability.Descriptor{
 var deckBoardsDelete = capability.Descriptor{
 	ID: Provider + ".deck.boards.delete", Version: 1, Title: "Delete a Nextcloud Deck board",
 	Description: "Delete exactly one confirmed bound Deck board; the identity needs the manage right on the board. " +
-		"Deck deletes softly and keeps the board recoverable, but Qatlas offers no restore. One read-only " +
+		"Deck deletes softly and keeps the board recoverable, but Qatlas Connect offers no restore. One read-only " +
 		"pre-check precedes exactly one request",
 	Tags: []string{"nextcloud", "deck", "boards", "delete"}, Provider: Provider,
 	Risk: deckWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),

@@ -296,7 +296,7 @@ func organizationSearchScope(allowed allowlist) (string, error) {
 
 var searchTermsArgument = capability.Argument{Name: "terms", Required: true, Description: "Search terms and " +
 	"GitHub qualifiers, such as language:go or is:merged; a connection whose targets narrow the search " +
-	"refuses a repo:, org:, user:, or owner: qualifier here, since Qatlas already adds the one the targets " +
+	"refuses a repo:, org:, user:, or owner: qualifier here, since Qatlas Connect already adds the one the targets " +
 	"allow, and refuses the OR operator and parentheses, since either could widen or rearrange it; a negated " +
 	"qualifier, such as -repo:, stays allowed; a connection that only excludes forces no qualifier, filters " +
 	"out excluded rows itself, allows OR and parentheses, and refuses a positive qualifier naming an excluded " +

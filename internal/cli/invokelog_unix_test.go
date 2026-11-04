@@ -166,8 +166,8 @@ func TestInvokeLogFallsBackOnAnOldVaultProcess(t *testing.T) {
 	}
 
 	code, _, stderr := runWithInput(t, &Options{}, "", "invoke", "bookstack.pages.nope", "--config", configIn(dir))
-	if code == exitOK || !strings.HasPrefix(stderr, "qatlas: unknown-operation") ||
-		!strings.Contains(stderr, "qatlas: warning: the invocation log entry was written without a check value") {
+	if code == exitOK || !strings.HasPrefix(stderr, "qconnect: unknown-operation") ||
+		!strings.Contains(stderr, "qconnect: warning: the invocation log entry was written without a check value") {
 		t.Fatalf("invoke: exit %d, stderr %q, want the invoke's own error and the warning", code, stderr)
 	}
 	entries, _ := logEntries(t, dir)

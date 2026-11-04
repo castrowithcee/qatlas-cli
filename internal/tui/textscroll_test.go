@@ -29,7 +29,7 @@ func TestTheWheelScrollsEveryTextAreaByThreeLines(t *testing.T) {
 			return m, &m.help
 		}, nil},
 		{"approval detail", func(t *testing.T) (*Model, *textScroll) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store, _, _ := newApprovalFixture(t, dir, "correct horse battery staple")
 			m := openApprovalModel(t, store, dir)
 			m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})

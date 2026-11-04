@@ -12,7 +12,7 @@ import (
 )
 
 // writeLegacyCredentialsYAML writes several credentials, each with several roles, directly into a plaintext
-// credentials.yaml, the way an earlier version of qatlas left one behind. Nothing in this build writes such
+// credentials.yaml, the way an earlier version of qconnect left one behind. Nothing in this build writes such
 // a file any more; this stands in for that.
 func writeLegacyCredentialsYAML(t *testing.T, dir string, entries map[string]map[string]string) {
 	t.Helper()
@@ -35,7 +35,7 @@ func writeLegacyCredentialsYAML(t *testing.T, dir string, entries map[string]map
 // The migrate action is offered only while credentials.yaml exists and holds an entry, and disappears once
 // it is gone.
 func TestVaultMigrateRowOffersOnlyWithLegacyEntries(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -63,7 +63,7 @@ func TestVaultMigrateRowOffersOnlyWithLegacyEntries(t *testing.T) {
 // switches to the vault; cancelling it writes nothing and keeps the file.
 func TestVaultMigrateOverviewCancelledWritesNothing(t *testing.T) {
 	const canaryID = "canary-migrate-cancel-71aa"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -111,7 +111,7 @@ func TestVaultMigrateOverviewCancelledWritesNothing(t *testing.T) {
 // deletes credentials.yaml; the combined result names what moved and what switched.
 func TestVaultMigrateWritesSwitchesAndDeletes(t *testing.T) {
 	const canaryID, canarySecret = "canary-migrate-id-88b2", "canary-migrate-secret-3d9f"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -184,7 +184,7 @@ func TestVaultMigrateWritesSwitchesAndDeletes(t *testing.T) {
 // delete question afterwards keeps credentials.yaml.
 func TestVaultMigrateWithALockedVaultAndDeclinedDelete(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	setup, _ := newVaultResolver(t, dir)
 	mustNoError(t, setup.SetVault("reader", "token-id", "canary-existing-9a1b",
@@ -258,7 +258,7 @@ func TestVaultMigrateWithALockedVaultAndDeclinedDelete(t *testing.T) {
 // passphrase-offer screen a locked vault uses (see TestVaultMigrateWithALockedVaultAndDeclinedDelete).
 func TestVaultMigrateAsksForAdminSessionWhenTheVaultIsAlreadyUnlocked(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	// The vault already holds an unrelated entry, encrypted, and this same resolver instance is the one the

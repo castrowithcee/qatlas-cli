@@ -110,7 +110,7 @@ target, or an entry named twice; an exclusion beats a target, and it removes no 
 The ownership check doubles the number of requests a single `files.*` call spends against the shared 60
 requests per minute budget. `infomaniak.drive.drives.list` needs none: Infomaniak answers it scoped to one
 `account_id`, and every returned drive is matched against it again before it is reported. A successful
-`qatlas connection test` reads one page of at most one drive of the bound account: it proves the token is
+`qconnect connection test` reads one page of at most one drive of the bound account: it proves the token is
 accepted and may list drives of that account, not that every bound drive exists or belongs to it.
 
 ## Choosing targets

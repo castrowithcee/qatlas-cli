@@ -48,7 +48,7 @@ reach. Excalidraw+ lets you rotate or soft-delete a key in the workspace setting
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `excalidraw-plus`, the service, a credential,
    the scope (targets and, if needed, exclusions), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the key as its `api-key` secret.
@@ -57,16 +57,16 @@ Without the guided setup, store the key on the command line. It is read from sta
 appear in the shell history:
 
 ```sh
-printf %s "$EXCALIDRAW_API_KEY" | qatlas credential set excalidraw-reader api-key
+printf %s "$EXCALIDRAW_API_KEY" | qconnect credential set excalidraw-reader api-key
 ```
 
 `excalidraw-reader` is the name of the credential in your configuration and `api-key` is its only secret. To replace
-a key that expired or was rotated, run the same command again with the new key. Run `qatlas config validate` to check
+a key that expired or was rotated, run the same command again with the new key. Run `qconnect config validate` to check
 the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Excalidraw+ accepted the key for
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Excalidraw+ accepted the key for
 reading one collection.
 
 **A passing test does not mean every tool works.** The test needs only the right to read collections. Excalidraw+
@@ -111,7 +111,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: this Excalidraw+ API key may not perform this operation; it needs the read right or the matching routes, and must not be expired
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | <Excalidraw+'s message>
 ```
 
@@ -128,8 +128,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Excalidraw+ rejected the API key | The key is wrong, expired, rotated, deleted, or belongs to another workspace than the one you mean | Create a new key ([Create a key](#create-a-key)) and store it again with `qatlas credential set <credential> api-key`. |
-| `auth`: the Excalidraw+ API key is unusable | The stored key holds characters a key cannot have, such as a line break or a space, or is too short | Store it again with `printf %s "$EXCALIDRAW_API_KEY" \| qatlas credential set <credential> api-key`. |
+| `auth`: Excalidraw+ rejected the API key | The key is wrong, expired, rotated, deleted, or belongs to another workspace than the one you mean | Create a new key ([Create a key](#create-a-key)) and store it again with `qconnect credential set <credential> api-key`. |
+| `auth`: the Excalidraw+ API key is unusable | The stored key holds characters a key cannot have, such as a line break or a space, or is too short | Store it again with `printf %s "$EXCALIDRAW_API_KEY" \| qconnect credential set <credential> api-key`. |
 | `permission`: this Excalidraw+ API key may not perform this operation ... | The key lacks the right or the route for this tool, or is expired | Find the tool group in [Rights per tool group](#rights-per-tool-group) and create a key with that right. Check the expiry date in the workspace settings. |
 | `permission` only for changes, the log, or users | The key can read but not do this | Create a key with a right that allows changes, or the route for this endpoint. |
 | `not-found`: Excalidraw+ does not hold this resource or does not show it to this key | The collection or scene does not exist, is in the trash, or the key's workspace or routes do not cover it. Excalidraw+ answers all of these the same | Check the identifier. Then check that the key belongs to the workspace of that collection and that its routes cover it. |

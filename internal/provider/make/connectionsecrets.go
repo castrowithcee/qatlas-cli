@@ -64,7 +64,7 @@ var reservedConnectionFields = map[string]bool{"accountName": true, "accountType
 	"accountVisibility": true, "teamId": true}
 
 const connectionSecretNote = "Secret values are never an argument: secret_ref names a forward credential that " +
-	"this Qatlas connection releases, and Make receives its fields, under their own names, as part of the " +
+	"this Qatlas Connect connection releases, and Make receives its fields, under their own names, as part of the " +
 	"request body. A plain field with the same name as a field of that credential is refused. fields holds " +
 	"plain, non-secret values only"
 
@@ -89,7 +89,7 @@ func connectionSecretsRisk(effect capability.Effect, idempotency capability.Idem
 
 var connectionsCreate = capability.Descriptor{
 	ID: Provider + ".connections.create", Version: 1, Title: "Create a Make connection",
-	Description: "Create one connection (stored third-party credentials) in the bound team, always the Qatlas " +
+	Description: "Create one connection (stored third-party credentials) in the bound team, always the Qatlas Connect " +
 		"connection's own team. connection_type is Make's type of the app's connection (accountType), scopes " +
 		"are the optional scopes of that type, fields the plain properties the type needs, and the secret " +
 		"properties, such as a client secret or password, come from secret_ref. " + connectionSecretNote +
@@ -151,7 +151,7 @@ var connectionsSetData = capability.Descriptor{
 			"; the whole stored data is replaced, so it must supply all secret fields"}},
 	Fields: []capability.Field{
 		{Name: "connection_id", Description: "The connection that was addressed"},
-		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+		{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 		{Name: "changed", Description: "True when Make reports the data as changed; an OAuth connection still " +
 			"needs a reauthorization in Make's web interface"},
 	},

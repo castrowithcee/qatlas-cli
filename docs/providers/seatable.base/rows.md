@@ -42,7 +42,7 @@ SELECT * FROM `Table` WHERE `col` = ? AND `col2` IN (?, ?) ORDER BY `col` DESC L
 
 ```sh
 echo '{"table":"id:0000","filters":[{"column":"Name","op":"like","value":"Bike%"}],"sort":[{"column":"_ctime","direction":"desc"}],"limit":25}' \
-  | qatlas invoke seatable.base.rows.search --connection sales-all-tables
+  | qconnect invoke seatable.base.rows.search --connection sales-all-tables
 ```
 
 ## Batch rows and snapshots
@@ -67,7 +67,7 @@ names it.
   the snapshots of the base before repeating it.
 
 ```sh
-qatlas invoke seatable.base.snapshots.create --connection sales-rw --confirm
+qconnect invoke seatable.base.snapshots.create --connection sales-rw --confirm
 echo '{"table":"id:0000","rows":[{"row_id":"Qtf7xPmoRaiFyQPO1aENTj","values":{"Status":"closed"}}]}' \
-  | qatlas invoke seatable.base.rows.batch-update --connection sales-rw --confirm
+  | qconnect invoke seatable.base.rows.batch-update --connection sales-rw --confirm
 ```

@@ -4,7 +4,7 @@
 // renders the Report.
 //
 // Everything happens on synthetic fixtures below one fresh directory under a base directory the caller
-// names. The package never resolves QATLAS_CONFIG, QATLAS_CLI_HOME, or the home directory, and never reads
+// names. The package never resolves QCONNECT_CONFIG, QCONNECT_HOME, or the home directory, and never reads
 // or writes a real configuration, vault, or log.
 package selftest
 

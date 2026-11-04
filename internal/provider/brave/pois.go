@@ -72,7 +72,7 @@ var poisGet = descriptor("pois", "get", "Get Brave place details",
 	"Read the details of up to 20 places by the ids of a place search or of the locations of a web search: "+
 		"address, coordinates, opening hours, contact, rating, reviews, pictures, and an action. The ids expire "+
 		"after about 8 hours. Brave names neither the plan nor the cost of this endpoint, so the plan of the key "+
-		"decides whether it is reachable. A position is only used when given; Qatlas never derives one.",
+		"decides whether it is reachable. A position is only used when given; Qatlas Connect never derives one.",
 	[]string{"places", "local"},
 	`{"type":"object","properties":{"ids":`+placeIDsSchema+`,"search_lang":`+searchLangSchema+`,`+
 		`"ui_lang":`+uiLangSchema+`,"units":`+enumSchema(unitSystems)+`,`+

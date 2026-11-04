@@ -1221,10 +1221,10 @@ func InvokeLogWarning(err error) string {
 	case err == nil:
 		return ""
 	case errors.As(err, &unsigned):
-		return fmt.Sprintf("qatlas: warning: the invocation log entry was written without a check value: %v",
+		return fmt.Sprintf("qconnect: warning: the invocation log entry was written without a check value: %v",
 			unsigned.Err)
 	}
-	return fmt.Sprintf("qatlas: warning: could not write the invocation log: %v", err)
+	return fmt.Sprintf("qconnect: warning: could not write the invocation log: %v", err)
 }
 
 // writeAuditText appends one warning line to the audit writer, beside the JSON audit event a confirmed

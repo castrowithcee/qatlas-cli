@@ -98,7 +98,7 @@ func exchange(request *http.Request) (*http.Response, bool) {
 		return jsonResponse(http.StatusUnauthorized, `{"detail":"Invalid token."}`), true
 	}
 	return jsonResponse(http.StatusOK, fmt.Sprintf(
-		`{"app_name":"qatlas","access_token":%q,"dtable_uuid":%q,"dtable_server":%q,`+
+		`{"app_name":"qconnect","access_token":%q,"dtable_uuid":%q,"dtable_server":%q,`+
 			`"workspace_id":7,"dtable_name":"Sales","use_api_gateway":true}`,
 		base.token, base.base, "https://"+request.URL.Host+"/dtable-server/")), true
 }

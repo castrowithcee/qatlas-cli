@@ -68,7 +68,7 @@ var contactIDArgument = capability.Argument{Name: "id", Required: true,
 
 var contactsCreate = capability.Descriptor{
 	ID: Provider + ".contacts.create", Version: 1, Title: "Create an Infomaniak contact",
-	Description: "Create one new contact in an allow-listed address book from structured fields. Qatlas builds " +
+	Description: "Create one new contact in an allow-listed address book from structured fields. Qatlas Connect builds " +
 		"the vCard 3.0 itself and generates the UID and the resource id; nothing raw comes from an argument. One " +
 		"PUT with If-None-Match: * stores it, so no existing contact can be replaced. The request is never " +
 		"repeated after an unclear result",
@@ -94,7 +94,7 @@ var contactsUpdate = capability.Descriptor{
 	ID: Provider + ".contacts.update", Version: 1, Title: "Replace an Infomaniak contact",
 	Description: "Replace one contact of an allow-listed address book completely by structured fields, bound to " +
 		"its etag. The UID is kept, which needs one GET before the single PUT with If-Match. A contact that " +
-		"holds a photo, a group card, or any other property Qatlas does not model is refused and left unchanged. " +
+		"holds a photo, a group card, or any other property Qatlas Connect does not model is refused and left unchanged. " +
 		"A changed etag or a failed precondition changes nothing. The request is never repeated after an unclear " +
 		"result",
 	Tags: []string{"infomaniak", "dav", "contacts", "contact", "update"}, Provider: Provider,

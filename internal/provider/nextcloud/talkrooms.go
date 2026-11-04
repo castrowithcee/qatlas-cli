@@ -37,7 +37,7 @@ var inviteUserPattern = regexp.MustCompile(`^[A-Za-z0-9_.@'-]{1,64}$`)
 const (
 	messageTalkNeedsAllRooms = "creating a Talk conversation requires a connection bound to all Talk conversations (target talk)"
 	messageTalkNotModerator  = "this identity is not an owner or moderator of this Talk conversation"
-	messageTalkNotInternal   = "this Talk conversation is not an internal conversation that Qatlas manages"
+	messageTalkNotInternal   = "this Talk conversation is not an internal conversation that Qatlas Connect manages"
 	messageTalkNoUser        = "the user to invite does not exist or is not accessible to this identity"
 
 	uncertainRoomCreate = "; the conversation may have been created, check talk.rooms.list before repeating"

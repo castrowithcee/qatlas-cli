@@ -57,7 +57,7 @@ var (
 	attachmentsLink = capability.Descriptor{
 		ID: Provider + ".attachments.link", Version: 1, Title: "Attach a link to a BookStack page",
 		Description: "Add a link attachment to one page. The link must be an http or https URL of 1 to 2000 " +
-			"characters without user information; Qatlas never fetches it. Not idempotent: a repeated call adds " +
+			"characters without user information; Qatlas Connect never fetches it. Not idempotent: a repeated call adds " +
 			"another attachment. " + attachmentBindNote,
 		Tags: []string{"knowledge", "attachments", "bookstack", "create"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),

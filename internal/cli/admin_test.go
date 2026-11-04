@@ -21,7 +21,7 @@ import (
 // seam a real run leaves at vault.Interactive.
 //
 // It also keeps 'vault unlock' from starting a vault process: such a process is this test binary started
-// anew, which a test enables with withVaultProcess alone. The binary started that way runs as qatlas
+// anew, which a test enables with withVaultProcess alone. The binary started that way runs as qconnect
 // itself, selected by runAsQatlasEnv, instead of running the tests; started with vaultClientEnv, it is a
 // client of a vault process instead (see runVaultClient).
 func TestMain(m *testing.M) {
@@ -44,22 +44,22 @@ func TestMain(m *testing.M) {
 	lookupAgentToken = func() (string, string, error) { return "", "", nil }
 	// Every start may migrate the configuration it finds and an MCP server logs to the vault directory of
 	// its configuration, so no test may resolve the default one of the machine it runs on; a test that needs
-	// its own sets QATLAS_CONFIG or Options.Config.
+	// its own sets QCONNECT_CONFIG or Options.Config.
 	home, err := os.MkdirTemp("", "qatlas-cli-test-home-")
 	if err != nil {
 		panic(err)
 	}
 	_ = os.Setenv("HOME", home)
 	_ = os.Setenv("USERPROFILE", home)
-	_ = os.Unsetenv("QATLAS_CONFIG")
-	_ = os.Setenv("QATLAS_CLI_HOME", home)
+	_ = os.Unsetenv("QCONNECT_CONFIG")
+	_ = os.Setenv("QCONNECT_HOME", home)
 	code := m.Run()
 	removeSeeds()
 	_ = os.RemoveAll(home)
 	os.Exit(code)
 }
 
-// runAsQatlasEnv makes the test binary run as qatlas, the way a vault process it starts runs.
+// runAsQatlasEnv makes the test binary run as qconnect, the way a vault process it starts runs.
 const runAsQatlasEnv = "QATLAS_CLI_TEST_RUN_AS_QATLAS"
 
 // withInteractive overrides checkInteractive for the duration of a test.

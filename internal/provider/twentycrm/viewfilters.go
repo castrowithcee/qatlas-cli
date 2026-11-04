@@ -20,7 +20,7 @@ const (
 	errViewFilterField = "the field is not an active, non-system field of the object of this view with a type that " +
 		"a filter can be written for"
 	errViewFilterShape = "only a simple filter on a field, without sub field or relation target, and with an operand " +
-		"that Qatlas writes, can be changed"
+		"that Qatlas Connect writes, can be changed"
 	errViewFilterNothing = "operand or one value is required"
 
 	// viewFilterNote holds the table of operands and values; the provider document refers to it.
@@ -31,7 +31,7 @@ const (
 		"IS_BEFORE, IS_AFTER with date as YYYY-MM-DD; IS_RELATIVE with relative (direction PAST or NEXT with an " +
 		"amount, or THIS without; unit SECOND to YEAR); IS_IN_PAST, IS_IN_FUTURE, IS_TODAY without a value. " +
 		"DATE_TIME: IS with date as YYYY-MM-DD or a UTC timestamp ending in Z; IS_BEFORE, IS_AFTER with a UTC " +
-		"timestamp ending in Z. BOOLEAN: IS with flag. Qatlas writes the value itself from exactly one of these " +
+		"timestamp ending in Z. BOOLEAN: IS with flag. Qatlas Connect writes the value itself from exactly one of these " +
 		"typed arguments. Filter groups, relation filters, and sub fields of composite fields are not supported. "
 )
 
@@ -59,7 +59,7 @@ var viewFilterFields = []capability.Field{
 	{Name: "field_id", Description: "The field the filter is on"},
 	{Name: "field", Description: "API name of the field, untrusted data"},
 	{Name: "operand", Description: "The operand of the filter"},
-	{Name: "value", Description: "The value Qatlas wrote, when it wrote one"},
+	{Name: "value", Description: "The value Qatlas Connect wrote, when it wrote one"},
 }
 
 var viewFilterValueArguments = []capability.Argument{
@@ -98,7 +98,7 @@ var viewfiltersUpdate = capability.Descriptor{
 	ID: Provider + ".view-filters.update", Version: 1, Title: "Update a filter of a Twenty CRM view",
 	Description: "Change the operand and the value of one simple filter of a view of the Twenty workspace of a " +
 		"connection; the field of the filter does not change. A filter on a sub field or a relation, and a filter " +
-		"with an operand Qatlas does not write, is refused. A valued operand always needs its value, also when " +
+		"with an operand Qatlas Connect does not write, is refused. A valued operand always needs its value, also when " +
 		"only the operand changes; without an operand the filter keeps its operand. " + viewFilterNote + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "filters", "update"},
 	Risk:     viewWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),

@@ -63,7 +63,7 @@ tools that change data off connections that do not need them.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `infomaniak.chat`, the service, a credential,
    the scope (targets: one or more teams, optionally channels), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
@@ -72,16 +72,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$KCHAT_TOKEN" | qatlas credential set kchat-bot token
+printf %s "$KCHAT_TOKEN" | qconnect credential set kchat-bot token
 ```
 
 `kchat-bot` is the name of the credential in your configuration and `token` is its only secret. To replace a token
-that expired or was revoked, run the same command again with the new token. Run `qatlas config validate` to check
+that expired or was revoked, run the same command again with the new token. Run `qconnect config validate` to check
 the configuration file, including the shape of the service address. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means kChat accepted the token and
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means kChat accepted the token and
 let it read its own list of teams.
 
 **A passing test does not mean every tool works.** It checks neither the teams and channels in the targets nor any
@@ -216,7 +216,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: this kChat token may not perform this operation; check its rights on the team or channel in kChat
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | <error id>: <kChat's message>
 ```
 
@@ -233,8 +233,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: kChat rejected the token | The token is wrong, expired, revoked, deactivated, or for another kChat instance | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. Check that the service address names the team the token belongs to. |
-| `auth`: the kChat token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$KCHAT_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: kChat rejected the token | The token is wrong, expired, revoked, deactivated, or for another kChat instance | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. Check that the service address names the team the token belongs to. |
+| `auth`: the kChat token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$KCHAT_TOKEN" \| qconnect credential set <credential> token`. |
 | `permission`: this kChat token may not perform this operation ... | The token lacks the scope, or its user lacks the permission for this tool | Check that an API token has the scope `kchat`. Then find the tool group in [Rights per tool group](#rights-per-tool-group), and ask a team or system administrator for the permission it names. |
 | `permission` when changing a channel, its members, or its roles | The user lacks the channel management permission | Ask a channel or team administrator for the permission of the row, for example `manage_public_channel_members` or `manage_channel_roles`. |
 | `permission` for webhooks or slash commands | The user may not manage integrations | Ask a team administrator for `manage_webhooks` or `manage_slash_commands`. |

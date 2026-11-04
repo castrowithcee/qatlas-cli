@@ -86,7 +86,7 @@ var answersAsk = func() capability.Descriptor {
 			"up to 50. Because the cost varies, only a connection that lists this tool in its tools offers it. "+
 			"The answer streams within one call: one that does not finish within 55 seconds ends as a timeout, "+
 			"may still be billed, and is never repeated. Research is limited to 50 seconds here, so longer "+
-			"research does not run through Qatlas, and citations and entities are not available with research.",
+			"research does not run through Qatlas Connect, and citations and entities are not available with research.",
 		[]string{"answers", "ai", "grounding"},
 		`{"type":"object","properties":{"question":{"type":"string","minLength":1,"maxLength":4000},`+
 			`"model":`+enumSchema(answersModels)+`,"search_context_size":`+enumSchema(answersContextSizes)+`,`+

@@ -22,7 +22,7 @@ var vaultHandoverPlatform = false
 var stopSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 // serveStreams returns the handover and the report a vault process inherits from StartProcess, its
-// standard input and output, or false when either is not a pipe: 'qatlas vault serve' run by hand at a
+// standard input and output, or false when either is not a pipe: 'qconnect vault serve' run by hand at a
 // console.
 func serveStreams() (handover, report *os.File, ok bool) {
 	if !isPipe(os.Stdin) || !isPipe(os.Stdout) {

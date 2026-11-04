@@ -17,8 +17,8 @@ import (
 // core before any provider I/O, so the tests need no server and reach no organization.
 func lexwareConfig(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	return writeConfig(t, `version: 4
 services:
   books:
@@ -194,7 +194,7 @@ func TestLexwareInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 			if code != exitUsage || stdout != "" {
 				t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
-			if !strings.Contains(stderr, "qatlas: "+tt.code+":") {
+			if !strings.Contains(stderr, "qconnect: "+tt.code+":") {
 				t.Errorf("stderr = %q, want the %s code", stderr, tt.code)
 			}
 			if reads.Load() != 0 {
@@ -211,11 +211,11 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"lexware","all":true}}}`,
+			`,"name":"qconnect.search","arguments":{"provider":"lexware","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"lexware.invoices.list","version":1}}}`,
+			`,"name":"qconnect.describe","arguments":{"operation":"lexware.invoices.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"lexware.invoices.get",` +
+			`,"name":"qconnect.invoke","arguments":{"operation":"lexware.invoices.get",` +
 			`"connection":"accounting","arguments":{"id":"not-a-uuid"}}}}`,
 	}, "\n") + "\n"
 
@@ -246,7 +246,7 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	mcpCode, _, _ := strings.Cut(invoke.Content[0].Text, ":")
 	code, _, cliStderr := runLexwareCLI(t, nil, `{"id":"not-a-uuid"}`,
 		"invoke", "lexware.invoices.get", "--connection", "accounting", "--config", path)
-	cliCode, _, _ := strings.Cut(strings.TrimPrefix(strings.SplitN(cliStderr, "\n", 2)[0], "qatlas: "), ":")
+	cliCode, _, _ := strings.Cut(strings.TrimPrefix(strings.SplitN(cliStderr, "\n", 2)[0], "qconnect: "), ":")
 	if code != exitUsage || mcpCode != cliCode || cliCode != "invalid-request" {
 		t.Fatalf("MCP code=%q CLI code=%q exit=%d", mcpCode, cliCode, code)
 	}

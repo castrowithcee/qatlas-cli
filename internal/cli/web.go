@@ -43,7 +43,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"encrypted vault, either the coupled browser's own masked passphrase form, or, in this terminal\n" +
 			"while it stays interactive, pressing enter and then typing the passphrase covertly, the same\n" +
 			"hidden way every other management command reads one. A right passphrase approves the coupled\n" +
-			"session for the admin session timeout of 'qatlas vault settings' (default 10m idle, renewed by\n" +
+			"session for the admin session timeout of 'qconnect vault settings' (default 10m idle, renewed by\n" +
 			"activity); a timeout of 0s approves exactly the next change and nothing beyond it. A vault with no\n" +
 			"passphrase at all needs\n" +
 			"no approval beyond coupling, and the page says so.\n\n" +
@@ -58,12 +58,12 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"masked, at least 4 characters, never shown or filled in again. The credential's page edits its\n" +
 			"description, replaces or removes fields and adds new ones; a connection's page and the guided\n" +
 			"setup tick which payload credentials it releases (forward_secrets). Saving a changed list never\n" +
-			"approves it: an approved connection stays open until 'qatlas vault approve' or the TUI's Approvals\n" +
+			"approves it: an approved connection stays open until 'qconnect vault approve' or the TUI's Approvals\n" +
 			"section approves it, and without an encrypted vault only that list limits the release.\n\n" +
 			"Saving a connection over an encrypted, unlocked vault approves that connection alone, by the same\n" +
 			"rule the TUI's own guided setup uses: it stays open instead, with a reason, only when it was\n" +
 			"already open for something its own form never showed. Unlike the TUI, this never sweeps and\n" +
-			"approves any other connection the save happened to newly open; those stay open and 'qatlas vault\n" +
+			"approves any other connection the save happened to newly open; those stay open and 'qconnect vault\n" +
 			"approve' or the TUI's Approvals section releases them. The result page then offers the same\n" +
 			"connection test the TUI runs, redacted the same way. This run allows no remote access. Ending the\n" +
 			"process, with a signal or otherwise, closes the listener and discards the session and any admin\n" +
@@ -100,11 +100,11 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			defer cancel()
 
 			url := server.URL()
-			fmt.Fprintf(c.ErrOrStderr(), "qatlas: open %s to couple this browser (valid once, expires soon)\n", url)
+			fmt.Fprintf(c.ErrOrStderr(), "qconnect: open %s to couple this browser (valid once, expires soon)\n", url)
 			if checkInteractive() {
 				if required, err := server.AdminPassphraseRequired(); err == nil && required {
 					fmt.Fprintln(c.ErrOrStderr(),
-						"qatlas: press enter here to approve the coupled browser with the vault passphrase")
+						"qconnect: press enter here to approve the coupled browser with the vault passphrase")
 				}
 			}
 			open := opts.Opener
@@ -112,7 +112,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				open = openBrowser
 			}
 			if err := open(url); err != nil {
-				fmt.Fprintln(c.ErrOrStderr(), "qatlas: could not open a browser automatically; use the URL above")
+				fmt.Fprintln(c.ErrOrStderr(), "qconnect: could not open a browser automatically; use the URL above")
 			}
 
 			go runTerminalAdmin(ctx, c.InOrStdin(), c.ErrOrStderr(), server)
@@ -122,7 +122,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 	}
 }
 
-// webSecrets returns the resolver 'qatlas web' reads its vault through. Like tuiSecrets (see
+// webSecrets returns the resolver 'qconnect web' reads its vault through. Like tuiSecrets (see
 // internal/cli/tui.go) it never lets the resolver's own cascade ask this terminal for a passphrase on its
 // own: this run's admin session, not an implicit prompt buried in credential resolution, is the one place
 // a vault passphrase is ever asked for here, on the coupled browser's own masked form or explicitly on this
@@ -157,27 +157,27 @@ func runTerminalAdmin(ctx context.Context, stdin io.Reader, stderr io.Writer, se
 			return
 		}
 		if !server.SessionCoupled() {
-			fmt.Fprintln(stderr, "qatlas: no browser is coupled yet; open the URL above first")
+			fmt.Fprintln(stderr, "qconnect: no browser is coupled yet; open the URL above first")
 			continue
 		}
 		if required, err := server.AdminPassphraseRequired(); err == nil && !required {
-			fmt.Fprintln(stderr, "qatlas: this vault has no passphrase; the coupled browser needs no approval")
+			fmt.Fprintln(stderr, "qconnect: this vault has no passphrase; the coupled browser needs no approval")
 			continue
 		}
 		passphrase, err := readVaultPassphrase("vault passphrase: ")
 		if err != nil {
-			fmt.Fprintln(stderr, "qatlas: could not read the passphrase on this terminal")
+			fmt.Fprintln(stderr, "qconnect: could not read the passphrase on this terminal")
 			continue
 		}
 		if err := server.VerifyAndGrantAdmin(passphrase); err != nil {
 			if errors.Is(err, vault.ErrWrongPassphrase) {
-				fmt.Fprintln(stderr, "qatlas: wrong passphrase")
+				fmt.Fprintln(stderr, "qconnect: wrong passphrase")
 			} else {
-				fmt.Fprintln(stderr, "qatlas: admin approval refused")
+				fmt.Fprintln(stderr, "qconnect: admin approval refused")
 			}
 			continue
 		}
-		fmt.Fprintln(stderr, "qatlas: admin approval granted to the coupled browser")
+		fmt.Fprintln(stderr, "qconnect: admin approval granted to the coupled browser")
 	}
 }
 

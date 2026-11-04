@@ -23,7 +23,7 @@ import (
 // process: unlocking the vault, through 'ctrl+l' or otherwise, still tries to hand it to one on Linux and macOS (see
 // startVaultProcess), and only a test that explicitly wants a real one, through withStartableVaultProcess in
 // vaultprocess_unix_test.go, replaces this stub for its own duration. Package cli's own TestMain
-// (internal/cli/admin_test.go) exists for the same reason, over 'qatlas vault unlock' itself.
+// (internal/cli/admin_test.go) exists for the same reason, over 'qconnect vault unlock' itself.
 //
 // It also shrinks vaultTickInterval: deliver (update_test.go) calls a command's function directly, which for
 // tea.Tick blocks for the interval, and never recurses past the message it produces (see deliver's own
@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 // unencryptedVaultModel builds an editor whose vault exists but was never given a passphrase.
 func unencryptedVaultModel(t *testing.T) *Model {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -81,11 +81,11 @@ func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 			}{
 				{"unencrypted", unencryptedVaultModel, "vault unencrypted"},
 				{"locked", func(t *testing.T) *Model {
-					m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+					m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 					return m
 				}, "vault locked"},
 				{"unlocked", func(t *testing.T) *Model {
-					m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+					m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 					return m
 				}, "vault unlocked"},
 			} {
@@ -114,7 +114,7 @@ func TestVaultHeaderThreeStatesAndNoVault(t *testing.T) {
 // window's own session starts, its remaining time rounded to minutes once it has, or that every change asks
 // again for vault.admin_timeout: 0.
 func TestVaultHeaderAdminAbbreviation(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 
 	if got := m.vaultHeaderText(); !strings.Contains(got, "admin off") {
 		t.Fatalf("vaultHeaderText() with no session = %q, want it to contain %q", got, "admin off")
@@ -141,7 +141,7 @@ func TestVaultHeaderAdminAbbreviation(t *testing.T) {
 // the safe admin session time 0, "admin: confirm each change", never a remaining time, since no session can
 // exist in this window without its own proof of the passphrase, and the stored time is unreadable until then.
 func TestVaultHeaderAdminAbbreviationWithOnlyTheVaultProcessUnlocked(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	m.vaultProcessUnlocked = true
 
 	// Locked in this window, the stored admin session time is unreadable and the safe 0 shows.
@@ -166,11 +166,11 @@ func TestVaultHeaderReadsWithoutColour(t *testing.T) {
 	}{
 		{"unencrypted", unencryptedVaultModel, "vault unencrypted"},
 		{"locked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			return m
 		}, "vault locked"},
 		{"unlocked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			return m
 		}, "vault unlocked"},
 	} {
@@ -210,7 +210,7 @@ func TestCtrlLUnlocksInListAndForm(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			want := tt.setup(t, m)
 
 			pump(t, m, "ctrl+l")
@@ -248,7 +248,7 @@ func TestCtrlLUnlocksInListAndForm(t *testing.T) {
 // An empty passphrase is refused without touching the vault at all, and esc cancels back to the screen
 // 'ctrl+l' was pressed from, leaving the vault locked.
 func TestCtrlLUnlockEmptyPassphraseAndCancel(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	openSectionByName(t, m, sectionServices)
 
 	pump(t, m, "ctrl+l")
@@ -272,7 +272,7 @@ func TestCtrlLUnlockEmptyPassphraseAndCancel(t *testing.T) {
 func TestCtrlLLocksWithConfirmation(t *testing.T) {
 	for _, key := range []string{"n", "esc"} {
 		t.Run("cancel with "+key, func(t *testing.T) {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			m.startAdminSession()
 			openSectionByName(t, m, sectionServices)
 
@@ -295,7 +295,7 @@ func TestCtrlLLocksWithConfirmation(t *testing.T) {
 	}
 
 	t.Run("y locks it", func(t *testing.T) {
-		m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+		m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 		m.startAdminSession()
 		openSectionByName(t, m, sectionServices)
 
@@ -322,7 +322,7 @@ func TestCtrlLLocksWithConfirmation(t *testing.T) {
 // itself, never the passphrase dialog; 'y' needs no passphrase, since there is no local key to unlock, and
 // still ends this window's admin session (none can exist here to begin with).
 func TestCtrlLLocksWhenOnlyTheVaultProcessHoldsItUnlocked(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	m.vaultProcessUnlocked = true
 	openSectionByName(t, m, sectionServices)
 
@@ -353,7 +353,7 @@ func TestCtrlLLocksWhenOnlyTheVaultProcessHoldsItUnlocked(t *testing.T) {
 // a plain unlock rather than admin.go's own "Admin passphrase needed to save" wording. The vault is locked,
 // so its stored admin session time is unreadable: the text names neither a duration nor "asks on every change".
 func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	openSectionByName(t, m, sectionServices)
 	pump(t, m, "ctrl+l")
 
@@ -369,8 +369,8 @@ func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
 // The key line of the tab line and the lists names ctrl+l for an encrypted vault, at every width, and leaves
 // it out where there is nothing to lock.
 func TestKeyLineNamesTheLockKey(t *testing.T) {
-	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
-	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
+	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	for _, width := range []int{40, 80, 160} {
 		for _, tt := range []struct {
 			name string
@@ -418,7 +418,7 @@ func TestCtrlLOnAnUnencryptedVault(t *testing.T) {
 // task's own requirement, exercised on the admin dialog itself (screenAdminAuth), a plain y/n confirmation
 // (screenConfirm), and the masked secret prompt (screenSecret).
 func TestCtrlLIsHarmlessDuringOtherDialogs(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	openSectionByName(t, m, sectionServices)
 	pressNew(t, m)
 	typeText(t, m, "wiki")
@@ -447,11 +447,11 @@ func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
 	}{
 		{"unencrypted", unencryptedVaultModel},
 		{"locked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			return m
 		}},
 		{"unlocked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			return m
 		}},
 	} {
@@ -472,7 +472,7 @@ func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
 // The header shows "vault unlocked" because a vault process elsewhere holds the vault open, while this
 // window itself cannot read the entry: the role row must say so instead of a bare "vault locked".
 func TestVaultRoleStateDoesNotContradictHeaderUnlockedByProcess(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 
 	if got := m.vaultRoleState("cred", "token"); got != stateVaultLocked {
 		t.Fatalf("role state with the vault locked everywhere = %q, want %q", got, stateVaultLocked)
@@ -494,7 +494,7 @@ func TestVaultRoleStateDoesNotContradictHeaderUnlockedByProcess(t *testing.T) {
 // A vault process with a hard unlock deadline adds it to the unlocked header; without one the header is
 // the plain text.
 func TestVaultHeaderShowsTheUnlockDeadline(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	m.vaultProcessUnlocked = true
 	if got := shown(m.vaultHeaderText()); strings.Contains(got, " until ") || !strings.Contains(got, "vault unlocked") {
 		t.Fatalf("header without a deadline = %q, want the plain unlocked text", got)

@@ -74,7 +74,7 @@ var placesSearch = descriptor("places", "search", "Search Brave places",
 		"and, where Brave found them, cities, countries, regions, neighborhoods, addresses, and streets. The ids "+
 		"of the places expire after about 8 hours and are the input of brave.pois.get and "+
 		"brave.poi-descriptions.get. Needs the Search plan of Brave, and every request is billed. A position is "+
-		"only used when given; Qatlas never derives one.",
+		"only used when given; Qatlas Connect never derives one.",
 	[]string{"places", "local"},
 	`{"type":"object","properties":{"q":{"type":"string","minLength":1,"maxLength":400},`+
 		`"latitude":{"type":"number","minimum":-90,"maximum":90},`+

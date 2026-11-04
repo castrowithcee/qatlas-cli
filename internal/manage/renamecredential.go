@@ -30,7 +30,7 @@ type CredentialPlan struct {
 	VaultEntry    bool
 	PendingWrites int
 	// EnvVars are the variables derived from the credential's name that can override its stored secrets; the
-	// credential reads them under their new names from now on. qatlas changes no environment.
+	// credential reads them under their new names from now on. qconnect changes no environment.
 	EnvVars []EnvRename
 	// Resumes says the rename finishes one that stopped before the configuration was saved: the vault holds
 	// the credential's entry under the new name already, or the system keyring holds a copy of its secrets
@@ -93,7 +93,7 @@ func (s *Service) planCredential(plan *RenamePlan, before *config.Config, approv
 		}
 		if len(roles) > 0 {
 			plan.Outside = append(plan.Outside, "environment variables named after the credential, which override "+
-				"its stored secrets: it reads them under its new name from now on, and qatlas changes "+
+				"its stored secrets: it reads them under its new name from now on, and qconnect changes "+
 				"no environment")
 		}
 	}
@@ -148,8 +148,8 @@ func (s *Service) planKeyring(plan *RenamePlan, roles []string) error {
 			switch {
 			case holds && name == plan.Old:
 				return &RenameRefusedError{fmt.Errorf("the unencrypted fallback file %s holds the %s secret of %s, "+
-					"which a rename cannot carry over; remove it with 'qatlas credential delete %s %s' and store it "+
-					"again with 'qatlas credential set %s %s' first", file.Path(), role, plan.Old, plan.Old, role,
+					"which a rename cannot carry over; remove it with 'qconnect credential delete %s %s' and store it "+
+					"again with 'qconnect credential set %s %s' first", file.Path(), role, plan.Old, plan.Old, role,
 					plan.Old, role)}
 			case holds:
 				return &RenameRefusedError{fmt.Errorf("the unencrypted fallback file %s holds a secret under the "+
@@ -281,7 +281,7 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 			if vault.FingerprintMatches(approved.Fingerprint, pair[1], own) {
 				return &RenameRefusedError{fmt.Errorf("the vault holds an approval of %s for the credential name "+
 					"%s that the rename would make valid again unseen; approve the connection as it is with "+
-					"'qatlas vault approve' first", reader.Connection, plan.New)}
+					"'qconnect vault approve' first", reader.Connection, plan.New)}
 			}
 			continue
 		}

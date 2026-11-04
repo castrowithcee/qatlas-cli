@@ -34,12 +34,12 @@ func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Co
 			"connections that can run them, and the number of connections configured for it at all.\n\n" +
 			"connections counts a connection when it offers at least one tool of the provider, so one whose\n" +
 			"effects offer none of its tools, or whose tools list is empty ('tools: []'), is left out of\n" +
-			"it while configured still counts it, and 'qatlas connections' still lists it. 'qatlas config\n" +
+			"it while configured still counts it, and 'qconnect connections' still lists it. 'qconnect config\n" +
 			"validate' warns about such a connection. A provider without any connection stays listed with\n" +
 			"zero. It is answered from the local configuration alone: no provider is contacted, no secret is\n" +
 			"read, and no URL or credential is published.\n\n" +
-			"The connections themselves, with what each one may do, are one 'qatlas connections' away, and\n" +
-			"the tools of one namespace one 'qatlas tools <provider>' away.\n\n" +
+			"The connections themselves, with what each one may do, are one 'qconnect connections' away, and\n" +
+			"the tools of one namespace one 'qconnect tools <provider>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON.",
 		Args: noArgs,
@@ -77,12 +77,12 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"discovery and invoke command, only when the working directory, or the root of the Git repository\n" +
 			"it lies in, is one of those directories or below one; a linked worktree also counts as its\n" +
 			"repository's main working tree. Elsewhere it is left out as if it were not configured, and naming\n" +
-			"it fails with unknown-connection. The paths are never published. 'qatlas help configuration'\n" +
+			"it fails with unknown-connection. The paths are never published. 'qconnect help configuration'\n" +
 			"explains them.\n\n" +
 			"While the vault is encrypted and locked, a connection whose credential is of type vault cannot\n" +
 			"be used, and every row gets a column unusable: vault-locked for such a connection, the code its\n" +
 			"invoke would end with, and empty for the others. Locked means that no vault process holds the\n" +
-			"vault unlocked; 'qatlas vault unlock' starts one. An encrypted vault also hands its secrets only\n" +
+			"vault unlocked; 'qconnect vault unlock' starts one. An encrypted vault also hands its secrets only\n" +
 			"to a connection a person approved as it is configured now; one that was never approved or changed\n" +
 			"since gets unusable: approval-required. Without such a connection the column is left out.\n\n" +
 			"A connection a person switched off, or whose active_until has passed, gets state: disabled, a column\n" +
@@ -91,7 +91,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"unsupported-capability and the reason connection-disabled.\n\n" +
 			"It is answered from the local configuration and the vault's state alone: no provider is\n" +
 			"contacted, no secret is read, and no passphrase is asked for. No URL, credential, target, or\n" +
-			"secret source is published. The tools one connection offers are one 'qatlas tools <provider>\n" +
+			"secret source is published. The tools one connection offers are one 'qconnect tools <provider>\n" +
 			"--connection <name>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON.",
@@ -104,7 +104,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			var provider string
 			if len(args) == 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
-					return &UsageError{fmt.Errorf("unknown provider %q%s; run 'qatlas providers' to list the "+
+					return &UsageError{fmt.Errorf("unknown provider %q%s; run 'qconnect providers' to list the "+
 						"providers", args[0], application.UnknownProviderHint(registry, args[0]))}
 				}
 				provider = args[0]
@@ -138,16 +138,16 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"colon where there is one, such as repository:OWNER/REPO; confirm is true for a tool that needs\n" +
 			"--confirm. target names the optional argument that picks the target, as name:form, only where an\n" +
 			"offering connection does not bind exactly one such target; it never shows a target value. Other\n" +
-			"optional arguments stay with 'qatlas describe'. connections names once, at the top,\n" +
+			"optional arguments stay with 'qconnect describe'. connections names once, at the top,\n" +
 			"every connection that offers one of the listed tools; an entry has its own connections, separated\n" +
 			"by spaces, only where fewer of them offer it, and none offers a tool that has a reason and no\n" +
 			"connections. All entries share one set of columns, so the listing is a table with a row per\n" +
 			"tool; a column that no entry uses is left out, and an empty value is \"\".\n\n" +
-			"The namespace argument is the provider prefix of the tool IDs; 'qatlas providers' lists the\n" +
+			"The namespace argument is the provider prefix of the tool IDs; 'qconnect providers' lists the\n" +
 			"namespaces. A provider that sorts its tools into groups answers with the groups instead of the\n" +
 			"tools when more than 50 tools remain after --connection, --all, and the group: one row per group\n" +
 			"with its ID, title, description, and the number of tools in it, sorted by group ID, and with\n" +
-			"--all also offered, the number of those some connection offers. 'qatlas tools <namespace>\n" +
+			"--all also offered, the number of those some connection offers. 'qconnect tools <namespace>\n" +
 			"<group>' lists the tools of one group in the usual form. --query always answers with tools, so\n" +
 			"it searches every group, and with a group it searches within it. A group that does not exist, or\n" +
 			"a group given for a provider without groups, is refused. --query answers the same form for a targeted search and may be used without a\n" +
@@ -183,10 +183,10 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"With --connection the reason is that connection's. Otherwise, where several connections refuse a\n" +
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
 			"connection-targets-outdated, connection-disabled, not-in-tools-list, requires-tool-allow-list,\n" +
-			"no-local-files, effect-not-permitted, outside-targets. 'qatlas tui' changes what a connection\n" +
+			"no-local-files, effect-not-permitted, outside-targets. 'qconnect tui' changes what a connection\n" +
 			"offers.\n\n" +
 			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
-			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
+			"connections that can run it, is one 'qconnect describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON. When no connection offers a listed tool, the list is empty and a note on stderr points to\n" +
 			"--all.",
@@ -203,7 +203,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			// answer the cascade exists to avoid. Naming the first step is more useful than that list.
 			if len(args) == 0 && query == "" {
 				return newSyntaxError(errors.New(
-					"tools needs a namespace or --query; run 'qatlas providers' to list the namespaces"))
+					"tools needs a namespace or --query; run 'qconnect providers' to list the namespaces"))
 			}
 			request := application.SearchRequest{Query: query, Connection: opts.Connection, All: all}
 			if len(args) == 2 {
@@ -211,7 +211,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			}
 			if len(args) >= 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
-					return &UsageError{fmt.Errorf("unknown tool namespace %q%s; run 'qatlas providers' to list "+
+					return &UsageError{fmt.Errorf("unknown tool namespace %q%s; run 'qconnect providers' to list "+
 						"the namespaces", args[0], application.UnknownProviderHint(registry, args[0]))}
 				}
 				request.Provider = args[0]
@@ -234,14 +234,14 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 				for _, group := range response.Groups {
 					total += group.Tools
 				}
-				fmt.Fprintf(c.ErrOrStderr(), "qatlas: %d tools in %d groups; 'qatlas tools %s <group>' lists one "+
+				fmt.Fprintf(c.ErrOrStderr(), "qconnect: %d tools in %d groups; 'qconnect tools %s <group>' lists one "+
 					"group, --query searches all\n", total, len(response.Groups), request.Provider)
 			}
 			if len(response.Tools) == 0 && len(response.Groups) == 0 && !all {
 				request.All = true
 				if every, err := core.Tools(request); err == nil && len(every.Tools) > 0 {
-					fmt.Fprintf(c.ErrOrStderr(), "qatlas: no connection offers any of the %d matching tools; "+
-						"--all lists them with the reason, 'qatlas connections' lists the connections\n",
+					fmt.Fprintf(c.ErrOrStderr(), "qconnect: no connection offers any of the %d matching tools; "+
+						"--all lists them with the reason, 'qconnect connections' lists the connections\n",
 						len(every.Tools))
 				}
 			}
@@ -278,7 +278,7 @@ func newDescribeCommand(opts *Options, registry *capability.Registry, use string
 			"schema as JSON Schema, and the argument and field metadata beside them. Invoke always validates the arguments against\n" +
 			"that complete input schema.\n\n" +
 			"With --connection it refuses a connection that does not offer the tool with\n" +
-			"unsupported-capability and the reason, as 'qatlas tools --all' names it.\n\n" +
+			"unsupported-capability and the reason, as 'qconnect tools --all' names it.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON.",
 		Args: exactlyOneArg("tool ID"),
@@ -332,13 +332,13 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"--confirm carries the confirmation a mutating tool requires for this request.\n\n" +
 			"--fields keeps only the named members in each entry of the tool's result list, as a comma\n" +
 			"separated list or repeated; the other members of the result stay. The selectable names are the\n" +
-			"selectable_fields of 'qatlas describe'. An unknown name, or a tool without a result list, is\n" +
+			"selectable_fields of 'qconnect describe'. An unknown name, or a tool without a result list, is\n" +
 			"refused with invalid-request before any provider is contacted.\n\n" +
 			"Every invoke ends within 60 seconds, reading stdin, resolving the secret, waiting for a rate\n" +
 			"limit, and the provider's requests included. What reaches that limit ends with timeout and\n" +
 			"the next step; a rate-limit pause that would outlast it ends at once with rate-limited and the\n" +
 			"seconds to wait. The system keyring is given at most 10 seconds and is asked once; see\n" +
-			"'qatlas help credential' for a session without a desktop.\n\n" +
+			"'qconnect help credential' for a session without a desktop.\n\n" +
 			"The result is written to stdout as JSON, the only format invoke writes: --output json is\n" +
 			"accepted and any other --output is refused. Diagnostics and the audit event of a confirmed\n" +
 			"mutation go to stderr. A connection-ambiguous diagnostic is followed by one JSON line with\n" +
@@ -346,7 +346,7 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"description, which is empty where none is maintained. Nothing is chosen for you; pass one of\n" +
 			"the names with --connection. A connection that does not offer the tool is refused with\n" +
 			"unsupported-capability, followed by one JSON line with code, message, operation, connection,\n" +
-			"and reason, the same reason 'qatlas tools --all' names.",
+			"and reason, the same reason 'qconnect tools --all' names.",
 		Args: exactlyOneArg("tool ID"),
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := checkInvokeFormat(c, opts); err != nil {

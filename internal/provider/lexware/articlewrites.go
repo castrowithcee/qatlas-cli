@@ -101,7 +101,7 @@ var articlesCreate = capability.Descriptor{
 
 var articlesUpdate = capability.Descriptor{
 	ID: Provider + ".articles.update", Version: 1, Title: "Update a Lexware article",
-	Description: "Change fields of one article: Qatlas reads the article, replaces only the given fields and " +
+	Description: "Change fields of one article: Qatlas Connect reads the article, replaces only the given fields and " +
 		"writes it back with the version it read. A change made by someone else in between is reported as a " +
 		"conflict and never overwritten. A given price replaces the whole price",
 	Tags:     []string{"lexware", "articles", "update", "products", "services", "accounting"},

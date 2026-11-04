@@ -52,7 +52,7 @@ Baserow lets you rename a token, generate a new value for it (the old value stop
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `baserow`, the service, a credential, the scope
    (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `database-token`
@@ -62,16 +62,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$BASEROW_TOKEN" | qatlas credential set baserow-reader database-token
+printf %s "$BASEROW_TOKEN" | qconnect credential set baserow-reader database-token
 ```
 
 `baserow-reader` is the name of the credential in your configuration and `database-token` is its only secret. To
 replace a token that was regenerated or deleted, run the same command again with the new token. Run
-`qatlas config validate` to check the configuration file. It contacts no provider.
+`qconnect config validate` to check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Baserow accepted the token for
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Baserow accepted the token for
 reading its table list.
 
 **A passing test does not mean every tool works.** The test needs only the right to read. Baserow checks the rights
@@ -116,7 +116,7 @@ Baserow's own answer follows.
 
 ```text
 permission: this database token may not update this resource; check its update right for the table
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | ERROR_USER_NOT_IN_GROUP: The user does not belong to the workspace.
 ```
 
@@ -132,8 +132,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Baserow rejected the database token | The token is wrong, was regenerated or deleted, or belongs to another Baserow than the service address | Create or copy the token again ([Create a token](#create-a-token)) and store it with `qatlas credential set <credential> database-token`. For a self-hosted instance, check the service address. |
-| `auth`: the Baserow database token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$BASEROW_TOKEN" \| qatlas credential set <credential> database-token`. |
+| `auth`: Baserow rejected the database token | The token is wrong, was regenerated or deleted, or belongs to another Baserow than the service address | Create or copy the token again ([Create a token](#create-a-token)) and store it with `qconnect credential set <credential> database-token`. For a self-hosted instance, check the service address. |
+| `auth`: the Baserow database token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$BASEROW_TOKEN" \| qconnect credential set <credential> database-token`. |
 | `permission`: this database token may not read this resource | The token lacks the right to read, or does not cover the table | Enable **Read** on the token and include the table; see [Rights per tool group](#rights-per-tool-group). |
 | `permission`: this database token may not create / update / delete this resource | The token can read but not make this change | Enable the right named in the message (**Create**, **Update**, or **Delete**) for the table. A move and a file upload need **Update**. |
 | `permission`: Baserow refused to serve this file | The instance denied the download of the stored file | Not a token right: the download sends no token. Check how the instance serves its files; see [Files](files.md#files). |

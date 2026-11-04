@@ -132,7 +132,7 @@ func (v *exportViews) wantContains(want ...string) {
 // whose secret store is the vault: a connection that arrives with its secret is open until it is approved.
 func vaultImportTarget(t *testing.T) *exportViews {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, testExportVaultPass, true)
 	m.cfg.Defaults.SecretStore = config.CredentialTypeVault
 	mustNoError(t, store.Save(m.cfg))
@@ -429,7 +429,7 @@ func TestImportApprovalQuestion(t *testing.T) {
 			v.wantImportStep(importApprove)
 			v.pump(answer)
 			v.wantImportStep(importResult)
-			v.wantContains("open      imported connection docs", "nothing else was approved; approve with 'qatlas vault approve'")
+			v.wantContains("open      imported connection docs", "nothing else was approved; approve with 'qconnect vault approve'")
 			for _, line := range panelLines(screenOf(m)) {
 				if strings.HasPrefix(line, "approved  ") {
 					t.Errorf("a connection was approved:\n%s", screenOf(m))
@@ -648,7 +648,7 @@ func TestImportConflictWritesNothingAndPlansAgain(t *testing.T) {
 
 func TestImportOffersAVaultPassphraseForTheFirstSecret(t *testing.T) {
 	path := importFixture(t, exportEncrypted)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	cfg := newTestConfig(t)
 	cfg.Defaults.SecretStore = config.CredentialTypeVault

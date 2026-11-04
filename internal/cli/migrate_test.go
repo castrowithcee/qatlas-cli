@@ -67,7 +67,7 @@ func TestFirstCommandMigratesAndKeepsStdoutClean(t *testing.T) {
 	}
 }
 
-// 'qatlas mcp' migrates too, and its stdout carries JSON-RPC and nothing else.
+// 'qconnect mcp' migrates too, and its stdout carries JSON-RPC and nothing else.
 func TestMCPMigratesWithoutTouchingStdout(t *testing.T) {
 	dir := schemaOneFixture(t)
 	opts := testOptionsIn(t, dir, nil)
@@ -110,7 +110,7 @@ func TestInvalidFileIsNotMigrated(t *testing.T) {
 
 	_, _, stderr := runWithInput(t, testOptionsIn(t, dir, nil), "", "config", "validate", "--config", configIn(dir))
 
-	if !strings.HasPrefix(stderr, "qatlas: config-invalid: ") || !strings.Contains(stderr, "connections.wiki") {
+	if !strings.HasPrefix(stderr, "qconnect: config-invalid: ") || !strings.Contains(stderr, "connections.wiki") {
 		t.Errorf("stderr = %q", stderr)
 	}
 	if data, _ := os.ReadFile(configIn(dir)); string(data) != invalid {
@@ -123,13 +123,13 @@ func TestInvalidFileIsNotMigrated(t *testing.T) {
 
 // The migration writes current provider and tool IDs for former ones, as every save does, and says so.
 func TestMigrationNamesTheFormerIDsItRewrites(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, strings.Replace(formerNamesConfig, "version: 4", "version: 1", 1))
 
 	code, _, stderr := runRenameCLI(t, "config", "validate", "--config", path)
 
-	if code != exitOK || !strings.Contains(stderr, `qatlas: services.svc: the former provider "acmechat" is now written as "acme.chat"`) {
+	if code != exitOK || !strings.Contains(stderr, `qconnect: services.svc: the former provider "acmechat" is now written as "acme.chat"`) {
 		t.Fatalf("exit = %d, stderr:\n%s", code, stderr)
 	}
 }
@@ -173,7 +173,7 @@ connections:
 	if code != exitOK {
 		t.Fatalf("exit = %d, stderr = %s", code, stderr)
 	}
-	if !strings.Contains(stderr, "vault approval once more ('qatlas vault approve' or 'qatlas tui'): broad\n") {
+	if !strings.Contains(stderr, "vault approval once more ('qconnect vault approve' or 'qconnect tui'): broad\n") {
 		t.Errorf("stderr does not name exactly the narrowed connection:\n%s", stderr)
 	}
 }
@@ -266,8 +266,8 @@ connections:
 	}
 	for _, want := range []string{
 		"to configuration schema 4: the targets of providers whose target forms changed meaning are now written in their current form\n",
-		"vault approval once more ('qatlas vault approve' or 'qatlas tui'): exact\n",
-		"offers no tool until its targets are chosen again ('qatlas tui'); the rest of the configuration stays usable: mixed\n",
+		"vault approval once more ('qconnect vault approve' or 'qconnect tui'): exact\n",
+		"offers no tool until its targets are chosen again ('qconnect tui'); the rest of the configuration stays usable: mixed\n",
 		"connections.mixed.targets",
 	} {
 		if !strings.Contains(text, want) {

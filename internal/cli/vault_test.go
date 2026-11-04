@@ -113,8 +113,8 @@ defaults:
 
 func vaultCredentialFixture(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(vaultCredentialConfig), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -279,7 +279,7 @@ func TestVaultUnlockWithoutTerminalIsVaultLocked(t *testing.T) {
 	if code != exitRuntime {
 		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitRuntime, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "qatlas: vault-locked:") {
+	if !strings.Contains(stderr, "qconnect: vault-locked:") {
 		t.Errorf("stderr = %q, want the vault-locked code", stderr)
 	}
 	if !strings.Contains(stderr, vaultLockedStep) {
@@ -370,7 +370,7 @@ func TestInvokeThroughAChangedConnectionNeedsApproval(t *testing.T) {
 		args []string
 		step string
 	}{
-		{nil, "save it in 'qatlas tui' or run 'qatlas vault approve'"},
+		{nil, "save it in 'qconnect tui' or run 'qconnect vault approve'"},
 		{[]string{"--agent"}, "the change to this connection is not approved; an agent cannot approve it, ask the user"},
 	} {
 		secrets := secret.NewWith(func(string) string { return "" }, nil, nil, &redact.Redactor{}).
@@ -378,7 +378,7 @@ func TestInvokeThroughAChangedConnectionNeedsApproval(t *testing.T) {
 		args := append([]string{"invoke", "bookstack.pages.list", "--config", configIn(dir)}, tt.args...)
 		code, stdout, stderr := runWithInput(t, &Options{Secrets: secrets}, "", args...)
 		if code != exitUsage || stdout != "" ||
-			!strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki is not approved") ||
+			!strings.HasPrefix(stderr, "qconnect: approval-required: connection wiki is not approved") ||
 			!strings.Contains(stderr, tt.step) || strings.Contains(stderr, canaryVault) {
 			t.Errorf("invoke %v: exit %d, stdout %q, stderr %q", tt.args, code, stdout, stderr)
 		}
@@ -539,8 +539,8 @@ defaults:
 
 func migrationFixture(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(keyringVaultMigrationConfig), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -852,7 +852,7 @@ func TestVaultMigrateRerunLockedVaultWithoutTerminalWritesNothing(t *testing.T) 
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitUsage, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "qatlas: admin-required:") {
+	if !strings.Contains(stderr, "qconnect: admin-required:") {
 		t.Errorf("stderr = %q, want the admin-required code", stderr)
 	}
 
@@ -984,7 +984,7 @@ func TestVaultMigrateWarnsWhenTheKeyringCannotBeChecked(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
 	}
-	if !strings.Contains(stderr, "qatlas: warning:") || !strings.Contains(stderr, "wiki-reader") ||
+	if !strings.Contains(stderr, "qconnect: warning:") || !strings.Contains(stderr, "wiki-reader") ||
 		!strings.Contains(stderr, "keyring") {
 		t.Errorf("stderr = %q, want a warning naming the credential and the keyring", stderr)
 	}
@@ -1028,8 +1028,8 @@ defaults:
 
 func twoConnectionVaultFixture(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(twoConnectionVaultConfig), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -1051,8 +1051,8 @@ func TestVaultApproveAllOpenConnections(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("stderr = %q, want none", stderr)
 	}
-	for _, want := range []string{"2 connections are open:", "wiki\n  source  changed outside qatlas: config.yaml edited directly (last modified ",
-		"wiki2\n  source  changed outside qatlas", ")\n  new connection, not yet approved\n",
+	for _, want := range []string{"2 connections are open:", "wiki\n  source  changed outside qconnect: config.yaml edited directly (last modified ",
+		"wiki2\n  source  changed outside qconnect", ")\n  new connection, not yet approved\n",
 		"approved 2 connections: wiki, wiki2"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout = %q, want it to contain %q", stdout, want)
@@ -1279,7 +1279,7 @@ func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
 		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitOK, stdout, stderr)
 	}
 	if !strings.Contains(stderr, "2 connections read from the vault but are not approved as configured") ||
-		!strings.Contains(stderr, "run 'qatlas vault approve'") {
+		!strings.Contains(stderr, "run 'qconnect vault approve'") {
 		t.Errorf("stderr = %q, want the pending approvals named", stderr)
 	}
 
@@ -1405,8 +1405,8 @@ func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 	}
 }
 
-// Every open connection names where its change came from: the latest qatlas log entry after the last
-// approval (unsigned here, so unverified), else a change outside qatlas with the file's modification time.
+// Every open connection names where its change came from: the latest qconnect log entry after the last
+// approval (unsigned here, so unverified), else a change outside qconnect with the file's modification time.
 func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
 	dir := twoConnectionVaultFixture(t)
 	seedEncryptedVault(t, dir, "wiki-vault", "token-id", canaryVault, "s3cret-phrase")
@@ -1426,7 +1426,7 @@ func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
 		t.Fatalf("first approve: exit %d, stderr %s", code, stderr)
 	}
 
-	// A change qatlas logged after the approval.
+	// A change qconnect logged after the approval.
 	writeConfig("[read, update]")
 	logger := invokelog.New(vault.New(dir).Dir(), 90)
 	if err := logger.Append(invokelog.Fields{Path: "tui", Operation: invokelog.OperationConnectionChange,
@@ -1456,10 +1456,10 @@ func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
 		t.Errorf("origin_of_change = %+v, want an unverified tui entry #1 with an RFC 3339 time", origin)
 	}
 
-	// A change nothing logged is outside qatlas, and carries no log_seq.
+	// A change nothing logged is outside qconnect, and carries no log_seq.
 	writeConfig("[read, delete]")
 	code, stdout, _ = approveAll()
-	if code != exitOK || !strings.Contains(stdout, "wiki2\n  source  changed outside qatlas: config.yaml edited directly") {
+	if code != exitOK || !strings.Contains(stdout, "wiki2\n  source  changed outside qconnect: config.yaml edited directly") {
 		t.Fatalf("text run: exit %d, stdout %q", code, stdout)
 	}
 	writeConfig("[read, update]")

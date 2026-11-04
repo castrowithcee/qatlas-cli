@@ -123,7 +123,7 @@ var reportsGet = capability.Descriptor{
 		{Name: "subtable", Description: "idsubdatatable of a row (from row_metadata) to read that row's subtable of " +
 			"the same report"},
 		{Name: "label", Description: "At most 10 row labels; only those rows are returned. Matomo then ignores its " +
-			"row limit, so Qatlas pages these rows itself"},
+			"row limit, so Qatlas Connect pages these rows itself"},
 		{Name: "limit", Description: "Rows per period and call, 1 through 1000; 100 when omitted, or 1000 divided by " +
 			"the number of periods when that is smaller. limit times the number of periods must not exceed 1000. " +
 			"A continuation keeps the limit of its first call"},

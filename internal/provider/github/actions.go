@@ -1301,7 +1301,7 @@ func (c *Client) jobLog(ctx context.Context, id int64, lines, maxBytes int) (*Jo
 	case response.StatusCode >= 300 && response.StatusCode < 400 && response.Header.Get("Location") != "":
 		location, err := response.Location()
 		if err != nil || location.Scheme != "https" || location.Host == "" || location.User != nil {
-			return nil, providerError(op, "GitHub pointed to a log address Qatlas does not read")
+			return nil, providerError(op, "GitHub pointed to a log address Qatlas Connect does not read")
 		}
 		download, err := http.NewRequestWithContext(ctx, http.MethodGet, location.String(), nil)
 		if err != nil {
@@ -1364,7 +1364,7 @@ func readTail(op string, response *http.Response, maxBytes int) ([]byte, bool, e
 		}
 		if total > maxLogDownload {
 			return nil, false, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-				Message: fmt.Sprintf("the job log is larger than the %d MiB Qatlas reads when its storage does "+
+				Message: fmt.Sprintf("the job log is larger than the %d MiB Qatlas Connect reads when its storage does "+
 					"not serve the end alone", maxLogDownload>>20)}
 		}
 		return tail, total > len(tail), nil

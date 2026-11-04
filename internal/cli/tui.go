@@ -14,6 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	"github.com/castrowithcee/qatlas-connect/internal/config"
 	"github.com/castrowithcee/qatlas-connect/internal/connlog"
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 	"github.com/castrowithcee/qatlas-connect/internal/manage"
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
 	"github.com/castrowithcee/qatlas-connect/internal/secret"
@@ -24,7 +25,7 @@ import (
 )
 
 // noUpdateCheck is the environment variable that keeps the editor from looking for a newer release.
-const noUpdateCheck = "QATLAS_NO_UPDATE_CHECK"
+const noUpdateCheck = "QCONNECT_NO_UPDATE_CHECK"
 
 func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string) *cobra.Command {
 	return &cobra.Command{
@@ -144,7 +145,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"ctrl+l works on the tab line, the lists, the forms, the pickers and tables, the target and path\n" +
 			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
 			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
-			"it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
+			"it to a vault process on Linux, macOS, and Windows the same way 'qconnect vault unlock' does, and\n" +
 			"starts this window's admin session in the same step. The first such unlock after the idle\n" +
 			"timeout, the admin session timeout, and the log retention moved into the vault asks once whether\n" +
 			"to take over the values config.yaml still holds for them (default no) and then removes those\n" +
@@ -155,17 +156,17 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
 			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
-			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
+			"keyring; storing its very first secret, here or with 'qconnect credential set', offers one, typed\n" +
 			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, enter opens a\n" +
 			"masked prompt that stores the secret in the place the secrets row names; d removes it after asking. On Linux, macOS, and Windows, storing or removing\n" +
 			"a vault secret here, or through the guided setup's own save, is handed on to a vault process that\n" +
-			"holds the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
+			"holds the vault unlocked outside this run, exactly the way 'qconnect credential set' and 'qconnect\n" +
 			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
 			"A keyring role says in system keyring,\n" +
 			"not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
-			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform; a\n" +
+			"(QCONNECT_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform; a\n" +
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
-			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
+			"QCONNECT_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
 			"General (6, first part of Settings) holds the preferences of this device: the theme (terminal,\n" +
 			"the default, takes the colors of the terminal; every other theme paints the whole screen;\n" +
@@ -194,17 +195,17 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"prompt with error: wrong passphrase instead of asking for a new passphrase or the confirmation\n" +
 			"for nothing, and nothing is ever asked on this process's own terminal. On Linux, macOS, and Windows,\n" +
 			"changing the passphrase or turning encryption off also locks a vault process that holds the vault\n" +
-			"unlocked with the old identity, the same way 'qatlas vault passphrase' and 'qatlas vault decrypt'\n" +
+			"unlocked with the old identity, the same way 'qconnect vault passphrase' and 'qconnect vault decrypt'\n" +
 			"already do, and says so once the change is done. While a plaintext\n" +
 			"credentials.yaml left over from an earlier version still holds an entry, migrate\n" +
-			"credentials.yaml carries every one of them into the vault the way 'qatlas vault migrate' does:\n" +
+			"credentials.yaml carries every one of them into the vault the way 'qconnect vault migrate' does:\n" +
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +
 			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
 			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
 			"the vault's idle timeout, maximum unlock time (off by default), admin session timeout, and log\n" +
 			"retention, editable while the vault is\n" +
 			"unlocked and saved with F2 into the encrypted vault as settings.age, never into config.yaml, like\n" +
-			"'qatlas vault settings'; the admin session timeout sets how long this window's own admin session\n" +
+			"'qconnect vault settings'; the admin session timeout sets how long this window's own admin session\n" +
 			"above stays open (see the read-only paragraph further up), 0s asking for the passphrase on every\n" +
 			"managing action instead.\n\n" +
 			"Saving a change while the vault is encrypted approves it automatically, without an extra\n" +
@@ -218,10 +219,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"and marks an expired token, or a model that covers nothing now, with ⚠ and words behind its\n" +
 			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
 			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
-			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +
+			"(YYYY-MM-DD or an RFC 3339 time), like 'qconnect vault token create'; enter opens its detail, where\n" +
 			"s shows its value and hides it again, only there and only while the session lasts; d revokes it\n" +
 			"after asking, y confirms and n or esc keeps it. While the vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"Activity (3) shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
+			"Activity (3) shows the invocation log, read only, the same log 'qconnect vault logs verify' checks. The\n" +
 			"bar on top reads Mode: Day, Range, or All and, for the first two, the date or the range of UTC\n" +
 			"days: tab moves the focus from the rows to the bar's fields and back, left/right change the\n" +
 			"mode, and enter or left/right on the date open a small dialog that takes one date, or from and\n" +
@@ -318,7 +319,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"esc asks before it drops a changed list or a typed path. While a path is typed, tab takes the\n" +
 			"suggested directory and up/down switch between several; only directories are suggested, and with nothing\n" +
 			"typed the directory the TUI was started in. A path that does not exist yet is taken as typed,\n" +
-			"and qatlas config validate warns about it.\n\n" +
+			"and qconnect config validate warns about it.\n\n" +
 			"enter on a text row goes on to the next row, and on the last one does nothing; it never saves.\n" +
 			"F2 saves the form from every row, or goes on to the next step of the guided setup; the summary of\n" +
 			"the guided setup saves with F2 too. The hint under the focused row stands in full, wrapped.\n\n" +
@@ -339,7 +340,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"profile is never applied to it on its own. A profile is a starting selection, not a role: the\n" +
 			"configuration keeps only the concrete tool IDs, so a tool a later version adds joins no saved\n" +
 			"connection, and no local tick narrows what the credential itself may do at the provider.\n\n" +
-			"? shows the help topics start, agents, and configuration, the same text as 'qatlas help start'\n" +
+			"? shows the help topics start, agents, and configuration, the same text as 'qconnect help start'\n" +
 			"and the others, on every screen that takes no typed text: the tab line, the lists, every question,\n" +
 			"the target and path lists, the setup summary, and the details of an approval, a token, and a log\n" +
 			"entry. It also opens on the provider table, the add menu of targets, and the template search while\n" +
@@ -350,20 +351,20 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
 			"v0.5.0 · U update. U on the tab line or in a list asks first and then installs it the way\n" +
-			"'qatlas update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
-			"first, runs the new program at the same path with the same arguments, and says qatlas updated\n" +
+			"'qconnect update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
+			"first, runs the new program at the same path with the same arguments, and says qconnect updated\n" +
 			"from one version to the other. If the vault was unlocked before, the new editor opens the\n" +
 			"unlock dialog at once; esc leaves it locked. Unsaved input in an open form is never dropped\n" +
 			"silently: the editor asks first, and not now keeps editing on the old version. Where the editor\n" +
 			"cannot restart itself, on Windows or when the new program cannot be run, it keeps running the\n" +
 			"old version until it is restarted by hand. On Windows u also locks a vault process before the\n" +
-			"program is replaced, since Windows has no handover; 'qatlas vault unlock' unlocks it again. A failed check stays silent. A dev build never\n" +
-			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.\n\n" +
+			"program is replaced, since Windows has no handover; 'qconnect vault unlock' unlocks it again. A failed check stays silent. A dev build never\n" +
+			"checks, and a non-empty QCONNECT_NO_UPDATE_CHECK turns the check off.\n\n" +
 			"The command version, also the row choose version in Settings, Update, lists the versions\n" +
-			"'qatlas update --list' shows, newest first, with the running one marked and prerelease and older\n" +
+			"'qconnect update --list' shows, newest first, with the running one marked and prerelease and older\n" +
 			"versions named. enter on one asks first, with the\n" +
 			"direction (newer, prerelease, or older) and what the installation does, and installs it like\n" +
-			"'qatlas update --to' with the same restart. An older version is a rollback: the question says its\n" +
+			"'qconnect update --to' with the same restart. An older version is a rollback: the question says its\n" +
 			"fixes of later versions are missing and that the vault is locked first; the older program is then\n" +
 			"checked against a copy of the configuration. If it does not read it, the editor asks separately\n" +
 			"whether to restore the newest backup it reads, with the date of the backup; only y does, and n or\n" +
@@ -373,17 +374,17 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	}
 }
 
-// checkTerminal reports whether a bare 'qatlas' may open the editor: standard input and output must both be
+// checkTerminal reports whether a bare 'qconnect' may open the editor: standard input and output must both be
 // terminals, since the editor reads keys from one and draws on the other. A test overrides it, like
 // checkInteractive; unlike vault.Interactive, one terminal stream is not enough.
 var checkTerminal = func() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// startTUI is what a bare 'qatlas' at a terminal runs; a test replaces it to see the branch without a screen.
+// startTUI is what a bare 'qconnect' at a terminal runs; a test replaces it to see the branch without a screen.
 var startTUI = runTUI
 
-// runTUI opens the terminal editor. 'qatlas tui' and a bare 'qatlas' at a terminal both run it, so the
+// runTUI opens the terminal editor. 'qconnect tui' and a bare 'qconnect' at a terminal both run it, so the
 // same flags apply to both.
 func runTUI(opts *Options, reg *capability.Registry, buildVersion string) error {
 	secret.SetLongRunning("tui")
@@ -421,15 +422,15 @@ func runTUI(opts *Options, reg *capability.Registry, buildVersion string) error 
 }
 
 // tuiPrefsPath is the device-local preferences file beside the resolved configuration file, so it follows
-// QATLAS_CLI_HOME and QATLAS_CONFIG exactly as the configuration does.
+// QCONNECT_HOME and QCONNECT_CONFIG exactly as the configuration does.
 func tuiPrefsPath(configPath string) string { return uiprefs.Path(filepath.Dir(configPath)) }
 
-// tuiSecrets returns the resolver 'qatlas tui' reads and writes secrets through. Unlike every other command
+// tuiSecrets returns the resolver 'qconnect tui' reads and writes secrets through. Unlike every other command
 // it never asks a vault passphrase on this process's terminal: bubbletea holds that terminal in raw mode
 // for its own screen, so a term.ReadPassword prompt there would corrupt it instead of being seen, and
 // inputs would race between the prompt and the editor. A locked, encrypted vault therefore answers
 // vault-locked wherever it is read or a role's secret removed from it, the same code an agent gets over
-// MCP; a person unlocks it first with 'qatlas vault unlock'. Storing a new secret is unaffected: it always
+// MCP; a person unlocks it first with 'qconnect vault unlock'. Storing a new secret is unaffected: it always
 // queues as a pending entry the vault's public key can take, whatever state the vault is in, and the
 // editor's own credential form offers a passphrase for a vault it is creating itself without ever asking
 // this terminal either. opts.resolver caches its result, so this is the same instance connectionTester's
@@ -499,7 +500,7 @@ func targetSecrets(opts *Options, secrets *secret.Resolver) (*secret.Resolver, e
 }
 
 // tuiSelfTest tells the editor how its selftest commands run: with this program as the writer process, the
-// way 'qatlas selftest' starts it. A program that cannot name itself offers no selftest.
+// way 'qconnect selftest' starts it. A program that cannot name itself offers no selftest.
 func tuiSelfTest(buildVersion string) tui.SelfTest {
 	exe, err := os.Executable()
 	if err != nil {
@@ -510,10 +511,10 @@ func tuiSelfTest(buildVersion string) tui.SelfTest {
 }
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
-// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set. Its installation
-// hands a running vault process over or locks it around the replacement, the way 'qatlas update' does.
+// dev build, which has no release to compare with, and when QCONNECT_NO_UPDATE_CHECK is set. Its installation
+// hands a running vault process over or locks it around the replacement, the way 'qconnect update' does.
 func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
-	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
+	if buildVersion == "" || buildVersion == "dev" || envvar.Get(noUpdateCheck) != "" {
 		return nil
 	}
 	client := opts.Updater
@@ -523,7 +524,7 @@ func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	return &lockingUpdater{opts: opts, client: client}
 }
 
-// lockingUpdater is the editor's updater: the client with the vault handover or lock of 'qatlas update'
+// lockingUpdater is the editor's updater: the client with the vault handover or lock of 'qconnect update'
 // around the replacement. Note keeps what that had to say, for the editor's status line.
 type lockingUpdater struct {
 	opts   *Options
@@ -556,12 +557,12 @@ func (u *lockingUpdater) UpdateProgress(ctx context.Context, progress func(done,
 // Note is what handing over or locking the vault process said during the last installation.
 func (u *lockingUpdater) Note() string { return u.note }
 
-// Versions lists the releases that can be chosen, the list 'qatlas update --list' shows.
+// Versions lists the releases that can be chosen, the list 'qconnect update --list' shows.
 func (u *lockingUpdater) Versions(ctx context.Context) ([]selfupdate.Entry, error) {
 	return u.client.List(ctx)
 }
 
-// InstallVersion installs a newer release or a prerelease like 'qatlas update --to', with the vault handover
+// InstallVersion installs a newer release or a prerelease like 'qconnect update --to', with the vault handover
 // or lock of an update.
 func (u *lockingUpdater) InstallVersion(ctx context.Context, tag string, progress func(done, total int64)) (selfupdate.Result, error) {
 	target, err := u.client.Target(ctx, tag)
@@ -578,7 +579,7 @@ func (u *lockingUpdater) InstallVersion(ctx context.Context, tag string, progres
 	return result, err
 }
 
-// PrepareRollback downloads the older version tag and runs it against the configuration, as 'qatlas update
+// PrepareRollback downloads the older version tag and runs it against the configuration, as 'qconnect update
 // --to' does. Its vault process is locked whatever the update behaviour says, because an older program cannot
 // take an unlocked vault over.
 func (u *lockingUpdater) PrepareRollback(ctx context.Context, tag string, progress func(done, total int64)) (tui.Rollback, error) {

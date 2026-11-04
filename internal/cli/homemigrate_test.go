@@ -58,8 +58,8 @@ func TestHomeMigrationKeepsVaultApprovalsTokensAndLog(t *testing.T) {
 	before := treeContents(t, legacy)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	t.Setenv(secret.StoreSelector, secret.StoreNone)
 
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "token", "list", "--output", "json")

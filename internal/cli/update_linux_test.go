@@ -9,7 +9,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
-// updateRun runs 'qatlas update' with args against a local release and reports the exit code, stderr, the
+// updateRun runs 'qconnect update' with args against a local release and reports the exit code, stderr, the
 // program afterwards, and how often the replacement was reached.
 func updateRun(t *testing.T, opts *Options, args ...string) (code int, stderr, program string, replaced int) {
 	t.Helper()
@@ -41,8 +41,8 @@ func TestUpdateAsksBeforeItReplaces(t *testing.T) {
 			if code != exitOK || len(asked) != 1 {
 				t.Fatalf("exit code = %d, questions = %d, stderr = %q", code, len(asked), stderr)
 			}
-			for _, want := range []string{"Update qatlas to v1.1.0?", "vault process is handed over to the new version", "locked first otherwise",
-				"'qatlas vault unlock'", "'qatlas mcp' servers restart themselves", "'qatlas tui' and 'qatlas web'"} {
+			for _, want := range []string{"Update qconnect to v1.1.0?", "vault process is handed over to the new version", "locked first otherwise",
+				"'qconnect vault unlock'", "'qconnect mcp' servers restart themselves", "'qconnect tui' and 'qconnect web'"} {
 				if !strings.Contains(asked[0], want) {
 					t.Errorf("the question does not say %q: %q", want, asked[0])
 				}
@@ -127,13 +127,13 @@ func TestConsequencesTextOfThePlatforms(t *testing.T) {
 	linux := selfupdate.ConsequencesText("linux", 2)
 	darwin := selfupdate.ConsequencesText("darwin", 1)
 	other := selfupdate.ConsequencesText("windows", -1)
-	if !strings.Contains(linux, "2 other qatlas processes of yours are running") || !strings.Contains(linux, "restart themselves") {
+	if !strings.Contains(linux, "2 other qconnect processes of yours are running") || !strings.Contains(linux, "restart themselves") {
 		t.Errorf("linux: %q", linux)
 	}
-	if !strings.Contains(darwin, "1 other qatlas process of yours is running") || !strings.Contains(darwin, "restart themselves") {
+	if !strings.Contains(darwin, "1 other qconnect process of yours is running") || !strings.Contains(darwin, "restart themselves") {
 		t.Errorf("darwin: %q", darwin)
 	}
-	if strings.Contains(other, "other qatlas") || !strings.Contains(other, "old version") ||
+	if strings.Contains(other, "other qconnect") || !strings.Contains(other, "old version") ||
 		!strings.Contains(other, "vault process is locked first, because Windows has no handover") || strings.Contains(other, "restart themselves") {
 		t.Errorf("windows: %q", other)
 	}

@@ -23,13 +23,13 @@ const (
 	roleTextMax     = 180
 	rolesWriteScope = "role management"
 
-	roleGuestRefused  = "the guest role (public access) cannot be changed through Qatlas"
-	roleSystemRefused = "a system role cannot be deleted through Qatlas"
+	roleGuestRefused  = "the guest role (public access) cannot be changed through Qatlas Connect"
+	roleSystemRefused = "a system role cannot be deleted through Qatlas Connect"
 
 	rolesWriteRoles = "Needs the BookStack role permission user-roles-manage for the token's user. Role permissions " +
 		"can escalate up to full administrative control of the instance, so the tool is only available through " +
 		"the tool allow list, and only on a connection without targets. external_auth_id is not supported: " +
-		"Qatlas never binds a role to groups of an external identity provider"
+		"Qatlas Connect never binds a role to groups of an external identity provider"
 	rolesWritePermissions = "permissions names the system permissions and content permissions of the role from the fixed " +
 		"list of BookStack v26.09.1 that the role form offers; unknown or repeated names are refused locally"
 )
@@ -99,7 +99,7 @@ var (
 		Description: "Change the name, description, multi-factor enforcement flag, or permissions of one role, in one " +
 			"request. A field that is left out stays unchanged; permissions replaces the whole permission list, so an " +
 			"empty list removes every permission. " + rolesWritePermissions + ". The guest role (system role public) " +
-			"is never changed: Qatlas reads the role and determines the guest role first and refuses, without a change, " +
+			"is never changed: Qatlas Connect reads the role and determines the guest role first and refuses, without a change, " +
 			"when the role is the guest role or the guest role cannot be determined. " + rolesWriteRoles,
 		Tags: []string{"administration", "roles", "bookstack", "update"}, Risk: rolesUpdateRisk, Provider: Provider,
 		RequiresToolAllowList: true,
@@ -121,7 +121,7 @@ var (
 		ID: Provider + ".roles.delete", Version: 1, Title: "Delete a BookStack role",
 		Description: "Permanently delete one role. This cannot be undone: the users of the role lose it, the content " +
 			"permissions of the role are removed, and the API offers no migration of the users to another role. " +
-			"BookStack refuses to delete the registration role, and Qatlas refuses every system role (a role with a " +
+			"BookStack refuses to delete the registration role, and Qatlas Connect refuses every system role (a role with a " +
 			"system name, such as admin or public) after reading the role, without a change. " + rolesWriteRoles,
 		Tags: []string{"administration", "roles", "bookstack", "delete"}, Risk: rolesDeleteRisk, Provider: Provider,
 		RequiresToolAllowList: true,

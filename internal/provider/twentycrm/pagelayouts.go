@@ -152,7 +152,7 @@ var pageLayoutsGet = capability.Descriptor{
 			"otherwise left out and named in omitted_fields; identifiers in it are not resolved"},
 		{Name: "omitted_fields", Description: "Widget members left out because they exceed the limits"},
 		{Name: "iframe_origin", Description: "Of an embedded page only scheme, host, and port; never path, query, or credentials"},
-		{Name: "type", Description: "Widget type; a type unknown to Qatlas is unknown"},
+		{Name: "type", Description: "Widget type; a type unknown to Qatlas Connect is unknown"},
 	},
 	Examples: []capability.Example{{
 		Description: "Read a dashboard layout",

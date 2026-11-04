@@ -82,7 +82,7 @@ func TestRenamingACredentialListsItsSecretsAndEnvironment(t *testing.T) {
 	pump(t, m, "f2")
 	view := screenOf(m)
 	for _, want := range []string{"Rename credential reader to viewer?", "credentials.reader -> credentials.viewer",
-		"env       QATLAS_READER", "reader    docs", "outside"} {
+		"env       QCONNECT_READER", "reader    docs", "outside"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the dry run does not show %q:\n%s", want, view)
 		}

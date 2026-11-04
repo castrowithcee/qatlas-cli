@@ -31,7 +31,7 @@ import (
 )
 
 // copiedProgram copies this test binary to bin/qatlas in a directory of the test's own, which plays the
-// installed qatlas: a vault process started from it, and every client of that process, runs from that path.
+// installed qconnect: a vault process started from it, and every client of that process, runs from that path.
 func copiedProgram(t *testing.T) (string, []byte) {
 	t.Helper()
 	self, err := os.Executable()

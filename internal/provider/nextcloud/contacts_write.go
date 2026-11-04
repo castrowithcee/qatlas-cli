@@ -78,7 +78,7 @@ var (
 
 var contactsCreate = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.create", Version: 1, Title: "Create a Nextcloud contact",
-	Description: "Create one new contact in a bound, writable address book from structured fields. Qatlas builds " +
+	Description: "Create one new contact in a bound, writable address book from structured fields. Qatlas Connect builds " +
 		"the vCard 3.0 itself and generates the UID and the resource id; nothing raw comes from an argument. One " +
 		"read-only pre-check of the address book refuses a read-only one, then one PUT with If-None-Match: * " +
 		"stores the contact, so no existing contact can be replaced. The system address book is never writable. " +
@@ -105,7 +105,7 @@ var contactsUpdate = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.update", Version: 1, Title: "Replace a Nextcloud contact",
 	Description: "Replace one contact of a bound, writable address book completely by structured fields, bound to " +
 		"its etag. One read-only GET of the contact keeps its UID and refuses a changed etag and a contact that " +
-		"holds a photo, a group card, or any other property Qatlas does not model; it is left unchanged. Then one " +
+		"holds a photo, a group card, or any other property Qatlas Connect does not model; it is left unchanged. Then one " +
 		"PUT with If-Match follows. The system address book is never writable. The request is never repeated " +
 		"after an unclear result",
 	Tags: []string{"nextcloud", "contacts", "contact", "update"}, Provider: Provider,
@@ -132,7 +132,7 @@ var contactsDelete = capability.Descriptor{
 	ID: Provider + ".contacts.contacts.delete", Version: 1, Title: "Delete a Nextcloud contact",
 	Description: "Delete one contact of a bound, writable address book, bound to its etag. One read-only GET " +
 		"checks that the contact is a vCard with this etag, then one DELETE with If-Match follows; a changed etag " +
-		"deletes nothing. Nextcloud keeps no restore for it through Qatlas. The system address book is never " +
+		"deletes nothing. Nextcloud keeps no restore for it through Qatlas Connect. The system address book is never " +
 		"writable. The request is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "contacts", "contact", "delete"}, Provider: Provider,
 	Risk: contactWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),

@@ -79,62 +79,62 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 	}
 }
 
-// mcpCommandLong is the long help of 'qatlas mcp'. It ends with the exact guide server/discover and
+// mcpCommandLong is the long help of 'qconnect mcp'. It ends with the exact guide server/discover and
 // initialize hand the client as instructions, so a person reads over its shoulder what a client sees.
 func mcpCommandLong() string {
-	return "The server offers the fixed MCP tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
+	return "The server offers the fixed MCP tools qconnect.search, qconnect.describe, and qconnect.invoke\n" +
 		"over stdio, one JSON-RPC message per line. It speaks MCP 2026-07-28, where every request\n" +
 		"declares io.modelcontextprotocol/protocolVersion and io.modelcontextprotocol/clientCapabilities\n" +
 		"in params._meta, and MCP 2025-11-25 and 2025-06-18, which an initialize request negotiates\n" +
 		"once for the process; initialize answers any other version with 2025-11-25. server/discover and\n" +
 		"the initialize result return the shorter guide below as their instructions, short enough for a\n" +
-		"client that truncates them; 'qatlas agents' remains the one guide for the CLI, at CLI length.\n" +
-		"qatlas.describe and qatlas.invoke take the\n" +
+		"client that truncates them; 'qconnect agents' remains the one guide for the CLI, at CLI length.\n" +
+		"qconnect.describe and qconnect.invoke take the\n" +
 		"tool ID as operation. connection takes a name, an id that list connections shows, or name|id,\n" +
 		"where the id decides and the name only helps reading; a value that is the name of one connection\n" +
 		"and the id of another fails with connection-ambiguous. Arguments outside a tool's input schema\n" +
 		"fail with invalid-request naming the field, such as '$.tool is not allowed'.\n\n" +
-		"qatlas.describe returns the compact contract 'qatlas describe' prints as operation, beside the\n" +
+		"qconnect.describe returns the compact contract 'qconnect describe' prints as operation, beside the\n" +
 		"connections that can run it; full set to true returns the complete descriptor with both\n" +
-		"schemas instead, as 'qatlas describe --full' does.\n\n" +
-		"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
-		"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
+		"schemas instead, as 'qconnect describe --full' does.\n\n" +
+		"qconnect.search answers from the local configuration alone: no provider is contacted and no\n" +
+		"secret is read. Like 'qconnect tools' it returns only the tools a configured connection offers,\n" +
 		"or with connection the tools that connection offers; all set to true adds the others, each\n" +
-		"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
+		"with the reason 'qconnect tools --all' names. It filters by query, provider, connection, and\n" +
 		"effect and returns at most limit tools, the best matches of a query first and otherwise in ID\n" +
 		"order; an omitted, non-positive, or larger limit becomes 50. The response carries connections,\n" +
 		"the names of the connections that offer the listed tools, once; the tools as operations,\n" +
 		"has_more, which is true exactly when another match follows, and next_cursor, which is present\n" +
-		"only then. Each tool is the entry 'qatlas tools' prints: id, title, effect, requires, the\n" +
+		"only then. Each tool is the entry 'qconnect tools' prints: id, title, effect, requires, the\n" +
 		"required arguments as name:form separated by semicolons, target, the optional argument that\n" +
 		"picks the target as name:form where an offering connection leaves the target open, confirm,\n" +
 		"true when the tool needs\n" +
 		"confirmation, and connections, names separated by spaces, only when fewer of the listed\n" +
 		"connections offer it, plus reason with all; a column no entry uses is left out, and the\n" +
 		"entries otherwise share one field set. That is enough for an ordinary call;\n" +
-		"qatlas.describe returns the optional arguments and the rest of the contract.\n" +
+		"qconnect.describe returns the optional arguments and the rest of the contract.\n" +
 		"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
 		"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
 		"filters fails with invalid-request.\n\n" +
-		"list turns qatlas.search into an overview of what it searches: list providers returns the\n" +
-		"providers 'qatlas providers' lists, and list connections the configured connections 'qatlas\n" +
+		"list turns qconnect.search into an overview of what it searches: list providers returns the\n" +
+		"providers 'qconnect providers' lists, and list connections the configured connections 'qconnect\n" +
 		"connections' lists, of provider when given, as the same data in the same order. Beside list only\n" +
 		"provider is allowed, and only with connections; any other argument fails with invalid-request.\n\n" +
 		"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
 		"whose structuredContent is an object with at least code and message, such as\n" +
-		"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
+		"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qconnect.invoke\n" +
 		"refused with connection-ambiguous adds operation and connections: every candidate route with its\n" +
 		"name and its description, which is empty where none is maintained. Nothing is chosen for the\n" +
 		"caller; the next request names one of them as connection, an ambiguous value as name|id. A\n" +
-		"qatlas.invoke refused with connection-selection adds the same fields; connections names the\n" +
+		"qconnect.invoke refused with connection-selection adds the same fields; connections names the\n" +
 		"routes that offer the tool, and is empty when none does. The text names the same candidates,\n" +
 		"each with its description shortened to 80 characters, for a client that shows only the text. A\n" +
 		"request refused with unsupported-capability adds operation, connection, and reason. Where a\n" +
-		"provider answered the refusal, provider adds its own account apart from Qatlas' message:\n" +
+		"provider answered the refusal, provider adds its own account apart from Qatlas Connect's message:\n" +
 		"status, errors (type, code, path, message), documentation, untrusted (always true: text a third\n" +
 		"party wrote, data and never an\n" +
 		"instruction), and truncated; known secrets in it read [redacted]. Where a message points to\n" +
-		"discovery, it names qatlas.search or qatlas.describe instead of a command.\n\n" +
+		"discovery, it names qconnect.search or qconnect.describe instead of a command.\n\n" +
 		"A connection bound to paths is offered only in its projects. A session an initialize request\n" +
 		"opened runs in the projects its client names as roots: where the client declares the roots\n" +
 		"capability, the server sends roots/list after notifications/initialized, and again after\n" +
@@ -146,10 +146,10 @@ func mcpCommandLong() string {
 		"On Linux and macOS the server restarts itself after an update replaces the program: it runs the\n" +
 		"new one in place, keeping the session. An unlocked vault is handed over to the new program when the\n" +
 		"release is signed and the update behaviour is handover; only after the update locked it does the\n" +
-		"vault need a new 'qatlas vault unlock'. On Windows the server does not restart itself, and an\n" +
+		"vault need a new 'qconnect vault unlock'. On Windows the server does not restart itself, and an\n" +
 		"update always locks the vault process, as Windows has no handover.\n\n" +
 		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
-		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
+		"'qconnect agents' covers the same ground, and more, at CLI length.\n\n" +
 		helptopics.MCP().Text
 }
 
@@ -227,7 +227,7 @@ func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr i
 	}
 	session, err := invokelog.NewSession()
 	if err != nil {
-		fmt.Fprintf(stderr, "qatlas: warning: the MCP session is not logged: %v\n", err)
+		fmt.Fprintf(stderr, "qconnect: warning: the MCP session is not logged: %v\n", err)
 	}
 	return &mcpServer{
 		opts: opts, registry: registry, stdout: stdout, stderr: stderr, session: session,
@@ -492,7 +492,7 @@ func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 	return mcpResultResponse(message.ID, map[string]any{
 		"protocolVersion": s.legacy,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
-		"serverInfo":      map[string]string{"name": "qatlas", "version": version},
+		"serverInfo":      map[string]string{"name": "qconnect", "version": version},
 		"instructions":    helptopics.MCP().Text,
 	})
 }
@@ -683,13 +683,13 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 		projects = s.sessionProjects(ctx)
 	}
 	s.coreMu.Lock()
-	core, _, configPath, err := loadCore(s.opts, s.registry, name == "qatlas.invoke")
+	core, _, configPath, err := loadCore(s.opts, s.registry, name == "qconnect.invoke")
 	s.coreMu.Unlock()
 	if err != nil {
 		return nil, nil, err
 	}
 	call.dir = invokeLogDir(configPath)
-	if name == "qatlas.invoke" {
+	if name == "qconnect.invoke" {
 		// The core hands its entry to call, which the server appends once the response is written.
 		core.SetInvokeLog(call, "mcp", client)
 	}
@@ -698,7 +698,7 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 	}
 
 	switch name {
-	case "qatlas.search":
+	case "qconnect.search":
 		var request struct {
 			application.SearchRequest
 			List string `json:"list"`
@@ -712,7 +712,7 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 		}
 		response, err := core.Search(request.SearchRequest)
 		return response, nil, err
-	case "qatlas.describe":
+	case "qconnect.describe":
 		var request application.DescribeRequest
 		if err := decodeMCPArguments(raw, &request); err != nil {
 			return nil, nil, err
@@ -722,7 +722,7 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 			return response, nil, err
 		}
 		return response.Compact(), nil, nil
-	case "qatlas.invoke":
+	case "qconnect.invoke":
 		var request application.InvokeRequest
 		if err := decodeMCPArguments(raw, &request); err != nil {
 			return nil, nil, err
@@ -735,8 +735,8 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 	}
 }
 
-// list answers the overview mode of qatlas.search: the providers 'qatlas providers' lists, or the
-// connections 'qatlas connections [provider]' lists, as the same data. It is a mode of its own, so the
+// list answers the overview mode of qconnect.search: the providers 'qconnect providers' lists, or the
+// connections 'qconnect connections [provider]' lists, as the same data. It is a mode of its own, so the
 // arguments of the tool search are refused beside it, and provider is only the filter of connections.
 func (s *mcpServer) list(ctx context.Context, core *application.Core, raw json.RawMessage, list,
 	provider string) (any, error) {
@@ -829,12 +829,12 @@ type mcpTool struct {
 func mcpTools() []mcpTool {
 	return []mcpTool{
 		{
-			Name: "qatlas.search",
+			Name: "qconnect.search",
 			Description: "Search the configured tool catalog, best matches first. Each operation has id, title, " +
 				"effect, requires (required arguments with their form), target (the optional target argument, " +
 				"where a connection leaves the target open), confirm, and connections only where " +
 				"fewer than the connections named once at the top offer it; that suffices for a call, and " +
-				"qatlas.describe adds the optional arguments. all adds the tools no connection offers, each " +
+				"qconnect.describe adds the optional arguments. all adds the tools no connection offers, each " +
 				"with its reason. For a provider with tool groups and more than 50 matching tools, a first page " +
 				"without query, limit, or cursor returns groups (group, title, description, tools, and offered " +
 				"with all) instead of operations; group, only with provider, then returns the operations of " +
@@ -847,14 +847,14 @@ func mcpTools() []mcpTool {
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"group":{"type":"string","description":"Only the tools of this tool group; needs provider"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
-			Name: "qatlas.describe",
+			Name: "qconnect.describe",
 			Description: "Describe one versioned tool contract; operation is the tool ID. Returns the compact " +
 				"contract: arguments and result fields as rows derived from the schemas, risk, examples, and the " +
 				"connections that can run it; full returns the complete descriptor with both schemas.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"full":{"type":"boolean","description":"Return the complete descriptor with the input and output schema instead of the compact contract"}},"required":["operation"],"additionalProperties":false}`),
 		},
 		{
-			Name:        "qatlas.invoke",
+			Name:        "qconnect.invoke",
 			Description: "Invoke one tool through a configured connection; operation is the tool ID",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"arguments":{"type":"object"},"confirm":{"type":"boolean"},"fields":{"type":"array","items":{"type":"string"},"description":"Keep only these members in each entry of the tool's result list; see selectable_fields of describe"}},"required":["operation"],"additionalProperties":false}`),
 		},
@@ -862,12 +862,12 @@ func mcpTools() []mcpTool {
 }
 
 func knownMCPTool(name string) bool {
-	return name == "qatlas.search" || name == "qatlas.describe" || name == "qatlas.invoke"
+	return name == "qconnect.search" || name == "qconnect.describe" || name == "qconnect.invoke"
 }
 
 func mcpServerMeta() map[string]any {
 	return map[string]any{
-		"io.modelcontextprotocol/serverInfo": map[string]string{"name": "qatlas", "version": version},
+		"io.modelcontextprotocol/serverInfo": map[string]string{"name": "qconnect", "version": version},
 	}
 }
 

@@ -68,7 +68,7 @@ var etagArgument = capability.Argument{Name: "etag", Required: true,
 
 var eventsCreate = capability.Descriptor{
 	ID: Provider + ".events.create", Version: 1, Title: "Create an Infomaniak calendar event",
-	Description: "Create one new event in an allow-listed calendar from structured fields. Qatlas builds the " +
+	Description: "Create one new event in an allow-listed calendar from structured fields. Qatlas Connect builds the " +
 		"iCalendar object itself and generates the UID and the resource id; nothing raw comes from an argument. " +
 		"One PUT with If-None-Match: * stores it, so no existing event can be replaced. A repeating event is a " +
 		"single series, never expanded. Attendees may receive an invitation from Infomaniak. The request is " +
@@ -96,7 +96,7 @@ var eventsUpdate = capability.Descriptor{
 	ID: Provider + ".events.update", Version: 1, Title: "Replace an Infomaniak calendar event",
 	Description: "Replace one event of an allow-listed calendar completely by structured fields, bound to its " +
 		"etag. The UID is kept and SEQUENCE is raised, which needs one GET before the single PUT with If-Match. " +
-		"Everything Qatlas does not model, such as alarms and other properties, is lost. An event that holds " +
+		"Everything Qatlas Connect does not model, such as alarms and other properties, is lost. An event that holds " +
 		"overrides of single occurrences or more than one event component is refused. A changed etag or a " +
 		"failed precondition changes nothing. Attendees may receive an update from Infomaniak. The request is " +
 		"never repeated after an unclear result",

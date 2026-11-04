@@ -737,7 +737,7 @@ func ConnectionIDs(cfg *config.Config) map[string]string {
 // from the vault; one the vault unlocked in this process holds no approval for; and one whose approval was
 // given for a credential entry since removed or stored anew; and one that is disabled or past its active_until
 // at now, as approved or as configured now. It is the same rule the vault applies when a token approves (see
-// vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about exactly the models
+// vault.Vault.ApproveWithToken), so 'qconnect vault token list' and 'show' warn about exactly the models
 // an approval would skip.
 func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token, now time.Time) ([]string, error) {
 	approvals, err := v.Approvals()

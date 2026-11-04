@@ -42,8 +42,8 @@ runners, deployments, or an organization.
 ## Observer and operator
 
 An observer is a connection whose `effects` lack `execute`, or whose `tools` list names no
-operator tool. It neither discovers nor runs an operator tool: `qatlas tools`, `qatlas.search`, and
-`qatlas.describe` do not offer them for it, and an invocation is refused as an unsupported capability before
+operator tool. It neither discovers nor runs an operator tool: `qconnect tools`, `qconnect.search`, and
+`qconnect.describe` do not offer them for it, and an invocation is refused as an unsupported capability before
 a secret is read. Planning effects (`create`, `update`) never allow an execution; only `execute` does.
 
 The terminal editor offers two setup profiles that are never preselected. `actions-observer` selects
@@ -160,9 +160,9 @@ and Qatlas keeps them behind a boundary of their own:
 
 - **Listed only.** A connection offers such a tool only when its `tools` list names it. A connection that
   selects by `effects` never offers one: a planning connection with `create` and `update`, an operator with
-  `execute`, or a connection with every effect neither discovers nor runs them. `qatlas tools`, `qatlas describe`, `qatlas.search`,
-  `qatlas.describe`, route selection, and invoke apply the same rule, and the complete tool contract
-  (`qatlas describe --full`) shows `requires_tool_allow_list: true`. The terminal editor marks these tools
+  `execute`, or a connection with every effect neither discovers nor runs them. `qconnect tools`, `qconnect describe`, `qconnect.search`,
+  `qconnect.describe`, route selection, and invoke apply the same rule, and the complete tool contract
+  (`qconnect describe --full`) shows `requires_tool_allow_list: true`. The terminal editor marks these tools
   `(listed only)`.
 - **Never preselected.** No profile a new connection starts with selects them, and the recommended profile
   of a provider may not. The profiles `workflow-maintainer` and `actions-admin` exist only to be chosen on

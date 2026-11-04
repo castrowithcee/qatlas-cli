@@ -75,8 +75,8 @@ func transferSource(t *testing.T) string {
 // transferTarget is an installation with no configuration yet.
 func transferTarget(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	return t.TempDir()
 }
 
@@ -156,7 +156,7 @@ func TestConfigExportImportRoundTripAndModes(t *testing.T) {
 	}
 	for _, want := range []string{"mode create", "create   connections wiki", "create   services wiki",
 		"brings local access from the file: paths", "without secret here until one is set: wiki-vault",
-		"created 4, replaced 0, skipped 0", "qatlas credential set", "qatlas vault approve"} {
+		"created 4, replaced 0, skipped 0", "qconnect credential set", "qconnect vault approve"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("import stdout = %q, want %q", stdout, want)
 		}

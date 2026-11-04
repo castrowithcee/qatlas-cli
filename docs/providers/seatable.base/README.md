@@ -17,9 +17,9 @@ A connection binds the credential to one table through `target`, to an explicit 
 base. A fixed table may include a view after `/`; identifiers use `id:TABLEID` and `id:TABLEID/id:VIEWID`.
 
 ```sh
-qatlas invoke seatable.base.tables.list --connection sales-all-tables
-qatlas invoke seatable.base.columns.list --connection sales-all-tables --arg table=id:0000
-qatlas invoke seatable.base.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
+qconnect invoke seatable.base.tables.list --connection sales-all-tables
+qconnect invoke seatable.base.columns.list --connection sales-all-tables --arg table=id:0000
+qconnect invoke seatable.base.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
 ```
 
 ## Areas

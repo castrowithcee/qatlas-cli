@@ -272,7 +272,7 @@ func (c *Client) classifyStatus(op string, response *http.Response) *provider.Er
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Excalidraw+ did not answer in time"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Excalidraw+ answered with a redirect, which Qatlas does not follow for this request"}
+			Message: "Excalidraw+ answered with a redirect, which Qatlas Connect does not follow for this request"}
 	default:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Excalidraw+ rejected the operation (HTTP %d)", status)}
@@ -410,7 +410,7 @@ func Register(reg *capability.Registry) error {
 				"elements of a scene by element version, and replaces a scene's whole content; every change " +
 				"needs its own confirmation, and the content replacement and both deletions are offered only to a " +
 				"connection whose tools list names them. Deleting a scene or a collection moves it to the trash of " +
-				"Excalidraw+ and breaks its shared links and embeds; Qatlas cannot restore it",
+				"Excalidraw+ and breaks its shared links and embeds; Qatlas Connect cannot restore it",
 			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID, contentPatch.ID,
 				contentReplace.ID, scenesDelete.ID, collectionsDelete.ID),
 		}, {
@@ -419,7 +419,7 @@ func Register(reg *capability.Registry) error {
 				"(personal data), changes a user's name or role, and removes a user; " +
 				"works only on a connection with the * target, every change needs its own confirmation, and the " +
 				"change tools are offered only to a connection whose tools list names them. A removed user loses " +
-				"access and workspace data; Qatlas cannot undo it",
+				"access and workspace data; Qatlas Connect cannot undo it",
 			Tools: []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID},
 		}},
 	}, TestConnection); err != nil {

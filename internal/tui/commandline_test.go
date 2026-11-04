@@ -185,13 +185,13 @@ func TestEnterRunsUpdateLikeU(t *testing.T) {
 	pump(t, m, ":")
 	typeText(t, m, "update")
 	pump(t, m, "enter")
-	if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") {
+	if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qconnect to v0.5.0?") {
 		t.Fatalf("update = screen %v:\n%s", m.screen, screenOf(m))
 	}
 }
 
 func TestEnterRunsLockVaultLikeCtrlL(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	openSectionByName(t, m, sectionServices)
 	pump(t, m, ":")
@@ -304,7 +304,7 @@ func TestPaletteIsAnOverlayWithPlaceholderAndShortcuts(t *testing.T) {
 			continue
 		}
 	}
-	if !strings.Contains(view, "qatlas") && len(lines) != 42 {
+	if !strings.Contains(view, "qconnect") && len(lines) != 42 {
 		t.Errorf("the screen below is gone: %d lines", len(lines))
 	}
 	width := 0

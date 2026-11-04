@@ -535,7 +535,7 @@ func Register(reg *capability.Registry) error {
 				"token, or Discussions: read and write on a fine-grained token; the notification tools, " +
 				"including the thread subscriptions and the listed-only mark-all, need a classic token with " +
 				"notifications (or repo), since GitHub does not support fine-grained tokens for them and " +
-				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request; " +
+				"Qatlas Connect refuses one before any request; a repository subscription is decided by GitHub per request; " +
 				"the gist tools need the gist scope on a classic token for secret gists and for every change, " +
 				"and creating, updating, or deleting a gist needs the user permission Gists: read and write " +
 				"on a fine-grained token, while GitHub lists no permission for the gist reads; the security alert " +
@@ -2072,7 +2072,7 @@ func (c *Client) classifyAnswer(op string, response *http.Response, snippet []by
 		return notFound(op, c.restSubject(response.Request))
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "GitHub answered with a redirect, which Qatlas does not follow; the resource may have moved"}
+			Message: "GitHub answered with a redirect, which Qatlas Connect does not follow; the resource may have moved"}
 	case status == http.StatusConflict:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: conflictMessage}
 	case status == http.StatusMethodNotAllowed:

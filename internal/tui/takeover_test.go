@@ -13,7 +13,7 @@ import (
 // unlock with ctrl+l has been typed up to the question.
 func takeoverModel(t *testing.T) *Model {
 	t.Helper()
-	m, store := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, store := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	cfg := store.New()
 	cfg.Vault.IdleTimeout, cfg.Vault.AdminTimeout, cfg.Logs.RetentionDays = "2h", "5m", 30
 	mustNoError(t, store.Save(cfg))
@@ -78,7 +78,7 @@ func TestUnlockAsksSettingsTakeoverNo(t *testing.T) {
 }
 
 func TestUnlockWithoutFieldsAsksNothing(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	pump(t, m, "ctrl+l")
 	typeText(t, m, "hunter2")
 	pump(t, m, "enter")

@@ -33,7 +33,7 @@ var tokenNow = time.Now
 
 // errTokensNeedEncryption refuses a token command on a vault without a passphrase.
 var errTokensNeedEncryption = errors.New("agent tokens need an encrypted vault: without a passphrase nobody " +
-	"could manage one; run 'qatlas vault encrypt' first")
+	"could manage one; run 'qconnect vault encrypt' first")
 
 func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	cmd := &cobra.Command{
@@ -55,10 +55,10 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"A token never manages credentials or their secrets, the vault's settings, or tokens. Tokens exist\n" +
 			"only while the vault is encrypted, sit encrypted inside it as tokens.age, and are managed only\n" +
 			"from an interactive terminal with the vault's passphrase, like every other 'vault' command. A\n" +
-			"token works in any number of projects: an agent presents it to 'qatlas vault approve' through\n" +
-			"QATLAS_AGENT_TOKEN, or else a line QATLAS_AGENT_TOKEN=<token> in the nearest\n" +
+			"token works in any number of projects: an agent presents it to 'qconnect vault approve' through\n" +
+			"QCONNECT_AGENT_TOKEN, or else a line QCONNECT_AGENT_TOKEN=<token> in the nearest\n" +
 			".qatlas/local/connect/agent.env of its working directory or a directory above it, or else\n" +
-			"in ~/.qatlas/local/connect/agent.env. qatlas only reads these files; a person writes them.\n\n" +
+			"in ~/.qatlas/local/connect/agent.env. qconnect only reads these files; a person writes them.\n\n" +
 			"A token guards against an agent's mistakes and self-help, such as another customer's connection,\n" +
 			"another credential, or more rights, not against an agent that sets out to get around it: an agent\n" +
 			"can read every token file it finds.",
@@ -85,8 +85,8 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"with the connections given with --model as models, each one that reads a vault\n" +
 			"credential, and shows its value: 256 random bits. --expires ends it at the start of a date\n" +
 			"(YYYY-MM-DD, local time) or at an RFC 3339 time; without it the token never expires. 'show'\n" +
-			"shows the value again later. Put it where the agent finds it, QATLAS_AGENT_TOKEN or a\n" +
-			".qatlas/local/connect/agent.env; qatlas never writes it there itself.",
+			"shows the value again later. Put it where the agent finds it, QCONNECT_AGENT_TOKEN or a\n" +
+			".qatlas/local/connect/agent.env; qconnect never writes it there itself.",
 		Args: exactlyOneArg("token name"),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runVaultTokenCreate(c, opts, reg, args[0], append(models, legacyModels...), expires)
@@ -397,18 +397,18 @@ func runVaultApproveWithToken(c *cobra.Command, opts *Options, reg *capability.R
 		return &UsageError{&application.AdminRequiredError{Reason: fmt.Sprintf("the agent token from %s is "+
 			"refused: %s", source, err)}}
 	case errors.Is(err, vaultproc.ErrNoTokens), errors.Is(err, vaultproc.ErrVersion):
-		return fmt.Errorf("%w; lock the vault and unlock it again with this qatlas", err)
+		return fmt.Errorf("%w; lock the vault and unlock it again with this qconnect", err)
 	case err != nil:
 		return fmt.Errorf("%w; %s", err, secret.VaultProcessRemedy(err))
 	}
 
 	out := c.OutOrStdout()
 	if unlogged {
-		fmt.Fprintln(c.ErrOrStderr(), "qatlas: warning: the vault process could not record every decision in the "+
+		fmt.Fprintln(c.ErrOrStderr(), "qconnect: warning: the vault process could not record every decision in the "+
 			"invocation log")
 	}
 	if len(result.Lapsed) > 0 {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s %s of agent token %s %s nothing now: renamed, deleted, "+
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s %s of agent token %s %s nothing now: renamed, deleted, "+
 			"not approved, or reading a credential stored anew\n", plural(len(result.Lapsed), "model", "models"),
 			redactAll(opts.Redactor, result.Lapsed), result.Token, plural(len(result.Lapsed), "covers", "cover"))
 	}

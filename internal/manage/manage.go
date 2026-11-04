@@ -356,7 +356,7 @@ func rollback(steps []undoStep, restoreVault func() error, cause error) error {
 	for _, credential := range order {
 		if roles := notRemoved[credential]; len(roles) > 0 {
 			cause = fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
-				"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(roles, ", "),
+				"them with 'qconnect credential delete %s <role>'", cause, credential, strings.Join(roles, ", "),
 				credential)
 		}
 	}

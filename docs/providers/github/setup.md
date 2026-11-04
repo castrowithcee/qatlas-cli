@@ -66,7 +66,7 @@ Give a token only what a connection needs. A connection that only reads should h
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `github`, the service, a credential, the
    scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
@@ -75,16 +75,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$GITHUB_TOKEN" | qatlas credential set github-reader token
+printf %s "$GITHUB_TOKEN" | qconnect credential set github-reader token
 ```
 
 `github-reader` is the name of the credential in your configuration and `token` is its only secret. To replace a
-token that expired or was revoked, run the same command again with the new token. Run `qatlas config validate` to
+token that expired or was revoked, run the same command again with the new token. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means GitHub accepted the token for
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means GitHub accepted the token for
 the first project or repository the connection's targets name exactly, or, with no such target, for your own user.
 
 **A passing test does not mean every tool works.** GitHub checks the rights again on every call. Compare the token
@@ -292,7 +292,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: this GitHub token may not read project users/octo/projects/3; check its scopes or permissions
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | INSUFFICIENT_SCOPES at user.projectV2: ...
   | documentation: https://docs.github.com/...
 ```
@@ -309,8 +309,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: GitHub rejected the token | The token is wrong, expired, revoked, or for another GitHub than the service address | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. For Enterprise, check the service address. |
-| `auth`: the GitHub token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$GITHUB_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: GitHub rejected the token | The token is wrong, expired, revoked, or for another GitHub than the service address | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. For Enterprise, check the service address. |
+| `auth`: the GitHub token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$GITHUB_TOKEN" \| qconnect credential set <credential> token`. |
 | `permission`: this GitHub token may not read ... | The token lacks the scope or permission for this read | Find the tool group in [Rights per tool group](#rights-per-tool-group), add the scope (classic) or permission (fine-grained), then retry. A fine-grained token also needs access to that repository. |
 | `permission`: this GitHub token may not change ... | The token can read but not write | Add the write right of the group: for example `repo` or "Issues: read and write", `project` for projects, "Pull requests: read and write". |
 | `permission` on a project of a user | A fine-grained token cannot reach user-owned projects | Use a classic token with `read:project` (or `project` to change). |

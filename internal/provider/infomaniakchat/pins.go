@@ -24,7 +24,7 @@ var pinsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Infomaniak kChat pinned messages",
 	Description: "List the pinned messages of one channel this connection may reach, one page at a time; kChat " +
-		"answers with every pinned message at once, so Qatlas slices that answer itself",
+		"answers with every pinned message at once, so Qatlas Connect slices that answer itself",
 	Tags:     []string{"infomaniak", "kchat", "pins", "list", "messages"},
 	Risk:     readRisk,
 	Provider: Provider,

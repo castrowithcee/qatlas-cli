@@ -49,7 +49,7 @@ var (
 
 var tasksCreate = capability.Descriptor{
 	ID: Provider + ".calendar.tasks.create", Version: 1, Title: "Create a Nextcloud calendar task",
-	Description: "Create one task (VTODO) in a bound calendar from structured fields. Qatlas builds the iCalendar " +
+	Description: "Create one task (VTODO) in a bound calendar from structured fields. Qatlas Connect builds the iCalendar " +
 		"object itself and generates its UID and resource id; nothing raw comes from an argument. Without " +
 		"parent_uid one read-only pre-check of the calendar refuses a read-only calendar or one without tasks; " +
 		"with it one query of the calendar must find exactly one task with that UID, otherwise nothing is " +
@@ -78,7 +78,7 @@ var tasksUpdate = capability.Descriptor{
 	ID: Provider + ".calendar.tasks.update", Version: 1, Title: "Replace a Nextcloud calendar task",
 	Description: "Replace one task of a bound calendar completely by structured fields, bound to its etag; this is " +
 		"also how a task is completed. One read-only pre-check reads the task and refuses a changed etag and " +
-		"a task with content Qatlas does not write, such as recurrence, alarms, attachments, or extensions; then " +
+		"a task with content Qatlas Connect does not write, such as recurrence, alarms, attachments, or extensions; then " +
 		"one PUT with the etag follows. UID and parent relation are kept and SEQUENCE raised. A read-only " +
 		"calendar is refused by Nextcloud. The request is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "task", "update"}, Provider: Provider,
@@ -104,7 +104,7 @@ var tasksDelete = capability.Descriptor{
 	Description: "Delete one task of a bound calendar, bound to its etag; a changed etag deletes nothing, and an " +
 		"object that is no task is refused. One read-only pre-check reads the task, then one DELETE follows. " +
 		"A read-only calendar is refused by Nextcloud. Nextcloud may keep the task in its calendar trash bin " +
-		"for a while; Qatlas offers no restore. The request is never repeated after an unclear result",
+		"for a while; Qatlas Connect offers no restore. The request is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "task", "delete"}, Provider: Provider,
 	Risk: eventWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + calendarArgSchema + `,` + eventIDArgSchema + `,` +

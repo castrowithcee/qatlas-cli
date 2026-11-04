@@ -532,7 +532,7 @@ func (m *Model) exportError(err error, path string) string {
 	return m.redactor.Apply(err.Error())
 }
 
-// exportLines are the preview or the result, one line each, in the order of 'qatlas config export'. A line
+// exportLines are the preview or the result, one line each, in the order of 'qconnect config export'. A line
 // that starts with "warning" is drawn as one. They name credentials and roles, never a value.
 func (m *Model) exportLines(res *manage.ExportResult, preview bool) []string {
 	e := m.export

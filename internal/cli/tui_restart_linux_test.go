@@ -165,7 +165,7 @@ func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *upda
 	}
 	cmd := exec.Command(bin, args...)
 	cmd.Env = []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color",
-		"QATLAS_CONFIG=" + configPath, "XDG_RUNTIME_DIR=" + runtimeDir, secret.StoreSelector + "=none",
+		"QCONNECT_CONFIG=" + configPath, "XDG_RUNTIME_DIR=" + runtimeDir, secret.StoreSelector + "=none",
 		runAsTUIEnv + "=1", tuiVersionEnv + "=v1.0.0", tuiReleasesEnv + "=" + server.URL,
 		tuiKeyEnv + "=" + string(ssh.MarshalAuthorizedKey(signer.PublicKey()))}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
@@ -255,7 +255,7 @@ func (r *updateRig) startUpdate() int {
 			if at > len(s) {
 				continue
 			}
-			asked, wait := strings.LastIndex(s[at:], "Update qatlas to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
+			asked, wait := strings.LastIndex(s[at:], "Update qconnect to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
 			question, refused = asked >= 0 && asked > wait, wait >= 0 && wait > asked
 			if question || refused {
 				at = len(s)
@@ -282,7 +282,7 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	}
 	r := newUpdateRig(t, "", "")
 	at := r.startUpdate()
-	r.wait(at, "qatlas updated from v1.0.0 to v2.0.0")
+	r.wait(at, "qconnect updated from v1.0.0 to v2.0.0")
 	at = r.wait(at, "Unlock vault")
 	if content, err := os.ReadFile(r.bin); err != nil || string(content) != r.program {
 		t.Errorf("the installed program is not the release: %v", err)

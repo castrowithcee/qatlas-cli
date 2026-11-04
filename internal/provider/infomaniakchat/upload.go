@@ -35,7 +35,7 @@ const (
 
 // uncertainUpload is appended to a failure of the upload request that may have reached kChat: the file may
 // be stored although no confirmation arrived. kChat has no operation to list or remove an unattached upload.
-const uncertainUpload = "; the file may have been uploaded and cannot be listed or removed through Qatlas, " +
+const uncertainUpload = "; the file may have been uploaded and cannot be listed or removed through Qatlas Connect, " +
 	"repeating the upload may leave a duplicate"
 
 var uploadNameSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(maxFileNameBytes) + `}`

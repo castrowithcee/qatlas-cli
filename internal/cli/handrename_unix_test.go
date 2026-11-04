@@ -19,8 +19,8 @@ func TestConfigValidateReadsTheNamesFromAVaultProcess(t *testing.T) {
 
 	code, stdout, stderr := validateNotes(t, dir)
 	if code != exitOK || !strings.HasPrefix(stdout, "configuration is valid: ") ||
-		!strings.Contains(stderr, "qatlas: note: connection wiki was renamed to wiki-main by hand") ||
-		!strings.Contains(stderr, "'qatlas config rename connection wiki wiki-main --adopt'") ||
+		!strings.Contains(stderr, "qconnect: note: connection wiki was renamed to wiki-main by hand") ||
+		!strings.Contains(stderr, "'qconnect config rename connection wiki wiki-main --adopt'") ||
 		strings.Contains(stderr, "not checked") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}

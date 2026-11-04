@@ -26,7 +26,7 @@ import (
 )
 
 // serveVaultProcess starts a vault process serving the already-encrypted vault at dir, unlocked with
-// passphrase, exactly the way a detached 'qatlas vault unlock' would; it mirrors the CLI's own
+// passphrase, exactly the way a detached 'qconnect vault unlock' would; it mirrors the CLI's own
 // serveVaultInProcess (internal/cli/vaultsync_unix_test.go). The server checks its clients by their
 // program, which is this very test binary on both ends.
 func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server, *vaultproc.Client) {
@@ -99,10 +99,10 @@ func refuseEveryClient(net.Conn) error {
 }
 
 // s on a vault credential's role hands what it just stored on to a running vault process, and x hands over
-// the removal too, the same way 'qatlas credential set' and 'qatlas credential delete' already do.
+// the removal too, the same way 'qconnect credential set' and 'qconnect credential delete' already do.
 func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 	const passphrase, canary = "hunter2", "canary-vault-role-sync-7c2e"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -155,7 +155,7 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 // Without a running vault process, storing or removing a vault secret needs nothing said: the platform
 // keeps working exactly as it did before this editor started telling a process about its writes.
 func TestVaultRoleWriteIsSilentWithoutARunningVaultProcess(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -189,7 +189,7 @@ func TestVaultRoleWriteIsSilentWithoutARunningVaultProcess(t *testing.T) {
 // naming the secret.
 func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -232,7 +232,7 @@ func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 // The warning of a refusing vault process is redacted before it reaches the status line.
 func TestVaultProcessWarningIsRedactedInTheStatusLine(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
@@ -270,7 +270,7 @@ func TestVaultProcessWarningIsRedactedInTheStatusLine(t *testing.T) {
 // through SaveConnectionSetup, the same manage.Service.SyncVaultProcess the role rows use.
 func TestSaveSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -314,7 +314,7 @@ func TestVaultRekeyLocksTheVaultProcess(t *testing.T) {
 		{"turn off encryption", "turn off encryption", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			path := filepath.Join(dir, "config.yaml")
 			store := newTestStore(t, path)
 			setup, _ := newVaultResolver(t, dir)
@@ -362,7 +362,7 @@ func TestVaultRekeyLocksTheVaultProcess(t *testing.T) {
 // exactly as it did before this editor started locking a process ahead of it.
 func TestVaultRekeyIsSilentWithoutARunningVaultProcess(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	setup, _ := newVaultResolver(t, dir)
@@ -393,10 +393,10 @@ func TestVaultRekeyIsSilentWithoutARunningVaultProcess(t *testing.T) {
 }
 
 // withStartableVaultProcess lets 'ctrl+l' unlocking a vault actually hand it to a vault process for the
-// duration of a test: startVaultProcessFn starts a real vaultproc.Server, bound to the socket a real 'qatlas
+// duration of a test: startVaultProcessFn starts a real vaultproc.Server, bound to the socket a real 'qconnect
 // vault serve' would use, from the very snapshot the unlock itself hands it, instead of a second copy of
 // this test binary (see TestMain in vaultheader_test.go, and package cli's own withVaultProcess for the same
-// reason over 'qatlas vault unlock' itself). Every server started this way is closed on cleanup.
+// reason over 'qconnect vault unlock' itself). Every server started this way is closed on cleanup.
 func withStartableVaultProcess(t *testing.T) {
 	t.Helper()
 	original := startVaultProcessFn
@@ -419,13 +419,13 @@ func withStartableVaultProcess(t *testing.T) {
 	}
 }
 
-// 'ctrl+l' unlocking a locked vault hands it to a real vault process on Linux and macOS, exactly the way 'qatlas vault
+// 'ctrl+l' unlocking a locked vault hands it to a real vault process on Linux and macOS, exactly the way 'qconnect vault
 // unlock' does: a fresh model over the very same directory, still locked in its own process, sees it
 // unlocked too once checkVaultProcess asks the process, the way another terminal's window would on its next
 // tick.
 func TestCtrlLStartsARealVaultProcess(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	setup, _ := newVaultResolver(t, dir)
@@ -477,10 +477,10 @@ func TestCtrlLStartsARealVaultProcess(t *testing.T) {
 }
 
 // 'ctrl+l' locking an unlocked, encrypted vault locks the real vault process that holds it open, the same
-// way 'qatlas vault lock' does.
+// way 'qconnect vault lock' does.
 func TestCtrlLLocksARealVaultProcess(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -512,7 +512,7 @@ func TestCtrlLLocksARealVaultProcess(t *testing.T) {
 // without a passphrase, and 'y' ends that real process.
 func TestCtrlLLocksARealVaultProcessWhenOnlyTheProcessHoldsItUnlocked(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	setup, _ := newVaultResolver(t, dir)

@@ -136,7 +136,7 @@ var connectionsAccessList = capability.Descriptor{
 	Arguments: []capability.Argument{connectionIDArgument},
 	Fields: []capability.Field{
 		{Name: "connection_id", Description: "The connection the access list belongs to"},
-		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+		{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 		{Name: "members", Description: "Users on the list as user_id and role (admin, member, or the role " +
 			"as Make names it, untrusted data), with name and email when Make reports them, untrusted data"},
 		{Name: "groups", Description: "Groups on the list as membership_id, role, and name, untrusted data"},
@@ -178,7 +178,7 @@ var connectionsAccessSet = capability.Descriptor{
 		{Name: "role", Required: true, Description: "admin (entity admin) or member (entity member)"}},
 	Fields: []capability.Field{
 		{Name: "connection_id", Description: "The connection that was addressed"},
-		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+		{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 		{Name: "user_id", Description: "The user whose role was set"},
 		{Name: "role", Description: "The role the user now holds, as Make reports it after the change"},
 		{Name: "changed", Description: "False when the user already held the role and no change was sent"},

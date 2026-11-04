@@ -42,7 +42,7 @@ Follow [Add it to Qatlas](../gitea/setup.md#add-it-to-qatlas), with provider `fo
 `$FORGEJO_TOKEN` in place of the token variable:
 
 ```sh
-printf %s "$FORGEJO_TOKEN" | qatlas credential set <credential> token
+printf %s "$FORGEJO_TOKEN" | qconnect credential set <credential> token
 ```
 
 ## Check the connection

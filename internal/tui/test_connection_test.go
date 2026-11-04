@@ -19,7 +19,7 @@ import (
 // newTestableModel builds an editor with one configured connection and an injected tester.
 func newTestableModel(t *testing.T, tester Tester, red *redact.Redactor) *Model {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newResolver(t, dir, nil)
 
@@ -255,7 +255,7 @@ func TestConnectionTestExplainsALockedVaultInEditorTerms(t *testing.T) {
 	runTest(t, m)
 
 	words := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Connection test could not run", "locked", "qatlas vault unlock"} {
+	for _, want := range []string{"Connection test could not run", "locked", "qconnect vault unlock"} {
 		if !strings.Contains(words, want) {
 			t.Errorf("locked-vault result does not contain %q:\n%s", want, screenOf(m))
 		}
@@ -277,7 +277,7 @@ func TestConnectionTestGuards(t *testing.T) {
 	})
 
 	t.Run("an empty list produces no command", func(t *testing.T) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		secrets, _ := newResolver(t, dir, nil)
 		m, err := buildModel(store, func(context.Context, string) (provider.Class, error) {

@@ -14,9 +14,9 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
-// testReleaseKeyEnv carries the public key of a test's own release, in authorized_keys form, to the qatlas
+// testReleaseKeyEnv carries the public key of a test's own release, in authorized_keys form, to the qconnect
 // processes the test starts from this test binary, which trust it in place of the compiled-in keys. Only the
-// test binary reads it; qatlas itself has no such way.
+// test binary reads it; qconnect itself has no such way.
 const testReleaseKeyEnv = "QATLAS_CLI_TEST_RELEASE_KEY"
 
 // trustTestReleaseKey makes releaseKeys return the key testReleaseKeyEnv carries, if any.

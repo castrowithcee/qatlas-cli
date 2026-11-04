@@ -413,7 +413,7 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 
 // The saved connection is tested by the very tester the Connections list uses.
 func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newResolver(t, dir, nil)
 	var calls []string
@@ -491,7 +491,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	}
 
 	// The setup reusing a credential, and its summary.
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))

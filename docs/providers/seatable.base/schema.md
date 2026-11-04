@@ -52,8 +52,8 @@ are untrusted provider content; control characters in `data`, `permission_type`,
 - List the tables before repeating an uncertain change.
 
 ```sh
-qatlas invoke seatable.base.tables.create --connection sales-all-tables --confirm --arg name=Angebote
-qatlas invoke seatable.base.tables.rename --connection sales-rw --confirm --arg table=id:0001 --arg name=Faelle
+qconnect invoke seatable.base.tables.create --connection sales-all-tables --confirm --arg name=Angebote
+qconnect invoke seatable.base.tables.rename --connection sales-rw --confirm --arg table=id:0001 --arg name=Faelle
 ```
 
 ## Columns
@@ -77,9 +77,9 @@ the columns of an allowed table. `columns.delete` is offered only by a connectio
 - List the columns before repeating an uncertain change.
 
 ```sh
-qatlas invoke seatable.base.columns.create --connection sales-rw --confirm --arg table=id:0000 \
+qconnect invoke seatable.base.columns.create --connection sales-rw --confirm --arg table=id:0000 \
   --arg name=Status --arg type=single-select --arg data='{"options":[{"name":"Offen"}]}'
-qatlas invoke seatable.base.columns.update --connection sales-rw --confirm --arg table=id:0000 \
+qconnect invoke seatable.base.columns.update --connection sales-rw --confirm --arg table=id:0000 \
   --arg column=Status --arg name=Stand
 ```
 
@@ -97,6 +97,6 @@ the options of single-select and multiple-select columns of an allowed table. `o
 - List the columns before repeating an uncertain change.
 
 ```sh
-qatlas invoke seatable.base.columns.options-add --connection sales-rw --confirm --arg table=id:0000 \
+qconnect invoke seatable.base.columns.options-add --connection sales-rw --confirm --arg table=id:0000 \
   --arg column=Status --arg options='[{"name":"Offen","color":"#FFE9A8"}]'
 ```

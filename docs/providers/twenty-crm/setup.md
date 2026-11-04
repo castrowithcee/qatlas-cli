@@ -49,7 +49,7 @@ for them.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `twenty-crm`, the service, a credential, the
    scope (object targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the key as its `api-key` secret.
@@ -58,17 +58,17 @@ Without the guided setup, store the key on the command line. It is read from sta
 in the shell history:
 
 ```sh
-printf %s "$TWENTY_API_KEY" | qatlas credential set twenty-reader api-key
+printf %s "$TWENTY_API_KEY" | qconnect credential set twenty-reader api-key
 ```
 
 `twenty-reader` is the name of the credential in your configuration and `api-key` is its only secret. To replace a
 key that was revoked, run the same command again with the new key. Run
-`qatlas config validate` to check the configuration file. It contacts no provider. Object targets and what a
+`qconnect config validate` to check the configuration file. It contacts no provider. Object targets and what a
 connection reaches without them are described under [Object targets](README.md#object-targets-and-exclusions).
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means:
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means:
 
 - Without object targets: Twenty let the key read companies, and the workspace describes the company fields Qatlas
   reads. If `company` is excluded, no company is read and only the catalog is checked.
@@ -198,7 +198,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: the workspace role of this API key may not read views; check the role of the API key in Twenty
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | ForbiddenException SOME_CODE: ...
 ```
 
@@ -214,8 +214,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Twenty rejected the API key | The key is wrong, revoked, or from another workspace than the service | Create a new key ([Create a role and a key](#create-a-role-and-a-key)), assign the role again, and store it with `qatlas credential set <credential> api-key`. For a self-hosted workspace, check the service address. |
-| `auth`: the Twenty API key is unusable | The stored key is shorter than 8 or longer than 4096 characters or holds spaces or line breaks | Store it again with `printf %s "$TWENTY_API_KEY" \| qatlas credential set <credential> api-key`. |
+| `auth`: Twenty rejected the API key | The key is wrong, revoked, or from another workspace than the service | Create a new key ([Create a role and a key](#create-a-role-and-a-key)), assign the role again, and store it with `qconnect credential set <credential> api-key`. For a self-hosted workspace, check the service address. |
+| `auth`: the Twenty API key is unusable | The stored key is shorter than 8 or longer than 4096 characters or holds spaces or line breaks | Store it again with `printf %s "$TWENTY_API_KEY" \| qconnect credential set <credential> api-key`. |
 | Test connection: `auth` with object targets | Twenty answers an unusable key with an empty schema, so the key is the likely cause | Check the key as in the row above. |
 | `permission`: the workspace role of this API key may not perform this operation (or read ...) | The role lacks the right for this tool | Find the tool group in [Rights per tool group](#rights-per-tool-group) and add the object right or settings right in the role. |
 | `permission`: ... may not create or change records of this object or one of the given fields | The role lacks "Edit Records" on the object or on a field | Add "Edit Records" on the object, and on the fields you write. |

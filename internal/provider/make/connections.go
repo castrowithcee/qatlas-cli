@@ -66,8 +66,8 @@ var listTypeRegexp = regexp.MustCompile(listTypePattern)
 var connectionIDSchema = idSchema
 
 var connectionIDArgument = capability.Argument{Name: "connection_id", Required: true,
-	Description: "Make connection identifier (not a Qatlas connection); its team is always re-checked live " +
-		"against Make's own report, and a Qatlas connection with a scenario or folder allow-list reaches no Make " +
+	Description: "Make connection identifier (not a Qatlas Connect connection); its team is always re-checked live " +
+		"against Make's own report, and a Qatlas Connect connection with a scenario or folder allow-list reaches no Make " +
 		"connections at all, since they belong to no scenario"}
 
 const connectionSummaryProperties = `"id":{"type":"integer"},"name":{"type":"string"},"account_name":{"type":"string"},` +
@@ -103,7 +103,7 @@ var connectionSummaryFields = []capability.Field{
 	{Name: "package_name", Description: "App package the connection belongs to, untrusted data"},
 	{Name: "expire", Description: "When the stored credential expires, as Make reports it"},
 	{Name: "scoped", Description: "True when Make reports the connection's scopes as sufficient"},
-	{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+	{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 	{Name: "organization_id", Description: "Organization of the connection, when Make reports one"},
 	{Name: "editable", Description: "True when Make reports the connection's data as editable"},
 }
@@ -194,7 +194,7 @@ var connectionsEditableSchema = capability.Descriptor{
 	Arguments: []capability.Argument{connectionIDArgument},
 	Fields: []capability.Field{
 		{Name: "connection_id", Description: "The connection the parameters belong to"},
-		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+		{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 		{Name: "parameters", Description: "Names of the editable parameters, untrusted data, at most " +
 			strconv.Itoa(maxEditableParameters) + " of at most " + strconv.Itoa(maxEditableParameterLength) +
 			" characters"},
@@ -222,7 +222,7 @@ var connectionsTest = capability.Descriptor{
 	Arguments: []capability.Argument{connectionIDArgument},
 	Fields: []capability.Field{
 		{Name: "connection_id", Description: "The connection that was tested"},
-		{Name: "team_id", Description: "Team of the connection; always the Qatlas connection's bound team"},
+		{Name: "team_id", Description: "Team of the connection; always the Qatlas Connect connection's bound team"},
 		{Name: "verified", Description: "True when Make reports the stored credential as valid; Make reports " +
 			"nothing else about the test"},
 	},

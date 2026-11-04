@@ -162,7 +162,7 @@ var teamVariablesDelete = capability.Descriptor{
 	ID: Provider + ".team-variables.delete", Version: 1, Title: "Delete a variable of the bound Make team",
 	Description: "Delete one custom variable of the bound team for good. The variable is listed first and a " +
 		"system variable or an unknown name is refused. Make requires its confirmed flag, which is sent only " +
-		"when confirmed is true. Scenarios of the team that read the variable by name lose its value; Qatlas " +
+		"when confirmed is true. Scenarios of the team that read the variable by name lose its value; Qatlas Connect " +
 		"does not look them up, check them first. Sends one request and never repeats it. Offered only when a " +
 		"connection's tools list names it, in no profile. Needs the team-variables:write and " +
 		"team-variables:read scopes",

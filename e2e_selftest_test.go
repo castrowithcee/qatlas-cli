@@ -38,8 +38,8 @@ func selftestInstallation(t *testing.T) (home string, env []string) {
 		}
 	}
 	env = append(os.Environ(), "HOME="+home, "USERPROFILE="+home, "XDG_CONFIG_HOME="+filepath.Join(home, "xdg"),
-		"APPDATA="+filepath.Join(home, "appdata"), "QATLAS_CLI_HOME="+cliHome,
-		"QATLAS_CONFIG="+filepath.Join(cliHome, "config.yaml"))
+		"APPDATA="+filepath.Join(home, "appdata"), "QCONNECT_HOME="+cliHome,
+		"QCONNECT_CONFIG="+filepath.Join(cliHome, "config.yaml"))
 	return home, env
 }
 

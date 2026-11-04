@@ -691,7 +691,7 @@ func TestTheGuidedSetupReadsTheListAsADraft(t *testing.T) {
 // "lst" of the lister provider, which reads its list through src.
 func encryptedListerModel(t *testing.T, src *listSource, passphrase string) *Model {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := config.NewStore(filepath.Join(dir, "config.yaml"), listerRegistry(t))
 	cfg := store.New()
 	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "lister", BaseURL: "https://wiki.example.invalid"}))

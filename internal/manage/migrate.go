@@ -23,7 +23,7 @@ import (
 // former provider and tool IDs the file named, which it names by their current IDs now, as every save writes
 // them. Reapproval names the connections that read a credential of an encrypted vault and whose effects the
 // migration narrowed to those of their tools: their approval no longer matches, and each needs approving once
-// ('qatlas vault approve', or in the editor). With a locked vault it lists every such connection, since
+// ('qconnect vault approve', or in the editor). With a locked vault it lists every such connection, since
 // whether it was approved is unknown. Retargeted names in the same way the connections whose targets or
 // exclusions the migration rewrote into their current form (see config.Config.RetargetedConnections).
 // OutdatedTargets names the connections whose targets their provider could not carry over: they are written as

@@ -395,7 +395,7 @@ func (c *Client) classify(op string, response *http.Response, change bool) *prov
 			Message: "Infomaniak rate-limited the operation; it allows at most 60 requests per minute per token"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Infomaniak answered with a redirect, which Qatlas does not follow for this request"}
+			Message: "Infomaniak answered with a redirect, which Qatlas Connect does not follow for this request"}
 	case status == http.StatusServiceUnavailable:
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op,
 			Message: "Infomaniak kDrive is unavailable or in maintenance"}
@@ -494,7 +494,7 @@ func Register(reg *capability.Registry) error {
 			Name: roleToken,
 			Description: "Infomaniak API token, created in the Infomaniak Manager under Account settings, API " +
 				"tokens; it reaches every Infomaniak account and kDrive its owner administers, so the connection " +
-				"target decides which single account, and which of its drives, Qatlas exposes",
+				"target decides which single account, and which of its drives, Qatlas Connect exposes",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "account and drives",

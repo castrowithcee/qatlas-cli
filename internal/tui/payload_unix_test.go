@@ -15,7 +15,7 @@ import (
 // not be lost because the first is already there.
 func TestPayloadSaveChainsTheVaultProcessWarnings(t *testing.T) {
 	const passphrase = "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)

@@ -60,8 +60,8 @@ func TestProviderConformance(t *testing.T) {
 // namespace, and the same contract of every tool, all of them equal to what the registry holds. Discovery
 // reads no secret.
 func TestProviderConformanceDiscoveryParity(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, "version: 4\ndefaults: {}\n")
 	reg := sharedRegistry()
 	var reads atomic.Int32
@@ -116,7 +116,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		arguments := `{"provider":"` + metadata.ID + `","all":true,"limit":50}`
 		for {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-				`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+				`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
 			responses, stderr := runMCPWithOptions(t, reg, input, mcpOptions())
 			result := toolResultFrom(t, responses["1"])
 			if stderr != "" || result.IsError {
@@ -149,7 +149,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		}
 		for _, full := range []bool{false, true} {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-				`,"name":"qatlas.describe","arguments":{"operation":"` + descriptor.ID + `","version":` +
+				`,"name":"qconnect.describe","arguments":{"operation":"` + descriptor.ID + `","version":` +
 				strconv.Itoa(descriptor.Version) + `,"full":` + strconv.FormatBool(full) + `}}}` + "\n"
 			described, stderr := runMCPWithOptions(t, reg, input, mcpOptions())
 			if stderr != "" {

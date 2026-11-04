@@ -26,7 +26,7 @@ const maxProjectNameLength = 255
 // owner's role may not do this. The provider body is never read into a message.
 const projectPermissionMessage = "n8n refused this projects operation: the instance's license may not include " +
 	"the Projects feature (project roles), the API key may lack the project scope, or its owner's role may not " +
-	"manage projects; Qatlas cannot tell which of the three"
+	"manage projects; Qatlas Connect cannot tell which of the three"
 
 // maxProjectTelemetryTags bounds the custom telemetry tags listed for one project, whatever n8n sends.
 const maxProjectTelemetryTags = 20

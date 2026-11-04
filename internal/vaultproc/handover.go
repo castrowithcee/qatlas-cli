@@ -301,7 +301,7 @@ func (s *Server) snapshot() (vault.Snapshot, bool) {
 		LocksAt: &locksAt, UnlockedAt: &unlocked, MaxUnlock: s.MaxUnlock}, true
 }
 
-// verifyRelease checks the release files the way 'qatlas update' does, by itself: the signature over
+// verifyRelease checks the release files the way 'qconnect update' does, by itself: the signature over
 // checksums.txt by one of keys, the archive's checksum listed there, and then the hash of the program in the
 // archive, which it returns. The error never reaches a client.
 func verifyRelease(files ReleaseFiles, keys []ssh.PublicKey) (string, error) {

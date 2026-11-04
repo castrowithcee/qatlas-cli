@@ -18,7 +18,7 @@ import (
 // maxBatchRows is Baserow's default batch size limit; it is checked before any I/O.
 const maxBatchRows = 200
 
-const batchNote = "One to 200 rows per call, sent as one request that Qatlas never repeats. "
+const batchNote = "One to 200 rows per call, sent as one request that Qatlas Connect never repeats. "
 
 const batchRowsOutput = `{"type":"object","properties":{"rows":{"type":"array","items":` + rowSchema +
 	`},"count":{"type":"integer"}},"required":["rows","count"],"additionalProperties":false}`
@@ -66,7 +66,7 @@ var rowsBatchUpdate = capability.Descriptor{
 var rowsBatchDelete = capability.Descriptor{
 	ID: Provider + ".rows.batch-delete", Version: 1, Title: "Delete Baserow rows in a batch",
 	Description: batchNote + "Delete several rows of a table by id; ids must be distinct. Baserow may keep them in " +
-		"the trash for a while; Qatlas does not restore them",
+		"the trash for a while; Qatlas Connect does not restore them",
 	Tags: []string{"baserow", "rows", "batch", "delete", "records"}, Provider: Provider, RequiresToolAllowList: true,
 	Risk: rowChangeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `,"row_ids":{"type":"array",` +

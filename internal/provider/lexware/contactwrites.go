@@ -125,7 +125,7 @@ var contactsCreate = capability.Descriptor{
 
 var contactsUpdate = capability.Descriptor{
 	ID: Provider + ".contacts.update", Version: 1, Title: "Update a Lexware contact",
-	Description: "Change fields of one contact: Qatlas reads the contact, replaces only the given fields and " +
+	Description: "Change fields of one contact: Qatlas Connect reads the contact, replaces only the given fields and " +
 		"writes it back with the version it read. A change made by someone else in between is reported as a " +
 		"conflict and never overwritten. A contact cannot switch between person and company, and a contact " +
 		"with more than one address, e-mail address, phone number or contact person is refused unchanged",
@@ -359,12 +359,12 @@ func rejectMultipleEntries(op string, contact rawObject) error {
 		for _, raw := range contact.object(group) {
 			if many(raw) {
 				return refusal(op, "the contact has several addresses, e-mail addresses, or phone numbers of one kind; "+
-					"Qatlas does not change such contacts because Lexware would drop entries")
+					"Qatlas Connect does not change such contacts because Lexware would drop entries")
 			}
 		}
 	}
 	if many(contact.object("company")["contactPersons"]) {
-		return refusal(op, "the contact has several contact persons; Qatlas does not change such contacts because "+
+		return refusal(op, "the contact has several contact persons; Qatlas Connect does not change such contacts because "+
 			"Lexware would drop entries")
 	}
 	return nil

@@ -28,15 +28,15 @@ type recordingDeletion struct {
 var recordingDeletions = []recordingDeletion{
 	{tool: "session-recordings.delete", method: "HeatmapSessionRecording.deleteSessionRecording",
 		op: "delete session recording", title: "Delete a Matomo session recording",
-		summary: "Delete a session recording; Qatlas offers no way to restore it. Matomo does not document what " +
+		summary: "Delete a session recording; Qatlas Connect offers no way to restore it. Matomo does not document what " +
 			"happens to its recorded sessions"},
 	{tool: "recorded-sessions.delete-session", method: "HeatmapSessionRecording.deleteRecordedSession",
 		op: "delete recorded session", title: "Delete a recorded Matomo session",
-		summary: "Delete all recorded page views within one recorded session of a visit; Qatlas offers no way to " +
+		summary: "Delete all recorded page views within one recorded session of a visit; Qatlas Connect offers no way to " +
 			"restore them", subID: "idVisit", subHint: "ID of the visit, from matomo.recorded-sessions.list", personal: true},
 	{tool: "recorded-sessions.delete-pageview", method: "HeatmapSessionRecording.deleteRecordedPageview",
 		op: "delete recorded page view", title: "Delete a recorded page view of a Matomo session",
-		summary: "Delete one recorded page view within a recorded session; Qatlas offers no way to restore it",
+		summary: "Delete one recorded page view within a recorded session; Qatlas Connect offers no way to restore it",
 		subID:   "idLogHsr", subHint: "ID of the recorded page view, from matomo.recorded-sessions.list", personal: true},
 }
 

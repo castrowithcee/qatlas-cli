@@ -50,7 +50,7 @@ func TestWrapIndentsContinuations(t *testing.T) {
 		{"one two three four", 9, "one two\nthree\nfour"},
 		{"1. first item text", 12, "1. first\n   item text"},
 		{"  - bullet item here", 14, "  - bullet\n    item here"},
-		{"  qatlas tools --query x", 16, "  qatlas tools\n  --query x"},
+		{"  qconnect tools --query x", 16, "  qconnect tools\n  --query x"},
 		{"abcdefghij", 4, "abcd\nefgh\nij"},
 	} {
 		if got := Wrap(tt.line, tt.width); got != tt.want {

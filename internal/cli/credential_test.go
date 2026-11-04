@@ -70,8 +70,8 @@ func testOptions(t *testing.T, store *secret.MemoryStore) *Options {
 // the directory holding it. The fallback file, if one is ever written, lands in the same directory.
 func keyringFixture(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(keyringConfig), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
@@ -83,7 +83,7 @@ func configIn(dir string) string { return filepath.Join(dir, "config.yaml") }
 
 // writeLegacyPlaintext writes one entry into a plaintext credentials.yaml directly, switch turned on.
 // Nothing in this build writes such a file any more; this stands in for a version that still did, so a
-// test can build the compatibility state 'qatlas credential delete' and 'config validate --secrets' still
+// test can build the compatibility state 'qconnect credential delete' and 'config validate --secrets' still
 // read and clear.
 func writeLegacyPlaintext(t *testing.T, dir, credential, role, value string) {
 	t.Helper()
@@ -233,7 +233,7 @@ func TestCredentialHelpRecommendsTheSystemKeyring(t *testing.T) {
 	words := strings.Join(strings.Fields(stdout.String()), " ")
 	for _, want := range []string{
 		"system keyring", "recommended", "Secret Service on Linux", "macOS Keychain",
-		"Windows Credential Manager", "QATLAS_<CREDENTIAL>_<ROLE> overrides", "type vault",
+		"Windows Credential Manager", "QCONNECT_<CREDENTIAL>_<ROLE> overrides", "type vault",
 		secret.StoreSelector + "=" + secret.StoreNone,
 	} {
 		if !strings.Contains(words, want) {
@@ -352,7 +352,7 @@ func TestCredentialDelete(t *testing.T) {
 func TestCredentialDeleteNamesTheStoreItSkipped(t *testing.T) {
 	dir := keyringFixture(t)
 	red := &redact.Redactor{}
-	// A nil store is what SystemStore returns for QATLAS_CREDENTIAL_STORE=none: switched off, never
+	// A nil store is what SystemStore returns for QCONNECT_CREDENTIAL_STORE=none: switched off, never
 	// consulted, and holding nothing this run was going to touch.
 	opts := &Options{
 		Redactor: red,
@@ -448,8 +448,8 @@ func TestConfigValidateReportsOnlySuccessWithoutTheFlag(t *testing.T) {
 // The source report is a check, not a listing: it must never be cut short by the record limit, because
 // the rows it silently dropped would read as an all-clear.
 func TestConfigValidateSecretsIsNotTruncated(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 
 	const connections = 30 // two roles each, well past the default limit of 50 records
@@ -538,7 +538,7 @@ func TestCredentialDeleteReportsARetainedEntry(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	if !strings.HasPrefix(stderr, "qatlas: config-invalid: ") {
+	if !strings.HasPrefix(stderr, "qconnect: config-invalid: ") {
 		t.Errorf("stderr = %q, want the same code the file gets everywhere else", stderr)
 	}
 	for _, want := range []string{"may still be stored in the plaintext file", "chmod 600 " + fallback} {
@@ -581,8 +581,8 @@ func TestStoredSecretNeverReachesTheOutput(t *testing.T) {
 		storedSecret = "canary-store-secret-9e05ba"
 	)
 
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	// Nothing may shadow the store, or the run would prove the wrong stage.
 	t.Setenv(secret.DerivedEnvName("vault-reader", "token-id"), "")
 	t.Setenv(secret.DerivedEnvName("vault-reader", "token-secret"), "")
@@ -772,8 +772,8 @@ func TestCredentialSetAcceptsTheRolesOfTheNamedProvider(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("QATLAS_CONFIG", "")
-			t.Setenv("QATLAS_CLI_HOME", "")
+			t.Setenv("QCONNECT_CONFIG", "")
+			t.Setenv("QCONNECT_HOME", "")
 			dir := t.TempDir()
 			if err := os.WriteFile(configIn(dir), []byte(providerRolesConfig), 0o600); err != nil {
 				t.Fatal(err)

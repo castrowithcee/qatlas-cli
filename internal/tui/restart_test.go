@@ -50,7 +50,7 @@ func TestAnInvalidHandoffIsIgnored(t *testing.T) {
 func TestTheNewEditorOpensTheUnlockDialogOnlyForAVaultLockedByTheUpdate(t *testing.T) {
 	h := &handoff{Version: 1, From: "v0.4.0", To: "v0.5.0", Unlocked: true}
 
-	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	locked.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	locked.adopt(h)
 	if locked.screen != screenVaultUnlock {
@@ -70,11 +70,11 @@ func TestTheNewEditorOpensTheUnlockDialogOnlyForAVaultLockedByTheUpdate(t *testi
 
 	for name, build := range map[string]func() (*Model, *handoff){
 		"unlocked before, still unlocked": func() (*Model, *handoff) {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			return m, h
 		},
 		"locked before": func() (*Model, *handoff) {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			return m, &handoff{Version: 1, From: "v0.4.0", To: "v0.5.0"}
 		},
 		"unencrypted": func() (*Model, *handoff) { return unencryptedVaultModel(t), h },
@@ -89,7 +89,7 @@ func TestTheNewEditorOpensTheUnlockDialogOnlyForAVaultLockedByTheUpdate(t *testi
 		if m.screen != screenNav {
 			t.Errorf("%s: screen %v, want no dialog", name, m.screen)
 		}
-		if !strings.Contains(m.render(), "qatlas updated from v0.4.0 to v0.5.0") {
+		if !strings.Contains(m.render(), "qconnect updated from v0.4.0 to v0.5.0") {
 			t.Errorf("%s: the update is not reported:\n%s", name, m.render())
 		}
 	}

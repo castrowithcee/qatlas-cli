@@ -38,7 +38,7 @@ import (
 // These tests run the old vault process in the test process, with the program it was started from played by
 // a copy of the test binary in a directory of the test's own: replacing that copy, as an update does, is what
 // the server is told through its ownProgram seam. The successor is a real process started from that path, the
-// test binary as a helper process in mode successor, which takes the vault over the way 'qatlas vault serve
+// test binary as a helper process in mode successor, which takes the vault over the way 'qconnect vault serve
 // --successor' does. Both ends of every connection accept each other (allow): the peer check of a handover is
 // the connection's own, already covered elsewhere.
 
@@ -272,7 +272,7 @@ func (f *handoverFixture) replaceWithRelease() {
 }
 
 // start is the server's StartSuccessor: it starts the program it is given as a helper process, the way
-// StartSuccessorProcess starts 'qatlas vault serve --successor', and ends it on any failure.
+// StartSuccessorProcess starts 'qconnect vault serve --successor', and ends it on any failure.
 func (f *handoverFixture) start(ctx context.Context, program string, snap vault.Snapshot) (int, func(), error) {
 	f.starts.Add(1)
 	if program != f.program {

@@ -277,7 +277,7 @@ func TestSaveSetupConflictWritesNoSecret(t *testing.T) {
 }
 
 func TestVaultMigrateConflictKeepsTheOtherChangeAndRepeatSucceeds(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	cfg := newTestConfig(t)

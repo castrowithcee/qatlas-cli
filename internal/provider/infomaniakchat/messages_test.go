@@ -343,6 +343,6 @@ func TestMessagesSendUnclearResultIsNeverRetried(t *testing.T) {
 		t.Fatalf("error leaked the message text: %v", err)
 	}
 	if posts != 1 {
-		t.Fatalf("posts = %d, want exactly one attempt, never repeated by Qatlas itself", posts)
+		t.Fatalf("posts = %d, want exactly one attempt, never repeated by Qatlas Connect itself", posts)
 	}
 }

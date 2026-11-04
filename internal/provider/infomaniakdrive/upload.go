@@ -101,7 +101,7 @@ var filesUpload = capability.Descriptor{
 		{Name: "conflict", Description: "What to do when the name already exists in the folder: error (default) " +
 			"refuses the upload; rename keeps both and gives the new file an available name; only for a new file"},
 		{Name: "client_token", Description: "Optional 16 to 36 character token that makes a repeated direct upload " +
-			"return the file of the first one; Qatlas generates it when omitted and reports it. Not available " +
+			"return the file of the first one; Qatlas Connect generates it when omitted and reports it. Not available " +
 			"for sessions of files above 100 MB"},
 		localfile.UploadPathArgument(),
 		{Name: localfile.ContentArgument, Description: "File content as base64, up to 4 MiB; instead of " + localfile.LocalPathArgument},

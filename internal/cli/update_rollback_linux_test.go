@@ -58,7 +58,7 @@ func withChosenProgram(t *testing.T, program string) {
 	t.Cleanup(func() { chosenProgram = original })
 }
 
-// run runs 'qatlas update --to v0.31.0' with args against the fixture and returns the exit code, stderr, and the
+// run runs 'qconnect update --to v0.31.0' with args against the fixture and returns the exit code, stderr, and the
 // installed program.
 func (f *rollbackFixture) run(t *testing.T, tweak func(*selfupdate.Client), args ...string) (int, string, string) {
 	t.Helper()
@@ -360,7 +360,7 @@ func TestRollbackLocksTheVaultProcessWhateverTheSettingSays(t *testing.T) {
 	if runningBefore || running(signerKeyClient) {
 		t.Error("the vault process was not locked before the replacement")
 	}
-	for _, want := range []string{"older version cannot take over", "'qatlas vault unlock'"} {
+	for _, want := range []string{"older version cannot take over", "'qconnect vault unlock'"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr lacks %q: %q", want, stderr)
 		}

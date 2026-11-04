@@ -448,7 +448,7 @@ var pullRequestsCheckMerged = &tool{
 		return capability.Descriptor{
 			Title: "Check whether a " + p.name + " pull request is merged",
 			Description: "Ask whether a pull request of a repository inside the connection's targets has been " +
-				"merged; the instance answers with a status only, which Qatlas reports as a boolean",
+				"merged; the instance answers with a status only, which Qatlas Connect reports as a boolean",
 			Tags:        []string{p.id, "pull-requests", "get"},
 			Risk:        readRisk(p.id + pullSensitivity),
 			InputSchema: inputSchema(pullNumberProperties, "number"),

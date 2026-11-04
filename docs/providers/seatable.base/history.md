@@ -37,7 +37,7 @@ never enter the audit trail or the invoke log. The shared rules are in
   when `operations` had more entries than one call reports.
 
 ```sh
-qatlas invoke seatable.base.rows.activities --connection sales-all-tables --arg table=id:0000 \
+qconnect invoke seatable.base.rows.activities --connection sales-all-tables --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj
-qatlas invoke seatable.base.base.operations --connection sales-all-tables --arg page=1
+qconnect invoke seatable.base.base.operations --connection sales-all-tables --arg page=1
 ```

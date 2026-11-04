@@ -224,12 +224,12 @@ func TestMigrateHomeLeavesAnExplicitPlaceAlone(t *testing.T) {
 		name, explicit, config, cliHome string
 	}{
 		{name: "flag", explicit: filepath.Join(home, "elsewhere.yaml")},
-		{name: "QATLAS_CONFIG", config: filepath.Join(home, "elsewhere.yaml")},
-		{name: "QATLAS_CLI_HOME", cliHome: filepath.Join(home, "elsewhere")},
+		{name: "QCONNECT_CONFIG", config: filepath.Join(home, "elsewhere.yaml")},
+		{name: "QCONNECT_HOME", cliHome: filepath.Join(home, "elsewhere")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("QATLAS_CONFIG", tt.config)
-			t.Setenv("QATLAS_CLI_HOME", tt.cliHome)
+			t.Setenv("QCONNECT_CONFIG", tt.config)
+			t.Setenv("QCONNECT_HOME", tt.cliHome)
 
 			m, err := MigrateHome(tt.explicit)
 
@@ -249,8 +249,8 @@ func TestLegacyDefault(t *testing.T) {
 	home := legacyHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	legacy := filepath.Join(home, ".qatlas", "cli", "config.yaml")
 	for _, tt := range []struct {
 		path string
@@ -267,16 +267,16 @@ func TestLegacyDefault(t *testing.T) {
 			t.Errorf("LegacyDefault(%q) = %v, want %v", tt.path, got, tt.want)
 		}
 	}
-	t.Run("QATLAS_CONFIG", func(t *testing.T) {
-		t.Setenv("QATLAS_CONFIG", legacy)
+	t.Run("QCONNECT_CONFIG", func(t *testing.T) {
+		t.Setenv("QCONNECT_CONFIG", legacy)
 		if LegacyDefault(legacy) {
-			t.Error("LegacyDefault() with QATLAS_CONFIG = true")
+			t.Error("LegacyDefault() with QCONNECT_CONFIG = true")
 		}
 	})
-	t.Run("QATLAS_CLI_HOME", func(t *testing.T) {
-		t.Setenv("QATLAS_CLI_HOME", filepath.Dir(legacy))
+	t.Run("QCONNECT_HOME", func(t *testing.T) {
+		t.Setenv("QCONNECT_HOME", filepath.Dir(legacy))
 		if LegacyDefault(legacy) {
-			t.Error("LegacyDefault() with QATLAS_CLI_HOME = true")
+			t.Error("LegacyDefault() with QCONNECT_HOME = true")
 		}
 	})
 }
@@ -286,8 +286,8 @@ func TestMigrateDefault(t *testing.T) {
 	home := legacyHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	legacy := filepath.Join(home, ".qatlas", "cli")
 	before := snapshot(t, legacy)
 

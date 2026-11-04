@@ -265,7 +265,7 @@ func (c *Client) findOwnReaction(ctx context.Context, op, path, content, login s
 			return 0, nil
 		}
 	}
-	return 0, providerError(op, "GitHub holds more reactions of this content than Qatlas scans to find the "+
+	return 0, providerError(op, "GitHub holds more reactions of this content than Qatlas Connect scans to find the "+
 		"account's own")
 }
 

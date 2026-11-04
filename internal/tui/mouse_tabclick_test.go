@@ -72,7 +72,7 @@ func TestTabClickDoesNothingWhileAsked(t *testing.T) {
 		t.Errorf("a click over a confirmation: screen %v section %v", m.screen, m.section)
 	}
 
-	m, _ = newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ = newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	sizedModel(m, 160, 40)
 	openSectionByName(t, m, sectionServices)
 	pressNew(t, m)

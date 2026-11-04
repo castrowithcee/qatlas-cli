@@ -19,8 +19,8 @@ import (
 // the Twenty tests are provider-neutral and reused.
 func githubConfig(t *testing.T) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	return writeConfig(t, `version: 4
 services:
   gh:
@@ -290,7 +290,7 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var reads atomic.Int32
 			code, stdout, stderr := runTwentyCLI(t, &reads, tt.input, tt.args...)
-			if code != exitUsage || stdout != "" || !strings.Contains(stderr, "qatlas: "+tt.code+":") {
+			if code != exitUsage || stdout != "" || !strings.Contains(stderr, "qconnect: "+tt.code+":") {
 				t.Fatalf("exit=%d stdout=%q stderr=%q, want %s", code, stdout, stderr, tt.code)
 			}
 			if reads.Load() != 0 {
@@ -307,11 +307,11 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"github","limit":50}}}`,
+			`,"name":"qconnect.search","arguments":{"provider":"github","limit":50}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"github.project-items.list","version":2}}}`,
+			`,"name":"qconnect.describe","arguments":{"operation":"github.project-items.list","version":2}}}`,
 		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"github.project-items.list","version":1,` +
+			`,"name":"qconnect.invoke","arguments":{"operation":"github.project-items.list","version":1,` +
 			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)
@@ -343,8 +343,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 // same invalid request over the CLI and MCP, even inside a git repository whose origin lies inside the
 // targets. It is refused before a secret is read, so GitHub is never contacted.
 func TestGitHubRepositoryNeverComesFromTheWorkingDirectory(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, `version: 4
 services:
   gh:
@@ -387,7 +387,7 @@ defaults: {}
 		var reads atomic.Int32
 		code, stdout, stderr := runTwentyCLI(t, &reads, `{"number":42}`,
 			"invoke", "github.issues.get", "--connection", connection, "--config", path)
-		if code != exitUsage || stdout != "" || strings.TrimSpace(stderr) != "qatlas: "+want {
+		if code != exitUsage || stdout != "" || strings.TrimSpace(stderr) != "qconnect: "+want {
 			t.Errorf("CLI on %s: exit=%d stdout=%q stderr=%q, want exit %d and %q", connection, code, stdout,
 				stderr, exitUsage, want)
 		}
@@ -397,7 +397,7 @@ defaults: {}
 			reads.Add(1)
 			return ""
 		}, nil, nil, redactor)}
-		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
 			`"arguments":{"operation":"github.issues.get","connection":"` + connection + `","arguments":{"number":42}}}}` +
 			"\n"
 		responses, _ := runMCPWithOptions(t, sharedRegistry(), input, options)

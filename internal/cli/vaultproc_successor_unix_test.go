@@ -19,8 +19,8 @@ func successorHome(t *testing.T) (string, *age.X25519Identity) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 	return home, encryptedVault(t, filepath.Join(home, ".qatlas", "cli"))
 }
@@ -97,16 +97,16 @@ func TestSuccessorConfigPathKeepsEveryOtherPath(t *testing.T) {
 			serveEarlier(t, vault.New(dir).Dir())
 			return filepath.Join(dir, "config.yaml")
 		},
-		"QATLAS_CONFIG": func(t *testing.T, home string) string {
+		"QCONNECT_CONFIG": func(t *testing.T, home string) string {
 			path := filepath.Join(home, ".qatlas", "cli", "config.yaml")
 			serveEarlier(t, vault.New(filepath.Dir(path)).Dir())
-			t.Setenv("QATLAS_CONFIG", path)
+			t.Setenv("QCONNECT_CONFIG", path)
 			return path
 		},
-		"QATLAS_CLI_HOME": func(t *testing.T, home string) string {
+		"QCONNECT_HOME": func(t *testing.T, home string) string {
 			dir := filepath.Join(home, ".qatlas", "cli")
 			serveEarlier(t, vault.New(dir).Dir())
-			t.Setenv("QATLAS_CLI_HOME", dir)
+			t.Setenv("QCONNECT_HOME", dir)
 			return filepath.Join(dir, "config.yaml")
 		},
 		"no earlier vault process": func(t *testing.T, home string) string {

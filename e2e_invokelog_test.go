@@ -14,7 +14,7 @@ import (
 )
 
 // TestInvokeLogEndToEnd drives the built binary's invocation log: several reading invokes over both the CLI
-// and the MCP broker append entries to vault/logs, none of them carrying an argument or a secret, 'qatlas
+// and the MCP broker append entries to vault/logs, none of them carrying an argument or a secret, 'qconnect
 // vault logs verify' reports the chain intact, and once one entry is changed by hand it reports the break
 // instead.
 func TestInvokeLogEndToEnd(t *testing.T) {
@@ -56,7 +56,7 @@ defaults:
 	c := &runner{bin: bin, seen: &seen, env: []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		secret.StoreSelector + "=none",
 		"E2E_LOG_ID=" + canaryPrimaryID,
 		"E2E_LOG_SECRET=" + canaryPrimarySecret,
@@ -82,11 +82,11 @@ defaults:
 	const queryCanary = "searchcanary774422"
 	mcpInput := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{` + mcpMeta + `}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qatlas.search","arguments":{"query":"` + queryCanary + `","connection":"primary"}}}` + "\n" +
+		`,"name":"qconnect.search","arguments":{"query":"` + queryCanary + `","connection":"primary"}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qatlas.describe","arguments":{"operation":"bookstack.pages.list"}}}` + "\n" +
+		`,"name":"qconnect.describe","arguments":{"operation":"bookstack.pages.list"}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"list","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"primary"}}}` + "\n"
+		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"primary"}}}` + "\n"
 	code, stdout, stderr := c.runInput(t, mcpInput, "mcp")
 	if code != 0 || stderr != "" {
 		t.Fatalf("mcp exit=%d stderr=%q", code, stderr)
@@ -138,7 +138,7 @@ defaults:
 			t.Fatalf("log line %q: %v", line, err)
 		}
 		if entry.Session == "" || entry.ReqBytes == nil || entry.RespBytes == nil ||
-			(entry.Operation == "qatlas.search" || entry.Operation == "qatlas.describe") && entry.Connection != "" {
+			(entry.Operation == "qconnect.search" || entry.Operation == "qconnect.describe") && entry.Connection != "" {
 			t.Fatalf("MCP entry = %s, want a session, both sizes, and no connection on navigation", line)
 		}
 		sessions[entry.Session] = true

@@ -67,7 +67,7 @@ defaults:
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatalf("writing the configuration: %v", err)
 	}
-	// What 'qatlas credential set' would have stored from a terminal: an encrypted vault.
+	// What 'qconnect credential set' would have stored from a terminal: an encrypted vault.
 	v := vault.New(dir)
 	offer := func(string) (string, error) { return passphrase, nil }
 	if err := v.Set("vault-reader", "token-id", storedID, offer); err != nil {
@@ -97,7 +97,7 @@ defaults:
 	c := &runner{bin: bin, seen: &seen, env: []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		"XDG_RUNTIME_DIR=" + runtimeDir,
 		secret.StoreSelector + "=none",
 	}}
@@ -123,22 +123,22 @@ defaults:
 	assertLocked := func(t *testing.T) {
 		t.Helper()
 		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
-		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: vault-locked: ") ||
-			!strings.Contains(stderr, "run 'qatlas vault unlock' in a terminal") {
+		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: vault-locked: ") ||
+			!strings.Contains(stderr, "run 'qconnect vault unlock' in a terminal") {
 			t.Errorf("invoke: exit %d, stdout %q, stderr %q; want vault-locked with the next step", code, stdout, stderr)
 		}
 		code, stdout, stderr = c.run(t, "connections", "--output", "json")
 		if code != 0 || !strings.Contains(stdout, `"unusable":"vault-locked"`) {
 			t.Errorf("connections: exit %d, stdout %q, stderr %q; want the connection unusable", code, stdout, stderr)
 		}
-		list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
+		list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
 		if list.Result.IsError || !strings.Contains(string(list.Result.Structured), `"unusable":"vault-locked"`) {
 			t.Errorf("MCP list = %+v, want the connection unusable", list.Result)
 		}
-		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke")
+		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
 		if !invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), `"code":"vault-locked"`) ||
-			!strings.Contains(string(invoke.Result.Structured), "qatlas vault unlock") {
-			t.Errorf("MCP invoke = %s, want vault-locked naming 'qatlas vault unlock'", invoke.Result.Structured)
+			!strings.Contains(string(invoke.Result.Structured), "qconnect vault unlock") {
+			t.Errorf("MCP invoke = %s, want vault-locked naming 'qconnect vault unlock'", invoke.Result.Structured)
 		}
 	}
 
@@ -166,11 +166,11 @@ defaults:
 			t.Errorf("connections: exit %d, stdout %q, stderr %q; want no unusable column", code, stdout, stderr)
 		}
 		// The broker was started while the vault was locked, and uses the vault process all the same.
-		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke")
+		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
 		if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 			t.Errorf("MCP invoke = %s, want the page", invoke.Result.Structured)
 		}
-		list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
+		list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
 		if list.Result.IsError || strings.Contains(string(list.Result.Structured), "unusable") {
 			t.Errorf("MCP list = %s, want no unusable column", list.Result.Structured)
 		}
@@ -193,7 +193,7 @@ defaults:
 		copied := &runner{bin: other, seen: &seen, env: c.env}
 		code, stdout, stderr := copied.run(t, "invoke", "bookstack.pages.list")
 		if code == 0 || strings.Contains(stdout, "Vault Runbook") ||
-			!strings.Contains(stderr, "is not this qatlas of this user") ||
+			!strings.Contains(stderr, "is not this qconnect of this user") ||
 			!strings.Contains(stderr, fmt.Sprintf("(process %d)", processID)) {
 			t.Errorf("invoke by another program: exit %d, stdout %q, stderr %q; want a refusal naming process %d",
 				code, stdout, stderr, processID)
@@ -223,8 +223,8 @@ defaults:
 			t.Cleanup(func() { _ = os.WriteFile(configPath, []byte(config), 0o600) })
 
 			code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
-			if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki ") ||
-				!strings.Contains(stderr, "'qatlas vault approve'") {
+			if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: approval-required: connection wiki ") ||
+				!strings.Contains(stderr, "'qconnect vault approve'") {
 				t.Errorf("invoke: exit %d, stdout %q, stderr %q; want approval-required naming the way out",
 					code, stdout, stderr)
 			}
@@ -236,12 +236,12 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, `"unusable":"approval-required"`) {
 				t.Errorf("connections: exit %d, stdout %q, stderr %q; want the connection unusable", code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
 			if !invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), `"code":"approval-required"`) ||
 				!strings.Contains(string(invoke.Result.Structured), "an agent cannot approve it") {
 				t.Errorf("MCP invoke = %s, want approval-required for an agent", invoke.Result.Structured)
 			}
-			list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
+			list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
 			if list.Result.IsError || !strings.Contains(string(list.Result.Structured), `"unusable":"approval-required"`) {
 				t.Errorf("MCP list = %s, want the connection unusable", list.Result.Structured)
 			}
@@ -271,7 +271,7 @@ defaults:
 		}
 
 		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
-		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki ") {
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: approval-required: connection wiki ") {
 			t.Fatalf("invoke before approve: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 		}
 
@@ -309,7 +309,7 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
 				t.Fatalf("invoke after renaming to %s: exit %d, stdout %q, stderr %q", step.name, code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"`+step.name+`"}`, "qatlas.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"`+step.name+`"}`, "qconnect.invoke")
 			if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 				t.Errorf("MCP invoke through %s = %s, want the page", step.name, invoke.Result.Structured)
 			}
@@ -334,7 +334,7 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
 				t.Fatalf("invoke after renaming to %s: exit %d, stdout %q, stderr %q", step.name, code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
 			if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 				t.Errorf("MCP invoke after renaming to %s = %s, want the page", step.name, invoke.Result.Structured)
 			}
@@ -357,7 +357,7 @@ defaults:
 	}
 }
 
-// broker is a running 'qatlas mcp' that answers one request at a time.
+// broker is a running 'qconnect mcp' that answers one request at a time.
 type broker struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser

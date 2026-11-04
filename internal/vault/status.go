@@ -1,6 +1,6 @@
 package vault
 
-// Status reports what qatlas vault status shows: no secret value ever appears in it.
+// Status reports what qconnect vault status shows: no secret value ever appears in it.
 type Status struct {
 	State State
 	Dir   string

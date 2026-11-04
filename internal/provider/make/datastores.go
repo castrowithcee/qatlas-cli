@@ -55,7 +55,7 @@ var dataStoreIDSchema = idSchema
 
 var dataStoreIDArgument = capability.Argument{Name: "datastore_id", Required: true,
 	Description: "Make data store identifier; its team is always re-checked live against Make's own report, " +
-		"and a Qatlas connection with a scenario allow-list reaches no data stores at all"}
+		"and a Qatlas Connect connection with a scenario allow-list reaches no data stores at all"}
 
 var dataStoreNameSchema = `{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxConnectionNameLength) + `}`
 
@@ -74,7 +74,7 @@ var dataStoreSummarySchema = `{"type":"object","properties":{"id":{"type":"integ
 var dataStoreSummaryFields = []capability.Field{
 	{Name: "id", Description: "Make data store identifier, used as datastore_id by the other data store tools"},
 	{Name: "name", Description: "Data store name, untrusted data"},
-	{Name: "team_id", Description: "Team of the data store; always the Qatlas connection's bound team"},
+	{Name: "team_id", Description: "Team of the data store; always the Qatlas Connect connection's bound team"},
 	{Name: "records", Description: "Number of records, as Make reports it"},
 	{Name: "size", Description: "Current size as Make reports it, untrusted data"},
 	{Name: "max_size", Description: "Maximum size as Make reports it, untrusted data"},

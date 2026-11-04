@@ -10,7 +10,7 @@ import (
 )
 
 // The invocation log of an MCP server records one entry per exchange of the baseline (initialize,
-// server/discover, tools/list), the navigation (qatlas.search, qatlas.describe), and the invokes, each with
+// server/discover, tools/list), the navigation (qconnect.search, qconnect.describe), and the invokes, each with
 // the byte lengths of the JSON-RPC request line and response message. Both lengths exclude the line feed
 // that ends a message, whichever way it went. An entry is appended only after the response was written, so
 // a logging failure, which is a warning on stderr, can neither change nor delay a response.
@@ -42,11 +42,11 @@ func (e *mcpExchange) classify(message mcpMessage) {
 		}
 		_ = json.Unmarshal(message.Params, &params)
 		switch params.Name {
-		case "qatlas.search":
+		case "qconnect.search":
 			e.area, e.operation = invokelog.AreaNavigation, invokelog.OperationMCPSearch
-		case "qatlas.describe":
+		case "qconnect.describe":
 			e.area, e.operation = invokelog.AreaNavigation, invokelog.OperationMCPDescribe
-		case "qatlas.invoke":
+		case "qconnect.invoke":
 			e.area = invokelog.AreaInvoke
 		}
 	}
@@ -54,7 +54,7 @@ func (e *mcpExchange) classify(message mcpMessage) {
 
 // mcpCall carries what one tool call hands from the core to the log.
 type mcpCall struct {
-	// core holds the fields the application core logged for a qatlas.invoke that reached it.
+	// core holds the fields the application core logged for a qconnect.invoke that reached it.
 	core *invokelog.Fields
 	// dir locates the log once the configuration was loaded; it is empty before.
 	dir string
@@ -82,7 +82,7 @@ func (s *mcpServer) reply(ex *mcpExchange, response mcpResponse) {
 }
 
 // logToolCall logs a tool call after its response was written, or not, where the call was cancelled. A
-// cancelled qatlas.invoke that reached the core still ran, so it keeps its entry, without resp_bytes; any
+// cancelled qconnect.invoke that reached the core still ran, so it keeps its entry, without resp_bytes; any
 // other cancelled call had no response and gets none.
 func (s *mcpServer) logToolCall(ex *mcpExchange, call *mcpCall, err error, n int, written bool) {
 	if ex.area == "" {

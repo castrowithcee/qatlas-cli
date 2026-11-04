@@ -26,7 +26,7 @@ the Forgejo instance of the connection.
 ## Configuration
 
 `base_url` is required and has no default: `https://HOST`, optionally with a port, without a path, user info, query,
-or fragment. An instance served below a path prefix is not supported. `qatlas config validate` refuses a missing or
+or fragment. An instance served below a path prefix is not supported. `qconnect config validate` refuses a missing or
 other address with `config-invalid` without quoting it. Qatlas appends `/api/v1` and follows no redirect, so the token
 never travels to another host. The only request outside `/api/v1` is the download of a release, issue, or comment
 attachment from `/attachments/UUID` on the same origin, described in [Releases](releases.md) and
@@ -124,7 +124,7 @@ Limits:
 ## Version and connection test
 
 A connection accepts one product in a supported version: Forgejo from 15 (LTS), Gitea from 1.27 including the
-version numbers from 28. Development builds count as their number. `qatlas connection test` first proves the
+version numbers from 28. Development builds count as their number. `qconnect connection test` first proves the
 product and version fail-closed, then reads with the token:
 
 1. `GET /api/forgejo/v1/version` without the token. A version means Forgejo.

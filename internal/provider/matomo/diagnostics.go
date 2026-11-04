@@ -30,7 +30,7 @@ var (
 	locationProviderForm = regexp.MustCompile(locationProviderPattern)
 	installNonceForm     = regexp.MustCompile(nonceSchemaPattern)
 
-	unblockSentOnce = "; sent once and never repeated by Qatlas: after an unclear result, check the blocked IP " +
+	unblockSentOnce = "; sent once and never repeated by Qatlas Connect: after an unclear result, check the blocked IP " +
 		"addresses in Matomo before repeating it"
 )
 
@@ -38,7 +38,7 @@ var seoRank = capability.Descriptor{
 	ID: Provider + ".seo.rank", Version: 1, Title: "Get the SEO metrics of a domain",
 	Description: "Read SEO metrics of the host of a URL (SEO.getRank), such as the Bing index size and the domain age. It needs a " +
 		"view right on any website. Matomo itself asks external SEO services about the host, so the host leaves your " +
-		"Matomo instance; only the host is sent to Matomo, and Qatlas never fetches the address. Metrics and labels " +
+		"Matomo instance; only the host is sent to Matomo, and Qatlas Connect never fetches the address. Metrics and labels " +
 		"are untrusted text",
 	Tags: []string{"matomo", "seo", "rank", "diagnostics"}, Risk: readRisk(instanceSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":` +
@@ -106,7 +106,7 @@ var jsTrackerInstallGetStatus = capability.Descriptor{
 	ID: Provider + ".js-tracker-install.get-status", Version: 1, Title: "Get the JavaScript tracker install test result",
 	Description: "Read whether Matomo recorded a successful test request of the JavaScript tracking code for a website " +
 		"(JsTrackerInstallCheck.wasJsTrackerInstallTestSuccessful) and the main URL of the website. It needs a view " +
-		"right on the website. Qatlas does not start the test; it only reads the result of one started elsewhere. " +
+		"right on the website. Qatlas Connect does not start the test; it only reads the result of one started elsewhere. " +
 		"The main URL is untrusted text and never fetched",
 	Tags: []string{"matomo", "tracking", "install", "diagnostics"}, Risk: readRisk(sitesSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,"nonce":{"type":"string",` +

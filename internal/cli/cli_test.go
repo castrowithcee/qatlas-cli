@@ -29,7 +29,7 @@ func TestRun(t *testing.T) {
 			name:         "no arguments prints help",
 			args:         nil,
 			wantCode:     exitOK,
-			wantInStdout: []string{"Usage:", "qatlas"},
+			wantInStdout: []string{"Usage:", "qconnect"},
 		},
 		{
 			name:     "help lists all global flags",
@@ -43,7 +43,7 @@ func TestRun(t *testing.T) {
 			name:       "version output is deterministic",
 			args:       []string{"--version"},
 			wantCode:   exitOK,
-			wantStdout: "qatlas dev\n",
+			wantStdout: "qconnect dev\n",
 		},
 		{
 			name:       "dev build cannot self-update",
@@ -203,7 +203,7 @@ func TestRunRuntimeError(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
-	if got := stderr.String(); got != "qatlas: runtime: synthetic internal failure\n" {
+	if got := stderr.String(); got != "qconnect: runtime: synthetic internal failure\n" {
 		t.Errorf("stderr = %q, want the diagnostic line only", got)
 	}
 }
@@ -222,7 +222,7 @@ func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	value := stderr.String()
-	diagnostic := strings.Index(value, "qatlas: usage: confirmed usage failure\n")
+	diagnostic := strings.Index(value, "qconnect: usage: confirmed usage failure\n")
 	usage := strings.Index(value, "Usage:")
 	audit := strings.Index(value, `{"request_id":"audit-id","result":"error"}`)
 	if diagnostic != 0 || usage < 0 || audit < 0 || !(diagnostic < usage && usage < audit) {
@@ -233,8 +233,8 @@ func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 // Only a malformed command line is followed by the usage block. A well-formed request that is refused keeps
 // exit code 2 and says what is wrong and what to do, without burying that under the flag list.
 func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, "version: 4\n")
 	for _, tt := range []struct {
 		name  string
@@ -256,7 +256,7 @@ func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runTools(t, nil, tt.args...)
-			if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: ") {
+			if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qconnect: ") {
 				t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
 			if got := strings.Contains(stderr, "\nUsage:\n"); got != tt.usage {
@@ -268,11 +268,11 @@ func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
 
 // The code already says invalid-request, so the message does not repeat it.
 func TestInvalidRequestIsNamedOnce(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, "version: 4\n")
 	code, _, stderr := runTools(t, nil, "invoke", "bookstack.pages.get", "--arg", "id=x", "--config", cfg)
-	if code != exitUsage || !strings.HasPrefix(stderr, "qatlas: invalid-request: ") ||
+	if code != exitUsage || !strings.HasPrefix(stderr, "qconnect: invalid-request: ") ||
 		strings.Contains(strings.ToLower(stderr), "invalid request") {
 		t.Errorf("exit=%d stderr=%q", code, stderr)
 	}

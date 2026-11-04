@@ -56,7 +56,7 @@ credential, so you can revoke each on its own.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `nextcloud`, the service (the instance
    address), a credential, the scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and enter the user ID as its `user-id` secret and
@@ -66,17 +66,17 @@ Without the guided setup, store both values on the command line. Each is read fr
 appear in the shell history:
 
 ```sh
-printf %s "$NEXTCLOUD_USER" | qatlas credential set nextcloud-reader user-id
-printf %s "$NEXTCLOUD_APP_PASSWORD" | qatlas credential set nextcloud-reader app-password
+printf %s "$NEXTCLOUD_USER" | qconnect credential set nextcloud-reader user-id
+printf %s "$NEXTCLOUD_APP_PASSWORD" | qconnect credential set nextcloud-reader app-password
 ```
 
 `nextcloud-reader` is the name of the credential in your configuration. To replace a revoked app password, run the
-second command again with the new one. Run `qatlas config validate` to check the configuration file. It contacts
+second command again with the new one. Run `qconnect config validate` to check the configuration file. It contacts
 no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Nextcloud accepted the user ID
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Nextcloud accepted the user ID
 and the app password and answered the reads named under [Configuration](README.md#configuration).
 
 **A passing test does not mean every tool works.** The test checks the Files root or folder, the bound calendars, or
@@ -204,7 +204,7 @@ path into it. A refusal adds a second part with Nextcloud's own answer, for exam
 
 ```text
 permission: this Nextcloud identity may not perform this operation on the path
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | Sabre\DAV\Exception\Forbidden: Access denied
 ```
 
@@ -216,9 +216,9 @@ instance (as its administrator) for Nextcloud's own reason.
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Nextcloud rejected the user ID or the app password | HTTP 401. The user ID or the app password is wrong, or the app password was revoked | Create a new app password ([Create an app password](#create-an-app-password)) and store it again with `qatlas credential set <credential> app-password`. Check that `user-id` is the user ID, not the e-mail address. |
-| `auth`: the Nextcloud user ID is unusable | The stored user ID is empty or holds a character such as `/`, `\`, `:`, `%`, `?`, `#`, or a control character | Store the user ID again with `printf %s "$NEXTCLOUD_USER" \| qatlas credential set <credential> user-id`. |
-| `auth`: the Nextcloud app password is unusable | The stored value is shorter than 8 characters or holds a space, a line break, or a character that is not printable ASCII | Store it again with `printf %s "$NEXTCLOUD_APP_PASSWORD" \| qatlas credential set <credential> app-password`. |
+| `auth`: Nextcloud rejected the user ID or the app password | HTTP 401. The user ID or the app password is wrong, or the app password was revoked | Create a new app password ([Create an app password](#create-an-app-password)) and store it again with `qconnect credential set <credential> app-password`. Check that `user-id` is the user ID, not the e-mail address. |
+| `auth`: the Nextcloud user ID is unusable | The stored user ID is empty or holds a character such as `/`, `\`, `:`, `%`, `?`, `#`, or a control character | Store the user ID again with `printf %s "$NEXTCLOUD_USER" \| qconnect credential set <credential> user-id`. |
+| `auth`: the Nextcloud app password is unusable | The stored value is shorter than 8 characters or holds a space, a line break, or a character that is not printable ASCII | Store it again with `printf %s "$NEXTCLOUD_APP_PASSWORD" \| qconnect credential set <credential> app-password`. |
 | `provider-error`: a Nextcloud service must use https (or a similar message about the address) | The address is `http`, or holds user information, a query, or a fragment | Use the plain `https://host` address, optionally with the installation path; see [Configuration](README.md#configuration). |
 | `tls`: the TLS connection could not be established | The certificate of the instance is not trusted by this computer, or does not match the host name | Install a certificate from a trusted authority on the instance, or make this computer trust the authority that issued it. |
 | `unreachable`: Nextcloud could not be reached | Wrong host, no network route, or the instance is down | Check the address, the network, and any proxy settings. |

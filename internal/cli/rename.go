@@ -25,7 +25,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"a service with the connections that use it, a connection with the defaults that name it, a\n" +
 			"credential with the connections that read it or release it as a forward credential. The entry\n" +
 			"keeps its id. Each command first lists every place the rename touches: the references it\n" +
-			"rewrites, the approvals, the agent tokens whose cover it ends, and what qatlas cannot change,\n" +
+			"rewrites, the approvals, the agent tokens whose cover it ends, and what qconnect cannot change,\n" +
 			"such as agent calls, scripts, and instructions that name it, and log entries written before.\n" +
 			"--dry-run stops there and changes nothing.\n\n" +
 			"Without --dry-run the command runs only from an interactive terminal; where the vault is\n" +
@@ -40,7 +40,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"longer covers anything through it; tokens are never rewritten. A name an agent token names as a\n" +
 			"model, or that a stale approval in the vault still holds, is refused. The rename is logged as\n" +
 			"one config.connection.rename entry with both names and the connection's id. Should the run stop\n" +
-			"before it is complete, the approval left under the other name approves nothing and 'qatlas vault\n" +
+			"before it is complete, the approval left under the other name approves nothing and 'qconnect vault\n" +
 			"approve' names it. A service is renamed in the configuration alone: approvals name the provider\n" +
 			"and the endpoint, not the service.\n\n" +
 			"A credential takes its secrets along: the system keyring's keys of a keyring credential and the\n" +
@@ -49,14 +49,14 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"token whose model's approval the rename does not carry, because it ran without an admin session,\n" +
 			"no longer covers anything through it. Environment variables derived from the old name, which\n" +
 			"override its stored secrets, are read under the new name from then on; the list names both, and\n" +
-			"qatlas changes no environment. A name the vault, the system keyring, or the unencrypted fallback\n" +
+			"qconnect changes no environment. A name the vault, the system keyring, or the unencrypted fallback\n" +
 			"file already holds secrets under is refused. Should the run stop after the secrets and before the\n" +
-			"configuration, 'qatlas vault approve' names what it left; running the same rename again finishes\n" +
+			"configuration, 'qconnect vault approve' names what it left; running the same rename again finishes\n" +
 			"it, and the same command with --revert puts the secrets and the approvals back under the old name\n" +
 			"and removes keyring keys under the new name that copy the old ones, leaving the configuration as it\n" +
 			"is.\n\n" +
 			"A connection or credential renamed by hand in config.yaml leaves its approvals and secrets under\n" +
-			"the old name; 'qatlas config validate' and 'qatlas vault approve' name it when they can read the\n" +
+			"the old name; 'qconnect config validate' and 'qconnect vault approve' name it when they can read the\n" +
 			"vault. Renaming it again the usual way would not fix that. With --adopt the configuration is taken\n" +
 			"as it is, with the new name and every reference to it, and what the vault and the system keyring\n" +
 			"hold under the old name follows it: a connection's approval, a credential's vault entry and\n" +
@@ -81,7 +81,7 @@ func newConfigRenameCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 		sub := &cobra.Command{
 			Use:   kind.name + " <old> <new>",
 			Short: kind.short,
-			Long:  kind.short + "; see 'qatlas config rename'.",
+			Long:  kind.short + "; see 'qconnect config rename'.",
 			Args: func(_ *cobra.Command, args []string) error {
 				if len(args) != 2 {
 					return newSyntaxError(fmt.Errorf("expected the current and the new %s name, got %d arguments",
@@ -167,7 +167,7 @@ func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, 
 		if plan.Adopt {
 			what = "adopt"
 		}
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: %s cancelled, nothing was changed\n", what)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: %s cancelled, nothing was changed\n", what)
 		return finishRename(c, asJSON, doc)
 	}
 	res, err := svc.Rename(contextOrBackground(c.Context()), plan)
@@ -205,7 +205,7 @@ func runRename(c *cobra.Command, opts *Options, reg *capability.Registry, kind, 
 			pairs[i] = apply(env.Old) + " -> " + apply(env.New)
 		}
 		fmt.Fprintf(out, "environment variables that override the stored secrets are read under the new name: %s; "+
-			"qatlas changed no environment\n", strings.Join(pairs, ", "))
+			"qconnect changed no environment\n", strings.Join(pairs, ", "))
 	}
 	if plan.Adopt {
 		fmt.Fprintf(out, "adopted the rename of %s %s to %s\n", kind, apply(old), apply(name))
@@ -362,7 +362,7 @@ func writeRevertPlan(out io.Writer, opts *Options, plan *manage.RenamePlan) {
 		case reader.Approval == manage.ApprovalValid:
 			text = "approved; stays"
 		case reader.Approval == manage.ApprovalOpen:
-			text = "open; stays open until 'qatlas vault approve'"
+			text = "open; stays open until 'qconnect vault approve'"
 		}
 		fmt.Fprintf(out, "  reader    %s: %s\n", apply(reader.Connection), text)
 	}
@@ -377,9 +377,9 @@ func renameReaderText(opts *Options, reader manage.RenameReader) string {
 	case reader.Carried:
 		return "approved; carried over, so " + name + " stays approved"
 	case reader.Approval == manage.ApprovalOpen:
-		return "open; stays open until 'qatlas vault approve'"
+		return "open; stays open until 'qconnect vault approve'"
 	}
-	return "approved; not carried over, so " + name + " needs 'qatlas vault approve'"
+	return "approved; not carried over, so " + name + " needs 'qconnect vault approve'"
 }
 
 func renameApprovalText(opts *Options, plan *manage.RenamePlan) string {
@@ -390,11 +390,11 @@ func renameApprovalText(opts *Options, plan *manage.RenamePlan) string {
 	case plan.Approval == "":
 		return "none to carry over"
 	case plan.CarryApproval && plan.Approval == manage.ApprovalOpen:
-		return "open; carried over, so " + name + " stays open until 'qatlas vault approve'"
+		return "open; carried over, so " + name + " stays open until 'qconnect vault approve'"
 	case plan.CarryApproval:
 		return "approved; carried over, so " + name + " stays approved"
 	}
-	return plan.Approval + "; not carried over, so " + name + " needs 'qatlas vault approve'"
+	return plan.Approval + "; not carried over, so " + name + " needs 'qconnect vault approve'"
 }
 
 // renameDocument is what 'config rename --output json' writes. Credential is there only for a credential.

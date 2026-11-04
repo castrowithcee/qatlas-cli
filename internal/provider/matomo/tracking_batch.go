@@ -26,7 +26,7 @@ const (
 )
 
 // trackingBatchSentOnce words the unclear outcome of a bulk request that may have arrived.
-const trackingBatchSentOnce = "; sent once and never repeated by Qatlas: a repeat counts the entries Matomo already " +
+const trackingBatchSentOnce = "; sent once and never repeated by Qatlas Connect: a repeat counts the entries Matomo already " +
 	"recorded twice, so read the visit log with matomo.visits.list before repeating any of them"
 
 // batchKinds maps the type of an entry to the builder of the single tool of the same name. Chatbot requests are
@@ -69,7 +69,7 @@ var trackingRecordBatch = capability.Descriptor{
 		"every entry, and an entry that names another website refuses the whole call. An entry cannot carry " +
 		"clientIp, timestamp, country, region, city, latitude, or longitude, and requests of AI chatbots are no " +
 		"entries, so the call needs no token, reads no secret, and sends neither token_auth nor an " +
-		"Authorization header; the visitor of every entry without userAgent is the Qatlas host with the user " +
+		"Authorization header; the visitor of every entry without userAgent is the Qatlas Connect host with the user " +
 		"agent qatlas-connect. The request is sent once and never retries. Matomo answers with the number of entries " +
 		"it tracked and the number it rejected as invalid; it skips an invalid entry and records the others, so " +
 		"a call can succeed in part, and it can abort on an exception in the middle (HTTP 500) after it " +

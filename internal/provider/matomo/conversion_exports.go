@@ -74,7 +74,7 @@ var conversionExportsList = capability.Descriptor{
 var conversionExportsDelete = capability.Descriptor{
 	ID: Provider + ".conversion-exports.delete", Version: 1, Title: "Delete a Matomo conversion export",
 	Description: "Delete an advertising conversion export of a website " +
-		"(AdvertisingConversionExport.deleteConversionExport); Qatlas offers no way to restore or recreate it. " +
+		"(AdvertisingConversionExport.deleteConversionExport); Qatlas Connect offers no way to restore or recreate it. " +
 		"The export is read once first and must belong to the website, otherwise it is not found and nothing is " +
 		"deleted. Needs the premium plugin AdvertisingConversionExport and, expected, a write right on the " +
 		"website; idempotent in effect" + conversionExportSentOnce + "; offered only where a connection's tools " +

@@ -55,7 +55,7 @@ such a number; only then Qatlas looks the number up once, and a refusal that nam
 given to either is refused as `invalid-request`.
 
 ```text
-qatlas: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
+qconnect: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
 ```
 
 `github.issues.update` sets the milestone of an issue by the number `github.milestones.list` reports. `0` removes

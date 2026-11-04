@@ -311,8 +311,8 @@ func TestRemovedToolsAreIgnoredWithAWarning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a removed tool made the configuration invalid: %v", err)
 	}
-	want := []string{`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qatlas and is ignored`,
-		`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qatlas and is ignored`}
+	want := []string{`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qconnect and is ignored`,
+		`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qconnect and is ignored`}
 	if got := cfg.ToolWarnings(); !reflect.DeepEqual(got, want) {
 		t.Errorf("ToolWarnings() = %q, want %q", got, want)
 	}

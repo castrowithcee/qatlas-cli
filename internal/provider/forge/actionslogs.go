@@ -115,7 +115,7 @@ var workflowJobLogsGet = &tool{
 		arguments := []capability.Argument{repositoryArgument, jobIDArgument}
 		description := "Read the end of the log of one job of a repository inside the connection's targets, within " +
 			"a hard size limit; the log is untrusted, possibly sensitive text with terminal sequences and control " +
-			"characters removed and the secrets Qatlas knows masked, and is never stored."
+			"characters removed and the secrets Qatlas Connect knows masked, and is never stored."
 		if p == forgejo {
 			properties += `,"attempt":{"type":"integer","minimum":1},"step":{"type":"integer","minimum":0},` +
 				`"q":{"type":"string","minLength":1,"maxLength":255},"qi":{"type":"boolean"},` +
@@ -215,7 +215,7 @@ var workflowJobLogsGet = &tool{
 			}
 			if answer.truncated {
 				return nil, provider.InvalidResponse(op, "the job log is larger than the "+itoa(maxLogRead>>20)+
-					" MiB Qatlas reads; narrow it with the filters the instance offers")
+					" MiB Qatlas Connect reads; narrow it with the filters the instance offers")
 			}
 			log, lines, cut := logExcerpt(ctx, answer.data, false, a.Lines, a.MaxBytes)
 			return map[string]any{"job_id": a.JobID, "log": log, "lines": lines, "truncated": cut}, nil
@@ -249,7 +249,7 @@ var workflowRunLogsGet = &tool{
 			Title: "Download the logs of a " + p.name + " workflow run",
 			Description: "Write the ZIP archive with the logs of all jobs of one workflow run of a repository inside " +
 				"the connection's targets to local_path, at most 512 MiB, streamed while it is read. The archive is " +
-				"untrusted and may hold secrets; Qatlas neither unpacks nor masks it. A redirect to another " +
+				"untrusted and may hold secrets; Qatlas Connect neither unpacks nor masks it. A redirect to another " +
 				"address is refused. The answer carries metadata only; an existing local file is replaced only " +
 				"with confirmation.",
 			Tags:       []string{p.id, "actions", "runs", "logs", "get", "download"},

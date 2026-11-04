@@ -24,7 +24,7 @@ func handRenameDocumentOf(opts *Options, r manage.HandRename) handRenameDocument
 	doc := handRenameDocument{Kind: r.Kind, Old: apply(r.Old), Ambiguous: r.Ambiguous}
 	if !r.Ambiguous {
 		doc.New = apply(r.New)
-		doc.Command = fmt.Sprintf("qatlas config rename %s %s %s --adopt", r.Kind, apply(r.Old), apply(r.New))
+		doc.Command = fmt.Sprintf("qconnect config rename %s %s %s --adopt", r.Kind, apply(r.Old), apply(r.New))
 	}
 	return doc
 }

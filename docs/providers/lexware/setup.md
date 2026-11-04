@@ -44,7 +44,7 @@ Give a key only what a connection needs, and use a separate key for each Lexware
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `lexware`, the service, a credential, the
    optional organization target, and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the key as its `api-key` secret.
@@ -53,11 +53,11 @@ Without the guided setup, store the key on the command line. It is read from sta
 in the shell history:
 
 ```sh
-printf %s "$LEXWARE_API_KEY" | qatlas credential set lexware-reader api-key
+printf %s "$LEXWARE_API_KEY" | qconnect credential set lexware-reader api-key
 ```
 
 `lexware-reader` is the name of the credential in your configuration and `api-key` is its only secret. To replace a
-key that was revoked or regenerated, run the same command again with the new key. Run `qatlas config validate` to
+key that was revoked or regenerated, run the same command again with the new key. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 A connection may name the organization its key must belong to; see the organization target in
@@ -65,7 +65,7 @@ A connection may name the organization its key must belong to; see the organizat
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Lexware accepted the key for
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Lexware accepted the key for
 reading one entry of the voucher list. With an organization target, the same test also fails if the key belongs to
 another organization.
 
@@ -108,7 +108,7 @@ Lexware's own answer follows.
 
 ```text
 permission: the API key is not permitted to perform this operation; check the rights of the API key in Lexware
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | Forbidden
 ```
 
@@ -122,8 +122,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Lexware rejected the API key | The key is wrong, revoked, or disabled, or Lexware is briefly unavailable | Check <https://status.lexware.de>. Then create a new key ([Create an API key](#create-an-api-key)) and store it again with `qatlas credential set <credential> api-key`. |
-| `auth`: the Lexware API key is unusable | The stored key holds a space, a line break, or other characters a key cannot have, or is too short | Store it again with `printf %s "$LEXWARE_API_KEY" \| qatlas credential set <credential> api-key`. |
+| `auth`: Lexware rejected the API key | The key is wrong, revoked, or disabled, or Lexware is briefly unavailable | Check <https://status.lexware.de>. Then create a new key ([Create an API key](#create-an-api-key)) and store it again with `qconnect credential set <credential> api-key`. |
+| `auth`: the Lexware API key is unusable | The stored key holds a space, a line break, or other characters a key cannot have, or is too short | Store it again with `printf %s "$LEXWARE_API_KEY" \| qconnect credential set <credential> api-key`. |
 | `permission`: the Lexware contract does not include this API access; check the contract in Lexware | The contract has no public API, or not the feature this tool needs | Check the contract in Lexware. Print layouts and the extended invoicing features need `INVOICING_PRO`, see [Rights per tool group](#rights-per-tool-group). |
 | `permission`: the API key is not permitted to perform this operation; check the rights of the API key in Lexware | The key lacks the scope for this area, the Lexware user lacks the access right, or the key predates the area (quotations) | Create a new key with the scope for the area chosen, or give the Lexware user the access right, then store the key again. |
 | `permission`: the API key belongs to a different organization than the one this connection is bound to | The key is for another organization than the connection's target | Use the key of the organization named in the target, or change the target. The message names neither organization. |

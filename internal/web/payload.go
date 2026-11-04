@@ -92,7 +92,7 @@ func (s *Server) forwardOpenNote(cand *config.Config, name string) string {
 		return ""
 	}
 	return fmt.Sprintf("%s release(s) it and now wait for approval, which saving does not give: approve with "+
-		"`qatlas vault approve` or in the TUI's Approvals section", strings.Join(open, ", "))
+		"`qconnect vault approve` or in the TUI's Approvals section", strings.Join(open, ", "))
 }
 
 // handleNewPayloadForm shows the form of a new payload credential.
@@ -347,7 +347,7 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 
 // handleSetForward saves the forward_secrets list of an existing connection. It writes the configuration only
 // and never approves: a changed release of a connection that was approved stays open until a person approves
-// it with `qatlas vault approve` or in the TUI's Approvals section.
+// it with `qconnect vault approve` or in the TUI's Approvals section.
 func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
 		return
@@ -390,7 +390,7 @@ func (s *Server) forwardChangeNotice(saved manage.ReleaseSaved, connName string)
 	case manage.ReleaseCheckFailed:
 		return "approval state not checked: " + s.redact(saved.CheckErr.Error())
 	case manage.ReleaseOpen:
-		return fmt.Sprintf("stays open: %s; saving does not approve it, approve it with `qatlas vault approve` or in "+
+		return fmt.Sprintf("stays open: %s; saving does not approve it, approve it with `qconnect vault approve` or in "+
 			"the TUI's Approvals section", manage.StaysOpenReason(saved.Change))
 	}
 	return ""

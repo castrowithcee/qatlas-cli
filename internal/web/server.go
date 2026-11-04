@@ -91,7 +91,7 @@ type Overview struct {
 }
 
 // Server is a local-only HTTP server that shows exactly one browser, coupled once with a one-time token,
-// the overview of one qatlas run. It binds only to the IPv4 loopback interface and never accepts a
+// the overview of one qconnect run. It binds only to the IPv4 loopback interface and never accepts a
 // connection whose declared Host or Origin names anything else.
 type Server struct {
 	listener net.Listener

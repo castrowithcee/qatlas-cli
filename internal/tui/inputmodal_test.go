@@ -26,7 +26,7 @@ func inModal(view, text string) bool {
 // it and an empty buffer, the right one carries on with the action, and esc drops what was typed.
 func TestAdminPassphraseModal(t *testing.T) {
 	const wrong, right = "wrong-canary-9x", "hunter2"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, right, true)
 	sizedModel(m, 100, 30)
 
@@ -84,7 +84,7 @@ func TestAdminPassphraseModal(t *testing.T) {
 
 // The unlock dialog of 'ctrl+l' is a modal as well and keeps its error inside.
 func TestVaultUnlockModal(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
 	sizedModel(m, 100, 30)
 	openSectionByName(t, m, sectionServices)
@@ -143,7 +143,7 @@ func TestSecretAndOfferModals(t *testing.T) {
 // modal as one.
 func TestPassphraseDialogsFitBothSizes(t *testing.T) {
 	for _, size := range []struct{ w, h int }{{minimumWidth, minimumHeight}, {modalMinWidth, modalMinHeight}} {
-		m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+		m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 		m.openAdminPrompt(true, m.screen, func() tea.Cmd { return nil })
 		typeText(t, m, strings.Repeat("x", 90))
 		sizedModel(m, size.w, size.h)

@@ -88,7 +88,7 @@ func TestLoadMapsFormerNamesWarnsAndLeavesFileUntouched(t *testing.T) {
 		`defaults.connections.acmechat: provider "acmechat" was renamed to "acme.chat"`,
 		`defaults.connections.acmechat.messages.fetch: tool "acmechat.messages.fetch" was renamed`,
 		`provider_notes.acmechat: provider "acmechat" was renamed to "acme.chat"`,
-		`connections.conn.tools: tool "acmechat.messages.purge" was removed from qatlas and is ignored`,
+		`connections.conn.tools: tool "acmechat.messages.purge" was removed from qconnect and is ignored`,
 	} {
 		if !strings.Contains(warnings, want) {
 			t.Errorf("warnings lack %q:\n%s", want, warnings)
@@ -182,7 +182,7 @@ connections:
 		t.Fatalf("Load() = %v", err)
 	}
 	if !strings.Contains(strings.Join(cfg.ToolWarnings(), "\n"),
-		`tool "acmechat.messages.purge" was removed from qatlas and is ignored`) {
+		`tool "acmechat.messages.purge" was removed from qconnect and is ignored`) {
 		t.Errorf("warnings = %v", cfg.ToolWarnings())
 	}
 }

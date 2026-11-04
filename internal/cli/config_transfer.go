@@ -29,7 +29,7 @@ func newConfigExportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 		Use:   "export <file>",
 		Short: "Write chosen parts of the configuration, without any secret, to a file",
 		Long: "Writes the services, credentials, and connections you choose to a new YAML file that only you\n" +
-			"can read, so 'qatlas config import' can take them over into another installation. Choose with --all\n" +
+			"can read, so 'qconnect config import' can take them over into another installation. Choose with --all\n" +
 			"or by name with --service, --credential, and --connection, each repeatable. A connection brings\n" +
 			"the service, the credential, and the forward credentials it names; the output lists each of them\n" +
 			"with the connections it was taken for. --defaults adds the default connections and the secret\n" +
@@ -129,13 +129,13 @@ func newConfigImportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 			"all; if anything fails, what was written is put back. A file with secrets that is not encrypted\n" +
 			"is a warning, and after a successful import the command offers to delete that file. Deleting it\n" +
 			"is never done by --yes. A vault that gets its first secret here offers a passphrase as\n" +
-			"'qatlas credential set' does; where the vault is encrypted, approvals that covered a replaced\n" +
+			"'qconnect credential set' does; where the vault is encrypted, approvals that covered a replaced\n" +
 			"secret are withdrawn. This command has no export with secrets.\n\n" +
 			"After the write the command lists the connections it created or replaced and, where the vault is\n" +
 			"encrypted, asks once whether to approve them now. --yes never approves: approving is its own\n" +
-			"decision, made later with 'qatlas vault approve'. A vault that is not encrypted binds no\n" +
+			"decision, made later with 'qconnect vault approve'. A vault that is not encrypted binds no\n" +
 			"connection. Without secrets in the file the import touches no secret; set one for a credential\n" +
-			"listed as without secret with 'qatlas credential set'. No agent token is taken from the file.\n\n" +
+			"listed as without secret with 'qconnect credential set'. No agent token is taken from the file.\n\n" +
 			"Import is a management command: it runs only from an interactive terminal, and where the vault\n" +
 			"is encrypted it asks for the passphrase first. No terminal fails with admin-required; an agent\n" +
 			"never imports.\n\n" +
@@ -213,7 +213,7 @@ func newConfigImportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 					return err
 				}
 				if !confirmed {
-					fmt.Fprintln(c.ErrOrStderr(), "qatlas: import cancelled, nothing was changed")
+					fmt.Fprintln(c.ErrOrStderr(), "qconnect: import cancelled, nothing was changed")
 					return finishTransfer(c, opts, structured, doc)
 				}
 			}
@@ -240,7 +240,7 @@ func newConfigImportCommand(opts *Options, reg *capability.Registry) *cobra.Comm
 					redactAll(opts.Redactor, res.Withdrawn))
 			}
 			if len(plan.CredentialsWithoutSecret) > 0 {
-				fmt.Fprintf(out, "set a secret with 'qatlas credential set' before use: %s\n",
+				fmt.Fprintf(out, "set a secret with 'qconnect credential set' before use: %s\n",
 					redactAll(opts.Redactor, plan.CredentialsWithoutSecret))
 			}
 			approveImported(c, opts, svc, res, yes, out, planOut, &doc)
@@ -308,11 +308,11 @@ func approveImported(c *cobra.Command, opts *Options, svc *manage.Service, res m
 	case report.VaultUnencrypted:
 		fmt.Fprintln(out, "the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
 	case report.VaultLocked:
-		fmt.Fprintln(out, "the vault is locked; approve the connections with 'qatlas vault approve' after unlocking it")
+		fmt.Fprintln(out, "the vault is locked; approve the connections with 'qconnect vault approve' after unlocking it")
 	}
 	if len(res.Connections) > 0 && report.Err == nil && len(report.Open) == 0 && len(report.Approved) == 0 &&
 		!report.VaultUnencrypted && !report.VaultLocked && !vaultIsEncrypted(opts) {
-		fmt.Fprintln(out, "new connections need the usual release; where the vault is encrypted, run 'qatlas vault approve'")
+		fmt.Fprintln(out, "new connections need the usual release; where the vault is encrypted, run 'qconnect vault approve'")
 	}
 	if len(report.Approved) > 0 {
 		doc.Approved = redactEach(opts.Redactor, report.Approved)
@@ -328,7 +328,7 @@ func approveImported(c *cobra.Command, opts *Options, svc *manage.Service, res m
 		fmt.Fprintf(out, "open: %s %s, %s\n", who, opts.Redactor.Apply(o.Connection), opts.Redactor.Apply(o.Reason))
 	}
 	if len(report.Open) > 0 {
-		hint := "approve with 'qatlas vault approve'"
+		hint := "approve with 'qconnect vault approve'"
 		if yes {
 			hint = "--yes does not approve; " + hint
 		} else if asked {
@@ -453,7 +453,7 @@ func writeExportResult(out io.Writer, opts *Options, res *manage.ExportResult, p
 			redactAll(opts.Redactor, res.DefaultsOmitted))
 	}
 	if len(res.SecretsNotIncluded) > 0 {
-		fmt.Fprintf(out, "  without secret  %s: set them in the target with 'qatlas credential set'\n",
+		fmt.Fprintf(out, "  without secret  %s: set them in the target with 'qconnect credential set'\n",
 			redactAll(opts.Redactor, res.SecretsNotIncluded))
 	}
 }

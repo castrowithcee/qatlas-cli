@@ -16,7 +16,7 @@ import (
 
 func main() {
 	output := flag.String("output", "", "directory for generated manpages")
-	version := flag.String("version", "dev", "Qatlas CLI version shown in the manpage metadata")
+	version := flag.String("version", "dev", "Qatlas Connect version shown in the manpage metadata")
 	flag.Parse()
 	if *output == "" {
 		fmt.Fprintln(os.Stderr, "gen-man: -output is required")
@@ -29,16 +29,16 @@ func main() {
 }
 
 // generate writes one manpage per command into output. Cobra leaves help topics out of the tree, so their
-// text becomes a section of qatlas.1, the one page every installation carries.
+// text becomes a section of qconnect.1, the one page every installation carries.
 func generate(output, version string) error {
 	if err := os.MkdirAll(output, 0o755); err != nil {
 		return err
 	}
-	header := &doc.GenManHeader{Section: "1", Source: "Qatlas CLI " + version, Manual: "Qatlas CLI Manual"}
+	header := &doc.GenManHeader{Section: "1", Source: "Qatlas Connect " + version, Manual: "Qatlas Connect Manual"}
 	if err := doc.GenManTree(cli.DocumentationCommand(version), header, output); err != nil {
 		return err
 	}
-	root := filepath.Join(output, "qatlas.1")
+	root := filepath.Join(output, "qconnect.1")
 	page, err := os.ReadFile(root)
 	if err != nil {
 		return err
@@ -49,8 +49,8 @@ func generate(output, version string) error {
 // withHelpTopics inserts the help topics before SEE ALSO, or at the end of a page without it.
 func withHelpTopics(page string) string {
 	var b strings.Builder
-	b.WriteString(".SH HELP TOPICS\n.PP\nThe same text is printed by \\fBqatlas help\\fP \\fItopic\\fP " +
-		"and shown by ? in \\fBqatlas tui\\fP.\n")
+	b.WriteString(".SH HELP TOPICS\n.PP\nThe same text is printed by \\fBqconnect help\\fP \\fItopic\\fP " +
+		"and shown by ? in \\fBqconnect tui\\fP.\n")
 	for _, topic := range helptopics.All() {
 		b.WriteString(".SS " + roff(topic.Name) + "\n.PP\n" + roff(topic.Short) + "\n.PP\n.nf\n")
 		// The page indents its text, so the topic is wrapped narrower than for a terminal.

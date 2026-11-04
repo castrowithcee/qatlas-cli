@@ -247,7 +247,7 @@ var workflowArtifactsDownload = &tool{
 			Title: "Download a " + p.name + " workflow artifact",
 			Description: "Write the ZIP archive of one artifact of a repository inside the connection's targets to " +
 				"local_path, at most 1 GiB, streamed while it is read. The archive is untrusted and may hold " +
-				"secrets; Qatlas neither unpacks nor masks it. Gitea's one redirect to the signed address of the " +
+				"secrets; Qatlas Connect neither unpacks nor masks it. Gitea's one redirect to the signed address of the " +
 				"instance itself is followed without the token; any other redirect, such as to external storage, is " +
 				"refused. The answer carries metadata only; an existing local file is replaced only " +
 				"with confirmation.",

@@ -31,9 +31,9 @@ them is in a profile. `comments.delete` is offered only by a connection whose `t
 - Comments across the whole base are not offered.
 
 ```sh
-qatlas invoke seatable.base.comments.list --connection sales-all-tables --arg table=id:0000 \
+qconnect invoke seatable.base.comments.list --connection sales-all-tables --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj
-qatlas invoke seatable.base.comments.create --connection sales-rw --confirm --arg table=id:0000 \
+qconnect invoke seatable.base.comments.create --connection sales-rw --confirm --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg comment="Please check this row"
-qatlas invoke seatable.base.collaborators.list --connection sales-all-tables
+qconnect invoke seatable.base.collaborators.list --connection sales-all-tables
 ```

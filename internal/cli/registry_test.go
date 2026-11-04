@@ -213,8 +213,8 @@ func TestShippedProfilesAreValidAndSafe(t *testing.T) {
 // The Infomaniak providers are listed under their current ID only; a former ID resolves through a rename and
 // is not a namespace of its own.
 func TestProvidersListsVendorFamilyProvidersUnderTheirCurrentIDs(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, "version: 4\ndefaults: {}\n")
 	var reads atomic.Int32
 	code, stdout, stderr := runTools(t, &reads, "providers", "--config", path, "--output", "json")

@@ -131,7 +131,7 @@ func (s *Service) readTransfer(path string, ask vault.PassphraseFunc) (*transfer
 	}
 	if yaml.Unmarshal(data, &head) == nil {
 		if head.Format != TransferFormat {
-			return nil, nil, s.refuse(fmt.Errorf("%s is not a qatlas configuration export (format must be %s)", path, TransferFormat))
+			return nil, nil, s.refuse(fmt.Errorf("%s is not a qconnect configuration export (format must be %s)", path, TransferFormat))
 		}
 		if head.FormatVersion != TransferFormatVersion && head.FormatVersion != TransferFormatVersionSecrets {
 			return nil, nil, s.refuse(fmt.Errorf("%s has format version %d, this build reads versions %d and %d", path, head.FormatVersion, TransferFormatVersion, TransferFormatVersionSecrets))
@@ -150,7 +150,7 @@ func (s *Service) readTransfer(path string, ask vault.PassphraseFunc) (*transfer
 		return nil, nil, s.refuse(fmt.Errorf("%s must contain exactly one document", path))
 	}
 	if f.Format != TransferFormat || (f.FormatVersion != TransferFormatVersion && f.FormatVersion != TransferFormatVersionSecrets) {
-		return nil, nil, s.refuse(fmt.Errorf("%s is not a qatlas configuration export of format version %d or %d", path, TransferFormatVersion, TransferFormatVersionSecrets))
+		return nil, nil, s.refuse(fmt.Errorf("%s is not a qconnect configuration export of format version %d or %d", path, TransferFormatVersion, TransferFormatVersionSecrets))
 	}
 	// The version says whether secrets are there, so neither a version-1 file with a section nor a
 	// version-2 file without one is read.

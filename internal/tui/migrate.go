@@ -1,6 +1,6 @@
 // Migrating a plaintext credentials.yaml into the vault, from the vault form's own 'migrate
 // credentials.yaml' action row. It shares its planning, writing, verifying, and credential-switching logic
-// with 'qatlas vault migrate' through package vaultmigrate; only asking for a passphrase, showing the
+// with 'qconnect vault migrate' through package vaultmigrate; only asking for a passphrase, showing the
 // entries decided (credential and role names only, never a value), and asking whether to delete the file
 // stay here, through this editor's own masked prompts and confirm screens, never a terminal.
 package tui
@@ -124,7 +124,7 @@ func (m *Model) planVaultMigrate(entries map[string]map[string]string, readCurre
 }
 
 // handlePlannedVaultMigrate opens the overview to confirm once the plan is ready, or reports why it could
-// not be built. Every entry already being in the vault is not itself a reason to stop, the same way 'qatlas
+// not be built. Every entry already being in the vault is not itself a reason to stop, the same way 'qconnect
 // vault migrate' keeps going to still ask about deleting the file: only an empty credentials.yaml, already
 // refused in startVaultMigrate, is.
 func (m *Model) handlePlannedVaultMigrate(msg planVaultMigrateMsg) tea.Cmd {
@@ -224,7 +224,7 @@ type vaultMigrateWrittenMsg struct {
 
 // runVaultMigrateWrite writes the confirmed plan into the vault, hands it on to a vault process where one
 // runs, verifies it back, and switches every affected credential to type vault in a clone of the current
-// configuration: exactly what package vaultmigrate does for 'qatlas vault migrate' too. It runs as a
+// configuration: exactly what package vaultmigrate does for 'qconnect vault migrate' too. It runs as a
 // command: writing may do the scrypt work of the vault's very first secret, and verifying may have to read
 // it back.
 func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
@@ -259,7 +259,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 }
 
 // vaultMigrateSync hands the entries a migrate action just wrote on to a vault process that holds the
-// vault unlocked outside this run, exactly the way 'qatlas vault migrate' does for the same plan, through the
+// vault unlocked outside this run, exactly the way 'qconnect vault migrate' does for the same plan, through the
 // same manage.Service.SyncVaultProcess every other vault write in this editor uses: a process that
 // cannot be reached at all, is not running, or this platform runs none, needs nothing said. Any other
 // failure is worth a warning, written to *warning rather than printed, since this editor has no terminal of

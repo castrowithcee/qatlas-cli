@@ -80,7 +80,7 @@ var newsSearch = descriptor("news", "search", "Search Brave News",
 			"a range as YYYY-MM-DDtoYYYY-MM-DD"},
 		{Name: "extra_snippets", Description: "Whether each result carries up to 5 further excerpts"},
 		{Name: "goggles", Description: "Up to 3 goggles that re-rank the results, each an https address of a " +
-			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas does not"},
+			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas Connect does not"},
 		{Name: "include_fetch_metadata", Description: "Whether results carry fetch metadata such as " +
 			"page_fetched; false when omitted"},
 		{Name: "operators", Description: "Whether Brave applies search operators in the query; true when omitted"},

@@ -226,7 +226,7 @@ func TestVaultHandoverCommandNeedsAdminAndEncryption(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, stderr = runWithInput(t, &Options{}, "", "vault", "handover", "lock", "--config", configIn(plain))
-	if code != exitUsage || !strings.Contains(stderr, "run 'qatlas vault encrypt' first") {
+	if code != exitUsage || !strings.Contains(stderr, "run 'qconnect vault encrypt' first") {
 		t.Errorf("unencrypted vault: exit %d, stderr %q, want the encryption named", code, stderr)
 	}
 }

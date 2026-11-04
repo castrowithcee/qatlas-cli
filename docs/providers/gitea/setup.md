@@ -49,7 +49,7 @@ connection needs. A connection that only reads should have a token that only rea
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `gitea`, the service (with its address), a
    credential, the scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
@@ -58,16 +58,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$GITEA_TOKEN" | qatlas credential set forge-token token
+printf %s "$GITEA_TOKEN" | qconnect credential set forge-token token
 ```
 
 `forge-token` is the name of the credential in your configuration and `token` is its only secret. To replace a
-token that expired or was revoked, run the same command again with the new token. Run `qatlas config validate` to
+token that expired or was revoked, run the same command again with the new token. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Gitea is a supported
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Gitea is a supported
 version and accepted the token for the first target of the connection, or, with no targets, for your own account.
 A repository target needs `read:repository` for this check; an account, an organization, or no target needs
 `read:user`.
@@ -204,7 +204,7 @@ follows.
 
 ```text
 not-found: Gitea does not show this resource to this token; it may not exist, or the token's scopes or repository binding do not reach it
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | <the message of the instance>
   | documentation: https://gitea.example.com/api/swagger
 ```
@@ -223,8 +223,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Gitea rejected the token; check that it is valid and not expired | The token is wrong, expired, revoked, or from another instance than the service address | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. Check the address of the service. |
-| `auth`: the Gitea token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$GITEA_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: Gitea rejected the token; check that it is valid and not expired | The token is wrong, expired, revoked, or from another instance than the service address | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. Check the address of the service. |
+| `auth`: the Gitea token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$GITEA_TOKEN" \| qconnect credential set <credential> token`. |
 | `not-found`: Gitea does not show this resource to this token ... | The name is wrong, **or** the token cannot reach it. Gitea answers both the same | Check the name (`OWNER/REPO`, the owner, the number). Then check the scope of the tool group in [Rights per tool group](#rights-per-tool-group): `read:repository` for repositories, `read:issue` for issues, `read:organization` for organizations, `read:user` for users. Read the provider answer for the exact scope. |
 | `not-found` on a change | The token can read but not write | Raise the permission of that category to **Read and Write** (`write:repository`, `write:issue`, `write:organization`, `write:user`, ...). |
 | `not-found` for a private repository or organization | The token is limited to public resources, or the account cannot see it | Create a token without the public-only limit, and make sure the account is a member or collaborator. |

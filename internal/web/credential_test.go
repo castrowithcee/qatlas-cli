@@ -223,7 +223,7 @@ func TestCreateEnvCredentialStoresOnlyNames(t *testing.T) {
 }
 
 // TestCreateVaultCredentialUnencrypted proves the vault's very first secret, offered no passphrase, leaves
-// the vault unencrypted, exactly the same choice 'qatlas credential set' and the TUI already offer.
+// the vault unencrypted, exactly the same choice 'qconnect credential set' and the TUI already offer.
 func TestCreateVaultCredentialUnencrypted(t *testing.T) {
 	v := vaultAbsent(t)
 	s, store, _, _ := newCredentialTestServer(t, v)

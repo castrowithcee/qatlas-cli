@@ -586,8 +586,8 @@ func TestPathPriority(t *testing.T) {
 		t.Helper()
 		t.Setenv("HOME", home)
 		t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-		t.Setenv("QATLAS_CONFIG", configFile)
-		t.Setenv("QATLAS_CLI_HOME", cliHomeDir)
+		t.Setenv("QCONNECT_CONFIG", configFile)
+		t.Setenv("QCONNECT_HOME", cliHomeDir)
 	}
 
 	t.Run("explicit flag wins", func(t *testing.T) {
@@ -600,7 +600,7 @@ func TestPathPriority(t *testing.T) {
 		}
 	})
 
-	t.Run("QATLAS_CONFIG wins over QATLAS_CLI_HOME", func(t *testing.T) {
+	t.Run("QCONNECT_CONFIG wins over QCONNECT_HOME", func(t *testing.T) {
 		setPathEnv(t, "/from/env.yaml", cliHome)
 
 		got, err := Path("")
@@ -610,7 +610,7 @@ func TestPathPriority(t *testing.T) {
 		}
 	})
 
-	t.Run("QATLAS_CLI_HOME wins over the default location", func(t *testing.T) {
+	t.Run("QCONNECT_HOME wins over the default location", func(t *testing.T) {
 		setPathEnv(t, "", cliHome)
 
 		got, err := Path("")

@@ -73,7 +73,7 @@ func (p *Prepared) ReadsConfig(ctx context.Context, config []byte) (bool, error)
 
 // checkEnvironment is the whole environment of the checked program. It carries no variable of the caller
 // besides what the system needs to start a program, and every place a program looks for a configuration,
-// a vault, or a runtime directory points into dir: the caller's QATLAS_CONFIG and QATLAS_CLI_HOME, home
+// a vault, or a runtime directory points into dir: the caller's QCONNECT_CONFIG and QCONNECT_HOME, home
 // directory, and credentials in the environment must stay out of reach of a program that is not yet trusted
 // with them.
 func checkEnvironment(dir string) []string {

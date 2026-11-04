@@ -15,7 +15,7 @@ import (
 )
 
 const deleteNote = "Moves it to the trash of Excalidraw+; shared links and embeds stop working, and only Excalidraw+ " +
-	"itself can restore it from its trash, Qatlas cannot. Sent once and never repeated"
+	"itself can restore it from its trash, Qatlas Connect cannot. Sent once and never repeated"
 
 const deleteSchema = `{"type":"object","properties":{"id":{"type":"string"},"deleted":{"type":"boolean"}},` +
 	`"required":["id","deleted"],"additionalProperties":false}`

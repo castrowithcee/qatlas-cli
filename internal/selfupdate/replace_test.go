@@ -191,7 +191,7 @@ func TestUpdateNoLongerRefusesWindows(t *testing.T) {
 
 func TestConsequencesTextOnWindowsNamesRunningProcesses(t *testing.T) {
 	text := ConsequencesText("windows", 2)
-	for _, want := range []string{"qatlas mcp", "qatlas tui", "qatlas web", "old version", "2 other qatlas processes",
+	for _, want := range []string{"qconnect mcp", "qconnect tui", "qconnect web", "old version", "2 other qconnect processes",
 		"vault process is locked first", "no handover"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in %q", want, text)

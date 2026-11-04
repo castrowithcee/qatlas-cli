@@ -50,7 +50,7 @@ func newApprovalFixture(t *testing.T, dir, passphrase string) (*config.Store, *c
 }
 
 // openApprovalModel builds an editor of its own over store's configuration and a vault resolver of its own
-// over dir, cold: neither unlocked nor holding an admin session, the way a freshly started 'qatlas tui'
+// over dir, cold: neither unlocked nor holding an admin session, the way a freshly started 'qconnect tui'
 // would. requireAdmin's own dialog unlocks it and starts the session together in one typed passphrase (see
 // unlockWithAdminPassphrase), so a test never has to unlock it first through some other path.
 func openApprovalModel(t *testing.T, store *config.Store, dir string) *Model {
@@ -104,7 +104,7 @@ func unlockWithAdminPassphrase(t *testing.T, m *Model, passphrase string) {
 // invoke gets the secret.
 func TestSavingAConnectionApprovesIt(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	m := openApprovalModel(t, store, dir)
 
@@ -129,7 +129,7 @@ func TestSavingAConnectionApprovesIt(t *testing.T) {
 // checks for the fixture's pre-existing, never-approved one.
 func TestNewConnectionSavedInTheFormIsApproved(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	m := openApprovalModel(t, store, dir)
 
@@ -149,7 +149,7 @@ func TestNewConnectionSavedInTheFormIsApproved(t *testing.T) {
 // what was approved, and nothing on the connection form itself would have let a person notice.
 func TestSavingAConnectionDoesNotApproveAHiddenServiceChange(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
 		t.Fatalf("Approve() = %v", err)
@@ -186,7 +186,7 @@ func TestSavingAConnectionDoesNotApproveAHiddenServiceChange(t *testing.T) {
 // this run.
 func TestSavingAConnectionApprovesAVisiblePermissionsChange(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
 		t.Fatalf("Approve() = %v", err)
@@ -217,11 +217,11 @@ func TestSavingAConnectionApprovesAVisiblePermissionsChange(t *testing.T) {
 }
 
 // A connection left open by a change outside this run (simulated here by editing the file directly, the
-// way another window or 'qatlas config' would) stays open when a different connection is saved in the same
+// way another window or 'qconnect config' would) stays open when a different connection is saved in the same
 // admin session: only the Approvals section, or its own form, releases it.
 func TestExternallyChangedConnectionStaysOpenAfterSavingAnother(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
 		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
@@ -267,7 +267,7 @@ func TestExternallyChangedConnectionStaysOpenAfterSavingAnother(t *testing.T) {
 // again, since this very save is what opened them.
 func TestServiceChangeApprovesTheConnectionsItOpens(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
 		t.Fatalf("Approve() = %v", err)
@@ -297,7 +297,7 @@ func TestServiceChangeApprovesTheConnectionsItOpens(t *testing.T) {
 // open rather than inheriting an approval that no longer describes anything real.
 func TestDeletingAConnectionRevokesItsApproval(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
 		t.Fatalf("Approve() = %v", err)
@@ -333,12 +333,12 @@ func TestDeletingAConnectionRevokesItsApproval(t *testing.T) {
 }
 
 // The bulk approval ('a') also removes a stale approval, left over from a connection removed outside a
-// delete this editor itself ran (which already revokes its own), the same way 'qatlas vault approve' with
+// delete this editor itself ran (which already revokes its own), the same way 'qconnect vault approve' with
 // no --connection does; it is offered even when nothing at all is open, since there is still the stale
 // approval to clean up.
 func TestBulkApproveRemovesStaleApprovals(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
 		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
@@ -410,7 +410,7 @@ func TestBulkApproveRemovesStaleApprovals(t *testing.T) {
 // An unencrypted vault is unaffected by any of this: saving a connection never mentions an approval, and the
 // resolver never refuses it either, exactly as before this task.
 func TestUnencryptedVaultUnaffectedBySaving(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -426,7 +426,7 @@ func TestUnencryptedVaultUnaffectedBySaving(t *testing.T) {
 	typeText(t, m, "canary-token-id-9f31")
 	pump(t, m, "enter")
 	if m.screen == screenVaultOffer {
-		// Leaving the offer empty keeps the vault unencrypted, the way declining it on 'qatlas credential
+		// Leaving the offer empty keeps the vault unencrypted, the way declining it on 'qconnect credential
 		// set' does.
 		pump(t, m, "enter")
 	}
@@ -450,7 +450,7 @@ func TestUnencryptedVaultUnaffectedBySaving(t *testing.T) {
 // approves every connection currently open after confirming how many.
 func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, _ := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, cfg.SetConnection("other", config.Connection{
 		Service: "wiki", Credential: "reader", Effects: []config.Effect{config.EffectRead},
@@ -526,7 +526,7 @@ func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 
 // An unencrypted vault has no approvals at all: the section says so, and the tab line points at Vault.
 func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir) // a vault directory that holds nothing yet: state absent
@@ -559,7 +559,7 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 	}
 
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	m = openApprovalModel(t, store, dir)
 	openSectionByName(t, m, sectionApprovals)
@@ -582,7 +582,7 @@ func TestNextStepNamesApprovalsAndAnUnencryptedVault(t *testing.T) {
 // what Pending finds, without anything having been approved along the way.
 func TestApprovalsSectionWhileLocked(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 
 	m := openApprovalModel(t, store, dir)
@@ -655,7 +655,7 @@ func toolsChange() approval.Change {
 // A list change shows what is new and what falls away first and the rest as a count, which e spells out; a
 // view too long for the window scrolls instead of cutting anything, at 80 columns too.
 func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, "correct horse battery staple")
 	m := openApprovalModel(t, store, dir)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -749,32 +749,32 @@ func openApprovalDetail(t *testing.T, dir, passphrase string, store *config.Stor
 
 func TestApprovalDetailNamesTheOrigin(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 
 	// Nothing logged: the configuration file was changed outside qatlas.
 	detail := screenOf(openApprovalDetail(t, dir, passphrase, store))
-	for _, want := range []string{"source", "changed outside qatlas: config.yaml edited directly (last modified ",
+	for _, want := range []string{"source", "changed outside qconnect: config.yaml edited directly (last modified ",
 		"an agent or another program may have edited the file", "o logs"} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("detail lacks %q:\n%s", want, detail)
 		}
 	}
 
-	// A change qatlas logged: unsigned here, so shown unverified.
+	// A change qconnect logged: unsigned here, so shown unverified.
 	err := invokelog.New(vault.New(dir).Dir(), 90).Append(invokelog.Fields{Path: "tui", Operation: invokelog.OperationConnectionCreate,
 		Connection: "personal", Effect: "create", Result: "success"})
 	mustNoError(t, err)
 	detail = screenOf(openApprovalDetail(t, dir, passphrase, store))
-	if !strings.Contains(detail, "changed in qatlas tui, "+time.Now().Format("2006-01-02")) ||
-		!strings.Contains(detail, "(unverified)") || strings.Contains(detail, "outside qatlas") {
+	if !strings.Contains(detail, "changed in qconnect tui, "+time.Now().Format("2006-01-02")) ||
+		!strings.Contains(detail, "(unverified)") || strings.Contains(detail, "outside qconnect") {
 		t.Errorf("detail does not name the logged change:\n%s", detail)
 	}
 }
 
 func TestApprovalDetailLogsKeyOpensTheFilteredLogs(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	logger := invokelog.New(vault.New(dir).Dir(), 90)
 	for _, connection := range []string{"personal", "elsewhere"} {
@@ -805,7 +805,7 @@ func TestApprovalDetailLogsKeyOpensTheFilteredLogs(t *testing.T) {
 
 func TestApprovalDetailUnreadableLogIsUnknownAndStillApproves(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	mustNoError(t, os.WriteFile(filepath.Join(vault.New(dir).Dir(), "logs"), []byte("not a directory"), 0o600))
 	m := openApprovalDetail(t, dir, passphrase, store)
@@ -848,7 +848,7 @@ func colourOf(style lipgloss.Style) string {
 // the "+" and "-" in front say the same without any colour.
 func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
 	restoreRenderer(t)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, "correct horse battery staple")
 	m := openApprovalModel(t, store, dir)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
@@ -887,7 +887,7 @@ func TestApprovalDetailMarksRightsWithAndWithoutColour(t *testing.T) {
 func TestApprovalDetailKeepsItsStateWordAtEverySize(t *testing.T) {
 	const passphrase = "correct horse battery staple"
 	for _, noColor := range []bool{false, true} {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store, _, _ := newApprovalFixture(t, dir, passphrase)
 		m := openApprovalDetail(t, dir, passphrase, store)
 		if noColor {

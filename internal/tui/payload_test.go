@@ -32,7 +32,7 @@ type payloadHarness struct {
 
 func newPayloadHarness(t *testing.T, withVault bool) *payloadHarness {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	var secrets *secret.Resolver
@@ -390,7 +390,7 @@ func TestRenamingAPayloadSecretInItsFormMovesItsValuesAndSavesTheRest(t *testing
 
 func TestPayloadSecretIsNotSavedWithoutTheAdminSession(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, passphrase, true)
 
 	openSectionByName(t, m, sectionCredentials)
@@ -546,7 +546,7 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 
 func TestSavingAConnectionNeverApprovesAChangedRelease(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	withPayload := cfg.Clone()
 	mustNoError(t, withPayload.SetCredential("billing", config.Credential{
@@ -583,7 +583,7 @@ func TestSavingAConnectionNeverApprovesAChangedRelease(t *testing.T) {
 
 func TestSavingAPayloadSecretLeavesItsConnectionsOpen(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, v := newApprovalFixture(t, dir, passphrase)
 	released := cfg.Clone()
 	mustNoError(t, released.SetCredential("billing", config.Credential{
@@ -677,7 +677,7 @@ func TestPayloadSecretCanBeDeleted(t *testing.T) {
 
 func TestForwardBindingNoteNamesAConnectionCredentialOutsideTheVault(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, _ := newApprovalFixture(t, dir, passphrase)
 	other := cfg.Clone()
 	mustNoError(t, other.SetCredential("keyring-reader", config.Credential{

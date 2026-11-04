@@ -150,7 +150,7 @@ func TestALogFailureIsAWarningAndKeepsTheSave(t *testing.T) {
 
 // The warning of a failed log reaches the status line redacted.
 func TestALogFailureWarningIsRedactedInTheStatusLine(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	secrets, _ := newResolver(t, dir, nil)
 	const marked = "the change was saved"
@@ -211,7 +211,7 @@ func TestAFailedSetupSaveLogsNothing(t *testing.T) {
 // A change of a service that shifts what an approval of a connection covers is a change of that connection,
 // logged for every vault connection that reads the service and for no other.
 func TestServiceChangeLogsTheConnectionsItReaches(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	secrets, _ := newVaultResolver(t, dir)
 	m, err := buildModel(newTestStore(t, path), nil, secrets, nil)

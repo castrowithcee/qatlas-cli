@@ -58,7 +58,7 @@ func TestBareQatlasStillRejectsAnUnknownArgumentAtATerminal(t *testing.T) {
 
 func TestRootHelpNamesBothEntries(t *testing.T) {
 	help, _, _ := runBare(t, false, "--help")
-	for _, want := range []string{"qatlas          a person", "qatlas agents   an agent"} {
+	for _, want := range []string{"qconnect          a person", "qconnect agents   an agent"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("root help lacks %q:\n%s", want, help)
 		}

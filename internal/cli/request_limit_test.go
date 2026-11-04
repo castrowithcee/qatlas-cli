@@ -119,13 +119,13 @@ func TestInlineContentAtSchemaLimitReachesTheHandlerOverStdinAndMCP(t *testing.T
 		t.Fatalf("stdin at limit: exit=%d calls=%d stderr=%q", code, calls, stderr)
 	}
 	if code, stderr := invoke(over); code != exitUsage || calls != 1 ||
-		!strings.HasPrefix(stderr, "qatlas: invalid-request:") {
+		!strings.HasPrefix(stderr, "qconnect: invalid-request:") {
 		t.Fatalf("stdin over limit: exit=%d calls=%d stderr=%.200q", code, calls, stderr)
 	}
 
 	call := func(id, arguments string) string {
 		return `{"jsonrpc":"2.0","id":` + id + `,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":{"operation":"fake.files.create","connection":"primary","arguments":` +
+			`,"name":"qconnect.invoke","arguments":{"operation":"fake.files.create","connection":"primary","arguments":` +
 			arguments + `}}}` + "\n"
 	}
 	responses, _ := runMCPWithOptions(t, registry, call("1", atLimit)+call("2", over), &Options{

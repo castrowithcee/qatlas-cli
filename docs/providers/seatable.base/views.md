@@ -43,7 +43,7 @@ names it. The shared rules are in [the README](README.md#shared-boundaries).
 - Read the view before repeating an uncertain change.
 
 ```sh
-qatlas invoke seatable.base.views.list --connection sales-all-tables --arg table=id:0000
-qatlas invoke seatable.base.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
+qconnect invoke seatable.base.views.list --connection sales-all-tables --arg table=id:0000
+qconnect invoke seatable.base.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
   --arg hidden_columns='["Notiz"]'
 ```

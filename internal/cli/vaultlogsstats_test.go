@@ -182,14 +182,14 @@ func TestVaultLogsStatsSessions(t *testing.T) {
 		`{"operation":"mcp/tools-list","calls":1,"req_bytes":50,"resp_bytes":9000,"total_bytes":9050,"est_tokens_total":2585},` +
 		`{"operation":"mcp/initialize","calls":1,"req_bytes":100,"resp_bytes":1000,"total_bytes":1100,"est_tokens_total":314}]},` +
 		`{"area":"navigation","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"est_tokens_total":77,"tools":[` +
-		`{"operation":"qatlas.search","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"est_tokens_total":77}]},` +
+		`{"operation":"qconnect.search","calls":1,"req_bytes":70,"resp_bytes":200,"total_bytes":270,"est_tokens_total":77}]},` +
 		`{"area":"invoke","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"est_tokens_total":34,"tools":[` +
 		`{"operation":"wiki.pages.get","calls":1,"req_bytes":30,"resp_bytes":90,"total_bytes":120,"est_tokens_total":34}]}]}]}` + "\n"
 	if code != exitOK || stderr != "" || !strings.HasSuffix(stdout, want) {
 		t.Fatalf("stats = exit %d, stdout %q, stderr %q, want a suffix\n%s", code, stdout, stderr, want)
 	}
 	groups := strings.SplitN(stdout, `"sessions"`, 2)[0]
-	if strings.Contains(groups, "mcp/") || strings.Contains(groups, "qatlas.search") ||
+	if strings.Contains(groups, "mcp/") || strings.Contains(groups, "qconnect.search") ||
 		!strings.Contains(groups, `"operation":"wiki.pages.get"`) || !strings.Contains(groups, `"old.tool"`) {
 		t.Errorf("groups = %s, want only the invokes", stdout)
 	}

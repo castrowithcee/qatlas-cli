@@ -147,7 +147,7 @@ var sourceControlPull = capability.Descriptor{
 		"force: true discards local changes that would otherwise block the pull. auto_publish all publishes " +
 		"every imported workflow and published publishes those that were published locally before the import; " +
 		"none (the default) publishes nothing by itself. When n8n refuses with a conflict, the result has " +
-		"outcome conflict and lists the conflicting files; nothing was imported and Qatlas does not retry. " +
+		"outcome conflict and lists the conflicting files; nothing was imported and Qatlas Connect does not retry. " +
 		"The request is sent once and never repeated after an unclear result. Where the connection excludes " +
 		"projects or workflows, the pull is refused when a preview of it, read just before, touches an " +
 		"excluded object or one that cannot be placed; changes made between that preview and the pull are " +
@@ -173,7 +173,7 @@ var sourceControlPush = capability.Descriptor{
 		"files names 1 to 50 objects by id and type (credential, workflow, tags, variables, folders, " +
 		"project, datatable). force: true pushes even objects with unresolved conflicts. When n8n refuses " +
 		"with a conflict, the result has outcome conflict and lists the conflicting files; nothing was " +
-		"pushed and Qatlas does not retry. The request is sent once and never repeated after an unclear " +
+		"pushed and Qatlas Connect does not retry. The request is sent once and never repeated after an unclear " +
 		"result. Where the connection excludes projects or workflows, naming an excluded object, or one " +
 		"whose owning project cannot be placed, is refused, and so is folders where a project is excluded. " +
 		sourceControlInstanceNote,

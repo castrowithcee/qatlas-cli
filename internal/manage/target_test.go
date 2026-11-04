@@ -86,7 +86,7 @@ func (f *browseFixture) read(ctx context.Context, resolved *config.Resolved, sec
 
 func newBrowseFixture(t *testing.T, v *vault.Vault) *browseFixture {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "qatlas", "config.yaml")
+	path := filepath.Join(t.TempDir(), "qconnect", "config.yaml")
 	store := config.NewStore(path, browseCatalog{})
 	cfg := store.New()
 	cfg.Services["wiki-svc"] = config.Service{Provider: "wiki", BaseURL: "https://wiki.example.test"}

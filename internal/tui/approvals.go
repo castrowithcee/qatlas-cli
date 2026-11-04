@@ -3,7 +3,7 @@
 // every managing action that saves or removes a connection, or the credential or service it depends on.
 //
 // Every function here that reads or changes an approval defers to package approval, the same core
-// 'qatlas vault approve' uses; nothing here reimplements what counts as a change.
+// 'qconnect vault approve' uses; nothing here reimplements what counts as a change.
 package tui
 
 import (
@@ -366,7 +366,7 @@ func (m *Model) approveOne(name string) tea.Cmd {
 }
 
 // approveAll approves every connection the Approvals section currently lists open, and, like
-// 'qatlas vault approve' with no --connection, also removes every stale approval it finds: one left over
+// 'qconnect vault approve' with no --connection, also removes every stale approval it finds: one left over
 // from a connection that was deleted or renamed outside a delete this editor itself ran, which already
 // revokes it on its own (see revokeApproval). An approval of a rename made by hand stays, so that adopting
 // the rename still finds it (see approval.Report.RevocableStale).
@@ -596,7 +596,7 @@ func (m *Model) handleApprovalOrigin(msg approvalOriginMsg) {
 }
 
 // approvalOriginFacts is the "source" row of the detail screen, made safe to print; a change made outside
-// qatlas adds a second row that says what that can mean.
+// qconnect adds a second row that says what that can mean.
 func (m *Model) approvalOriginFacts(name string) []styledFact {
 	if m.approvalOriginFor != name {
 		return nil

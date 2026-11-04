@@ -27,7 +27,7 @@ type findScene struct {
 
 func newFindScene(t *testing.T) *findScene {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, findPassphrase)
 	cfg := mustLoad(t, store)
 	v := vault.New(dir)

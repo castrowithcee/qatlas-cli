@@ -24,7 +24,7 @@ const (
 	permissionsInstanceWide = "content permissions of shelves"
 	chapterPermissions      = "content permissions of chapters"
 	guestProtected          = "the change would open content to the guest role (public access) or remove its " +
-		"protection; Qatlas does not create access for anonymous visitors"
+		"protection; Qatlas Connect does not create access for anonymous visitors"
 	guestOwner = "owner_id must not be a user of the guest role (public access)"
 )
 
@@ -79,7 +79,7 @@ var (
 		Description: "Change the owner, the role overrides, or the fallback permissions of one page, chapter, book, or shelf " +
 			"for existing roles, in one request. A category that is left out stays unchanged; role_permissions replaces " +
 			"all role overrides, so an empty list removes all of them; fallback_permissions needs inheriting and, when " +
-			"it is false, all four values. Public access is never opened: Qatlas determines the guest role " +
+			"it is false, all four values. Public access is never opened: Qatlas Connect determines the guest role " +
 			"(system role public) first and refuses, without a change, when it cannot be determined, when an entry " +
 			"gives the guest role any permission it does not already have, when role_permissions drops an existing " +
 			"guest entry, when the fallback changes without an explicit guest entry that denies everything, or " +

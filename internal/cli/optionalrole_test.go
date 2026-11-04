@@ -29,8 +29,8 @@ connections:
 
 // The source report lists an optional role that is not set as such, not as missing.
 func TestConfigValidateSecretsReportsAnUnsetOptionalRole(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(optionalConfig), 0o600); err != nil {
 		t.Fatal(err)

@@ -96,7 +96,7 @@ var smsPhoneNumbersRemove = capability.Descriptor{
 var smsCredentialsDelete = capability.Descriptor{
 	ID: Provider + ".sms-credentials.delete", Version: 1, Title: "Delete Matomo SMS provider credentials",
 	Description: "Delete the stored SMS provider credentials (MobileMessaging.deleteSMSAPICredential); SMS reports cannot " +
-		"be sent until credentials are stored again, which Qatlas cannot do. It needs the right to manage credentials. " +
+		"be sent until credentials are stored again, which Qatlas Connect cannot do. It needs the right to manage credentials. " +
 		smsScopeNote + "; idempotent in effect; offered only where a connection's tools list names it" + smsSentOnce,
 	Tags: []string{"matomo", "sms", "mobile-messaging", "delete", "instance"}, Risk: smsChangeRisk(capability.EffectDelete),
 	Provider: Provider, RequiresToolAllowList: true,

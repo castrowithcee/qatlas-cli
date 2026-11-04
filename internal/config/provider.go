@@ -556,7 +556,7 @@ type ProviderMetadata struct {
 	DefaultEffects   []Effect
 	SupportedEffects []Effect
 	Tools            []ToolMetadata
-	// RemovedTools lists tool IDs qatlas no longer offers. A tools list may still name one: the entry is
+	// RemovedTools lists tool IDs qconnect no longer offers. A tools list may still name one: the entry is
 	// ignored with a warning instead of failing the configuration.
 	RemovedTools []string
 	// RenamedTools maps a former tool ID to the registered tool that replaced it. A configuration naming

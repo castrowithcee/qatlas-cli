@@ -303,7 +303,7 @@ func (s Server) ExistingEventOf(op string, data []byte) (found ExistingEvent, er
 		case child.Name == ical.CompEvent && chosen == nil && child.Props.Get(ical.PropRecurrenceID) == nil:
 			chosen = child
 		default:
-			return ExistingEvent{}, provider.Fail(op, "this event holds overrides of single occurrences or other components that Qatlas does not write; change it in a calendar application")
+			return ExistingEvent{}, provider.Fail(op, "this event holds overrides of single occurrences or other components that Qatlas Connect does not write; change it in a calendar application")
 		}
 	}
 	if chosen == nil {

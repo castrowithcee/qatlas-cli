@@ -20,7 +20,7 @@ const (
 	retentionNumber  = `"type":"integer","maximum":3650`
 )
 
-const retentionSentOnce = "; sent once and never repeated by Qatlas: after an unclear result the settings may have been " +
+const retentionSentOnce = "; sent once and never repeated by Qatlas Connect: after an unclear result the settings may have been " +
 	"saved, so read them in Matomo before repeating it"
 
 const retentionNote = " Every argument is required and the call sets the whole state, because Matomo resets an omitted " +

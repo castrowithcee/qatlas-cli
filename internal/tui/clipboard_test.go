@@ -194,7 +194,7 @@ func TestCopyLogDetail(t *testing.T) {
 // The approval detail is copied with its facts.
 func TestCopyApprovalDetail(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	m := openApprovalModel(t, store, dir)
 	openEntryForm(t, m, sectionServices, "wiki")

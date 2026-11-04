@@ -32,7 +32,7 @@ var userRoles = []string{"global:admin", "global:member", "global:chatUser"}
 // userPermissionMessage is the one message of a 403 on a users endpoint. Only the instance owner may use
 // these endpoints, and the API key may lack the user scope or the license; the body is never read.
 const userPermissionMessage = "n8n refused this user management operation: only the instance owner may " +
-	"use it, and the license or the API key's user scope may be missing; Qatlas cannot tell which"
+	"use it, and the license or the API key's user scope may be missing; Qatlas Connect cannot tell which"
 
 var userReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: userDataSensitivity}

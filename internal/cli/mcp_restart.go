@@ -150,7 +150,7 @@ func (s *mcpServer) resume() {
 		return
 	}
 	s.errMu.Lock()
-	fmt.Fprintf(s.stderr, "qatlas: mcp: restarted after an update, version %s to %s\n", s.restartFrom, s.version)
+	fmt.Fprintf(s.stderr, "qconnect: mcp: restarted after an update, version %s to %s\n", s.restartFrom, s.version)
 	s.errMu.Unlock()
 	if s.resumeRoots {
 		s.requestRoots(false)
@@ -231,5 +231,5 @@ func (s *mcpServer) restartIfReplaced(reader *bufio.Reader, line []byte) {
 func (s *mcpServer) restartNote(format string, args ...any) {
 	s.errMu.Lock()
 	defer s.errMu.Unlock()
-	fmt.Fprintf(s.stderr, "qatlas: mcp: "+format+"\n", args...)
+	fmt.Fprintf(s.stderr, "qconnect: mcp: "+format+"\n", args...)
 }

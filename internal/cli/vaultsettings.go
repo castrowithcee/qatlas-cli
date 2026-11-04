@@ -12,7 +12,7 @@ import (
 // errSettingsNeedEncryption refuses the settings of a vault without a passphrase.
 var errSettingsNeedEncryption = errors.New("the idle timeout, the maximum unlock time, the admin session timeout and the log " +
 	"retention are stored in an encrypted vault: without a passphrase nobody could manage them; run " +
-	"'qatlas vault encrypt' first")
+	"'qconnect vault encrypt' first")
 
 // errRetentionNeeded is the refusal to replace an untrusted settings.age without a stated retention: the
 // safe settings never truncate a log, so a retention would have to be invented, and a retention deletes data.
@@ -32,7 +32,7 @@ func newVaultSettingsCommand(opts *Options) *cobra.Command {
 			"set, and 0s turns it off. Durations are Go durations such as 12h or 30m.\n\n" +
 			"Without a flag the command shows the four values; with --idle-timeout, --max-unlock,\n" +
 			"--admin-timeout, or --retention-days it sets exactly those and keeps the others, including the\n" +
-			"update behaviour of 'qatlas vault handover'. The idle timeout and the retention must be positive\n" +
+			"update behaviour of 'qconnect vault handover'. The idle timeout and the retention must be positive\n" +
 			"and the admin session and maximum unlock timeouts must not be negative; nothing is written for an\n" +
 			"invalid value.\n\n" +
 			"The settings are stored authenticated inside the encrypted vault as settings.age, never in\n" +
@@ -43,7 +43,7 @@ func newVaultSettingsCommand(opts *Options) *cobra.Command {
 			"passphrase every time, like every 'vault' command but status, unlock, and lock; without a terminal\n" +
 			"they fail with admin-required, with a wrong passphrase with usage, before anything is read or\n" +
 			"written. A vault that is not encrypted has no place for the settings and is refused.\n" +
-			"'qatlas vault passphrase' keeps the settings and 'qatlas vault decrypt' removes them.",
+			"'qconnect vault passphrase' keeps the settings and 'qconnect vault decrypt' removes them.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return runVaultSettings(c, opts) },
 	}

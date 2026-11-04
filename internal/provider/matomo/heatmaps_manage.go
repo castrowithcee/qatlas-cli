@@ -68,7 +68,7 @@ func heatmapSettingArguments(replaces bool) []capability.Argument {
 		{Name: "excludedElements", Description: "Comma-separated CSS selectors of elements left out of the heatmap, " +
 			"up to 2048 characters" + given},
 		{Name: "screenshotUrl", Description: "Address of the page the screenshot is taken from, up to 2048 " +
-			"characters; text that Qatlas never fetches" + given},
+			"characters; text that Qatlas Connect never fetches" + given},
 		{Name: "breakpointMobile", Description: "Screen width in pixels below which a device of unknown type counts " +
 			"as mobile, 1 to 99999" + given},
 		{Name: "breakpointTablet", Description: "Screen width in pixels below which a device of unknown type counts " +

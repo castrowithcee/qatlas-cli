@@ -77,7 +77,7 @@ func handoffOf(t *testing.T, call execCall) *handoff {
 
 func TestAnUpdateRestartsTheEditorInPlace(t *testing.T) {
 	t.Setenv(handoffEnv, "stale")
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	m.updater = newerRelease()
 	r := withRestart(t, m, true)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
@@ -109,7 +109,7 @@ func TestAnUpdateRestartsTheEditorInPlace(t *testing.T) {
 }
 
 func TestTheHandoffTellsWhetherTheVaultWasLocked(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 	m.updater = newerRelease()
 	r := withRestart(t, m, true)
 	m.release = newerRelease().check
@@ -124,7 +124,7 @@ func TestTheHandoffTellsWhetherTheVaultWasLocked(t *testing.T) {
 }
 
 func TestAFailedExecKeepsTheEditorRunning(t *testing.T) {
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	m.updater = newerRelease()
 	r := withRestart(t, m, true)
 	r.execErr = errors.New("exec format error")
@@ -149,7 +149,7 @@ func TestAFailedExecKeepsTheEditorRunning(t *testing.T) {
 	if mode := m.View().MouseMode; mode != tea.MouseModeCellMotion {
 		t.Errorf("after a failed restart the view asks for mouse mode %v", mode)
 	}
-	if m.status != "Updated to v0.5.0. Restart qatlas tui to use it." || m.fail != "restart failed: exec format error" {
+	if m.status != "Updated to v0.5.0. Restart qconnect tui to use it." || m.fail != "restart failed: exec format error" {
 		t.Errorf("status %q, fail %q; want the hint and the failure", m.status, m.fail)
 	}
 }
@@ -186,7 +186,7 @@ func TestNoRestartWhereTheNewProgramCannotRun(t *testing.T) {
 			if r.command != nil || len(r.calls) != 0 {
 				t.Errorf("the editor restarted")
 			}
-			if !strings.Contains(m.render(), "Restart qatlas tui to use it.") {
+			if !strings.Contains(m.render(), "Restart qconnect tui to use it.") {
 				t.Errorf("the hint is missing:\n%s", m.render())
 			}
 		})
@@ -203,7 +203,7 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 		if m.screen != screenRestart || r.command != nil {
 			t.Fatalf("%s: screen %v, restart %v; want the question and no restart", answer, m.screen, r.command != nil)
 		}
-		if view := screenOf(m); !strings.Contains(view, "Restart qatlas tui into v0.5.0?") ||
+		if view := screenOf(m); !strings.Contains(view, "Restart qconnect tui into v0.5.0?") ||
 			!strings.Contains(view, "y restart and discard") {
 			t.Errorf("the question is missing:\n%s", view)
 		}
@@ -211,7 +211,7 @@ func TestUnsavedInputBlocksTheRestartUntilItIsDiscarded(t *testing.T) {
 		if m.screen != screenForm || m.fieldValue("name") != "typed" || r.command != nil {
 			t.Errorf("%s: screen %v name %q; want the form with its input and no restart", answer, m.screen, m.fieldValue("name"))
 		}
-		if !strings.Contains(m.render(), "Restart qatlas tui to use it.") {
+		if !strings.Contains(m.render(), "Restart qconnect tui to use it.") {
 			t.Errorf("%s: the hint is missing:\n%s", answer, m.render())
 		}
 	}

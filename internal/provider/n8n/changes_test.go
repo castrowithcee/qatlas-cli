@@ -377,7 +377,7 @@ func TestChangeRequestsAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		t.Fatalf("error leaked the provider body: %v", err)
 	}
 	if posts != 1 {
-		t.Fatalf("posts = %d, want exactly one attempt, never repeated by Qatlas itself", posts)
+		t.Fatalf("posts = %d, want exactly one attempt, never repeated by Qatlas Connect itself", posts)
 	}
 
 	calls = nil
@@ -398,7 +398,7 @@ func TestChangeRequestsAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		t.Fatalf("err = %v, want the stop's own transport failure named as uncertain", err)
 	}
 	if stops != 1 {
-		t.Fatalf("stops = %d, want exactly one attempt, never repeated by Qatlas itself", stops)
+		t.Fatalf("stops = %d, want exactly one attempt, never repeated by Qatlas Connect itself", stops)
 	}
 }
 

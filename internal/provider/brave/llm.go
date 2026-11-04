@@ -117,7 +117,7 @@ var llmContext = descriptor("llm-context", "get", "Get Brave LLM Context",
 		{Name: "operators_fallback", Description: "Whether Brave falls back to the original results when " +
 			"search operators find nothing; true when omitted"},
 		{Name: "goggles", Description: "Up to 3 goggles that re-rank the results, each an https address of a " +
-			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas does not"},
+			"goggle registered with Brave or inline goggle rules; Brave fetches the address, Qatlas Connect does not"},
 		{Name: "freshness", Description: "Page age: pd (24 hours), pw (7 days), pm (31 days), py (365 days), or " +
 			"a range as YYYY-MM-DDtoYYYY-MM-DD"},
 		{Name: "enable_local", Description: "True forces local recall, false forces standard ranking; omitted, " +

@@ -499,7 +499,7 @@ func (c *Client) classify(op string, response *http.Response, need string, body 
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Make did not answer in time"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Make answered with a redirect, which Qatlas does not follow for this request"}
+			Message: "Make answered with a redirect, which Qatlas Connect does not follow for this request"}
 	default:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Make rejected the operation (HTTP %d)", status)}
@@ -821,7 +821,7 @@ func Register(reg *capability.Registry) error {
 			ID: "credentialrequests-manage", Title: "Create credential requests in the bound team",
 			Description: "reads what credentialrequests-read reads and creates a credential request in the " +
 				"bound team, whose link lets the named person enter secrets themselves; no secret passes " +
-				"through Qatlas. Every creation needs its own confirmation, is never retried, and needs the " +
+				"through Qatlas Connect. Every creation needs its own confirmation, is never retried, and needs the " +
 				"credential-requests:read, credential-requests:write, and user:read scopes. The " +
 				"person must be a member of the bound team; no user is invited. Deleting a request is in no profile",
 			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID, credentialRequestsCreate.ID},

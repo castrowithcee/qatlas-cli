@@ -112,7 +112,7 @@ type Entry struct {
 
 // Fields is what a caller supplies for one completed invoke; Append computes Seq, Time, PrevHash, and MAC.
 type Fields struct {
-	// Path is "cli" or "mcp" for an invoke, and "tui", "web" or "cli" for a change qatlas made to a
+	// Path is "cli" or "mcp" for an invoke, and "tui", "web" or "cli" for a change qconnect made to a
 	// connection in the configuration file (see the Operation constants).
 	Path       string
 	Client     *ClientInfo
@@ -189,7 +189,7 @@ var resultPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var validEffects = map[string]bool{"": true, "read": true, "create": true, "update": true, "delete": true,
 	"execute": true}
 
-// The operations that log a change qatlas made to a connection in the configuration file, one entry per
+// The operations that log a change qconnect made to a connection in the configuration file, one entry per
 // changed connection, with the connection's name and no value of it. Their Path is the surface that made the
 // change, "tui", "web" or "cli", and their Effect is create, update, or delete respectively; a rename is an
 // update that names the new name as Connection and the old one as FormerConnection.
@@ -247,7 +247,7 @@ const (
 	OperationHandover = "vault.handover"
 )
 
-// OperationConfigMigrate logs that qatlas moved the configuration file to the schema named by Version. Its
+// OperationConfigMigrate logs that qconnect moved the configuration file to the schema named by Version. Its
 // Path is "cli", whichever command migrated.
 const OperationConfigMigrate = "config.migrate"
 
@@ -259,14 +259,22 @@ const OperationConfigMigrate = "config.migrate"
 const (
 	OperationMCPInitialize = "mcp/initialize"
 	OperationMCPToolsList  = "mcp/tools-list"
-	OperationMCPSearch     = "qatlas.search"
-	OperationMCPDescribe   = "qatlas.describe"
+	OperationMCPSearch     = "qconnect.search"
+	OperationMCPDescribe   = "qconnect.describe"
+)
+
+// The navigation names of earlier releases. Entries written under them stay valid and are read as before;
+// new entries never carry them. Transition: dropped with the next major release.
+const (
+	legacyOperationMCPSearch   = "qatlas.search"
+	legacyOperationMCPDescribe = "qatlas.describe"
 )
 
 // mcpOperations maps each reserved mcp operation to its area.
 var mcpOperations = map[string]Area{
 	OperationMCPInitialize: AreaBaseline, OperationMCPToolsList: AreaBaseline,
 	OperationMCPSearch: AreaNavigation, OperationMCPDescribe: AreaNavigation,
+	legacyOperationMCPSearch: AreaNavigation, legacyOperationMCPDescribe: AreaNavigation,
 }
 
 // managementOperations holds every operation an entry can carry that is not an invoke, besides the mcp

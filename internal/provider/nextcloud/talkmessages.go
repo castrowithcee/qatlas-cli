@@ -254,7 +254,7 @@ var (
 
 var talkMessagesSend = capability.Descriptor{
 	ID: Provider + ".talk.messages.send", Version: 1, Title: "Send a Nextcloud Talk message",
-	Description: "Post one message to a Talk conversation the connection binds, optionally as a reply. Qatlas adds a " +
+	Description: "Post one message to a Talk conversation the connection binds, optionally as a reply. Qatlas Connect adds a " +
 		"random reference_id and reports it; after an unclear outcome the message may exist, so look for the " +
 		"reference_id in talk.messages.list before sending again. A rate limit is reported as such and not repeated",
 	Tags:     []string{"nextcloud", "talk", "chat", "send", "ocs"},
@@ -267,7 +267,7 @@ var talkMessagesSend = capability.Descriptor{
 		{Name: "reply_to", Description: "ID of the message to reply to"},
 		{Name: "silent", Description: "True to send without notifying the participants; false when omitted"}},
 	Fields: []capability.Field{{Name: "sent", Description: "True when Nextcloud accepted the message"},
-		{Name: "reference_id", Description: "Reference Qatlas sent with the message; talk.messages.list reports it"},
+		{Name: "reference_id", Description: "Reference Qatlas Connect sent with the message; talk.messages.list reports it"},
 		{Name: "message", Description: "The posted message as Nextcloud reports it, untrusted data"}},
 	Examples: []capability.Example{{Description: "Reply to a message",
 		Arguments: json.RawMessage(`{"token":"abcd1234","message":"Done.","reply_to":"42"}`)}},

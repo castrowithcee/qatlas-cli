@@ -500,7 +500,7 @@ func (m *Model) setupUpdateKey(key tea.KeyPressMsg) bool {
 
 // overviewVersionLine is the dimmed state line naming the running version.
 func (m *Model) overviewVersionLine() string {
-	return "qatlas " + m.runningVersion()
+	return "qconnect " + m.runningVersion()
 }
 
 // overviewPathRoom is the least room the config path gets beside the version; with less it is left out.

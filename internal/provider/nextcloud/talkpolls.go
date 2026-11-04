@@ -379,7 +379,7 @@ var pollFields = []capability.Field{
 	{Name: "id", Description: "ID of the poll"},
 	{Name: "question", Description: "Question, untrusted data"},
 	{Name: "options", Description: "Options with the id a vote names, their text (untrusted data), and the votes once Talk shows them; at most 100"},
-	{Name: "status", Description: "open or closed; other for a state Qatlas does not know"},
+	{Name: "status", Description: "open or closed; other for a state Qatlas Connect does not know"},
 	{Name: "result_mode", Description: "public shows the result at once, hidden only after the poll is closed"},
 	{Name: "max_votes", Description: "Options one voter may choose; 0 means any number"},
 	{Name: "author_type", Description: "Actor type of the author, untrusted data"},
@@ -422,7 +422,7 @@ var talkPollsCreate = capability.Descriptor{
 var talkPollsVote = capability.Descriptor{
 	ID: Provider + ".talk.polls.vote", Version: 1, Title: "Vote on a Nextcloud Talk poll",
 	Description: "Vote on an open poll of a Talk conversation the connection binds. The option IDs must be those of " +
-		"talk.polls.get; Qatlas reads the poll once and refuses an unknown option or more options than the poll allows. " +
+		"talk.polls.get; Qatlas Connect reads the poll once and refuses an unknown option or more options than the poll allows. " +
 		"A vote replaces an earlier one of this identity",
 	Tags:     []string{"nextcloud", "talk", "poll", "vote", "ocs"},
 	Provider: Provider, Risk: talkWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),

@@ -151,7 +151,7 @@ func TestListCursorRoundTripsAndBindsTheFilters(t *testing.T) {
 			}
 			var page struct{ Cursor string }
 			if err := json.Unmarshal([]byte(result), &page); err != nil || page.Cursor == "" || page.Cursor == "inner" {
-				t.Fatalf("cursor = %q, %v, want a Qatlas cursor", page.Cursor, err)
+				t.Fatalf("cursor = %q, %v, want a Qatlas Connect cursor", page.Cursor, err)
 			}
 			raw, err := base64.RawURLEncoding.DecodeString(page.Cursor)
 			if err != nil || !strings.HasSuffix(string(raw), "inner") || len(raw) != cursorFingerprintBytes+len("inner") {

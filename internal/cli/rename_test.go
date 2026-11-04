@@ -235,7 +235,7 @@ func TestVaultApproveNamesARenameLeftover(t *testing.T) {
 	dir = stopConnectionRename()
 	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
 	if code != exitOK || !strings.Contains(stdout, "the approval of wiki-main is left over from an unfinished rename "+
-		"of connection wiki: 'qatlas config rename connection wiki wiki-main' gives the connection that name") ||
+		"of connection wiki: 'qconnect config rename connection wiki wiki-main' gives the connection that name") ||
 		!strings.Contains(stdout, "removed 1 stale approval no longer read from the vault: wiki-main") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
@@ -261,13 +261,13 @@ func TestConfigRenameCredentialCarriesApprovalsAndNamesEnvVars(t *testing.T) {
 		"  rewrites  connections.wiki.credential\n", "  rewrites  connections.wiki2.credential\n",
 		"  vault     entry wiki-vault -> wiki-cred, keeping its id and its secrets\n",
 		"  reader    wiki: approved; carried over, so wiki stays approved\n",
-		"  env       QATLAS_WIKI_VAULT_TOKEN_ID -> QATLAS_WIKI_CRED_TOKEN_ID (token-id)\n",
+		"  env       QCONNECT_WIKI_VAULT_TOKEN_ID -> QCONNECT_WIKI_CRED_TOKEN_ID (token-id)\n",
 		"  outside   environment variables named after the credential, which override its stored secrets: it reads " +
-			"them under its new name from now on, and qatlas changes no environment, not changed\n",
+			"them under its new name from now on, and qconnect changes no environment, not changed\n",
 		"the vault files are backed up as ",
 		"approvals carried over to wiki-cred: wiki, wiki2\n",
 		"environment variables that override the stored secrets are read under the new name: ",
-		", QATLAS_WIKI_VAULT_TOKEN_ID -> QATLAS_WIKI_CRED_TOKEN_ID, ", "; qatlas changed no environment\n",
+		", QCONNECT_WIKI_VAULT_TOKEN_ID -> QCONNECT_WIKI_CRED_TOKEN_ID, ", "; qconnect changed no environment\n",
 		"renamed credential wiki-vault to wiki-cred\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -309,7 +309,7 @@ func TestConfigRenameCredentialDryRunAndAdmin(t *testing.T) {
 	if !doc.DryRun || doc.Renamed || !doc.VaultUnread || doc.Kind != "credential" || doc.Credential == nil ||
 		doc.Credential.VaultEntry || len(doc.Credential.Readers) != 2 || doc.Credential.Readers[0].Connection != "wiki" ||
 		!slices.Contains(doc.Credential.EnvVars, envRenameDocument{Role: "token-id",
-			Old: "QATLAS_WIKI_VAULT_TOKEN_ID", New: "QATLAS_WIKI_CRED_TOKEN_ID"}) {
+			Old: "QCONNECT_WIKI_VAULT_TOKEN_ID", New: "QCONNECT_WIKI_CRED_TOKEN_ID"}) {
 		t.Errorf("document = %+v, %+v", doc, doc.Credential)
 	}
 	code, _, stderr = runWithInput(t, &Options{}, "", "config", "rename", "credential", "wiki-vault", "wiki-cred",
@@ -362,8 +362,8 @@ func TestVaultApproveNamesACredentialLeftover(t *testing.T) {
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
 	if code != exitOK || !strings.Contains(stdout, "the vault holds credential wiki-vault under the name wiki-cred, "+
 		"with the approvals of wiki, wiki2, left over from an unfinished rename; until it is resolved, wiki-vault is "+
-		"not read from the vault: 'qatlas config rename credential wiki-vault wiki-cred' finishes the rename, and "+
-		"'qatlas config rename credential wiki-vault wiki-cred --revert' puts it back under wiki-vault\n") ||
+		"not read from the vault: 'qconnect config rename credential wiki-vault wiki-cred' finishes the rename, and "+
+		"'qconnect config rename credential wiki-vault wiki-cred --revert' puts it back under wiki-vault\n") ||
 		!strings.Contains(stdout, "nothing is open") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}

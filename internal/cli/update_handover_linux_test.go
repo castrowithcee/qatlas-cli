@@ -29,7 +29,7 @@ type handoverRun struct {
 	replacedAfter bool
 }
 
-// updateSurfaces are the two ways to update: 'qatlas update --yes' and the editor's updater.
+// updateSurfaces are the two ways to update: 'qconnect update --yes' and the editor's updater.
 var updateSurfaces = map[string]func(t *testing.T, dir string, updater *selfupdate.Client) (updated bool, note string, err error){
 	"command": func(t *testing.T, dir string, updater *selfupdate.Client) (bool, string, error) {
 		code, stdout, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--yes", "--config", configIn(dir),
@@ -90,7 +90,7 @@ func running(client *vaultproc.Client) bool {
 
 // A signed release with the setting handover prepares the handover before the replacement without locking
 // the vault process; the commit comes after it. Here the successor cannot take over, so the vault process
-// locks itself and the message names 'qatlas vault unlock'.
+// locks itself and the message names 'qconnect vault unlock'.
 func TestUpdatePreparesTheHandoverBeforeAndCommitsAfterTheReplacement(t *testing.T) {
 	for surface := range updateSurfaces {
 		t.Run(surface, func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestUpdatePreparesTheHandoverBeforeAndCommitsAfterTheReplacement(t *testing
 			if !run.runningBefore {
 				t.Error("the vault process was locked before the replacement although a handover was prepared")
 			}
-			for _, want := range []string{"could not hand the vault over", "locked itself", "'qatlas vault unlock'"} {
+			for _, want := range []string{"could not hand the vault over", "locked itself", "'qconnect vault unlock'"} {
 				if !strings.Contains(run.note, want) {
 					t.Errorf("note does not say %q: %q", want, run.note)
 				}
@@ -136,7 +136,7 @@ func TestUpdateLocksBeforeTheReplacementWhenTheSettingIsLock(t *testing.T) {
 			if run.runningBefore || running(client) {
 				t.Error("the vault process was not locked before the replacement")
 			}
-			for _, want := range []string{"locked as the update behaviour says", "'qatlas vault unlock'"} {
+			for _, want := range []string{"locked as the update behaviour says", "'qconnect vault unlock'"} {
 				if !strings.Contains(run.note, want) {
 					t.Errorf("note does not say %q: %q", want, run.note)
 				}
@@ -163,7 +163,7 @@ func TestUpdateLocksWhereThePlatformHasNoHandover(t *testing.T) {
 				if run.runningBefore || running(client) {
 					t.Error("the vault process was not locked before the replacement")
 				}
-				for _, want := range []string{"Windows locks the vault process instead of handing it over", "'qatlas vault unlock'"} {
+				for _, want := range []string{"Windows locks the vault process instead of handing it over", "'qconnect vault unlock'"} {
 					if !strings.Contains(run.note, want) {
 						t.Errorf("note does not say %q: %q", want, run.note)
 					}

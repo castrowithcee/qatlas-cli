@@ -114,7 +114,7 @@ func (c *Client) DeleteMetaObject(ctx context.Context, change *metaWriteChange) 
 		return nil, invalidRequest(errObjectUnavailable)
 	}
 	if !isTrue(current.IsCustom) || isTrue(current.IsSystem) {
-		return nil, invalidRequest("only custom objects can be deleted through Qatlas")
+		return nil, invalidRequest("only custom objects can be deleted through Qatlas Connect")
 	}
 	if current.IsActive == nil || *current.IsActive {
 		return nil, invalidRequest("deactivate the object first with twenty-crm.meta-objects.update and is_active false")
@@ -138,7 +138,7 @@ func (c *Client) DeleteMetaField(ctx context.Context, change *metaWriteChange) (
 	}
 	if !isTrue(current.IsCustom) || isTrue(current.IsSystem) || !contains(metaFieldTypes, current.Type) ||
 		current.Type == "MORPH_RELATION" {
-		return nil, invalidRequest("only custom fields other than morph relations can be deleted through Qatlas")
+		return nil, invalidRequest("only custom fields other than morph relations can be deleted through Qatlas Connect")
 	}
 	if current.IsActive == nil || *current.IsActive {
 		return nil, invalidRequest("deactivate the field first with twenty-crm.meta-fields.update and is_active false")

@@ -1,4 +1,4 @@
-// Package config loads and validates the qatlas configuration and resolves the connection a command
+// Package config loads and validates the qconnect configuration and resolves the connection a command
 // should use. It never reads, stores, or reports secret values: a credential only says where its secrets
 // come from, either by naming environment variables or by pointing at the system credential store.
 // Resolving a secret from that description is the job of package secret.
@@ -20,6 +20,8 @@ import (
 	"unicode/utf8"
 
 	yaml "go.yaml.in/yaml/v3"
+
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 )
 
 // Schema versions this build reads. Version 2 adds the stable id of a service, a credential and a
@@ -352,7 +354,7 @@ func parseIdleTimeout(text string) (time.Duration, error) {
 		return 0, errors.New(`must be a duration such as "12h" or "30m"`)
 	}
 	if d <= 0 {
-		return 0, errors.New("must be positive; run 'qatlas vault lock' to lock the vault at once")
+		return 0, errors.New("must be positive; run 'qconnect vault lock' to lock the vault at once")
 	}
 	return d, nil
 }
@@ -418,16 +420,16 @@ func (e *InvalidError) Error() string { return fmt.Sprintf("%s: %v", e.Path, e.E
 func (e *InvalidError) Unwrap() error { return e.Err }
 
 // Path returns the configuration file to use. An explicit path wins, then the file named by
-// QATLAS_CONFIG, then config.yaml inside the directory named by QATLAS_CLI_HOME, then
+// QCONNECT_CONFIG, then config.yaml inside the directory named by QCONNECT_HOME, then
 // ~/.qatlas/connect/config.yaml, or ~/.qatlas/cli/config.yaml while only that directory exists.
 func Path(explicit string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
 	}
-	if p := os.Getenv("QATLAS_CONFIG"); p != "" {
+	if p := envvar.Get("QCONNECT_CONFIG"); p != "" {
 		return p, nil
 	}
-	if dir := os.Getenv("QATLAS_CLI_HOME"); dir != "" {
+	if dir := envvar.Get("QCONNECT_HOME"); dir != "" {
 		return filepath.Join(dir, "config.yaml"), nil
 	}
 	home, err := os.UserHomeDir()
@@ -1567,11 +1569,11 @@ const envNameRule = "must be the name of an environment variable, written with l
 // keyringValuesRule states why a keyring credential carries no values. Like envNameRule it never quotes
 // the input: whatever stands under a keyring credential is most likely the secret itself.
 const keyringValuesRule = "must be absent for a keyring credential, whose secrets live in the credential " +
-	"store; set them with 'qatlas credential set'"
+	"store; set them with 'qconnect credential set'"
 
 // vaultValuesRule is keyringValuesRule's counterpart for a vault credential.
 const vaultValuesRule = "must be absent for a vault credential, whose secrets live in the vault; " +
-	"set them with 'qatlas credential set'"
+	"set them with 'qconnect credential set'"
 
 // maxDescriptionLength bounds a connection description and a provider note. Each labels a route or a
 // provider for the person choosing one, neither is documentation, and discovery repeats them, so they stay
@@ -1676,7 +1678,7 @@ func (c *Config) ToolWarnings() []string {
 		metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
 		for _, tool := range conn.Tools {
 			if contains(metadata.RemovedTools, tool) {
-				warnings = append(warnings, fmt.Sprintf("connections.%s.tools: tool %q was removed from qatlas "+
+				warnings = append(warnings, fmt.Sprintf("connections.%s.tools: tool %q was removed from qconnect "+
 					"and is ignored", name, tool))
 			}
 		}

@@ -160,7 +160,7 @@ var viewsGet = capability.Descriptor{
 		{Name: "name", Description: "Name of the view, untrusted data"},
 		{Name: "object", Description: "Singular API name of the object, when the data model resolves it"},
 		{Name: "object_metadata_id", Description: "UUID of the object"},
-		{Name: "type", Description: "View type; a type unknown to Qatlas is unknown"},
+		{Name: "type", Description: "View type; a type unknown to Qatlas Connect is unknown"},
 		{Name: "key", Description: "Key of the view, INDEX for the standard view of an object"},
 		{Name: "icon", Description: "Icon name"},
 		{Name: "position", Description: "Position among the views of the object"},

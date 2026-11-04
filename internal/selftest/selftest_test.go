@@ -109,10 +109,10 @@ func TestSmokeProfileMeasuresEverything(t *testing.T) {
 func TestRunnerIgnoresEnvironment(t *testing.T) {
 	skipShort(t)
 	guard := t.TempDir()
-	for _, name := range []string{"HOME", "USERPROFILE", "QATLAS_CLI_HOME", "XDG_CONFIG_HOME", "APPDATA"} {
+	for _, name := range []string{"HOME", "USERPROFILE", "QCONNECT_HOME", "XDG_CONFIG_HOME", "APPDATA"} {
 		t.Setenv(name, guard)
 	}
-	t.Setenv("QATLAS_CONFIG", filepath.Join(guard, "config.yaml"))
+	t.Setenv("QCONNECT_CONFIG", filepath.Join(guard, "config.yaml"))
 	if _, err := Run(context.Background(), Options{
 		Scenario: "storage", Profile: Smoke(), BaseDir: t.TempDir(), Worker: testWorker("worker"),
 	}); err != nil {

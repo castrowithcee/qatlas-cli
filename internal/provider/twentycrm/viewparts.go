@@ -41,7 +41,7 @@ const (
 	viewPartWriteNote = "Changes a view that every user of the whole Twenty workspace sees. Only custom views of the " +
 		"whole workspace can be changed: personal views, standard and index views, and widget views are refused. " +
 		"Needs the Twenty right Views and a connection without object targets, and is offered only by a connection " +
-		"whose tools list names it. Qatlas reads the view first and sends the change once; after an unclear result " +
+		"whose tools list names it. Qatlas Connect reads the view first and sends the change once; after an unclear result " +
 		"read the view before repeating it"
 
 	viewColumnSizeSchema     = `{"type":"integer","minimum":1,"maximum":2000}`

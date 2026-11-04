@@ -30,7 +30,7 @@ type logFixture struct {
 
 func newLogFixture(t *testing.T) *logFixture {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	setup, _ := newVaultResolver(t, dir)
 	mustNoError(t, setup.SetVault("reader", "token-id", "canary-token-id-5c1e",
 		func(string) (string, error) { return logPassphrase, nil }))

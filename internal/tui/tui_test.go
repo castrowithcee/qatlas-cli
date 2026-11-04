@@ -87,7 +87,7 @@ func newModel(t *testing.T) (*Model, *config.Store, string) {
 // newEnvModel builds an editor that sees exactly the environment the test names.
 func newEnvModel(t *testing.T, env map[string]string) (*Model, *config.Store, string) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 
@@ -1882,7 +1882,7 @@ func TestOverviewShowsTheConfigPathWithTheHomeAsTilde(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	press(t, m, "1")
-	want := "~" + string(filepath.Separator) + filepath.Join("qatlas", "config.yaml")
+	want := "~" + string(filepath.Separator) + filepath.Join("qconnect", "config.yaml")
 	if view := m.render(); !strings.Contains(view, want) || strings.Contains(view, home) {
 		t.Errorf("the Overview lacks %q or shows the home directory:\n%s", want, view)
 	}

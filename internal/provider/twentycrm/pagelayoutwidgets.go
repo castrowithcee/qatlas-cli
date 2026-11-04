@@ -101,7 +101,7 @@ var pagelayoutwidgetsCreate = capability.Descriptor{
 		"is an aggregate number, bar, line, or pie chart of the records of one object, whose schema is read first and " +
 		"needs the Twenty permission \"Data model\" too; every field must belong to the object, be active, and not be " +
 		"a system field. Filters are simple and checked like those of twenty-crm.view-filters.create: " + viewFilterNote +
-		"Display options are only the ones named as arguments. Qatlas builds the widget configuration itself. Other " +
+		"Display options are only the ones named as arguments. Qatlas Connect builds the widget configuration itself. Other " +
 		"widget types are not offered. " + widgetWriteNote,
 	Tags:     []string{"twentycrm", "dashboards", "pagelayoutwidgets", "create"},
 	Risk:     pageLayoutWriteRisk,

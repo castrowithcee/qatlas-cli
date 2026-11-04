@@ -252,7 +252,7 @@ func (c *Client) fetchVia(ctx context.Context, op, path string, query url.Values
 	case response.StatusCode >= 300 && response.StatusCode < 400:
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: c.product.name +
-			" serves this file from another address, such as external storage; Qatlas does not follow it",
+			" serves this file from another address, such as external storage; Qatlas Connect does not follow it",
 			Original: &provider.Original{Status: response.StatusCode}}
 	case response.StatusCode != http.StatusOK:
 		return refusal(op, c.product, c.limiter, response, false)

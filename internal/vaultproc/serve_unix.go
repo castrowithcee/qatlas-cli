@@ -20,7 +20,7 @@ import (
 
 // HandoverFD and ReportFD are the descriptors a vault process inherits from whatever started it with
 // StartProcess: the handover it reads the vault's key and secrets from, and the report it answers on once
-// it listens or failed to. Both 'qatlas vault unlock' and the TUI's own 'ctrl+l' start a vault process this
+// it listens or failed to. Both 'qconnect vault unlock' and the TUI's own 'ctrl+l' start a vault process this
 // same way, so the numbers, and the words on ReportFD (see ReportReady), are exported here instead of kept
 // as a matching pair of unexported constants in two packages that would have to be edited together.
 //
@@ -36,9 +36,9 @@ const (
 	ReportFD   = 4
 )
 
-// StartProcess starts 'qatlas vault serve' for the vault at configPath, detached from this process and its
+// StartProcess starts 'qconnect vault serve' for the vault at configPath, detached from this process and its
 // session, hands it snap through an inherited pipe, and waits until client reaches it. It is the shared core
-// 'qatlas vault unlock' and the TUI's own 'ctrl+l' unlock both run, so a vault process is started exactly
+// 'qconnect vault unlock' and the TUI's own 'ctrl+l' unlock both run, so a vault process is started exactly
 // the same way whichever asks; only how the passphrase that produced snap was asked differs, and neither
 // belongs to this package.
 //
@@ -61,7 +61,7 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 	return awaitProcess(ctx, client, deadline)
 }
 
-// StartSuccessorProcess starts 'qatlas vault serve' as the successor of the running vault process, this one, from
+// StartSuccessorProcess starts 'qconnect vault serve' as the successor of the running vault process, this one, from
 // program, the file an update installed at the path this process was started from and that the process
 // checked against the release, for the vault at configPath, and hands it snap as StartProcess does. It returns
 // once the successor reported that it listens at NextPath of the vault socket, with its process id
@@ -69,7 +69,7 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 // successor before it returns. It is a StartSuccessor.
 //
 // The successor is started by the path itself, so the path the kernel records for it is the path clients
-// run qatlas from. What it is started with is the successor contract; see HandoverFD.
+// run qconnect from. What it is started with is the successor contract; see HandoverFD.
 func StartSuccessorProcess(ctx context.Context, program, configPath string, snap vault.Snapshot) (int, func(), error) {
 	process, done, report, err := startServe(ctx, program, serveArgs(configPath, true), snap, startDeadline(ctx))
 	if err == nil && report != ReportReady {

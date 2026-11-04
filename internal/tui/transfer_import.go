@@ -378,7 +378,7 @@ func (m *Model) handleImportPlanned(msg importPlannedMsg) tea.Cmd {
 	return nil
 }
 
-// importPlanLines are the preview, one line each, in the order of 'qatlas config import'. A line that starts
+// importPlanLines are the preview, one line each, in the order of 'qconnect config import'. A line that starts
 // with "warning" is drawn as one. They name credentials and roles, never a value.
 func (m *Model) importPlanLines(plan *manage.ImportPlan, store string, overSSH bool) []string {
 	apply := m.redactor.Apply
@@ -534,7 +534,7 @@ func (m *Model) handleImportDone(msg importDoneMsg) tea.Cmd {
 	return nil
 }
 
-// importResultLines are what the write did, in the order of 'qatlas config import'.
+// importResultLines are what the write did, in the order of 'qconnect config import'.
 func (m *Model) importResultLines(plan *manage.ImportPlan, res manage.ImportResult) []string {
 	apply := m.redactor.Apply
 	names := func(list []string) string { return apply(strings.Join(list, ", ")) }
@@ -560,7 +560,7 @@ func hasImportedOpen(report manage.ImportApproval) bool {
 	return slices.ContainsFunc(report.Open, func(o manage.ImportOpen) bool { return o.Imported })
 }
 
-// importApprovalLines say what approving did or why it did not, in the order of 'qatlas config import'.
+// importApprovalLines say what approving did or why it did not, in the order of 'qconnect config import'.
 // asked is true once the question was answered.
 func (m *Model) importApprovalLines(res manage.ImportResult, report manage.ImportApproval, asked bool) []string {
 	apply := m.redactor.Apply

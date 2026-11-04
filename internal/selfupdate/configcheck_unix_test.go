@@ -46,8 +46,8 @@ func TestReadsConfigFollowsTheExitStatus(t *testing.T) {
 // The program gets a copy in a private directory, an environment without the caller's configuration, vault,
 // or home, and the directory is gone afterwards.
 func TestReadsConfigRunsOnACopyInAPrivateEmptyEnvironment(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "/real/config.yaml")
-	t.Setenv("QATLAS_CLI_HOME", "/real/home")
+	t.Setenv("QCONNECT_CONFIG", "/real/config.yaml")
+	t.Setenv("QCONNECT_HOME", "/real/home")
 	t.Setenv("GITHUB_TOKEN", "canary-token")
 	record := filepath.Join(t.TempDir(), "record")
 	script := `{ echo "args=$*"; echo "cwd=$(pwd)"; echo "mode=$(stat -c %a . 2>/dev/null || stat -f %Lp .)"; echo "copy=$(cat "$2")"; env; } > ` + record + "\nexit 0\n"
@@ -60,7 +60,7 @@ func TestReadsConfigRunsOnACopyInAPrivateEmptyEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := string(data)
-	for _, bad := range []string{"QATLAS_CONFIG", "QATLAS_CLI_HOME", "canary-token", "/real/"} {
+	for _, bad := range []string{"QCONNECT_CONFIG", "QCONNECT_HOME", "canary-token", "/real/"} {
 		if strings.Contains(out, bad) {
 			t.Errorf("the program saw %q:\n%s", bad, out)
 		}

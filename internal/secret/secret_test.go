@@ -271,7 +271,7 @@ func TestMissingSecretNamesALockedKeyring(t *testing.T) {
 
 	r, _, _, _ = fixture(t, nil)
 	_, err = r.Resolve(context.Background(), credName, keyringCred(), role)
-	if err == nil || !strings.Contains(err.Error(), "store it in the system keyring with 'qatlas credential set") {
+	if err == nil || !strings.Contains(err.Error(), "store it in the system keyring with 'qconnect credential set") {
 		t.Errorf("error = %v, want the keyring named as the place to store it", err)
 	}
 }
@@ -371,7 +371,7 @@ func TestMissingSecretMessage(t *testing.T) {
 		}
 		// The way out of a keyring credential is the command and the derived variable, both of which are
 		// names rather than values.
-		for _, want := range []string{"qatlas credential set wiki-reader token-id", "QATLAS_WIKI_READER_TOKEN_ID"} {
+		for _, want := range []string{"qconnect credential set wiki-reader token-id", "QCONNECT_WIKI_READER_TOKEN_ID"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("error = %q, want it to contain %q", err, want)
 			}
@@ -396,11 +396,11 @@ func TestDerivedEnvName(t *testing.T) {
 		role       string
 		want       string
 	}{
-		{"wiki-reader", "token-id", "QATLAS_WIKI_READER_TOKEN_ID"},
-		{"wiki.audit", "token-secret", "QATLAS_WIKI_AUDIT_TOKEN_SECRET"},
-		{"Wiki_2", "token", "QATLAS_WIKI_2_TOKEN"},
+		{"wiki-reader", "token-id", "QCONNECT_WIKI_READER_TOKEN_ID"},
+		{"wiki.audit", "token-secret", "QCONNECT_WIKI_AUDIT_TOKEN_SECRET"},
+		{"Wiki_2", "token", "QCONNECT_WIKI_2_TOKEN"},
 		// A name may start with a digit; the fixed prefix keeps the result a legal variable name.
-		{"7wiki", "token", "QATLAS_7WIKI_TOKEN"},
+		{"7wiki", "token", "QCONNECT_7WIKI_TOKEN"},
 	}
 
 	for _, tt := range tests {

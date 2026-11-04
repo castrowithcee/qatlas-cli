@@ -54,7 +54,7 @@ type payloadFixture struct {
 
 func newPayloadFixture(t *testing.T, credType string) *payloadFixture {
 	t.Helper()
-	store := config.NewStore(filepath.Join(t.TempDir(), "qatlas", "config.yaml"))
+	store := config.NewStore(filepath.Join(t.TempDir(), "qconnect", "config.yaml"))
 	cfg := store.New()
 	if err := cfg.SetCredential("shared", config.Credential{Type: credType, Forward: true,
 		Fields: []string{"user", "pass"}}); err != nil {
@@ -121,7 +121,7 @@ func TestSavePayloadReportsRemovalsThatFailedAndKeepsGoing(t *testing.T) {
 	if !reflect.DeepEqual(saved.Leftover, []string{"pass"}) {
 		t.Errorf("Leftover = %v, want [pass]", saved.Leftover)
 	}
-	if note := LeftoverNote("shared", "pass"); !strings.Contains(note, "'qatlas credential delete shared pass'") {
+	if note := LeftoverNote("shared", "pass"); !strings.Contains(note, "'qconnect credential delete shared pass'") {
 		t.Errorf("LeftoverNote() = %q", note)
 	}
 }
@@ -278,7 +278,7 @@ func TestForwardOpenNamesOnlyConnectionsReleasingTheCredential(t *testing.T) {
 // "shared", over the encrypted, unlocked vault of an approval world in which a is approved.
 func newReleaseFixture(t *testing.T) (*Service, *config.Config, config.Revision) {
 	t.Helper()
-	store := config.NewStore(filepath.Join(t.TempDir(), "qatlas", "config.yaml"), roleCatalog{})
+	store := config.NewStore(filepath.Join(t.TempDir(), "qconnect", "config.yaml"), roleCatalog{})
 	cfg := store.New()
 	cfg.Services["s-a"] = config.Service{Provider: "wiki", BaseURL: "https://a.example.test"}
 	cfg.Credentials["c-a"] = config.Credential{Type: config.CredentialTypeVault}

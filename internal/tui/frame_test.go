@@ -22,8 +22,8 @@ func vaultCases(t *testing.T) []struct {
 } {
 	t.Helper()
 	none, _, _ := newModel(t)
-	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
-	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	locked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
+	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	return []struct {
 		name  string
 		m     *Model
@@ -135,7 +135,7 @@ func TestHeaderNamesEveryStateAndTheHeightFollows(t *testing.T) {
 		}
 	}
 
-	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	unlocked, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	for _, width := range []int{minimumWidth, 79} {
 		unlocked.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 		for _, step := range []struct {
@@ -261,7 +261,7 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	setProfile(profileASCII)
 	applyTheme(uiprefs.ThemeTerminal)
 
-	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 	m.Update(tea.WindowSizeMsg{Width: 220, Height: 30})
 	m.section, m.screen = sectionServices, screenList
 	view := m.render()

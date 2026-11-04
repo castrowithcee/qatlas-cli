@@ -29,7 +29,7 @@ func versionUpdaterFor(t *testing.T, dir string, client *selfupdate.Client) *loc
 	return u
 }
 
-// The editor lists the same choice as 'qatlas update --list'.
+// The editor lists the same choice as 'qconnect update --list'.
 func TestTUIUpdaterListsTheChoosableVersions(t *testing.T) {
 	u := versionUpdaterFor(t, t.TempDir(), chosenUpdater(t, installedProgram(t), chosenReleases, new(int)))
 	entries, err := u.Versions(context.Background())
@@ -111,7 +111,7 @@ func TestTUIUpdaterRollbackLocksTheVaultProcessWhateverTheSettingSays(t *testing
 	if data, _ := os.ReadFile(executable); string(data) != rollbackProgram {
 		t.Errorf("program = %q", data)
 	}
-	if note := u.Note(); !strings.Contains(note, "older version cannot take over") || !strings.Contains(note, "'qatlas vault unlock'") {
+	if note := u.Note(); !strings.Contains(note, "older version cannot take over") || !strings.Contains(note, "'qconnect vault unlock'") {
 		t.Errorf("note = %q", note)
 	}
 }
