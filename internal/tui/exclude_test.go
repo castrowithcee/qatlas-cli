@@ -265,14 +265,14 @@ func TestExclusionsDoNotChangeWhatTheFormOffersOrReaches(t *testing.T) {
 	reg := reachRegistry(t)
 	m, _ := toolsModel(t, reg, map[string]config.Connection{"route": {Service: "wiki", Credential: "reader", Tools: []string{}}})
 	openEntryForm(t, m, sectionConnections, "route")
-	before := m.toolText("fake.trash.list")
+	before := m.toolText("fake.drive.trash")
 	row := m.field(targetsLabel)
 	row.entries, row.excluded = []string{"folder/secret/x"}, map[string]bool{"folder/secret/x": true}
-	if got := m.toolText("fake.trash.list"); got != before {
+	if got := m.toolText("fake.drive.trash"); got != before {
 		t.Fatalf("toolText with only exclusions = %q, without = %q", got, before)
 	}
 	row.entries, row.excluded = []string{"drive/d1", "folder/secret/x"}, map[string]bool{"folder/secret/x": true}
-	if got := m.toolText("fake.trash.list"); strings.Contains(got, "outside-targets") {
+	if got := m.toolText("fake.drive.trash"); strings.Contains(got, "outside-targets") {
 		t.Fatalf("an exclusion hid the reach of a target: %q", got)
 	}
 }

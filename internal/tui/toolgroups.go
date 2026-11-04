@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -29,15 +30,38 @@ type toolGroups struct {
 }
 
 // newToolGroups groups the tool choices of a picker by the groups of the provider's metadata, in the order
-// of the provider. A tool the provider no longer registers, which a saved list may still hold, goes into a
-// last group of its own. It returns nil for a provider without groups.
+// of the provider. A provider without groups is grouped by the first ID segment after its own ID, in
+// alphabetical order. A tool the provider no longer registers, which a saved list may still hold, goes into a
+// last group of its own. It returns nil when the provider has fewer than two groups.
 func newToolGroups(metadata config.ProviderMetadata, choices []string) *toolGroups {
-	if len(metadata.Groups) == 0 {
-		return nil
-	}
 	known := map[string]string{}
 	for _, tool := range metadata.Tools {
 		known[tool.ID] = tool.Group
+	}
+	candidates := append([]config.ToolGroup{}, metadata.Groups...)
+	if len(candidates) == 0 {
+		// The provider ID may hold a dot itself, so the prefix is cut, not the second segment taken.
+		seen := map[string]bool{}
+		for id := range known {
+			if rest, ok := strings.CutPrefix(id, metadata.ID+"."); ok {
+				if segment, _, more := strings.Cut(rest, "."); more && segment != "" {
+					known[id] = segment
+					if !seen[segment] {
+						seen[segment] = true
+						candidates = append(candidates, config.ToolGroup{ID: segment, Title: segment})
+					}
+					continue
+				}
+			}
+			delete(known, id)
+		}
+		if len(candidates) < 2 {
+			return nil
+		}
+		sort.Slice(candidates, func(i, j int) bool { return candidates[i].ID < candidates[j].ID })
+	}
+	if len(candidates) == 0 {
+		return nil
 	}
 	g := &toolGroups{members: map[string][]string{}, of: map[string]string{}, collapsed: map[string]bool{}}
 	for _, choice := range choices {
@@ -48,8 +72,7 @@ func newToolGroups(metadata config.ProviderMetadata, choices []string) *toolGrou
 		g.members[id] = append(g.members[id], choice)
 		g.of[choice] = id
 	}
-	candidates := append(append([]config.ToolGroup{}, metadata.Groups...),
-		config.ToolGroup{ID: unlistedGroup, Title: tr(tToolGroupNotRegistered)})
+	candidates = append(candidates, config.ToolGroup{ID: unlistedGroup, Title: tr(tToolGroupNotRegistered)})
 	for _, group := range candidates {
 		if len(g.members[group.ID]) == 0 {
 			continue
