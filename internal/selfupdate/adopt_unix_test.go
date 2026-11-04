@@ -33,7 +33,9 @@ func TestAdoptNameMovesTheProgramAndLeavesAnAlias(t *testing.T) {
 	}
 	path, done, err := adoptName(former)
 	current := filepath.Join(filepath.Dir(former), "qconnect")
-	if err != nil || !done || path != current {
+	// adoptName answers with the resolved path; on macOS the temporary directory lies behind a symlink.
+	want, _ := filepath.EvalSymlinks(filepath.Dir(former))
+	if err != nil || !done || path != filepath.Join(want, "qconnect") {
 		t.Fatalf("adoptName() = %q, %v, %v", path, done, err)
 	}
 	if after, err := os.Lstat(current); err != nil || !os.SameFile(before, after) {
