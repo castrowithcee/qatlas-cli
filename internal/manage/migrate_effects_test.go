@@ -253,13 +253,14 @@ func TestMigrationKeepsTheFingerprintOfUnchangedEffects(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := vault.Fingerprint(secret.ScopeOf(resolved), "id-1"); got != reference {
-		t.Errorf("Fingerprint() = %s, want %s", got, reference)
+	// reference was computed under the legacy label, which FingerprintMatches still accepts.
+	if scope := secret.ScopeOf(resolved); !vault.FingerprintMatches(reference, scope, "id-1") {
+		t.Errorf("Fingerprint() = %s, does not match %s", vault.Fingerprint(scope, "id-1"), reference)
 	}
 	// The scope schema 2 approved, written out: permissions and tools as the former validation required.
 	former := vault.Scope{Connection: "same", Credential: "vault-reader", Provider: "docs",
 		Origin: "https://wiki.example.test", Effects: []string{"read"}, Targets: []string{}, Tools: []string{"docs.read"}}
-	if got := vault.Fingerprint(former, "id-1"); got != reference {
-		t.Errorf("former Fingerprint() = %s, want %s", got, reference)
+	if !vault.FingerprintMatches(reference, former, "id-1") {
+		t.Errorf("former Fingerprint() = %s, does not match %s", vault.Fingerprint(former, "id-1"), reference)
 	}
 }

@@ -72,7 +72,7 @@ func checkSocketGone(t *testing.T, path string) {
 // platformHelper runs the helper process modes only Linux and macOS have: the successors of a handover.
 func platformHelper(mode, path string) {
 	switch mode {
-	case "successor", "successor-no-socket":
+	case "successor", "successor-no-socket", "successor-renamed", "successor-earlier":
 		handoverHelper(mode, path)
 	}
 }
@@ -231,7 +231,7 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	// beside the vault.
 	wantDir := filepath.Join(filepath.Dir(vaultDir), "run")
 	if runtime.GOOS == "linux" {
-		wantDir = filepath.Join(runtimeDir, "qatlas")
+		wantDir = filepath.Join(runtimeDir, runtimeDirName)
 	}
 	if dir := beside(); dir != wantDir {
 		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want %s", dir, wantDir)
@@ -239,7 +239,7 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 
 	explicit := short()
 	t.Setenv("XDG_RUNTIME_DIR", explicit)
-	if dir := beside(); dir != filepath.Join(explicit, "qatlas") {
+	if dir := beside(); dir != filepath.Join(explicit, runtimeDirName) {
 		t.Fatalf("SocketPath() with XDG_RUNTIME_DIR = %s, want the variable to win", dir)
 	}
 }

@@ -45,7 +45,7 @@ func pipePath(abs string) (string, bool, error) {
 		return "", true, err
 	}
 	sum := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(abs))))
-	return pipePrefix + "qatlas-vault-" + sid.String() + "-" + hex.EncodeToString(sum[:8]), true, nil
+	return pipePrefix + pipeName + sid.String() + "-" + hex.EncodeToString(sum[:8]), true, nil
 }
 
 // pipeSecurity returns the security attributes every instance of a vault pipe is created with: a protected
@@ -256,6 +256,14 @@ type pipeAddr string
 
 func (a pipeAddr) Network() string { return "pipe" }
 func (a pipeAddr) String() string  { return string(a) }
+
+// ListenSuccessor fails on Windows: a vault process here never hands the vault over, so no successor listens.
+func ListenSuccessor(string, string) (net.Listener, error) {
+	return nil, fmt.Errorf("a vault pipe is never handed over: %w", errors.ErrUnsupported)
+}
+
+// EarlierServes is false on Windows: no vault process there hands the vault over.
+func EarlierServes(string) bool { return false }
 
 // AwaitHandover fails on Windows: a vault process here never hands the vault over to a successor, so no
 // listener is ever taken over. A successor that is started all the same locks itself at once.

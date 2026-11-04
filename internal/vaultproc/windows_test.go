@@ -27,7 +27,7 @@ func socketIn(t *testing.T) string {
 	if _, err := rand.Read(b[:]); err != nil {
 		t.Fatal(err)
 	}
-	return pipePrefix + "qatlas-vault-test-" + hex.EncodeToString(b[:])
+	return pipePrefix + pipeName + "test-" + hex.EncodeToString(b[:])
 }
 
 // rawListen listens at path the way a server without the vault's key would. A pipe carries no key either
@@ -146,7 +146,7 @@ func TestPipePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(path, pipePrefix+"qatlas-vault-"+sid.String()+"-") || checkPathLength(path) != nil {
+	if !strings.HasPrefix(path, pipePrefix+pipeName+sid.String()+"-") || checkPathLength(path) != nil {
 		t.Fatalf("SocketPath() = %s, want a pipe named after this user", path)
 	}
 	// XDG_RUNTIME_DIR means nothing to a pipe.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -239,5 +240,73 @@ func TestMigrateHomeLeavesAnExplicitPlaceAlone(t *testing.T) {
 				t.Errorf("an explicit place migrated the default directory: %v", err)
 			}
 		})
+	}
+}
+
+// Only the exact default file of the versions before the rename counts, after cleaning and without resolving
+// a link, and only while the environment names no explicit place.
+func TestLegacyDefault(t *testing.T) {
+	home := legacyHome(t)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	legacy := filepath.Join(home, ".qatlas", "cli", "config.yaml")
+	for _, tt := range []struct {
+		path string
+		want bool
+	}{
+		{legacy, true},
+		{filepath.Join(home, ".qatlas", "cli", "..", "cli", "config.yaml"), true},
+		{filepath.Join(home, ".qatlas", "connect", "config.yaml"), false},
+		{filepath.Join(home, ".qatlas", "cli", "linked.yaml"), false},
+		{filepath.Join(home, "elsewhere", "config.yaml"), false},
+		{"", false},
+	} {
+		if got := LegacyDefault(tt.path); got != tt.want {
+			t.Errorf("LegacyDefault(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+	t.Run("QATLAS_CONFIG", func(t *testing.T) {
+		t.Setenv("QATLAS_CONFIG", legacy)
+		if LegacyDefault(legacy) {
+			t.Error("LegacyDefault() with QATLAS_CONFIG = true")
+		}
+	})
+	t.Run("QATLAS_CLI_HOME", func(t *testing.T) {
+		t.Setenv("QATLAS_CLI_HOME", filepath.Dir(legacy))
+		if LegacyDefault(legacy) {
+			t.Error("LegacyDefault() with QATLAS_CLI_HOME = true")
+		}
+	})
+}
+
+// MigrateDefault migrates as MigrateHome does and returns the current default file, never the legacy one.
+func TestMigrateDefault(t *testing.T) {
+	home := legacyHome(t)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	legacy := filepath.Join(home, ".qatlas", "cli")
+	before := snapshot(t, legacy)
+
+	path, err := MigrateDefault()
+
+	if want := filepath.Join(home, ".qatlas", "connect", "config.yaml"); err != nil || path != want {
+		t.Fatalf("MigrateDefault() = %q, %v, want %q", path, err, want)
+	}
+	if data, err := os.ReadFile(path); err != nil || string(data) != "version: 4\n" {
+		t.Errorf("the migrated file holds %q, %v", data, err)
+	}
+	if after := snapshot(t, legacy); !maps.Equal(after, before) {
+		t.Errorf("the legacy directory changed: %v, want %v", after, before)
+	}
+
+	empty := t.TempDir()
+	t.Setenv("HOME", empty)
+	t.Setenv("USERPROFILE", empty)
+	if path, err := MigrateDefault(); err == nil {
+		t.Errorf("MigrateDefault() without anything to migrate = %q, want an error", path)
 	}
 }

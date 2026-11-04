@@ -15,8 +15,6 @@ import (
 const (
 	// ecosystemDirName is the directory below the home directory every Qatlas tool keeps its own folder in.
 	ecosystemDirName = ".qatlas"
-	// homeDirName is this program's folder inside ecosystemDirName.
-	homeDirName = "connect"
 	// legacyHomeDirName is the folder of the versions before the rename. It is read, never written, and
 	// stays in place so a rollback to such a version works on its own state. Transitional until the next
 	// major release.
@@ -60,6 +58,44 @@ func MigrateHome(explicit string) (*HomeMigration, error) {
 		return nil, nil
 	}
 	return migrateHome(home)
+}
+
+// LegacyDefault reports whether path is the default configuration file of the versions before the rename,
+// compared after cleaning and without resolving symbolic links, while neither QATLAS_CONFIG nor
+// QATLAS_CLI_HOME point to an explicit place. A vault process of those versions that serves its default
+// location starts its successor with this file.
+func LegacyDefault(path string) bool {
+	if path == "" || os.Getenv("QATLAS_CONFIG") != "" || os.Getenv("QATLAS_CLI_HOME") != "" {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	want, err := filepath.Abs(filepath.Join(home, ecosystemDirName, legacyHomeDirName, "config.yaml"))
+	if err != nil {
+		return false
+	}
+	got, err := filepath.Abs(path)
+	return err == nil && got == want
+}
+
+// MigrateDefault migrates as a run from the default location does (see MigrateHome) and returns the
+// configuration file in the current default directory. Unlike Path it never falls back to the legacy
+// directory: when the current one does not exist afterwards, it fails.
+func MigrateDefault() (string, error) {
+	if _, err := MigrateHome(""); err != nil {
+		return "", err
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine the user home directory: %w", err)
+	}
+	dir := filepath.Join(home, ecosystemDirName, homeDirName)
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return "", fmt.Errorf("the configuration was not migrated to %s", dir)
+	}
+	return filepath.Join(dir, "config.yaml"), nil
 }
 
 // migrateHome copies home/.qatlas/cli into home/.qatlas/connect. The copy goes into a staging directory and

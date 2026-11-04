@@ -27,7 +27,11 @@ const settingsSchemaVersion = 2
 // only the vault itself can write. The label differs from the one of tokens and logs, so none of the three
 // keys can stand in for another. The schema version is part of the authenticated input, so every schema
 // shares the label without one's check value standing in for another's.
-const settingsMACLabel = "qatlas vault settings v1"
+const settingsMACLabel = "qatlas-connect vault settings v1"
+
+// legacySettingsMACLabel is the label settings.age was authenticated with before the rename: accepted for
+// reading until the next major release; never written.
+const legacySettingsMACLabel = "qatlas vault settings v1"
 
 // Defaults of the vault settings, used while settings.age does not exist.
 const (
@@ -130,9 +134,13 @@ func (v *Vault) settingsPath() string { return filepath.Join(v.dir, settingsFile
 // of the schema version and its fields, one per line in fixed order with numbers in decimal. Schema 1 is
 // the version and the behaviour. Callers pass only a behaviour that parses, so it holds no line break.
 func settingsMAC(key *age.X25519Identity, doc settingsDocument) (string, error) {
+	return settingsMACWith(key, doc, settingsMACLabel)
+}
+
+func settingsMACWith(key *age.X25519Identity, doc settingsDocument, label string) (string, error) {
 	secret := []byte(key.String())
 	defer clear(secret)
-	macKey, err := hkdf.Key(sha256.New, secret, nil, settingsMACLabel, sha256.Size)
+	macKey, err := hkdf.Key(sha256.New, secret, nil, label, sha256.Size)
 	if err != nil {
 		return "", errors.New("cannot derive the settings key")
 	}
@@ -148,6 +156,17 @@ func settingsMAC(key *age.X25519Identity, doc settingsDocument) (string, error) 
 		return "", errors.New("unknown settings schema")
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// settingsMACValid checks the document's MAC under the current label first and the legacy one as a
+// fallback. Both comparisons are constant-time and independent, so neither outcome leaks through timing.
+func settingsMACValid(key *age.X25519Identity, doc settingsDocument) bool {
+	for _, label := range []string{settingsMACLabel, legacySettingsMACLabel} {
+		if want, err := settingsMACWith(key, doc, label); err == nil && hmac.Equal([]byte(want), []byte(doc.MAC)) {
+			return true
+		}
+	}
+	return false
 }
 
 // ReadSettings returns the settings of the encrypted vault in dir, the vault directory itself as Dir
@@ -188,8 +207,7 @@ func readSettings(dir string, key *age.X25519Identity) (Settings, int, error) {
 	if err != nil {
 		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
-	want, err := settingsMAC(key, doc)
-	if err != nil || !hmac.Equal([]byte(want), []byte(doc.MAC)) {
+	if !settingsMACValid(key, doc) {
 		return SafeSettings(), 0, ErrSettingsUntrusted
 	}
 	if doc.Schema == 1 {

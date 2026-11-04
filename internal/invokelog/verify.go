@@ -20,8 +20,9 @@ type DayReport struct {
 	// Unchecked counts the invocation entries of the day that carry a MAC nobody checked, because Verify
 	// was given no Checker.
 	Unchecked int
-	// Changed counts the lines of the day, entries and retention-cut markers alike, whose MAC is malformed
-	// or does not match the line. Each one breaks the chain.
+	// Changed counts the lines of the day, entries and retention-cut markers alike, whose MAC is malformed,
+	// does not match the line, or is one under the former label after one under the current label. Each
+	// one breaks the chain.
 	Changed int
 	// Missing counts the sequence numbers skipped right before an entry of this day that no retention cut
 	// documents: entries deleted from the middle, or a whole day file.
@@ -54,9 +55,11 @@ type Report struct {
 //
 // Every line that carries a check value is checked with checker, when there is one: a malformed check value
 // or one that does not match counts as changed and breaks the chain, while an empty one only counts as
-// unverified. Without a checker a well-formed check value counts as unchecked instead. A check that cannot
-// be made at all fails Verify rather than passing a line unchecked. The files are read under the logs
-// lock, which is released before the first check, so a slow checker never holds up a writer.
+// unverified. A signed line under the former label after the first one under the current label counts as
+// changed as well, with or without a checker. Without a checker a well-formed check value counts as
+// unchecked instead. A check that cannot be made at all fails Verify rather than passing a line unchecked.
+// The files are read under the logs lock, which is released before the first check, so a slow checker
+// never holds up a writer.
 func VerifyWith(vaultDir string, checker Checker) (Report, error) {
 	report, _, err := verify(vaultDir, checker, nil)
 	return report, err
@@ -72,7 +75,8 @@ const (
 	MACUnchecked
 	// MACValid is a line whose check value matches it.
 	MACValid
-	// MACInvalid is a line whose check value is malformed or does not match it.
+	// MACInvalid is a line whose check value is malformed or does not match it, or one under the former
+	// label after one under the current label.
 	MACInvalid
 )
 
@@ -193,6 +197,7 @@ func verify(vaultDir string, checker Checker, inRange func(date string) bool) (R
 		previousRaw   []byte
 		previousSeq   uint64
 		sawFirstEntry bool
+		relabeled     bool
 		// previousLine is the recorded result of the line previousRaw is, nil when it was not recorded.
 		previousLine *LineResult
 	)
@@ -264,7 +269,7 @@ func verify(vaultDir string, checker Checker, inRange func(date string) bool) (R
 					fmt.Sprintf("entry with sequence %d does not chain from the previous entry", entry.Seq))
 				report.Broken = true
 			}
-			state := countMAC(&dayReport, &report, checks(d.date), &results, entry, raw)
+			state := countMAC(&dayReport, &report, checks(d.date), &results, &relabeled, entry, raw)
 			if line != nil {
 				line.MAC = state
 			}
@@ -293,29 +298,53 @@ func setChain(line *LineResult, state ChainState) {
 
 // countMAC counts the check value of one line into its day's report and returns what it found. results
 // holds the checker's answers for the well-formed check values not counted yet, in order; this takes the
-// next one when the line has one and checked is true.
-func countMAC(day *DayReport, report *Report, checked bool, results *[]bool, entry Entry, raw []byte) MACState {
+// next one when the line has one and checked is true. relabeled records whether a line signed under
+// keyLabel came before: from there on a line signed under legacyKeyLabel is a change, checked or not, so a
+// chain changes labels at most once and never back.
+func countMAC(day *DayReport, report *Report, checked bool, results *[]bool, relabeled *bool, entry Entry,
+	raw []byte) MACState {
 	invocation := entry.Kind != KindCut
-	switch {
-	case entry.MAC == "":
+	if entry.MAC == "" {
 		if invocation {
 			day.Unverified++
 		}
 		return MACNone
-	case wellFormed(raw) && !checked:
+	}
+	state, problem := MACInvalid, fmt.Sprintf("entry with sequence %d does not match its check value", entry.Seq)
+	if unsigned, _, err := unsignedOf(raw); err == nil {
+		state = MACUnchecked
+		if checked {
+			state = MACInvalid
+			if (*results)[0] {
+				state = MACValid
+			}
+			*results = (*results)[1:]
+		}
+		current := currentLabel(unsigned)
+		switch {
+		case current != (entry.MACKey == currentMACKey):
+			// A mac_key anywhere but right before mac is not a line sign writes.
+			state = MACInvalid
+		case !current && *relabeled:
+			state = MACInvalid
+			problem = fmt.Sprintf("entry with sequence %d is signed under the former log key after the current one",
+				entry.Seq)
+		}
+		if current {
+			*relabeled = true
+		}
+	}
+	switch state {
+	case MACUnchecked:
 		if invocation {
 			day.Unchecked++
 		}
-		return MACUnchecked
-	case wellFormed(raw):
-		valid := (*results)[0]
-		*results = (*results)[1:]
-		if valid {
-			return MACValid
-		}
+		return state
+	case MACValid:
+		return state
 	}
 	day.Changed++
-	day.Problem = firstProblem(day.Problem, fmt.Sprintf("entry with sequence %d does not match its check value", entry.Seq))
+	day.Problem = firstProblem(day.Problem, problem)
 	report.Broken = true
 	return MACInvalid
 }

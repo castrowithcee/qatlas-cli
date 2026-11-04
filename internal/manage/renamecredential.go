@@ -276,9 +276,9 @@ func (s *Service) planApprovals(plan *RenamePlan, v *vault.Vault, approve bool) 
 		if !held {
 			continue
 		}
-		if approved.Fingerprint != vault.Fingerprint(pair[0], own) {
+		if !vault.FingerprintMatches(approved.Fingerprint, pair[0], own) {
 			reader.Approval = ApprovalOpen
-			if approved.Fingerprint == vault.Fingerprint(pair[1], own) {
+			if vault.FingerprintMatches(approved.Fingerprint, pair[1], own) {
 				return &RenameRefusedError{fmt.Errorf("the vault holds an approval of %s for the credential name "+
 					"%s that the rename would make valid again unseen; approve the connection as it is with "+
 					"'qatlas vault approve' first", reader.Connection, plan.New)}

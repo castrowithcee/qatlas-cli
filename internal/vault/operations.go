@@ -412,6 +412,8 @@ func (v *Vault) writeEncrypted(doc *document) error {
 }
 
 func (v *Vault) writeSecrets(id *identity, doc *document) error {
+	// Every regular write re-labels approvals granted under the legacy fingerprint.
+	doc.upgradeFingerprints()
 	plain, err := encodeDocument(doc)
 	if err != nil {
 		return fmt.Errorf("cannot encode %s: %w", v.secretsPath(), err)

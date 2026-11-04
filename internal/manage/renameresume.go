@@ -107,7 +107,7 @@ func leftoverApprovals(cfg, renamed *config.Config, old string, v *vault.Vault,
 		if err != nil {
 			return nil, err
 		}
-		if held && approved.Fingerprint == vault.Fingerprint(scope, entry) {
+		if held && vault.FingerprintMatches(approved.Fingerprint, scope, entry) {
 			out = append(out, vault.ScopeRename{Before: scope, After: back, ConnectionID: id})
 		}
 	}
@@ -245,7 +245,7 @@ func (s *Service) planRevertVault(plan *RenamePlan, cred config.Credential, appr
 				if err != nil {
 					return err
 				}
-				if scope.Connection == reader.Connection && held && approved.Fingerprint == vault.Fingerprint(scope, id) {
+				if scope.Connection == reader.Connection && held && vault.FingerprintMatches(approved.Fingerprint, scope, id) {
 					reader.Approval = ApprovalValid
 				}
 			}

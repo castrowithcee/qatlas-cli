@@ -2,6 +2,7 @@ package vault
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -140,7 +141,11 @@ func sortedOrNil(values []string) []string {
 }
 
 // fingerprintLabel separates a connection fingerprint from any other use of the same hash.
-const fingerprintLabel = "qatlas connection approval v1\x00"
+const fingerprintLabel = "qatlas-connect connection approval v1\x00"
+
+// legacyFingerprintLabel is the fingerprint label of approvals granted before the rename: accepted for
+// comparison until the next major release; never written.
+const legacyFingerprintLabel = "qatlas connection approval v1\x00"
 
 // Fingerprint returns the fingerprint of scope for the credential entry credentialID, the random id the vault
 // keeps for that entry: a credential deleted and stored again under the same name gets a new id, and with it
@@ -150,6 +155,31 @@ const fingerprintLabel = "qatlas connection approval v1\x00"
 // The canonical form is a JSON object with a fixed field order. A field added later is added with omitempty,
 // so every connection that leaves it empty keeps the fingerprint it was approved with.
 func Fingerprint(scope Scope, credentialID string) string {
+	return fingerprintWith(fingerprintLabel, scope, credentialID)
+}
+
+// FingerprintMatches reports whether stored is the approved fingerprint of scope for credentialID, under the
+// current label or, for an approval granted before the rename, the legacy one. The comparison is
+// constant-time and covers both labels without stopping at the first.
+func FingerprintMatches(stored string, scope Scope, credentialID string) bool {
+	current := subtle.ConstantTimeCompare([]byte(stored), []byte(Fingerprint(scope, credentialID)))
+	legacy := subtle.ConstantTimeCompare([]byte(stored), []byte(fingerprintWith(legacyFingerprintLabel, scope, credentialID)))
+	return current|legacy == 1
+}
+
+// upgradeFingerprints re-labels every approval whose fingerprint is the legacy one of its own recorded scope
+// and credential entry. An approval that matches neither label stays untouched and so stays unapproved.
+func (d *document) upgradeFingerprints() {
+	for name, approval := range d.Approvals {
+		legacy := fingerprintWith(legacyFingerprintLabel, approval.Scope, approval.CredentialID)
+		if subtle.ConstantTimeCompare([]byte(approval.Fingerprint), []byte(legacy)) == 1 {
+			approval.Fingerprint = Fingerprint(approval.Scope, approval.CredentialID)
+			d.Approvals[name] = approval
+		}
+	}
+}
+
+func fingerprintWith(label string, scope Scope, credentialID string) string {
 	n := scope.Normalized()
 	canonical := struct {
 		CredentialID string   `json:"credential_id"`
@@ -174,7 +204,7 @@ func Fingerprint(scope Scope, credentialID string) string {
 		// Marshalling strings and string slices cannot fail.
 		panic("vault: cannot encode a connection scope: " + err.Error())
 	}
-	sum := sha256.Sum256(append([]byte(fingerprintLabel), data...))
+	sum := sha256.Sum256(append([]byte(label), data...))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -209,7 +239,7 @@ func (b Bindings) Allows(scope Scope, credential string) bool {
 	}
 	own := b.IDs[scope.Credential]
 	approved := b.Approvals[scope.Connection]
-	return own != "" && approved != "" && approved == Fingerprint(scope, own)
+	return own != "" && approved != "" && FingerprintMatches(approved, scope, own)
 }
 
 // AllowsRole is Allows for one role: a forward credential hands out only the fields its approval names.

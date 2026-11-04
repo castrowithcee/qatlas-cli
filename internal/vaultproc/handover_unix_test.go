@@ -45,8 +45,8 @@ import (
 const handoverArchive = "qatlas_9.9.9_test.tar.gz"
 
 // handoverHelper is what a helper process started as a successor runs, for the modes TestHelperProcess hands
-// on: successor takes the vault over like the real one; successor-no-socket reports ready without listening,
-// as a successor whose socket went missing.
+// on: successor takes the vault over like the real one, and so do successor-renamed and successor-earlier,
+// below; successor-no-socket reports ready without listening, as a successor whose socket went missing.
 func handoverHelper(mode, socket string) {
 	report := os.NewFile(4, "report")
 	data, _ := io.ReadAll(io.LimitReader(os.NewFile(3, "handover"), 16<<20))
@@ -70,7 +70,17 @@ func handoverHelper(mode, socket string) {
 		fmt.Fprintln(report, "the vault key cannot be read")
 		os.Exit(1)
 	}
-	l, err := Listen(NextPath(socket))
+	// successor-renamed is started by a vault process at the earlier release's socket, its own at
+	// _CURRENT; successor-earlier stands in for a successor of the earlier release, which knows only the
+	// socket at _LEGACY.
+	current, legacy := socket, ""
+	switch mode {
+	case "successor-renamed":
+		current, legacy = os.Getenv(helperEnv+"_CURRENT"), socket
+	case "successor-earlier":
+		current = os.Getenv(helperEnv + "_LEGACY")
+	}
+	l, err := listenSuccessor(current, legacy)
 	if err != nil {
 		fmt.Fprintln(report, err)
 		os.Exit(1)
@@ -84,7 +94,7 @@ func handoverHelper(mode, socket string) {
 	s.MaxUnlock = snap.MaxUnlock
 	fmt.Fprintln(report, "ready")
 	_ = report.Close()
-	if err := AwaitHandover(context.Background(), l, socket, HandoverTimeout); err != nil {
+	if err := AwaitHandover(context.Background(), l, current, HandoverTimeout); err != nil {
 		fmt.Println("not handed over")
 		_ = s.Close()
 	}
@@ -126,9 +136,10 @@ type handoverFixture struct {
 	probe      *writeProbe
 	release    ReleaseFiles
 	scope      vault.Scope
-	// mode is the helper mode a successor is started in; starts counts the successors started, and
-	// successor and output are the last one and its standard output.
+	// mode is the helper mode a successor is started in, with env added to its environment; starts counts
+	// the successors started, and successor and output are the last one and its standard output.
 	mode      string
+	env       []string
 	starts    atomic.Int32
 	mu        sync.Mutex
 	successor *exec.Cmd
@@ -137,6 +148,12 @@ type handoverFixture struct {
 }
 
 func newHandoverFixture(t *testing.T) *handoverFixture {
+	t.Helper()
+	return newHandoverFixtureAt(t, socketIn(t))
+}
+
+// newHandoverFixtureAt is newHandoverFixture with the server at socket.
+func newHandoverFixtureAt(t *testing.T, socket string) *handoverFixture {
 	t.Helper()
 	f := &handoverFixture{t: t, mode: "successor", scope: tokenVorbild()}
 	f.vault = vault.New(t.TempDir())
@@ -171,7 +188,7 @@ func newHandoverFixture(t *testing.T) *handoverFixture {
 	signer := releasetest.NewSigner(t)
 	f.release = writeRelease(t, dir, program, signer, nil)
 
-	f.socket = socketIn(t)
+	f.socket = socket
 	l, err := Listen(f.socket)
 	if err != nil {
 		t.Fatalf("Listen() = %v", err)
@@ -274,7 +291,7 @@ func (f *handoverFixture) start(ctx context.Context, program string, snap vault.
 		return 0, nil, err
 	}
 	cmd := exec.Command(program, "-test.run=^TestHelperProcess$")
-	cmd.Env = append(os.Environ(), helperEnv+"="+f.mode, helperEnv+"_SOCKET="+f.socket)
+	cmd.Env = append(append(os.Environ(), helperEnv+"="+f.mode, helperEnv+"_SOCKET="+f.socket), f.env...)
 	cmd.ExtraFiles = []*os.File{handoverRead, reportWrite}
 	cmd.Stdout = outWrite
 	err = cmd.Start()

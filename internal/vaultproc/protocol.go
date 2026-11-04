@@ -84,9 +84,6 @@ const (
 // nonceSize is the number of random bytes a challenge holds.
 const nonceSize = 32
 
-// proofLabel separates the proof from any other use of the nonce's hash.
-const proofLabel = "qatlas vault process proof v2\x00"
-
 // hello is the first line a client sends on every connection: a fresh random nonce, encrypted to the
 // vault's public recipient. Only a process holding the vault's key can decrypt it, which is how a client
 // tells the vault process apart from anything else listening at the socket.

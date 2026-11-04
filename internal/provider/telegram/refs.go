@@ -42,11 +42,14 @@ const (
 )
 
 const (
-	refKeyLabel   = "qatlas telegram reference key v1"
-	refTagBytes   = sha256.Size
-	maxRefBinding = 9 + 128 // business/<id>
-	maxRefID      = 1024
-	maxRefText    = 2048
+	refKeyLabel = "qatlas-connect telegram reference key v1"
+	// legacyRefKeyLabel keyed references issued before the rename: accepted for checking until the next
+	// major release; never used to sign.
+	legacyRefKeyLabel = "qatlas telegram reference key v1"
+	refTagBytes       = sha256.Size
+	maxRefBinding     = 9 + 128 // business/<id>
+	maxRefID          = 1024
+	maxRefText        = 2048
 )
 
 // parsedRef is a reference that passed the format, kind, and binding checks but whose tag is still unchecked.
@@ -60,9 +63,9 @@ type parsedRef struct {
 
 func (k refKind) valid() bool { return k >= refFile && k <= refPreCheckoutQuery && k != refRetired }
 
-func refKey(token string) []byte {
+func refKey(token, label string) []byte {
 	// HKDF-SHA256 with a 32-byte output cannot fail.
-	key, err := hkdf.Key(sha256.New, []byte(token), nil, refKeyLabel, sha256.Size)
+	key, err := hkdf.Key(sha256.New, []byte(token), nil, label, sha256.Size)
 	if err != nil {
 		panic(err)
 	}
@@ -78,8 +81,10 @@ func refSigned(kind refKind, binding, id string) []byte {
 	return append(out, id...)
 }
 
-func refTag(token string, signed []byte) []byte {
-	mac := hmac.New(sha256.New, refKey(token))
+func refTag(token string, signed []byte) []byte { return refTagWith(token, refKeyLabel, signed) }
+
+func refTagWith(token, label string, signed []byte) []byte {
+	mac := hmac.New(sha256.New, refKey(token, label))
 	mac.Write(signed)
 	return mac.Sum(nil)
 }
@@ -146,7 +151,9 @@ func parseRef(resolved *config.Resolved, want refKind, raw string) (parsedRef, e
 // checkRef is the second stage: it verifies the tag against this client's bot token in constant time and
 // returns the identifier. It runs before any request to Telegram.
 func (c *Client) checkRef(p parsedRef) (string, error) {
-	if !hmac.Equal(p.tag, refTag(c.token, p.signed)) {
+	current := hmac.Equal(p.tag, refTag(c.token, p.signed))
+	legacy := hmac.Equal(p.tag, refTagWith(c.token, legacyRefKeyLabel, p.signed))
+	if !current && !legacy {
 		return "", providerError("check reference", "the reference was not issued for this bot token")
 	}
 	return p.id, nil

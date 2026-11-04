@@ -312,7 +312,7 @@ func Pending(cfg *config.Config, v *vault.Vault) (Report, error) {
 		switch {
 		case !ok:
 			report.Open = append(report.Open, Change{Connection: name, New: true, After: c.scope.Normalized()})
-		case approved.Fingerprint != vault.Fingerprint(c.scope, c.id):
+		case !vault.FingerprintMatches(approved.Fingerprint, c.scope, c.id):
 			before := approved.Scope
 			report.Open = append(report.Open, Change{
 				Connection: name, Before: &before, After: c.scope.Normalized(),

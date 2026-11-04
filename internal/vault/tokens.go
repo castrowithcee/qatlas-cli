@@ -31,7 +31,11 @@ const tokenSchemaVersion = 1
 // encrypted to the public recipient like every vault file, so anyone who can write files could encrypt a
 // document of their own to it; the check value, keyed from the vault's private key, is what only the vault
 // itself can write.
-const tokenMACLabel = "qatlas agent tokens v1"
+const tokenMACLabel = "qatlas-connect agent tokens v1"
+
+// legacyTokenMACLabel is the label tokens.age was authenticated with before the rename: accepted for
+// reading until the next major release; never written.
+const legacyTokenMACLabel = "qatlas agent tokens v1"
 
 // TokenPrefix begins every agent token, so a person, and a secret scanner, can tell one apart.
 const TokenPrefix = "qat_"
@@ -104,10 +108,10 @@ func CheckTokenName(name string) error {
 func (v *Vault) tokensPath() string { return filepath.Join(v.dir, tokensFile) }
 
 // tokenKey derives the key that authenticates tokens.age from the vault's private key.
-func tokenKey(id *identity) ([]byte, error) {
+func tokenKey(id *identity, label string) ([]byte, error) {
 	secret := []byte(id.key.String())
 	defer clear(secret)
-	key, err := hkdf.Key(sha256.New, secret, nil, tokenMACLabel, sha256.Size)
+	key, err := hkdf.Key(sha256.New, secret, nil, label, sha256.Size)
 	if err != nil {
 		return nil, errors.New("cannot derive the agent token key")
 	}
@@ -116,7 +120,11 @@ func tokenKey(id *identity) ([]byte, error) {
 
 // tokenMAC is the check value of tokens: the hex HMAC-SHA256, keyed with tokenKey, of their JSON encoding.
 func tokenMAC(id *identity, tokens []Token) (string, error) {
-	key, err := tokenKey(id)
+	return tokenMACWith(id, tokens, tokenMACLabel)
+}
+
+func tokenMACWith(id *identity, tokens []Token, label string) (string, error) {
+	key, err := tokenKey(id, label)
 	if err != nil {
 		return "", err
 	}
@@ -156,14 +164,18 @@ func (v *Vault) loadTokens() ([]Token, error) {
 		return nil, fmt.Errorf("cannot read %s: unsupported token schema version %d, want %d",
 			v.tokensPath(), doc.Schema, tokenSchemaVersion)
 	}
-	want, err := tokenMAC(v.identity, doc.Tokens)
-	if err != nil {
-		return nil, err
+	// The current label is tried first; the legacy one is only a fallback for a file written before the
+	// rename. A failed key derivation is no verdict on the file, so it surfaces as its own error.
+	for _, label := range []string{tokenMACLabel, legacyTokenMACLabel} {
+		want, err := tokenMACWith(v.identity, doc.Tokens, label)
+		if err != nil {
+			return nil, err
+		}
+		if hmac.Equal([]byte(want), []byte(doc.MAC)) {
+			return doc.Tokens, nil
+		}
 	}
-	if !hmac.Equal([]byte(want), []byte(doc.MAC)) {
-		return nil, ErrTokensTampered
-	}
-	return doc.Tokens, nil
+	return nil, ErrTokensTampered
 }
 
 // writeTokens replaces tokens.age with tokens, authenticated for this vault.
