@@ -120,8 +120,8 @@ func checkPathLength(path string) error {
 var userRuntimeRoot = "/run/user"
 
 // SocketPath returns the socket of the vault process that serves the vault in vaultDir, as vault.Vault.Dir
-// reports it. The socket lives in $XDG_RUNTIME_DIR/qatlas when the session has a runtime directory, which
-// the system empties at logout or restart. Without the variable, as under agent hosts that start qatlas
+// reports it. The socket lives in $XDG_RUNTIME_DIR/qatlas-connect when the session has a runtime directory,
+// which the system empties at logout or restart. Without the variable, as under agent hosts that start qatlas
 // with a filtered environment, the user's runtime directory is found by its conventional place on
 // platforms that have one, so such a process still reaches the vault process an unlock in a terminal
 // started. Only when there is none the socket lives in run beside the vault, ~/.qatlas/connect/run by
@@ -129,15 +129,19 @@ var userRuntimeRoot = "/run/user"
 // directory, a test's included, never reaches the process of another vault through the shared runtime
 // directory.
 //
-// On macOS, where a socket path holds fewer bytes, a path that would be too long there moves to qatlas in
-// the per-user temporary directory ($TMPDIR) instead; every other platform, and a path too long even
-// there, fails with a PathTooLongError.
+// On macOS, where a socket path holds fewer bytes, a path that would be too long there moves to
+// qatlas-connect in the per-user temporary directory ($TMPDIR) instead; every other platform, and a path too
+// long even there, fails with a PathTooLongError.
 //
-// On Windows the vault process listens on a named pipe instead, \\.\pipe\qatlas-vault-<user>-<vault>: the
-// security identifier of this user, so no two users' names collide, and a hash of the vault's absolute
-// path, compared without regard to case as the file system does. A pipe leaves nothing on disk, and the
-// system removes it once its process ends, at logout or restart included.
-func SocketPath(vaultDir string) (string, error) {
+// On Windows the vault process listens on a named pipe instead,
+// \\.\pipe\qatlas-connect-vault-<user>-<vault>: the security identifier of this user, so no two users'
+// names collide, and a hash of the vault's absolute path, compared without regard to case as the file system
+// does. A pipe leaves nothing on disk, and the system removes it once its process ends, at logout or restart
+// included.
+func SocketPath(vaultDir string) (string, error) { return socketPath(vaultDir, runtimeDirName) }
+
+// socketPath is SocketPath with name as the directory below the runtime directory, and below $TMPDIR on macOS.
+func socketPath(vaultDir, name string) (string, error) {
 	abs, err := filepath.Abs(vaultDir)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine the vault directory: %w", err)
@@ -146,19 +150,19 @@ func SocketPath(vaultDir string) (string, error) {
 		return path, err
 	}
 	sum := sha256.Sum256([]byte(abs))
-	name := "vault-" + hex.EncodeToString(sum[:8]) + ".sock"
+	file := "vault-" + hex.EncodeToString(sum[:8]) + ".sock"
 
 	dir := filepath.Join(filepath.Dir(abs), "run")
 	// A relative XDG_RUNTIME_DIR is invalid by the specification and ignored like an unset one.
 	if runtime := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(runtime) {
-		dir = filepath.Join(runtime, "qatlas")
+		dir = filepath.Join(runtime, name)
 	} else if runtime := userRuntimeDir(); runtime != "" {
-		dir = filepath.Join(runtime, "qatlas")
+		dir = filepath.Join(runtime, name)
 	}
-	path := filepath.Join(dir, name)
+	path := filepath.Join(dir, file)
 	if err := checkPathLength(path); err != nil {
-		if fallback, ok := fallbackSocketDir(); ok && checkPathLength(filepath.Join(fallback, name)) == nil {
-			return filepath.Join(fallback, name), nil
+		if fallback, ok := fallbackSocketDir(name); ok && checkPathLength(filepath.Join(fallback, file)) == nil {
+			return filepath.Join(fallback, file), nil
 		}
 		return "", err
 	}

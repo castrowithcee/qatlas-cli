@@ -377,9 +377,9 @@ func TestSocketPath(t *testing.T) {
 	runtimeDir := shortTempDir(t)
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	inRuntime, err := SocketPath(vaultDir)
-	if err != nil || inRuntime != filepath.Join(runtimeDir, "qatlas", name) {
+	if err != nil || inRuntime != filepath.Join(runtimeDir, runtimeDirName, name) {
 		t.Fatalf("SocketPath() with a runtime directory = %s, %v, want %s", inRuntime, err,
-			filepath.Join(runtimeDir, "qatlas", name))
+			filepath.Join(runtimeDir, runtimeDirName, name))
 	}
 	other, err := SocketPath(filepath.Join(shortTempDir(t), "vault"))
 	if err != nil || other == inRuntime {

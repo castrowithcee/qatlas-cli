@@ -10,7 +10,7 @@ import (
 // approval given then stays valid; a disabled one differs.
 func TestFingerprintOfAnActiveConnectionIsUnchanged(t *testing.T) {
 	const before = "4e83b7a5c7201175c9e37bccbfb39049023b62d0e8d15ea98e0e2205ca0e928a"
-	if got := Fingerprint(wikiScope(), "id-1"); got != before {
+	if got := fingerprintWith(legacyFingerprintLabel, wikiScope(), "id-1"); got != before {
 		t.Fatalf("Fingerprint() = %s, want the fingerprint from before the state existed", got)
 	}
 	off := wikiScope()

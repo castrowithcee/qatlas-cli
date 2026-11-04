@@ -9,9 +9,10 @@
 // caller, never written silently and never left to abort the invoke it was called for.
 //
 // A logger given the log key (see Key and Logger.WithKey) also signs every entry it writes, retention-cut
-// markers included, with a check value in Entry.MAC; see Key.mac for its exact definition. A logger
-// without one leaves MAC empty, which marks an entry unverified: Verify counts such an entry but never
-// treats it as a break, so the chain runs on through signed and unsigned entries alike.
+// markers included, with a check value in Entry.MAC and names the key's label in Entry.MACKey; see Key.mac
+// for its exact definition. A logger without one leaves MAC empty, which marks an entry unverified: Verify
+// counts such an entry but never treats it as a break, so the chain runs on through signed and unsigned
+// entries alike.
 package invokelog
 
 import (
@@ -101,6 +102,10 @@ type Entry struct {
 	Session  string `json:"session,omitempty"`
 	Cut      *Cut   `json:"cut,omitempty"`
 	PrevHash string `json:"prev_hash"`
+	// MACKey is currentMACKey on an entry signed under keyLabel and absent on one signed under
+	// legacyKeyLabel or not signed at all. It is covered by the check value and the chain, so the first
+	// entry that carries it marks where a chain changed labels; see verify.
+	MACKey int `json:"mac_key,omitempty"`
 	// MAC is the check value of a signed entry, empty for an unsigned one; see Key.mac.
 	MAC string `json:"mac"`
 }
@@ -521,9 +526,13 @@ func (l *Logger) Append(f Fields) error {
 	return appendLines(todayPath, lines)
 }
 
-// encode is the line entry is stored as: its JSON encoding with an empty MAC, signed when l has a key.
+// encode is the line entry is stored as: its JSON encoding with an empty MAC, signed under keyLabel when l
+// has a key.
 func (l *Logger) encode(entry Entry) ([]byte, error) {
-	entry.MAC = ""
+	entry.MAC, entry.MACKey = "", 0
+	if l.key.usable() {
+		entry.MACKey = currentMACKey
+	}
 	raw, err := json.Marshal(entry)
 	if err != nil || !l.key.usable() {
 		return raw, err

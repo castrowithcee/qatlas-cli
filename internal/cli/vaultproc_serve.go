@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
@@ -29,9 +31,9 @@ const vaultProcessPlatform = true
 // anything.
 //
 // As a successor, started by a running vault process from the program an update installed (see
-// vaultproc.StartSuccessorProcess), it listens beside the vault socket, at vaultproc.NextPath, reports ready, and
-// waits until that process moved its socket onto the vault socket; it keeps the time that process would have
-// locked at. Only a platform that hands the vault over on an update starts one (see vaultHandoverPlatform);
+// vaultproc.StartSuccessorProcess), it listens beside the vault socket (see vaultproc.ListenSuccessor), reports
+// ready, and waits until that process moved its socket onto the vault socket; it keeps the time that process
+// would have locked at. Only a platform that hands the vault over on an update starts one (see vaultHandoverPlatform);
 // elsewhere a successor refuses to start.
 func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error {
 	handover, report, ok := serveStreams()
@@ -85,16 +87,25 @@ func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error 
 		return err
 	}
 	vaultDir := vault.New(filepath.Dir(path)).Dir()
+	fromDir := vaultDir
+	if successor {
+		if path, err = successorConfigPath(path, vaultDir, key); err != nil {
+			answer(err.Error())
+			return err
+		}
+		vaultDir = vault.New(filepath.Dir(path)).Dir()
+	}
 	socket, err := vaultproc.SocketPath(vaultDir)
 	if err != nil {
 		answer(err.Error())
 		return err
 	}
-	listenAt := socket
+	var listener net.Listener
 	if successor {
-		listenAt = vaultproc.NextPath(socket)
+		listener, err = vaultproc.ListenSuccessor(vaultDir, fromDir)
+	} else {
+		listener, err = vaultproc.Listen(socket)
 	}
-	listener, err := vaultproc.Listen(listenAt)
 	if errors.Is(err, vaultproc.ErrRunning) && !successor {
 		answer(vaultproc.ReportRunning)
 		return err
@@ -152,6 +163,28 @@ func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error 
 		go watchSocket(ctx, socket, func() { _ = server.Close() })
 	}
 	return server.Serve(listener)
+}
+
+// successorConfigPath is the configuration file a successor serves, started with path, by a vault process
+// that serves the vault in vaultDir. A vault process of the release before qatlas-connect that serves the
+// default location of that release starts its successor with that location's file, which this release
+// reaches only once migrated. Where path is exactly that file, nothing in the environment names an explicit
+// place, and such a process serves the vault, the successor migrates as a run from the default location does
+// and serves the current default file. It does not start when the migration fails or the migrated vault is
+// not the one key opens, rather than serve a place no new client reaches. Any other path stays as it is.
+func successorConfigPath(path, vaultDir string, key *age.X25519Identity) (string, error) {
+	if !config.LegacyDefault(path) || !vaultproc.EarlierServes(vaultDir) {
+		return path, nil
+	}
+	current, err := config.MigrateDefault()
+	if err != nil {
+		return "", err
+	}
+	if recipient, err := vault.New(filepath.Dir(current)).Recipient(); err != nil ||
+		recipient != key.Recipient().String() {
+		return "", errors.New("the vault in the current configuration directory is not the vault handed over")
+	}
+	return current, nil
 }
 
 // readHandover reads the vault's key and secrets from the pipe 'qatlas vault unlock' writes them to, and

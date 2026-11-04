@@ -1,0 +1,1 @@
+{"seq":8,"time":"2026-03-04T11:00:00Z","path":"cli","operation":"canary.legacy.three","connection":"canary-legacy-wiki","effect":"read","result":"success","duration_ms":7,"prev_hash":"05db462750e362f4ec8f99ea59ff781b71f5e08ddbafd2a2aa7b1fc2ca7e142d","mac":"04deef788a87a9f61c4282377fde57f9acadc6299281d010d1087a601e84b26b"}

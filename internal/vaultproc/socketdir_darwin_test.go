@@ -18,8 +18,8 @@ func TestSocketPathMovesAnOverlongPathToTMPDIR(t *testing.T) {
 	vaultDir := filepath.Join("/", strings.Repeat("d", maxSocketPath), "vault")
 
 	path, err := SocketPath(vaultDir)
-	if err != nil || filepath.Dir(path) != filepath.Join(tmp, "qatlas") {
-		t.Fatalf("SocketPath() of an overlong path = %s, %v, want it in %s", path, err, filepath.Join(tmp, "qatlas"))
+	if err != nil || filepath.Dir(path) != filepath.Join(tmp, runtimeDirName) {
+		t.Fatalf("SocketPath() of an overlong path = %s, %v, want it in %s", path, err, filepath.Join(tmp, runtimeDirName))
 	}
 	l, err := Listen(path)
 	if err != nil {

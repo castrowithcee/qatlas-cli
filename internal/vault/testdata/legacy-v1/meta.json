@@ -1,0 +1,19 @@
+{
+  "passphrase": "fixture-phrase",
+  "scope": {
+    "connection": "conn-a",
+    "credential": "gh-a",
+    "provider": "github",
+    "origin": "https://api.github.com",
+    "permissions": [
+      "read"
+    ],
+    "targets": [
+      "repos/o/a"
+    ],
+    "tools": [
+      "github.issues.list"
+    ]
+  },
+  "agent_token": "qat_qFlRafDSqhMAJuRpv24sCYGWXHqJXwZPcnvb3IUmyf4"
+}

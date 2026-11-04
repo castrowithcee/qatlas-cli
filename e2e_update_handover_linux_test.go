@@ -41,16 +41,38 @@ import (
 // an MCP server runs on an unlocked vault. With the setting handover the vault stays unlocked: the server's
 // next call reads the vault credential, the vault process is a new one, and the log records the handover.
 // With the setting lock the same update locks the vault, and the call reports vault-locked.
+//
+// The case from the earlier release starts from a program built with the tag legacy_vault_names, which
+// reaches its vault process by the names of the release before qatlas-connect: its proof label, its runtime
+// directory. Its vault process hands over to this release's program all the same, which then serves this
+// release's socket alone; before the update, this release's program does not reach the earlier process.
+//
+// The earlier release at its default location keeps its configuration in ~/.qatlas/cli and hands its
+// successor that file. The successor migrates to ~/.qatlas/connect and serves it there, where this release's
+// program finds it by default, and leaves ~/.qatlas/cli as it was, but for the earlier process's own record
+// of the handover.
 func TestUpdateHandsTheVaultOverToTheNewProgram(t *testing.T) {
 	if testing.Short() {
-		t.Skip("the acceptance run builds the binary four times")
+		t.Skip("the acceptance run builds the binary six times")
 	}
-	for _, behaviour := range []vault.UpdateBehaviour{vault.UpdateHandover, vault.UpdateLock} {
-		t.Run(string(behaviour), func(t *testing.T) { updateHandoverCase(t, behaviour) })
+	for _, tc := range []struct {
+		name      string
+		behaviour vault.UpdateBehaviour
+		earlier   bool
+		atDefault bool
+	}{
+		{string(vault.UpdateHandover), vault.UpdateHandover, false, false},
+		{string(vault.UpdateLock), vault.UpdateLock, false, false},
+		{"handover from the earlier release", vault.UpdateHandover, true, false},
+		{"handover from the earlier release at its default location", vault.UpdateHandover, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) { updateHandoverCase(t, tc.behaviour, tc.earlier, tc.atDefault) })
 	}
 }
 
-func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
+// updateHandoverCase runs one case; atDefault keeps the configuration in the earlier release's default
+// location instead of naming it in QATLAS_CONFIG.
+func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour, earlier, atDefault bool) {
 	const (
 		storedID     = "canary-handover-id-5d27a1"
 		storedSecret = "canary-handover-secret-93be60"
@@ -89,9 +111,9 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 	}))
 	t.Cleanup(releases.Close)
 
-	build := func(path, version string) {
+	build := func(path, version, tags string) {
 		t.Helper()
-		cmd := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false", "-ldflags",
+		cmd := exec.Command("go", "build", "-tags", tags, "-buildvcs=false", "-ldflags",
 			"-X github.com/castrowithcee/qatlas-connect/internal/cli.version="+version+
 				" -X 'github.com/castrowithcee/qatlas-connect/internal/release.extraKeyLines="+keyLine+"'"+
 				" -X github.com/castrowithcee/qatlas-connect/internal/selfupdate.testBaseURL="+releases.URL,
@@ -101,9 +123,13 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 			t.Fatalf("building the binary: %v", err)
 		}
 	}
-	build(bin, "v1.0.0")
+	tags := "e2e"
+	if earlier {
+		tags += ",legacy_vault_names"
+	}
+	build(bin, "v1.0.0", tags)
 	next := filepath.Join(dir, "next")
-	build(next, "v2.0.0")
+	build(next, "v2.0.0", "e2e")
 	program, err := os.ReadFile(next)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +156,14 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 	sum := sha256.Sum256(archive)
 	checksums = []byte(hex.EncodeToString(sum[:]) + "  " + asset + "\n")
 
-	configPath := filepath.Join(dir, "config.yaml")
+	configDir := dir
+	if atDefault {
+		configDir = filepath.Join(dir, ".qatlas", "cli")
+		if err := os.MkdirAll(configDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	configPath := filepath.Join(configDir, "config.yaml")
 	config := fmt.Sprintf(`version: 4
 services:
   wiki:
@@ -150,7 +183,7 @@ defaults:
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	v := vault.New(dir)
+	v := vault.New(configDir)
 	offer := func(string) (string, error) { return passphrase, nil }
 	for name, value := range map[string]string{"token-id": storedID, "token-secret": storedSecret} {
 		if err := v.Set("vault-reader", name, value, offer); err != nil {
@@ -183,13 +216,16 @@ defaults:
 	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
 
 	var seen strings.Builder
-	c := &runner{bin: bin, seen: &seen, env: []string{
+	env := []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
 		"XDG_RUNTIME_DIR=" + runtimeDir,
 		secret.StoreSelector + "=none",
-	}}
+	}
+	if !atDefault {
+		env = append(env, "QATLAS_CONFIG="+configPath)
+	}
+	c := &runner{bin: bin, seen: &seen, env: env}
 	var vaultPIDs []int
 	t.Cleanup(func() {
 		_, _, _ = c.run(t, "vault", "lock")
@@ -216,6 +252,25 @@ defaults:
 	}
 	oldPID, _ := strconv.Atoi(match[1])
 	vaultPIDs = append(vaultPIDs, oldPID)
+	sockets := func(name string) []string {
+		found, _ := filepath.Glob(filepath.Join(runtimeDir, name, "vault-*"))
+		return found
+	}
+	if earlier {
+		if len(sockets("qatlas")) == 0 || len(sockets("qatlas-connect")) != 0 {
+			t.Fatalf("the earlier program's vault process listens at %v and %v, want the earlier runtime directory only",
+				sockets("qatlas"), sockets("qatlas-connect"))
+		}
+	}
+	// At the default location this release's program would migrate the configuration before the update.
+	if earlier && !atDefault {
+		nextRunner := &runner{bin: next, seen: &seen, env: c.env}
+		if code, stdout, stderr := nextRunner.run(t, "vault", "status", "--output", "json"); code != 0 ||
+			!strings.Contains(stdout, `"process":"none"`) {
+			t.Fatalf("vault status of the new program before the update: exit %d, stdout %q, stderr %q, want no "+
+				"vault process", code, stdout, stderr)
+		}
+	}
 
 	broker := startBroker(t, c)
 	pages := `{"operation":"bookstack.pages.list","connection":"wiki"}`
@@ -224,6 +279,12 @@ defaults:
 		t.Fatalf("call before the update = %+v", call.Result)
 	}
 	mcpPID := broker.cmd.Process.Pid
+	// The call's record reaches the log after its answer; the state before the update holds it.
+	for deadline := time.Now().Add(5 * time.Second); atDefault && time.Now().Before(deadline) &&
+		!strings.Contains(readLogs(t, configDir), `"bookstack.pages.list"`); {
+		time.Sleep(20 * time.Millisecond)
+	}
+	before := dirState(t, configDir)
 
 	code, stdout, stderr := c.run(t, "update", "--yes", "--output", "json")
 	if code != 0 || !strings.Contains(stdout, `"updated":true`) || !strings.Contains(stdout, `"signed":true`) {
@@ -269,8 +330,25 @@ defaults:
 		if syscall.Kill(oldPID, 0) == nil {
 			t.Errorf("the old vault process %d still runs", oldPID)
 		}
-		if !strings.Contains(readLogs(t, dir), `"operation":"vault.handover"`) {
+		if !strings.Contains(readLogs(t, configDir), `"operation":"vault.handover"`) {
 			t.Error("the log has no vault.handover entry")
+		}
+		if len(sockets("qatlas-connect")) == 0 || len(sockets("qatlas")) != 0 {
+			t.Errorf("after the handover the vault process listens at %v, and %v is left in the earlier runtime "+
+				"directory, want this release's socket only", sockets("qatlas-connect"), sockets("qatlas"))
+		}
+		if atDefault {
+			checkLegacyHomeKept(t, before, dirState(t, configDir))
+			current := filepath.Join(dir, ".qatlas", "connect")
+			if info, err := os.Stat(current); err != nil || !info.IsDir() {
+				t.Fatalf("%s is %v, %v, want the migrated configuration", current, info, err)
+			}
+			// The successor records the call after the update in the migrated vault's log.
+			calls := func(dir string) int { return strings.Count(readLogs(t, dir), `"bookstack.pages.list"`) }
+			if got, was := calls(current), calls(configDir); got <= was {
+				t.Errorf("the migrated log records %d calls, the earlier one %d, want the call after the update "+
+					"in the migrated log", got, was)
+			}
 		}
 	case vault.UpdateLock:
 		if !strings.Contains(stderr, "locked") || !strings.Contains(stderr, "'qatlas vault unlock'") {
@@ -283,6 +361,63 @@ defaults:
 	for _, canary := range []string{storedID, storedSecret, passphrase} {
 		if strings.Contains(seen.String(), canary) {
 			t.Errorf("a secret reached the output: %s", canary)
+		}
+	}
+}
+
+// dirState describes every entry below dir by its mode and, for a regular file, its content.
+func dirState(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	state := map[string]string{}
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		state[rel] = info.Mode().String()
+		if info.Mode().IsRegular() {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			state[rel] += " " + string(data)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+// checkLegacyHomeKept checks that the earlier release's directory is what it was before the update, but for
+// the record of the handover the earlier vault process appends to its own log, which may create the log.
+func checkLegacyHomeKept(t *testing.T, before, after map[string]string) {
+	t.Helper()
+	logs := filepath.Join("vault", "logs")
+	for rel, now := range after {
+		was, ok := before[rel]
+		switch {
+		case now == was:
+		case !ok && (rel == logs || rel == filepath.Join(logs, ".lock")) && !strings.Contains(strings.TrimSpace(now), " "):
+		case ok && !strings.HasPrefix(now, was), !strings.HasPrefix(rel, logs+string(filepath.Separator)),
+			!strings.HasSuffix(rel, ".jsonl"):
+			t.Errorf("%s changed in the earlier release's directory", rel)
+		default:
+			added := strings.TrimPrefix(now, was)
+			if !ok {
+				_, added, _ = strings.Cut(now, " ")
+			}
+			for _, line := range strings.Split(strings.TrimSpace(added), "\n") {
+				if !strings.Contains(line, `"operation":"vault.handover"`) {
+					t.Errorf("%s gained an entry other than the earlier process's handover: %s", rel, line)
+				}
+			}
+		}
+	}
+	for rel := range before {
+		if _, ok := after[rel]; !ok {
+			t.Errorf("%s disappeared from the earlier release's directory", rel)
 		}
 	}
 }

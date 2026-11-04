@@ -13,7 +13,7 @@ func TestFingerprintCoversExclude(t *testing.T) {
 	}
 	// Without exclusions the fingerprint is the one written before they existed.
 	scope.Exclude = []string{}
-	if got := Fingerprint(scope, "id-1"); got != legacyFingerprint {
+	if got := fingerprintWith(legacyFingerprintLabel, scope, "id-1"); got != legacyFingerprint {
 		t.Errorf("Fingerprint() with an empty exclude list = %s, want the legacy value", got)
 	}
 	scope.Exclude = []string{"b", "a"}

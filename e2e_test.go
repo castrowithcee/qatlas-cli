@@ -199,6 +199,23 @@ func buildBinary(t *testing.T, dir string) string {
 	return bin
 }
 
+// shortRuntimeDir returns a fresh runtime directory for the vault socket, removed after the test. A test's
+// own temporary directory nests its name, and the per-user one of macOS leaves too little of the socket
+// path's limit, so there it is created in /tmp instead.
+func shortRuntimeDir(t *testing.T) string {
+	t.Helper()
+	base := ""
+	if runtime.GOOS == "darwin" {
+		base = "/tmp"
+	}
+	dir, err := os.MkdirTemp(base, "qv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 // TestEndToEnd drives the public command surface of the built binary against a local mock. It is the
 // acceptance run for the MVP: discovery, connection selection, reading, every output format, the stream
 // and exit code contract, and a secret leak check.

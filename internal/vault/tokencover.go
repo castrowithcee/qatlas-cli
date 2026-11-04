@@ -159,7 +159,7 @@ func (v *Vault) ApproveWithTokenConnections(value string, current []Scope, conne
 		switch {
 		case !approved:
 			changes = append(changes, open{TokenChange{Connection: name, Kind: ChangeCreate}, scope, id})
-		case approval.Fingerprint != Fingerprint(scope, id):
+		case !FingerprintMatches(approval.Fingerprint, scope, id):
 			changes = append(changes, open{TokenChange{Connection: name, Kind: ChangeUpdate}, scope, id})
 		}
 	}

@@ -189,12 +189,12 @@ func TestApprovalsExistOnlyWhileEncrypted(t *testing.T) {
 // was computed from the canonical form of that time.
 func TestFingerprintWithoutFilesIsUnchanged(t *testing.T) {
 	const want = "4e83b7a5c7201175c9e37bccbfb39049023b62d0e8d15ea98e0e2205ca0e928a"
-	if got := Fingerprint(wikiScope(), "id-1"); got != want {
+	if got := fingerprintWith(legacyFingerprintLabel, wikiScope(), "id-1"); got != want {
 		t.Fatalf("Fingerprint() = %s, want %s", got, want)
 	}
 	empty := wikiScope()
 	empty.FilesRead, empty.FilesWrite = []string{}, []string{}
-	if got := Fingerprint(empty, "id-1"); got != want {
+	if got := fingerprintWith(legacyFingerprintLabel, empty, "id-1"); got != want {
 		t.Errorf("Fingerprint() with empty files = %s, want %s", got, want)
 	}
 }

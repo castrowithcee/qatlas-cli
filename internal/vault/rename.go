@@ -279,7 +279,7 @@ func (v *Vault) renameUnlocked(r CredentialRename) ([]string, func() error, erro
 		if r.Resume && c.Before.Credential == r.From {
 			own = before[r.To]
 		}
-		if !ok || own == "" || approval.Fingerprint != Fingerprint(c.Before, own) || after[c.After.Credential] == "" {
+		if !ok || own == "" || !FingerprintMatches(approval.Fingerprint, c.Before, own) || after[c.After.Credential] == "" {
 			continue
 		}
 		id := after[c.After.Credential]

@@ -3,7 +3,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/hkdf"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -17,17 +22,20 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/approval"
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	qconfig "github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/bookstack"
 	"github.com/castrowithcee/qatlas-connect/internal/secret"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
-// TestSignedInvokeLogEndToEnd drives the built binary's signed invocation log: while the vault is locked
-// an invoke is logged unverified; once 'vault unlock' at a pseudo-terminal started the vault process,
-// invokes over the CLI and an MCP broker started before the unlock are logged signed by that process, and
-// 'vault logs verify' has it check them. A line changed by hand, the last one, is reported changed. 'vault
-// lock' ends the process, after which verify checks the chain alone and reports the check values as not
-// checked. Neither a secret nor any key material ever reaches an output or the log.
+// TestSignedInvokeLogEndToEnd drives the built binary's signed invocation log: it continues two days the
+// former release signed under its log key label; while the vault is locked an invoke is logged unverified;
+// once 'vault unlock' at a pseudo-terminal started the vault process, invokes over the CLI and an MCP broker
+// started before the unlock are logged signed by that process under the current label, and 'vault logs
+// verify' has it check the former and the current entries alike. A line changed by hand, the last one, is
+// reported changed, and so is a line signed under the former label after the current one. 'vault lock'
+// ends the process, after which verify checks the chain alone and reports the check values as not checked.
+// Neither a secret nor any key material ever reaches an output or the log.
 func TestSignedInvokeLogEndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the acceptance run builds the binary")
@@ -88,11 +96,7 @@ defaults:
 		t.Fatalf("approving the connection: %v, %v", approved, err)
 	}
 
-	runtimeDir, err := os.MkdirTemp("", "qv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	runtimeDir := shortRuntimeDir(t)
 
 	var seen strings.Builder
 	c := &runner{bin: bin, seen: &seen, env: []string{
@@ -113,11 +117,19 @@ defaults:
 	broker := startBroker(t, c)
 
 	logsDir := filepath.Join(dir, "vault", "logs")
+	now := time.Now().UTC()
+	former := seedFormerLog(t, logsDir, vaultKey, now.AddDate(0, 0, -2), now.AddDate(0, 0, -1))
 	readLog := func(t *testing.T) (string, []map[string]any) {
 		t.Helper()
-		files, _ := filepath.Glob(filepath.Join(logsDir, "*.jsonl"))
+		all, _ := filepath.Glob(filepath.Join(logsDir, "*.jsonl"))
+		var files []string
+		for _, file := range all {
+			if _, seeded := former[file]; !seeded {
+				files = append(files, file)
+			}
+		}
 		if len(files) != 1 {
-			t.Fatalf("day files = %v, want exactly one", files)
+			t.Fatalf("day files = %v, want exactly one beside the former release's", files)
 		}
 		data, err := os.ReadFile(files[0])
 		if err != nil {
@@ -200,8 +212,14 @@ defaults:
 	}
 	for i, entry := range entries {
 		signed := entry["mac"] != ""
-		if signed != (i > 0) {
-			t.Fatalf("entry %d = %v, want only the entry written while locked unsigned", i, entry)
+		if signed != (i > 0) || signed != (entry["mac_key"] == 2.0) {
+			t.Fatalf("entry %d = %v, want only the entry written while locked unsigned, the rest under the current label",
+				i, entry)
+		}
+	}
+	for file, data := range former {
+		if now, _ := os.ReadFile(file); !bytes.Equal(now, data) {
+			t.Fatalf("the former release's day file %s was rewritten", filepath.Base(file))
 		}
 	}
 	if entries[3]["path"] != "mcp" || entries[4]["path"] != "mcp" || entries[4]["operation"] != "qatlas.search" ||
@@ -210,9 +228,17 @@ defaults:
 	}
 
 	code, macCheck, days, stderr := verify(t)
-	if code != 0 || macCheck != "checked" || len(days) != 1 || days[0].Entries != 5 || days[0].Unverified != 1 ||
-		days[0].Unchecked != 0 || days[0].Changed != 0 || stderr != "" {
+	if code != 0 || macCheck != "checked" || len(days) != 3 || stderr != "" {
 		t.Fatalf("verify: exit %d, mac_check %q, days %+v, stderr %q", code, macCheck, days, stderr)
+	}
+	for _, day := range days[:2] {
+		if day != (verifyDay{Entries: 2}) {
+			t.Fatalf("verify of the former release's day: %+v, want 2 entries, every check value valid", day)
+		}
+	}
+	days = days[2:]
+	if days[0].Entries != 5 || days[0].Unverified != 1 || days[0].Unchecked != 0 || days[0].Changed != 0 {
+		t.Fatalf("verify: days %+v", days)
 	}
 
 	// The last line by hand: its chain stays intact, since nothing follows it, but its check value fails.
@@ -226,9 +252,28 @@ defaults:
 		t.Fatal(err)
 	}
 	code, _, days, stderr = verify(t)
-	if code == 0 || days[0].Changed != 1 || !strings.Contains(days[0].Problem, "does not match its check value") ||
-		!strings.Contains(stderr, "broken") {
+	if code == 0 || len(days) != 3 || days[2].Changed != 1 ||
+		!strings.Contains(days[2].Problem, "does not match its check value") || !strings.Contains(stderr, "broken") {
 		t.Fatalf("verify of a changed line: exit %d, days %+v, stderr %q", code, days, stderr)
+	}
+
+	// A line under the former label after the current one, chained and signed the way the former release
+	// would have, is a change too.
+	lines := bytes.Split(bytes.TrimRight(original, "\n"), []byte("\n"))
+	var last invokelog.Entry
+	if err := json.Unmarshal(lines[len(lines)-1], &last); err != nil {
+		t.Fatal(err)
+	}
+	downgraded := append(append([]byte(nil), original...), formerLine(t, vaultKey, invokelog.Entry{Seq: last.Seq + 1,
+		Time: last.Time, Path: "cli", Operation: "bookstack.pages.list", Effect: "read", Result: "success",
+		PrevHash: hashOf(lines[len(lines)-1])})...)
+	if err := os.WriteFile(file, append(downgraded, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, _, days, stderr = verify(t)
+	if code == 0 || len(days) != 3 || days[2].Changed != 1 || !strings.Contains(days[2].Problem, "former log key") ||
+		!strings.Contains(stderr, "broken") {
+		t.Fatalf("verify of a line under the former label: exit %d, days %+v, stderr %q", code, days, stderr)
 	}
 	if err := os.WriteFile(file, original, 0o600); err != nil {
 		t.Fatal(err)
@@ -246,15 +291,72 @@ defaults:
 	processID = 0
 
 	code, macCheck, days, stderr = verify(t)
-	if code != 0 || macCheck != "vault-locked" || days[0].Unchecked != 4 || days[0].Unverified != 1 || stderr != "" {
+	if code != 0 || macCheck != "vault-locked" || len(days) != 3 || days[0].Unchecked != 2 || days[1].Unchecked != 2 ||
+		days[2].Unchecked != 4 || days[2].Unverified != 1 || stderr != "" {
 		t.Fatalf("verify after lock: exit %d, mac_check %q, days %+v, stderr %q", code, macCheck, days, stderr)
 	}
 
 	broker.stop(t)
 	logData, _ := os.ReadFile(file)
+	for _, data := range former {
+		logData = append(logData, data...)
+	}
 	for _, canary := range []string{storedID, storedSecret, passphrase, vaultKey, strings.ToLower(vaultKey), "AGE-SECRET-KEY"} {
 		if strings.Contains(seen.String(), canary) || strings.Contains(string(logData), canary) {
 			t.Errorf("secret or key material reached the output or the log")
 		}
 	}
+}
+
+// formerLabel is the context the former release derived its log key with.
+const formerLabel = "qatlas invocation log v1"
+
+// seedFormerLog writes two signed entries on each of days, chained from the genesis hash and signed under
+// formerLabel with the vault key identity, the way the former release wrote them, and returns each file's
+// contents by path.
+func seedFormerLog(t *testing.T, logsDir, identity string, days ...time.Time) map[string][]byte {
+	t.Helper()
+	if err := os.MkdirAll(logsDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{}
+	prev, seq := hashOf(nil), uint64(1)
+	for _, day := range days {
+		path := filepath.Join(logsDir, day.Format("2006-01-02")+".jsonl")
+		var data []byte
+		for _, op := range []string{"bookstack.pages.list", "bookstack.pages.get"} {
+			line := formerLine(t, identity, invokelog.Entry{Seq: seq, Time: day.Truncate(time.Second), Path: "cli",
+				Operation: op, Connection: "wiki", Effect: "read", Result: "success", PrevHash: prev})
+			data = append(append(data, line...), '\n')
+			prev, seq = hashOf(line), seq+1
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		files[path] = data
+	}
+	return files
+}
+
+// formerLine is entry as the former release stored it: without mac_key, with the HMAC-SHA256 under the log
+// key HKDF derives from identity with formerLabel as its check value.
+func formerLine(t *testing.T, identity string, entry invokelog.Entry) []byte {
+	t.Helper()
+	unsigned, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := hkdf.Key(sha256.New, []byte(identity), nil, formerLabel, sha256.Size)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := hmac.New(sha256.New, key)
+	h.Write(unsigned)
+	line := bytes.TrimSuffix(unsigned, []byte(`""}`))
+	return append(line, `"`+hex.EncodeToString(h.Sum(nil))+`"}`...)
+}
+
+func hashOf(line []byte) string {
+	sum := sha256.Sum256(line)
+	return hex.EncodeToString(sum[:])
 }

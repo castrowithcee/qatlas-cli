@@ -72,7 +72,7 @@ func checkSocketGone(t *testing.T, path string) {
 // platformHelper runs the helper process modes only Linux and macOS have: the successors of a handover.
 func platformHelper(mode, path string) {
 	switch mode {
-	case "successor", "successor-no-socket":
+	case "successor", "successor-no-socket", "successor-renamed", "successor-earlier":
 		handoverHelper(mode, path)
 	}
 }
@@ -188,10 +188,15 @@ func TestCheckProcess(t *testing.T) {
 func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	root := userRuntimeRoot
 	t.Cleanup(func() { userRuntimeRoot = root })
-	// A short root keeps the socket path within the kernel's limit; t.TempDir names it after the test.
+	// A short root keeps the socket path within the kernel's limit; t.TempDir names it after the test, and
+	// the per-user $TMPDIR of macOS alone is too long for one.
+	base := ""
+	if runtime.GOOS == "darwin" {
+		base = "/tmp"
+	}
 	short := func() string {
 		t.Helper()
-		dir, err := os.MkdirTemp("", "qrt")
+		dir, err := os.MkdirTemp(base, "qrt")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -231,7 +236,7 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	// beside the vault.
 	wantDir := filepath.Join(filepath.Dir(vaultDir), "run")
 	if runtime.GOOS == "linux" {
-		wantDir = filepath.Join(runtimeDir, "qatlas")
+		wantDir = filepath.Join(runtimeDir, runtimeDirName)
 	}
 	if dir := beside(); dir != wantDir {
 		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want %s", dir, wantDir)
@@ -239,7 +244,7 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 
 	explicit := short()
 	t.Setenv("XDG_RUNTIME_DIR", explicit)
-	if dir := beside(); dir != filepath.Join(explicit, "qatlas") {
+	if dir := beside(); dir != filepath.Join(explicit, runtimeDirName) {
 		t.Fatalf("SocketPath() with XDG_RUNTIME_DIR = %s, want the variable to win", dir)
 	}
 }
