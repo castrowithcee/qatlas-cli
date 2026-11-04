@@ -14,7 +14,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-connect/internal/release"
 	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
@@ -79,7 +78,7 @@ func needSSHKeygen(t *testing.T) {
 	}
 }
 
-const zipArchive = "qatlas_%s_windows_amd64.zip"
+const zipArchive = "qconnect_%s_windows_amd64.zip"
 
 func zipName(tag string) string { return strings.Replace(zipArchive, "%s", tag, 1) }
 
@@ -103,12 +102,13 @@ func zipball(t *testing.T, files map[string]string) []byte {
 	return buf.Bytes()
 }
 
-// publish adds a release whose qatlas.exe is the text program and makes it the latest.
+// publish adds a release whose qconnect.exe is the text program and makes it the latest.
 func (e *psEnv) publish(tag, program string, opts releaseOptions) {
 	e.t.Helper()
 	archive := zipball(e.t, map[string]string{
-		"bin/qatlas.exe":           program,
-		"share/doc/qatlas/LICENSE": "license " + tag + "\n",
+		"bin/qconnect.exe":           program,
+		"share/doc/qconnect/LICENSE": "license " + tag + "\n",
+		"share/doc/qconnect/NOTICE":  "notice " + tag + "\n",
 	})
 	sum := sha256.Sum256(archive)
 	hash := hex.EncodeToString(sum[:])
@@ -121,11 +121,19 @@ func (e *psEnv) publish(tag, program string, opts releaseOptions) {
 	if signer == nil {
 		signer = e.signer
 	}
-	e.server.Publish(tag, map[string][]byte{
+	namespace := opts.namespace
+	if namespace == "" {
+		namespace = connectNamespace
+	}
+	assets := map[string][]byte{
 		zipName(tag):        archive,
 		"checksums.txt":     checksums,
-		"checksums.txt.sig": releasetest.Sign(e.t, signer, release.Namespace, "sha512", checksums),
-	})
+		"checksums.txt.sig": releasetest.Sign(e.t, signer, legacyNamespace, "sha512", checksums),
+	}
+	if !opts.noSignature {
+		assets["checksums.txt.qconnect.sig"] = releasetest.Sign(e.t, signer, namespace, "sha512", checksums)
+	}
+	e.server.Publish(tag, assets)
 }
 
 // run pipes scripts/install.ps1 into Invoke-Expression, like `irm ... | iex`, with errors made fatal so a
@@ -145,10 +153,11 @@ func (e *psEnv) run(env ...string) (string, error) {
 		"TEMP="+e.t.TempDir(),
 		"TMP="+e.t.TempDir(),
 		"QATLAS_VERSION=",
-		"QATLAS_INSTALL_BASE_URL="+e.server.URL,
-		"QATLAS_INSTALL_PREFIX="+e.prefix,
-		"QATLAS_INSTALL_ALLOWED_SIGNERS_FILE="+e.signers,
-		"QATLAS_INSTALL_USER_PATH_FILE="+e.pathFile,
+		"QCONNECT_VERSION=",
+		"QCONNECT_INSTALL_BASE_URL="+e.server.URL,
+		"QCONNECT_INSTALL_PREFIX="+e.prefix,
+		"QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE="+e.signers,
+		"QCONNECT_INSTALL_USER_PATH_FILE="+e.pathFile,
 	)
 	cmd.Env = append(cmd.Env, env...)
 	out, err := cmd.CombinedOutput()
@@ -164,10 +173,10 @@ func (e *psEnv) mustRun(env ...string) string {
 	return out
 }
 
-func (e *psEnv) exe() string { return filepath.Join(e.prefix, "bin", "qatlas.exe") }
+func (e *psEnv) exe() string { return filepath.Join(e.prefix, "bin", "qconnect.exe") }
 
 func (e *psEnv) stageLeftovers() []string {
-	matches, _ := filepath.Glob(filepath.Join(e.prefix, ".qatlas-stage.*"))
+	matches, _ := filepath.Glob(filepath.Join(e.prefix, ".qconnect-stage.*"))
 	return matches
 }
 
@@ -227,7 +236,7 @@ func TestInstallPS1FreshAndReinstall(t *testing.T) {
 	forEachShell(t, func(t *testing.T, e *psEnv) {
 		e.publish("v1.0.0", "program one", releaseOptions{})
 		out := e.mustRun()
-		for _, want := range []string{"v1.0.0", e.exe(), "new terminal", "run `qatlas` (press g", "qatlas web", "press g to connect a provider"} {
+		for _, want := range []string{"v1.0.0", e.exe(), "new terminal", "run `qconnect` (press g", "qconnect web", "press g to connect a provider"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("output lacks %q:\n%s", want, out)
 			}
@@ -235,7 +244,7 @@ func TestInstallPS1FreshAndReinstall(t *testing.T) {
 		if got := readFile(t, e.exe()); got != "program one" {
 			t.Errorf("binary = %q", got)
 		}
-		if got := readFile(t, filepath.Join(e.prefix, `share\doc\qatlas\LICENSE`)); got != "license v1.0.0\n" {
+		if got := readFile(t, filepath.Join(e.prefix, `share\doc\qconnect\LICENSE`)); got != "license v1.0.0\n" {
 			t.Errorf("license = %q", got)
 		}
 		if _, err := os.Stat(filepath.Join(e.home, ".qatlas")); !os.IsNotExist(err) {
@@ -258,9 +267,9 @@ func TestInstallPS1FreshAndReinstall(t *testing.T) {
 			t.Errorf("binary after reinstall = %q", got)
 		}
 		if got := readFile(t, e.exe()+".old"); got != "program one" {
-			t.Errorf("qatlas.exe.old = %q", got)
+			t.Errorf("qconnect.exe.old = %q", got)
 		}
-		if got := readFile(t, filepath.Join(e.prefix, `share\doc\qatlas\LICENSE`)); got != "license v1.0.1\n" {
+		if got := readFile(t, filepath.Join(e.prefix, `share\doc\qconnect\LICENSE`)); got != "license v1.0.1\n" {
 			t.Errorf("license after reinstall = %q", got)
 		}
 		if got := readFile(t, e.pathFile); got != binDir {
@@ -271,7 +280,7 @@ func TestInstallPS1FreshAndReinstall(t *testing.T) {
 		e.publish("v1.0.2", "program three", releaseOptions{})
 		e.mustRun()
 		if got := readFile(t, e.exe()+".old"); got != "program two" {
-			t.Errorf("qatlas.exe.old after third run = %q", got)
+			t.Errorf("qconnect.exe.old after third run = %q", got)
 		}
 		if left := e.stageLeftovers(); len(left) != 0 {
 			t.Errorf("staging left behind: %v", left)
@@ -362,9 +371,11 @@ func TestInstallPS1RejectsBadReleaseWithoutChange(t *testing.T) {
 		env     []string
 		message string
 	}{
-		"wrong checksum":    {releaseOptions{wrongChecksum: true}, nil, "SHA-256 mismatch"},
-		"foreign signature": {releaseOptions{signer: other}, nil, "signature"},
-		"embedded release key rejects test signature": {releaseOptions{}, []string{"QATLAS_INSTALL_ALLOWED_SIGNERS_FILE="}, "signature"},
+		"wrong checksum":                              {releaseOptions{wrongChecksum: true}, nil, "SHA-256 mismatch"},
+		"foreign signature":                           {releaseOptions{signer: other}, nil, "signature"},
+		"signature under the former namespace":        {releaseOptions{namespace: legacyNamespace}, nil, "signature"},
+		"missing qconnect signature":                  {releaseOptions{noSignature: true}, nil, "download of checksums.txt.qconnect.sig failed"},
+		"embedded release key rejects test signature": {releaseOptions{}, []string{"QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE="}, "signature"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -385,9 +396,9 @@ func TestInstallPS1RejectsBadReleaseWithoutChange(t *testing.T) {
 					t.Errorf("binary changed to %q", got)
 				}
 				if _, err := os.Stat(e.exe() + ".old"); !os.IsNotExist(err) {
-					t.Errorf("qatlas.exe.old exists: %v", err)
+					t.Errorf("qconnect.exe.old exists: %v", err)
 				}
-				if got := readFile(t, filepath.Join(e.prefix, `share\doc\qatlas\LICENSE`)); got != "license v1.0.0\n" {
+				if got := readFile(t, filepath.Join(e.prefix, `share\doc\qconnect\LICENSE`)); got != "license v1.0.0\n" {
 					t.Errorf("license changed to %q", got)
 				}
 				if got := readFile(t, e.pathFile); got != pathBefore {
@@ -435,12 +446,59 @@ func TestInstallPS1PinnedVersions(t *testing.T) {
 		if got := readFile(t, e.exe()); got != "stable" {
 			t.Errorf("latest binary = %q", got)
 		}
-		e.mustRun("QATLAS_VERSION=v1.2.3-rc.1")
+		e.mustRun("QCONNECT_VERSION=v1.2.3-rc.1")
 		if got := readFile(t, e.exe()); got != "release candidate" {
-			t.Errorf("QATLAS_VERSION binary = %q", got)
+			t.Errorf("QCONNECT_VERSION binary = %q", got)
 		}
-		if out, err := e.run("QATLAS_VERSION=latest"); err == nil || !strings.Contains(out, "invalid version") {
+		if out, err := e.run("QCONNECT_VERSION=latest"); err == nil || !strings.Contains(out, "invalid version") {
 			t.Errorf("invalid version: %v\n%s", err, out)
+		}
+	})
+}
+
+func TestInstallPS1ReplacesFormerProgramByCopy(t *testing.T) {
+	forEachShell(t, func(t *testing.T, e *psEnv) {
+		bin := filepath.Join(e.prefix, "bin")
+		if err := os.MkdirAll(bin, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		former := filepath.Join(bin, "qatlas.exe")
+		if err := os.WriteFile(former, []byte("former program"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		e.publish("v3.0.0", "connect program", releaseOptions{})
+		out := e.mustRun()
+		if !strings.Contains(out, "alias") {
+			t.Errorf("output does not mention the alias:\n%s", out)
+		}
+		if got := readFile(t, former); got != "connect program" {
+			t.Errorf("qatlas.exe = %q", got)
+		}
+		if got := readFile(t, e.exe()); got != "connect program" {
+			t.Errorf("qconnect.exe = %q", got)
+		}
+		if got := readFile(t, filepath.Join(e.prefix, `share\doc\qconnect\NOTICE`)); got != "notice v3.0.0\n" {
+			t.Errorf("doc file = %q", got)
+		}
+	})
+}
+
+func TestInstallPS1FormerVariables(t *testing.T) {
+	forEachShell(t, func(t *testing.T, e *psEnv) {
+		e.publish("v1.0.0", "one", releaseOptions{})
+		e.publish("v1.1.0", "two", releaseOptions{})
+		out := e.mustRun("QCONNECT_INSTALL_PREFIX=", "QATLAS_INSTALL_PREFIX="+e.prefix, "QATLAS_VERSION=v1.0.0")
+		for _, name := range []string{"QATLAS_INSTALL_PREFIX", "QATLAS_VERSION"} {
+			if !strings.Contains(out, name+" is deprecated") {
+				t.Errorf("no deprecation warning for %s:\n%s", name, out)
+			}
+		}
+		if got := readFile(t, e.exe()); got != "one" {
+			t.Errorf("binary = %q", got)
+		}
+		out = e.mustRun("QATLAS_VERSION=v1.0.0", "QCONNECT_VERSION=v1.1.0")
+		if got := readFile(t, e.exe()); got != "two" || strings.Contains(out, "QATLAS_VERSION is deprecated") {
+			t.Errorf("binary = %q, output:\n%s", got, out)
 		}
 	})
 }

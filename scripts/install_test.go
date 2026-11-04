@@ -16,7 +16,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-connect/internal/release"
 	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
@@ -62,8 +61,14 @@ func newInstallEnv(t *testing.T) *installEnv {
 	return e
 }
 
+// Signature namespaces of the release: the current one and the one only older installers verify.
+const (
+	connectNamespace = "qatlas-connect-release"
+	legacyNamespace  = "qatlas-release"
+)
+
 func archiveName(tag string) string {
-	return fmt.Sprintf("qatlas_%s_%s_%s.tar.gz", tag, runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("qconnect_%s_%s_%s.tar.gz", tag, runtime.GOOS, runtime.GOARCH)
 }
 
 // tarball builds a release archive with the layout of scripts/release.sh.
@@ -96,15 +101,18 @@ func tarball(t *testing.T, files map[string]string) []byte {
 type releaseOptions struct {
 	wrongChecksum bool
 	signer        ssh.Signer // nil: the environment's test key
+	namespace     string     // signature namespace of checksums.txt.qconnect.sig; empty: connectNamespace
+	noSignature   bool       // omit checksums.txt.qconnect.sig
 }
 
 // publish adds a release whose binary is the text program and makes it the latest.
 func (e *installEnv) publish(tag, program string, opts releaseOptions) {
 	e.t.Helper()
 	archive := tarball(e.t, map[string]string{
-		"bin/qatlas":               program,
-		"share/man/man1/qatlas.1":  ".TH QATLAS 1 " + tag + "\n",
-		"share/doc/qatlas/LICENSE": "license " + tag + "\n",
+		"bin/qconnect":                 program,
+		"share/man/man1/qconnect.1":    ".TH QCONNECT 1 " + tag + "\n",
+		"share/doc/qconnect/LICENSE":   "license " + tag + "\n",
+		"share/doc/qconnect/NOTICE.md": "notice " + tag + "\n",
 	})
 	sum := sha256.Sum256(archive)
 	hash := hex.EncodeToString(sum[:])
@@ -117,11 +125,19 @@ func (e *installEnv) publish(tag, program string, opts releaseOptions) {
 	if signer == nil {
 		signer = e.signer
 	}
-	e.server.Publish(tag, map[string][]byte{
+	namespace := opts.namespace
+	if namespace == "" {
+		namespace = connectNamespace
+	}
+	assets := map[string][]byte{
 		archiveName(tag):    archive,
 		"checksums.txt":     checksums,
-		"checksums.txt.sig": releasetest.Sign(e.t, signer, release.Namespace, "sha512", checksums),
-	})
+		"checksums.txt.sig": releasetest.Sign(e.t, signer, legacyNamespace, "sha512", checksums),
+	}
+	if !opts.noSignature {
+		assets["checksums.txt.qconnect.sig"] = releasetest.Sign(e.t, signer, namespace, "sha512", checksums)
+	}
+	e.server.Publish(tag, assets)
 }
 
 // run executes scripts/install.sh with a clean environment. env entries are added to it.
@@ -132,9 +148,9 @@ func (e *installEnv) run(stdinScript bool, env []string, args ...string) (string
 		"HOME=" + e.home,
 		"SHELL=" + e.shell,
 		"TMPDIR=" + e.t.TempDir(),
-		"QATLAS_INSTALL_BASE_URL=" + e.server.URL,
-		"QATLAS_INSTALL_PREFIX=" + e.prefix,
-		"QATLAS_INSTALL_ALLOWED_SIGNERS_FILE=" + e.signers,
+		"QCONNECT_INSTALL_BASE_URL=" + e.server.URL,
+		"QCONNECT_INSTALL_PREFIX=" + e.prefix,
+		"QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE=" + e.signers,
 	}
 	var cmd *exec.Cmd
 	if stdinScript {
@@ -172,7 +188,7 @@ func readFile(t *testing.T, path string) string {
 }
 
 func (e *installEnv) stageLeftovers() []string {
-	matches, _ := filepath.Glob(filepath.Join(e.prefix, ".qatlas-stage.*"))
+	matches, _ := filepath.Glob(filepath.Join(e.prefix, ".qconnect-stage.*"))
 	return matches
 }
 
@@ -181,12 +197,12 @@ func TestInstallFreshAndReinstall(t *testing.T) {
 	e.publish("v1.0.0", "program one", releaseOptions{})
 
 	out := e.mustRun(nil)
-	for _, want := range []string{"v1.0.0", filepath.Join(e.prefix, "bin", "qatlas"), "new terminal", "run `qatlas` (press g", "qatlas web", "press g to connect a provider"} {
+	for _, want := range []string{"v1.0.0", filepath.Join(e.prefix, "bin", "qconnect"), "new terminal", "run `qconnect` (press g", "qconnect web", "press g to connect a provider"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
 	}
-	binary := filepath.Join(e.prefix, "bin", "qatlas")
+	binary := filepath.Join(e.prefix, "bin", "qconnect")
 	info, err := os.Stat(binary)
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("binary: %v, %v", info, err)
@@ -194,10 +210,10 @@ func TestInstallFreshAndReinstall(t *testing.T) {
 	if got := readFile(t, binary); got != "program one" {
 		t.Errorf("binary = %q", got)
 	}
-	if got := readFile(t, filepath.Join(e.prefix, "share/man/man1/qatlas.1")); !strings.Contains(got, "v1.0.0") {
+	if got := readFile(t, filepath.Join(e.prefix, "share/man/man1/qconnect.1")); !strings.Contains(got, "v1.0.0") {
 		t.Errorf("man page = %q", got)
 	}
-	if got := readFile(t, filepath.Join(e.prefix, "share/doc/qatlas/LICENSE")); got != "license v1.0.0\n" {
+	if got := readFile(t, filepath.Join(e.prefix, "share/doc/qconnect/LICENSE")); got != "license v1.0.0\n" {
 		t.Errorf("license = %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(e.home, ".qatlas")); !os.IsNotExist(err) {
@@ -216,10 +232,10 @@ func TestInstallFreshAndReinstall(t *testing.T) {
 	if got := readFile(t, binary); got != "program two" {
 		t.Errorf("binary after reinstall = %q", got)
 	}
-	if got := readFile(t, filepath.Join(e.prefix, "share/doc/qatlas/LICENSE")); got != "license v1.0.1\n" {
+	if got := readFile(t, filepath.Join(e.prefix, "share/doc/qconnect/LICENSE")); got != "license v1.0.1\n" {
 		t.Errorf("license after reinstall = %q", got)
 	}
-	if got := readFile(t, profile); strings.Count(got, "Qatlas installer") != 1 || strings.Count(got, "export PATH") != 1 {
+	if got := readFile(t, profile); strings.Count(got, "Qatlas Connect installer") != 1 || strings.Count(got, "export PATH") != 1 {
 		t.Errorf("profile after reinstall = %q", got)
 	}
 	if left := e.stageLeftovers(); len(left) != 0 {
@@ -256,9 +272,11 @@ func TestInstallRejectsBadReleaseWithoutChange(t *testing.T) {
 		env     []string
 		message string
 	}{
-		"wrong checksum":    {releaseOptions{wrongChecksum: true}, nil, "SHA-256 mismatch"},
-		"foreign signature": {releaseOptions{signer: other}, nil, "signature"},
-		"embedded release key rejects test signature": {releaseOptions{}, []string{"QATLAS_INSTALL_ALLOWED_SIGNERS_FILE="}, "signature"},
+		"wrong checksum":                              {releaseOptions{wrongChecksum: true}, nil, "SHA-256 mismatch"},
+		"foreign signature":                           {releaseOptions{signer: other}, nil, "signature"},
+		"signature under the former namespace":        {releaseOptions{namespace: legacyNamespace}, nil, "signature"},
+		"missing qconnect signature":                  {releaseOptions{noSignature: true}, nil, "download of checksums.txt.qconnect.sig failed"},
+		"embedded release key rejects test signature": {releaseOptions{}, []string{"QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE="}, "signature"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -275,10 +293,10 @@ func TestInstallRejectsBadReleaseWithoutChange(t *testing.T) {
 			if !strings.Contains(out, tc.message) {
 				t.Errorf("output lacks %q:\n%s", tc.message, out)
 			}
-			if got := readFile(t, filepath.Join(e.prefix, "bin", "qatlas")); got != "old program" {
+			if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "old program" {
 				t.Errorf("binary changed to %q", got)
 			}
-			if got := readFile(t, filepath.Join(e.prefix, "share/doc/qatlas/LICENSE")); got != "license v1.0.0\n" {
+			if got := readFile(t, filepath.Join(e.prefix, "share/doc/qconnect/LICENSE")); got != "license v1.0.0\n" {
 				t.Errorf("license changed to %q", got)
 			}
 			if got := readFile(t, filepath.Join(e.home, ".profile")); got != profile {
@@ -312,16 +330,16 @@ func TestInstallPinnedVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("argument: %v\n%s", err, out)
 	}
-	if got := readFile(t, filepath.Join(e.prefix, "bin", "qatlas")); got != "release candidate" {
+	if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "release candidate" {
 		t.Errorf("binary = %q", got)
 	}
 	e.mustRun(nil)
-	if got := readFile(t, filepath.Join(e.prefix, "bin", "qatlas")); got != "stable" {
+	if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "stable" {
 		t.Errorf("latest binary = %q", got)
 	}
-	e.mustRun([]string{"QATLAS_VERSION=v1.2.3-rc.1"})
-	if got := readFile(t, filepath.Join(e.prefix, "bin", "qatlas")); got != "release candidate" {
-		t.Errorf("QATLAS_VERSION binary = %q", got)
+	e.mustRun([]string{"QCONNECT_VERSION=v1.2.3-rc.1"})
+	if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "release candidate" {
+		t.Errorf("QCONNECT_VERSION binary = %q", got)
 	}
 	if out, err := e.run(false, nil, "latest"); err == nil || !strings.Contains(out, "invalid version") {
 		t.Errorf("invalid version: %v\n%s", err, out)
@@ -366,4 +384,76 @@ func TestInstallPathHandling(t *testing.T) {
 			t.Errorf("profile = %q", got)
 		}
 	})
+}
+
+func TestInstallReplacesFormerProgramByAlias(t *testing.T) {
+	e := newInstallEnv(t)
+	bin := filepath.Join(e.prefix, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	former := filepath.Join(bin, "qatlas")
+	if err := os.WriteFile(former, []byte("former program"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.publish("v3.0.0", "connect program", releaseOptions{})
+	out := e.mustRun(nil)
+	if !strings.Contains(out, "alias") {
+		t.Errorf("output does not mention the alias:\n%s", out)
+	}
+	target, err := os.Readlink(former)
+	if err != nil || target != "qconnect" {
+		t.Fatalf("qatlas is not a symlink to qconnect: %q, %v", target, err)
+	}
+	if got := readFile(t, former); got != "connect program" {
+		t.Errorf("qatlas runs %q", got)
+	}
+	if got := readFile(t, filepath.Join(e.prefix, "share/doc/qconnect/NOTICE.md")); got != "notice v3.0.0\n" {
+		t.Errorf("doc file = %q", got)
+	}
+
+	// A second run keeps the alias; a fresh prefix without a former program gets none.
+	e.mustRun(nil)
+	if target, err := os.Readlink(former); err != nil || target != "qconnect" {
+		t.Errorf("alias after reinstall: %q, %v", target, err)
+	}
+	fresh := newInstallEnv(t)
+	fresh.publish("v3.0.0", "connect program", releaseOptions{})
+	fresh.mustRun(nil)
+	if _, err := os.Lstat(filepath.Join(fresh.prefix, "bin", "qatlas")); !os.IsNotExist(err) {
+		t.Errorf("fresh install created qatlas: %v", err)
+	}
+}
+
+func TestInstallFormerVariables(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("v1.0.0", "one", releaseOptions{})
+	e.publish("v1.1.0", "two", releaseOptions{})
+	cleared := []string{"QCONNECT_INSTALL_BASE_URL=", "QCONNECT_INSTALL_PREFIX=", "QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE="}
+	former := []string{"QATLAS_INSTALL_BASE_URL=" + e.server.URL, "QATLAS_INSTALL_PREFIX=" + e.prefix, "QATLAS_INSTALL_ALLOWED_SIGNERS_FILE=" + e.signers}
+
+	out := e.mustRun(append(append([]string{}, cleared...), append(former, "QATLAS_VERSION=v1.0.0")...))
+	for _, name := range []string{"QATLAS_INSTALL_BASE_URL", "QATLAS_INSTALL_PREFIX", "QATLAS_INSTALL_ALLOWED_SIGNERS_FILE", "QATLAS_VERSION"} {
+		if !strings.Contains(out, "warning: "+name+" is deprecated") || !strings.Contains(out, "use QCONNECT_"+strings.TrimPrefix(name, "QATLAS_")) {
+			t.Errorf("no deprecation warning for %s:\n%s", name, out)
+		}
+	}
+	if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "one" {
+		t.Errorf("binary = %q", got)
+	}
+
+	// The new variable wins over the former one and then warns about nothing.
+	out = e.mustRun([]string{"QATLAS_VERSION=v1.0.0", "QATLAS_INSTALL_PREFIX=/nonexistent/former", "QCONNECT_VERSION=v1.1.0"})
+	if got := readFile(t, filepath.Join(e.prefix, "bin", "qconnect")); got != "two" {
+		t.Errorf("binary = %q", got)
+	}
+	if strings.Contains(out, "QATLAS_VERSION is deprecated") {
+		t.Errorf("warned although QCONNECT_VERSION is set:\n%s", out)
+	}
+	if strings.Contains(out, "QATLAS_INSTALL_PREFIX is deprecated") {
+		t.Errorf("warned although QCONNECT_INSTALL_PREFIX is set:\n%s", out)
+	}
+	if _, err := os.Stat("/nonexistent/former"); err == nil {
+		t.Error("former prefix was used")
+	}
 }

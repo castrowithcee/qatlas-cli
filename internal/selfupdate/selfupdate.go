@@ -1,4 +1,4 @@
-// Package selfupdate checks and installs tagged Qatlas CLI releases.
+// Package selfupdate checks and installs tagged qconnect releases.
 package selfupdate
 
 import (
@@ -143,6 +143,7 @@ func (c *Client) installRelease(ctx context.Context, result Result, rel release)
 type Prepared struct {
 	result      Result
 	goos        string
+	layout      releaseverify.Layout
 	archiveName string
 	payload     payload
 	checksums   []byte
@@ -157,8 +158,13 @@ func (p *Prepared) Version() string { return p.result.Latest }
 // prepareRelease downloads and verifies rel, the release named by result.Latest. Nothing is installed.
 func (c *Client) prepareRelease(ctx context.Context, result Result, rel release) (*Prepared, error) {
 	goos, goarch := c.platform()
-	archiveName := assetName(result.Latest, goos, goarch)
-	archiveURL, checksumURL, signatureURL, err := releaseURLs(rel, archiveName)
+	// The version asked for decides the names and the signature, never the files the release offers.
+	layout, err := releaseverify.LayoutOf(result.Latest)
+	if err != nil {
+		return nil, fmt.Errorf("release has an invalid version: %w", err)
+	}
+	archiveName := layout.ArchiveName(result.Latest, goos, goarch)
+	archiveURL, checksumURL, signatureURL, err := releaseURLs(rel, archiveName, layout.SignatureAsset)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +183,7 @@ func (c *Client) prepareRelease(ctx context.Context, result Result, rel release)
 	if keys == nil {
 		keys = releaseverify.TrustedKeys()
 	}
-	if err := releaseverify.VerifyChecksums(checksums, signature, keys); err != nil {
+	if err := releaseverify.VerifyRelease(checksums, signature, archiveName, keys); err != nil {
 		return nil, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
 	}
 	result.Signed = true
@@ -193,11 +199,11 @@ func (c *Client) prepareRelease(ctx context.Context, result Result, rel release)
 	if !strings.EqualFold(hex.EncodeToString(got[:]), want) {
 		return nil, fmt.Errorf("checksum mismatch for %s", archiveName)
 	}
-	files, err := extractPayload(archiveName, archive, goos)
+	files, err := extractPayload(archiveName, archive, goos, layout)
 	if err != nil {
 		return nil, err
 	}
-	return &Prepared{result: result, goos: goos, archiveName: archiveName, payload: files,
+	return &Prepared{result: result, goos: goos, layout: layout, archiveName: archiveName, payload: files,
 		checksums: checksums, signature: signature, archive: archive, timeout: c.CheckTimeout}, nil
 }
 
@@ -206,16 +212,16 @@ func (c *Client) InstallPrepared(ctx context.Context, p *Prepared) (Result, erro
 	result := p.result
 	files := Release{Signed: result.Signed, ArchiveName: p.archiveName}
 	if c.BeforeReplace != nil || c.AfterReplace != nil {
-		dir, err := os.MkdirTemp("", "qatlas-release-*")
+		dir, err := os.MkdirTemp("", "qconnect-release-*")
 		if err != nil {
 			return Result{}, fmt.Errorf("create release directory: %w", err)
 		}
 		defer os.RemoveAll(dir)
-		if files, err = writeRelease(dir, files, p.checksums, p.signature, p.archive); err != nil {
+		if files, err = writeRelease(dir, files, p.layout.SignatureAsset, p.checksums, p.signature, p.archive); err != nil {
 			return Result{}, err
 		}
 	}
-	if err := c.install(ctx, p.payload, p.goos, files); err != nil {
+	if err := c.install(ctx, p.payload, p.goos, p.layout, files); err != nil {
 		return Result{}, err
 	}
 	result.Updated = true
@@ -225,15 +231,16 @@ func (c *Client) InstallPrepared(ctx context.Context, p *Prepared) (Result, erro
 	return result, nil
 }
 
-// writeRelease stores the verified release files in dir, which is private to this user, and names them.
-func writeRelease(dir string, files Release, checksums, signature, archive []byte) (Release, error) {
+// writeRelease stores the verified release files in dir, which is private to this user, under their names in
+// the release, and names them; signatureName is the name of the signature the release was verified with.
+func writeRelease(dir string, files Release, signatureName string, checksums, signature, archive []byte) (Release, error) {
 	files.Checksums = filepath.Join(dir, "checksums.txt")
 	files.Archive = filepath.Join(dir, files.ArchiveName)
 	if err := os.WriteFile(files.Checksums, checksums, 0o600); err != nil {
 		return Release{}, fmt.Errorf("store checksums: %w", err)
 	}
 	if signature != nil {
-		files.Signature = filepath.Join(dir, "checksums.txt.sig")
+		files.Signature = filepath.Join(dir, signatureName)
 		if err := os.WriteFile(files.Signature, signature, 0o600); err != nil {
 			return Release{}, fmt.Errorf("store checksums signature: %w", err)
 		}
@@ -277,7 +284,7 @@ func (c *Client) checkWithRelease(ctx context.Context) (Result, release, error) 
 	if err != nil {
 		return Result{}, release{}, fmt.Errorf("latest release has an invalid version: %w", err)
 	}
-	result := Result{Current: c.Version, Latest: r.TagName, UpdateAvailable: current.compare(latest) < 0}
+	result := Result{Current: c.Version, Latest: r.TagName, UpdateAvailable: current.Compare(latest) < 0}
 	return result, r, nil
 }
 
@@ -294,7 +301,7 @@ func (c *Client) newestSigned(ctx context.Context) (release, error) {
 		if !ok || r.Prerelease {
 			continue
 		}
-		if best.TagName == "" || v.compare(bestV) > 0 {
+		if best.TagName == "" || v.Compare(bestV) > 0 {
 			best, bestV = r, v
 		}
 	}
@@ -466,15 +473,9 @@ func (c *Client) platform() (string, string) {
 	return goos, goarch
 }
 
-func assetName(version, goos, goarch string) string {
-	extension := ".tar.gz"
-	if goos == "windows" {
-		extension = ".zip"
-	}
-	return fmt.Sprintf("qatlas_%s_%s_%s%s", version, goos, goarch, extension)
-}
-
-func releaseURLs(r release, archiveName string) (string, string, string, error) {
+// releaseURLs finds the archive, checksums.txt, and the signature named signatureName among the assets of r.
+// Only that signature counts: another one the release carries is not looked at.
+func releaseURLs(r release, archiveName, signatureName string) (string, string, string, error) {
 	var archiveURL, checksumURL, signatureURL string
 	for _, asset := range r.Assets {
 		assetURL := asset.APIURL
@@ -486,7 +487,7 @@ func releaseURLs(r release, archiveName string) (string, string, string, error) 
 			archiveURL = assetURL
 		case "checksums.txt":
 			checksumURL = assetURL
-		case "checksums.txt.sig":
+		case signatureName:
 			signatureURL = assetURL
 		}
 	}
@@ -501,19 +502,19 @@ type payload struct {
 	manpage    []byte
 }
 
-func extractPayload(filename string, body []byte, goos string) (payload, error) {
+func extractPayload(filename string, body []byte, goos string, layout releaseverify.Layout) (payload, error) {
 	if strings.HasSuffix(filename, ".zip") {
-		return extractZip(body, goos)
+		return extractZip(body, goos, layout)
 	}
 	gz, err := gzip.NewReader(bytes.NewReader(body))
 	if err != nil {
 		return payload{}, fmt.Errorf("open release archive: %w", err)
 	}
 	defer gz.Close()
-	return extractTar(tar.NewReader(gz), goos)
+	return extractTar(tar.NewReader(gz), goos, layout)
 }
 
-func extractTar(reader *tar.Reader, goos string) (payload, error) {
+func extractTar(reader *tar.Reader, goos string, layout releaseverify.Layout) (payload, error) {
 	var out payload
 	for {
 		header, err := reader.Next()
@@ -526,14 +527,14 @@ func extractTar(reader *tar.Reader, goos string) (payload, error) {
 		if header.Typeflag != tar.TypeReg {
 			continue
 		}
-		if err := capturePayload(&out, filepath.ToSlash(strings.TrimPrefix(header.Name, "./")), reader, goos); err != nil {
+		if err := capturePayload(&out, filepath.ToSlash(strings.TrimPrefix(header.Name, "./")), reader, goos, layout); err != nil {
 			return payload{}, err
 		}
 	}
-	return requirePayload(out, goos)
+	return requirePayload(out, goos, layout)
 }
 
-func extractZip(body []byte, goos string) (payload, error) {
+func extractZip(body []byte, goos string, layout releaseverify.Layout) (payload, error) {
 	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return payload{}, fmt.Errorf("open release archive: %w", err)
@@ -547,28 +548,24 @@ func extractZip(body []byte, goos string) (payload, error) {
 		if err != nil {
 			return payload{}, fmt.Errorf("open %s in release archive: %w", file.Name, err)
 		}
-		err = capturePayload(&out, filepath.ToSlash(strings.TrimPrefix(file.Name, "./")), entry, goos)
+		err = capturePayload(&out, filepath.ToSlash(strings.TrimPrefix(file.Name, "./")), entry, goos, layout)
 		entry.Close()
 		if err != nil {
 			return payload{}, err
 		}
 	}
-	return requirePayload(out, goos)
+	return requirePayload(out, goos, layout)
 }
 
-func capturePayload(out *payload, name string, reader io.Reader, goos string) error {
-	executableName := "bin/qatlas"
-	if goos == "windows" {
-		executableName += ".exe"
-	}
+func capturePayload(out *payload, name string, reader io.Reader, goos string, layout releaseverify.Layout) error {
 	switch name {
-	case executableName:
+	case layout.ProgramFile(goos):
 		body, err := readEntry(reader, maxExecutableSize)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 		out.executable = body
-	case "share/man/man1/qatlas.1":
+	case layout.ManpageFile():
 		body, err := readEntry(reader, maxManpageSize)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
@@ -589,17 +586,22 @@ func readEntry(reader io.Reader, limit int64) ([]byte, error) {
 	return body, nil
 }
 
-func requirePayload(out payload, goos string) (payload, error) {
+func requirePayload(out payload, goos string, layout releaseverify.Layout) (payload, error) {
 	if len(out.executable) == 0 {
-		return payload{}, errors.New("release archive does not contain the qatlas executable")
+		return payload{}, fmt.Errorf("release archive does not contain the %s executable", layout.Program)
 	}
 	if goos != "windows" && len(out.manpage) == 0 {
-		return payload{}, errors.New("release archive does not contain qatlas.1")
+		return payload{}, fmt.Errorf("release archive does not contain %s.1", layout.Program)
 	}
 	return out, nil
 }
 
-func (c *Client) install(ctx context.Context, files payload, goos string, release Release) error {
+// install puts the program of a release with layout in place of the installed one, <prefix>/bin/qconnect or,
+// on Windows, <prefix>\bin\qconnect.exe, and its manual page beside it. An installation under the former
+// name qatlas, or with qatlas as an alias, is replaced under both names: the program goes to qconnect and
+// qatlas becomes an alias of it. A release before the rename goes to qatlas instead, and qconnect is removed:
+// that program does not call itself so. Transition until the next major release.
+func (c *Client) install(ctx context.Context, files payload, goos string, layout releaseverify.Layout, release Release) error {
 	executable := c.Executable
 	if executable == "" {
 		var err error
@@ -612,6 +614,7 @@ func (c *Client) install(ctx context.Context, files payload, goos string, releas
 	if err != nil {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
+	absolute = followAlias(absolute, goos)
 	info, err := os.Lstat(absolute)
 	if err != nil {
 		return fmt.Errorf("inspect installed executable: %w", err)
@@ -619,13 +622,19 @@ func (c *Client) install(ctx context.Context, files payload, goos string, releas
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return &UnsupportedInstallationError{Reason: "the running executable must be a regular file, not a symlink"}
 	}
-	wantName := "qatlas"
+	extension := ""
 	if goos == "windows" {
-		wantName += ".exe"
+		extension = ".exe"
 	}
 	binDir := filepath.Dir(absolute)
-	if filepath.Base(absolute) != wantName || filepath.Base(binDir) != "bin" {
-		return &UnsupportedInstallationError{Reason: "install the release as <prefix>/bin/" + wantName}
+	if base := filepath.Base(absolute); (base != currentName+extension && base != formerName+extension) ||
+		filepath.Base(binDir) != "bin" {
+		return &UnsupportedInstallationError{Reason: "install the release as <prefix>/bin/" + currentName + extension}
+	}
+	target := filepath.Join(binDir, layout.Program+extension)
+	other := filepath.Join(binDir, currentName+extension)
+	if !layout.Legacy {
+		other = filepath.Join(binDir, formerName+extension)
 	}
 	prefix := filepath.Dir(binDir)
 	manDir := filepath.Join(prefix, "share", "man", "man1")
@@ -635,31 +644,65 @@ func (c *Client) install(ctx context.Context, files payload, goos string, releas
 			return fmt.Errorf("create man directory: %w", err)
 		}
 		var err error
-		stagedMan, err = stageFile(manDir, ".qatlas-man-*", files.manpage, 0o644)
+		stagedMan, err = stageFile(manDir, ".qconnect-man-*", files.manpage, 0o644)
 		if err != nil {
 			return fmt.Errorf("stage manpage: %w", err)
 		}
 		defer os.Remove(stagedMan)
 	}
-	stagedBinary, err := stageFile(binDir, ".qatlas-bin-*", files.executable, info.Mode().Perm()|0o500)
+	mode := info.Mode().Perm() | 0o500
+	stagedBinary, err := stageFile(binDir, ".qconnect-bin-*", files.executable, mode)
 	if err != nil {
 		return fmt.Errorf("stage executable: %w", err)
 	}
 	defer os.Remove(stagedBinary)
+	// Windows keeps the former name as a copy of the program (see AdoptCurrentName), replaced alongside.
+	stagedCopy := ""
+	if goos == "windows" && !layout.Legacy {
+		if existing, err := os.Lstat(other); err == nil && existing.Mode().IsRegular() {
+			if stagedCopy, err = stageFile(binDir, ".qconnect-bin-*", files.executable, mode); err != nil {
+				return fmt.Errorf("stage executable: %w", err)
+			}
+			defer os.Remove(stagedCopy)
+		}
+	}
 	if c.BeforeReplace != nil {
 		if err := c.BeforeReplace(ctx, release); err != nil {
 			return err
 		}
 	}
 	if stagedMan != "" {
-		if err := os.Rename(stagedMan, filepath.Join(manDir, "qatlas.1")); err != nil {
+		if err := os.Rename(stagedMan, filepath.Join(manDir, layout.Program+".1")); err != nil {
 			return fmt.Errorf("install manpage: %w", err)
 		}
 	}
-	if goos == "windows" {
-		return replaceRunning(osFileOps, stagedBinary, absolute)
+	if err := replaceProgram(goos, stagedBinary, target); err != nil {
+		return err
 	}
-	if err := os.Rename(stagedBinary, absolute); err != nil {
+	if layout.Legacy {
+		dropCurrentName(goos, other, filepath.Join(manDir, currentName+".1"))
+		return nil
+	}
+	if goos == "windows" {
+		if stagedCopy == "" {
+			return nil
+		}
+		if err := replaceRunning(osFileOps, stagedCopy, other); err != nil {
+			return fmt.Errorf("replace %s: %w", filepath.Base(other), err)
+		}
+		return nil
+	}
+	return aliasFormerName(other)
+}
+
+// replaceProgram puts staged in place of target, which on Windows may be running or not exist yet.
+func replaceProgram(goos, staged, target string) error {
+	if goos == "windows" {
+		if _, err := os.Lstat(target); err == nil {
+			return replaceRunning(osFileOps, staged, target)
+		}
+	}
+	if err := os.Rename(staged, target); err != nil {
 		return fmt.Errorf("replace executable: %w", err)
 	}
 	return nil

@@ -42,7 +42,7 @@ import (
 // --successor' does. Both ends of every connection accept each other (allow): the peer check of a handover is
 // the connection's own, already covered elsewhere.
 
-const handoverArchive = "qatlas_9.9.9_test.tar.gz"
+const handoverArchive = "qconnect_v9.9.9_linux_amd64.tar.gz"
 
 // handoverHelper is what a helper process started as a successor runs, for the modes TestHelperProcess hands
 // on: successor takes the vault over like the real one, and so do successor-renamed and successor-earlier,
@@ -135,6 +135,7 @@ type handoverFixture struct {
 	replaced   atomic.Bool
 	probe      *writeProbe
 	release    ReleaseFiles
+	signer     ssh.Signer // the key the vault process trusts, which signed release
 	scope      vault.Scope
 	// mode is the helper mode a successor is started in, with env added to its environment; starts counts
 	// the successors started, and successor and output are the last one and its standard output.
@@ -186,6 +187,7 @@ func newHandoverFixtureAt(t *testing.T, socket string) *handoverFixture {
 		t.Fatal(err)
 	}
 	signer := releasetest.NewSigner(t)
+	f.signer = signer
 	f.release = writeRelease(t, dir, program, signer, nil)
 
 	f.socket = socket
@@ -207,14 +209,21 @@ func newHandoverFixtureAt(t *testing.T, socket string) *handoverFixture {
 	return f
 }
 
-// writeRelease writes a release into dir whose archive holds program as bin/qatlas, its checksums.txt, and
+// writeRelease writes a release into dir whose archive holds program as bin/qconnect, its checksums.txt, and
 // its signature by signer. change, if set, changes the archive after its checksum was listed.
 func writeRelease(t *testing.T, dir string, program []byte, signer ssh.Signer, change func([]byte) []byte) ReleaseFiles {
+	t.Helper()
+	return writeReleaseSigned(t, dir, program, signer, release.Namespace, change)
+}
+
+// writeReleaseSigned is writeRelease with the signature made for namespace.
+func writeReleaseSigned(t *testing.T, dir string, program []byte, signer ssh.Signer, namespace string,
+	change func([]byte) []byte) ReleaseFiles {
 	t.Helper()
 	var archive bytes.Buffer
 	gz, _ := gzip.NewWriterLevel(&archive, gzip.BestSpeed)
 	tw := tar.NewWriter(gz)
-	if err := tw.WriteHeader(&tar.Header{Name: "bin/qatlas", Mode: 0o755, Size: int64(len(program)),
+	if err := tw.WriteHeader(&tar.Header{Name: "bin/qconnect", Mode: 0o755, Size: int64(len(program)),
 		Typeflag: tar.TypeReg}); err != nil {
 		t.Fatal(err)
 	}
@@ -233,10 +242,10 @@ func writeRelease(t *testing.T, dir string, program []byte, signer ssh.Signer, c
 	if change != nil {
 		data = change(data)
 	}
-	files := ReleaseFiles{Checksums: filepath.Join(dir, "checksums.txt"), Signature: filepath.Join(dir, "checksums.txt.sig"),
+	files := ReleaseFiles{Checksums: filepath.Join(dir, "checksums.txt"), Signature: filepath.Join(dir, release.SignatureAsset),
 		Archive: filepath.Join(dir, handoverArchive), ArchiveName: handoverArchive}
 	for path, content := range map[string][]byte{files.Checksums: checksums, files.Archive: data,
-		files.Signature: releasetest.Sign(t, signer, release.Namespace, "sha256", checksums)} {
+		files.Signature: releasetest.Sign(t, signer, namespace, "sha256", checksums)} {
 		if err := os.WriteFile(path, content, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -480,6 +489,10 @@ func TestHandoverPrepareRefusesAnUnverifiedRelease(t *testing.T) {
 				t.Fatal(err)
 			}
 			return files
+		},
+		// The former namespace, by the trusted key, does not verify a release after the rename.
+		"signed under the former namespace": func(f *handoverFixture) ReleaseFiles {
+			return writeReleaseSigned(t, t.TempDir(), []byte("program"), f.signer, release.LegacyNamespace, nil)
 		},
 		"relative path": func(f *handoverFixture) ReleaseFiles {
 			files := f.release

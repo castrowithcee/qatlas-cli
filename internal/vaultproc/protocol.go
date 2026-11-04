@@ -121,7 +121,8 @@ type request struct {
 // path, and the name of the archive as checksums.txt lists it. The vault process reads and verifies them
 // itself; nothing in them is taken on trust from the client.
 type ReleaseFiles struct {
-	// Checksums is checksums.txt, Signature checksums.txt.sig, and Archive the archive of this platform.
+	// Checksums is checksums.txt, Signature the signature over it the release version is verified with, and
+	// Archive the archive of this platform.
 	Checksums string `json:"checksums"`
 	Signature string `json:"signature"`
 	Archive   string `json:"archive"`

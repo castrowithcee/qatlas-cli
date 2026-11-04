@@ -70,7 +70,7 @@ func TestRequestOutlastsTheStallTimeoutWhileDataFlows(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
+	client := &Client{HTTPClient: server.Client(), Version: "v3.0.0"}
 	var dones []int64
 	var totals []int64
 	body, err := client.request(context.Background(), server.URL, 1<<20, "application/octet-stream",
@@ -104,7 +104,7 @@ func TestRequestEndsAStalledDownload(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer server.Close()
-	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
+	client := &Client{HTTPClient: server.Client(), Version: "v3.0.0"}
 	// Fire only after the partial block reset the watchdog, so the stall comes mid-download.
 	go func() {
 		timer := <-created
@@ -126,7 +126,7 @@ func TestRequestEndsWhenTheAnswerNeverStarts(t *testing.T) {
 		<-r.Context().Done()
 	}))
 	defer server.Close()
-	client := &Client{HTTPClient: server.Client(), Version: "v1.0.0"}
+	client := &Client{HTTPClient: server.Client(), Version: "v3.0.0"}
 	go func() {
 		timer := <-created
 		<-arrived
@@ -141,9 +141,9 @@ func TestRequestEndsWhenTheAnswerNeverStarts(t *testing.T) {
 // Update reports the progress of the archive download only.
 func TestUpdateReportsArchiveProgress(t *testing.T) {
 	archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
-	server := releaseServer(t, "v1.1.0", archive, "")
+	server := releaseServer(t, "v3.1.0", archive, "")
 	defer server.Close()
-	executable := filepath.Join(t.TempDir(), "bin", "qatlas")
+	executable := filepath.Join(t.TempDir(), "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestUpdateReportsArchiveProgress(t *testing.T) {
 	}
 	var last int64
 	client := &Client{
-		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", SigningKeys: testKeys(t),
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v3.0.0", SigningKeys: testKeys(t),
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,
 		Progress: func(done, total int64) { last = done },
 	}

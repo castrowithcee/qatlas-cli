@@ -296,10 +296,10 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 	}
 }
 
-// installedProgram writes a stand-in for an installed <prefix>/bin/qatlas and returns its path.
+// installedProgram writes a stand-in for an installed <prefix>/bin/qconnect and returns its path.
 func installedProgram(t *testing.T) string {
 	t.Helper()
-	executable := filepath.Join(t.TempDir(), "bin", "qatlas")
+	executable := filepath.Join(t.TempDir(), "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func installedProgram(t *testing.T) string {
 	return executable
 }
 
-// releaseUpdater returns an updater for executable against a local release v1.1.0 whose program is
+// releaseUpdater returns an updater for executable against a local release v3.1.0 whose program is
 // "new-program" and which is signed by a key the updater trusts. before runs right before the installed files are replaced,
 // after the command's own hook.
 func releaseUpdater(t *testing.T, executable string, before func()) *selfupdate.Client {
@@ -325,7 +325,7 @@ func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, tr
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
 	tw := tar.NewWriter(gz)
-	for name, content := range map[string]string{"bin/qatlas": "new-program", "share/man/man1/qatlas.1": "manual"} {
+	for name, content := range map[string]string{"bin/qconnect": "new-program", "share/man/man1/qconnect.1": "manual"} {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(content)), Typeflag: tar.TypeReg}); err != nil {
 			t.Fatal(err)
 		}
@@ -333,7 +333,7 @@ func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, tr
 	}
 	_ = tw.Close()
 	_ = gz.Close()
-	const asset = "qatlas_v1.1.0_linux_amd64.tar.gz"
+	const asset = "qconnect_v3.1.0_linux_amd64.tar.gz"
 	sum := sha256.Sum256(archive.Bytes())
 	checksums := []byte(fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), asset))
 
@@ -346,9 +346,9 @@ func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, tr
 				{"name": "checksums.txt", "url": server.URL + "/checksums"},
 			}
 			if signer != nil {
-				assets = append(assets, map[string]string{"name": "checksums.txt.sig", "url": server.URL + "/signature"})
+				assets = append(assets, map[string]string{"name": release.SignatureAsset, "url": server.URL + "/signature"})
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.1.0", "assets": assets})
+			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v3.1.0", "assets": assets})
 		case "/asset":
 			_, _ = w.Write(archive.Bytes())
 		case "/checksums":
@@ -361,7 +361,7 @@ func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, tr
 	}))
 	t.Cleanup(server.Close)
 	client := &selfupdate.Client{
-		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", GOOS: "linux", GOARCH: "amd64",
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v3.0.0", GOOS: "linux", GOARCH: "amd64",
 		Executable: executable,
 		BeforeReplace: func(context.Context, selfupdate.Release) error {
 			before()

@@ -26,13 +26,16 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 		Use:   "update",
 		Short: "Update qconnect to the latest stable release",
 		Long: "Update checks the latest stable GitHub release, verifies the signature of its checksums.txt\n" +
-			"(checksums.txt.sig, an SSH signature checked against the release keys built into qconnect)\n" +
+			"(checksums.txt.qconnect.sig, an SSH signature checked against the release keys built into qconnect)\n" +
 			"and the selected archive with its published SHA-256 checksum, and replaces a direct\n" +
-			"<prefix>/bin/qatlas installation. A release with an invalid signature is refused and nothing is\n" +
+			"<prefix>/bin/qconnect installation. A release with an invalid signature is refused and nothing is\n" +
 			"changed, and so is a release without a signature. Only signed releases are offered or installed.\n" +
-			"It also refreshes qatlas.1 in the same prefix. On Windows the installation is\n" +
-			"<prefix>\\bin\\qatlas.exe: the running file is renamed to qatlas.exe.old, the new one takes its place\n" +
-			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
+			"It also refreshes qconnect.1 in the same prefix. On Windows the installation is\n" +
+			"<prefix>\\bin\\qconnect.exe: the running file is renamed to qconnect.exe.old, the new one takes its place\n" +
+			"(the old one is put back should that fail), and qconnect.exe.old is removed at the next start or update.\n" +
+			"Until the next major release the former name qatlas stays an alias beside qconnect, a link on Linux\n" +
+			"and macOS and a copy on Windows, and is replaced along with it; an installation still called qatlas\n" +
+			"gets qconnect beside it, at its first start or update.\n" +
 			"Running 'qconnect mcp', 'qconnect tui' and 'qconnect web' keep running the old version until they are\n" +
 			"restarted or reconnected.\n" +
 			"At a terminal, update shows how much of the archive has downloaded. A slow download goes on as\n" +
@@ -55,7 +58,10 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 			"confirms the change of program only. Without a readable backup, or without that confirmation,\n" +
 			"nothing is changed. A rollback always locks a running vault process before it replaces the\n" +
 			"program, whatever the update behaviour says, and never touches the vault's files. If the\n" +
-			"replacement fails, the configuration it replaced is put back.\n\n" +
+			"replacement fails, the configuration it replaced is put back. A version from before the rename to\n" +
+			"qconnect is installed as qatlas and qconnect is removed; it works on the state from before the\n" +
+			"migration, the configuration in ~/.qatlas/cli/ and the keyring service qatlas-cli, which the\n" +
+			"question says before anything is installed.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
 			"running qconnect processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +

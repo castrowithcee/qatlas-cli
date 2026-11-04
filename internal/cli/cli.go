@@ -210,6 +210,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			if err := resolveFormat(c, opts); err != nil {
 				return err
 			}
+			adoptProgramName(c)
 			migrateConfig(c, opts, reg)
 			return nil
 		},

@@ -79,25 +79,25 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour, earlier, 
 		passphrase   = "canary-passphrase-handover-8c41"
 	)
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "prefix", "bin", "qatlas")
+	bin := filepath.Join(dir, "prefix", "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	wiki := mock(t, "Token "+storedID+":"+storedSecret, []map[string]any{page(1, "Handover Runbook")}, "<p>x</p>")
 
-	// The local release server: a signed v2.0.0 whose program is built below.
+	// The local release server: a signed v3.1.0 whose program is built below.
 	signer := releasetest.NewSigner(t)
 	keyLine := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
 	var archive, checksums []byte
-	asset := fmt.Sprintf("qatlas_v2.0.0_linux_%s.tar.gz", runtime.GOARCH)
+	asset := fmt.Sprintf("qconnect_v3.1.0_linux_%s.tar.gz", runtime.GOARCH)
 	var releases *httptest.Server
 	releases = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/releases/latest":
-			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v2.0.0", "assets": []map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v3.1.0", "assets": []map[string]string{
 				{"name": asset, "url": releases.URL + "/asset"},
 				{"name": "checksums.txt", "url": releases.URL + "/checksums"},
-				{"name": "checksums.txt.sig", "url": releases.URL + "/signature"},
+				{"name": release.SignatureAsset, "url": releases.URL + "/signature"},
 			}})
 		case "/asset":
 			_, _ = w.Write(archive)
@@ -127,9 +127,9 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour, earlier, 
 	if earlier {
 		tags += ",legacy_vault_names"
 	}
-	build(bin, "v1.0.0", tags)
+	build(bin, "v3.0.0", tags)
 	next := filepath.Join(dir, "next")
-	build(next, "v2.0.0", "e2e")
+	build(next, "v3.1.0", "e2e")
 	program, err := os.ReadFile(next)
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour, earlier, 
 	for _, entry := range []struct {
 		name string
 		body []byte
-	}{{"bin/qatlas", program}, {"share/man/man1/qatlas.1", []byte(".TH QATLAS 1\n")}} {
+	}{{"bin/qconnect", program}, {"share/man/man1/qconnect.1", []byte(".TH QCONNECT 1\n")}} {
 		if err := tw.WriteHeader(&tar.Header{Name: entry.name, Mode: 0o755, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}); err != nil {
 			t.Fatal(err)
 		}
@@ -304,8 +304,8 @@ defaults:
 	select {
 	case line := <-broker.lines:
 		seen.WriteString(line)
-		if !strings.Contains(line, `"version":"v2.0.0"`) {
-			t.Errorf("the MCP server does not report version v2.0.0: %s", line)
+		if !strings.Contains(line, `"version":"v3.1.0"`) {
+			t.Errorf("the MCP server does not report version v3.1.0: %s", line)
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("the MCP server did not answer server/discover")

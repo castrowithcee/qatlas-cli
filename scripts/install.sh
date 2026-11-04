@@ -1,45 +1,67 @@
 #!/bin/sh
-# Qatlas installer for Linux, macOS and WSL.
+# Qatlas Connect installer for Linux, macOS and WSL.
 #
 #   curl -fsSL https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.sh | sh
 #   curl -fsSL https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.sh | sh -s -- v1.2.3
 #
-# Installs the newest stable release (or the version given as argument or in QATLAS_VERSION, including
-# pre-release tags such as v1.2.3-rc.1) into ~/.local; running it again updates the installation.
+# Installs the newest stable release (or the version given as argument or in QCONNECT_VERSION, including
+# pre-release tags such as v1.2.3-rc.1) of qconnect into ~/.local; running it again updates the installation.
+# An existing qatlas program in the prefix is replaced by a symlink to qconnect.
 # The archive is installed only after the SHA-256 listed in checksums.txt matches and, when ssh-keygen is
-# available, checksums.txt carries a valid signature of the release key embedded below. Any mismatch aborts
-# before the installation is touched. The script never uses sudo and never touches the configuration under ~/.qatlas.
+# available, checksums.txt.qconnect.sig is a valid signature of checksums.txt by the release key embedded
+# below. Any mismatch aborts before the installation is touched. The script never uses sudo and never touches
+# the configuration under ~/.qatlas.
 #
 # Environment (all optional; the first two exist for tests and mirrors):
-#   QATLAS_VERSION                       release tag to install instead of the latest stable release
-#   QATLAS_INSTALL_BASE_URL              releases URL; only changes where files are downloaded from
-#                                        (default https://github.com/castrowithcee/qatlas-connect/releases)
-#   QATLAS_INSTALL_PREFIX                installation prefix (default $HOME/.local)
-#   QATLAS_INSTALL_ALLOWED_SIGNERS_FILE  TEST ONLY: allowed-signers file used instead of the embedded key.
-#                                        It replaces only the key; the signature is still required.
-#   HOME, SHELL                          select the login profile that receives the PATH line
+#   QCONNECT_VERSION                       release tag to install instead of the latest stable release
+#   QCONNECT_INSTALL_BASE_URL              releases URL; only changes where files are downloaded from
+#                                          (default https://github.com/castrowithcee/qatlas-connect/releases)
+#   QCONNECT_INSTALL_PREFIX                installation prefix (default $HOME/.local)
+#   QCONNECT_INSTALL_ALLOWED_SIGNERS_FILE  TEST ONLY: allowed-signers file used instead of the embedded key.
+#                                          It replaces only the key; the signature is still required.
+#   HOME, SHELL                            select the login profile that receives the PATH line
+# The former QATLAS_VERSION and QATLAS_INSTALL_* variables are still read, with a warning, when the matching
+# QCONNECT_ variable is unset; this fallback ends with the next major release.
 set -eu
 
 repo_url=https://github.com/castrowithcee/qatlas-connect/releases
 signer_line='qatlas-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6euNyMyw+0rV5TVSa24o374+wDn75ueHvdYAGZnEv5'
-marker='# added by the Qatlas installer'
+marker='# added by the Qatlas Connect installer'
+old_marker='# added by the Qatlas installer'
 
 fail() {
-	printf 'qatlas-install: %s\n' "$*" >&2
+	printf 'qconnect-install: %s\n' "$*" >&2
 	exit 1
 }
 
 warn() {
-	printf 'qatlas-install: warning: %s\n' "$*" >&2
+	printf 'qconnect-install: warning: %s\n' "$*" >&2
+}
+
+# setting <suffix> prints the value of QCONNECT_<suffix>, or of the former QATLAS_<suffix> with a warning when
+# only that one is set. The new variable wins; an empty value counts as unset.
+setting() {
+	eval "new=\${QCONNECT_$1:-}"
+	eval "old=\${QATLAS_$1:-}"
+	if [ -n "$new" ]; then
+		printf '%s' "$new"
+	elif [ -n "$old" ]; then
+		warn "QATLAS_$1 is deprecated and will be removed in the next major release; use QCONNECT_$1"
+		printf '%s' "$old"
+	fi
 }
 
 main() {
 	[ -n "${HOME:-}" ] || fail 'HOME is not set'
-	base=${QATLAS_INSTALL_BASE_URL:-$repo_url}
+	base=$(setting INSTALL_BASE_URL)
+	base=${base:-$repo_url}
 	base=${base%/}
-	prefix=${QATLAS_INSTALL_PREFIX:-$HOME/.local}
+	prefix=$(setting INSTALL_PREFIX)
+	prefix=${prefix:-$HOME/.local}
 	prefix=${prefix%/}
-	version=${1:-${QATLAS_VERSION:-}}
+	signers_file=$(setting INSTALL_ALLOWED_SIGNERS_FILE)
+	version=${1:-}
+	[ -n "$version" ] || version=$(setting VERSION)
 
 	command -v curl >/dev/null 2>&1 || fail 'curl is required'
 	command -v tar >/dev/null 2>&1 || fail 'tar is required'
@@ -71,8 +93,8 @@ main() {
 		fail "invalid version '$version'; expected a tag such as v1.2.3 or v1.2.3-rc.1"
 	fi
 
-	archive="qatlas_${version}_${os}_${arch}.tar.gz"
-	tmp=$(mktemp -d "${TMPDIR:-/tmp}/qatlas-install.XXXXXX")
+	archive="qconnect_${version}_${os}_${arch}.tar.gz"
+	tmp=$(mktemp -d "${TMPDIR:-/tmp}/qconnect-install.XXXXXX")
 	stage=
 	cleanup() {
 		rm -rf "$tmp"
@@ -81,16 +103,16 @@ main() {
 	trap cleanup EXIT
 	trap 'exit 1' HUP INT TERM
 
-	printf 'Downloading Qatlas %s for %s/%s\n' "$version" "$os" "$arch"
-	for name in "$archive" checksums.txt checksums.txt.sig; do
+	printf 'Downloading Qatlas Connect %s for %s/%s\n' "$version" "$os" "$arch"
+	for name in "$archive" checksums.txt checksums.txt.qconnect.sig; do
 		curl -fsSL -o "$tmp/$name" "$base/download/$version/$name" || fail "download of $name failed"
 	done
 
 	if command -v ssh-keygen >/dev/null 2>&1; then
-		signers=${QATLAS_INSTALL_ALLOWED_SIGNERS_FILE:-$tmp/allowed-signers}
-		[ -n "${QATLAS_INSTALL_ALLOWED_SIGNERS_FILE:-}" ] || printf '%s\n' "$signer_line" >"$signers"
-		ssh-keygen -Y verify -f "$signers" -I qatlas-release -n qatlas-release \
-			-s "$tmp/checksums.txt.sig" <"$tmp/checksums.txt" >/dev/null 2>&1 ||
+		signers=${signers_file:-$tmp/allowed-signers}
+		[ -n "$signers_file" ] || printf '%s\n' "$signer_line" >"$signers"
+		ssh-keygen -Y verify -f "$signers" -I qatlas-release -n qatlas-connect-release \
+			-s "$tmp/checksums.txt.qconnect.sig" <"$tmp/checksums.txt" >/dev/null 2>&1 ||
 			fail 'signature of checksums.txt is invalid; nothing was installed'
 	else
 		warn 'ssh-keygen not found: the release signature was NOT verified, only the SHA-256 checksum'
@@ -102,21 +124,35 @@ main() {
 	[ "$got" = "$want" ] || fail "SHA-256 mismatch for $archive; nothing was installed"
 
 	mkdir -p "$prefix"
-	stage=$(mktemp -d "$prefix/.qatlas-stage.XXXXXX")
+	stage=$(mktemp -d "$prefix/.qconnect-stage.XXXXXX")
 	tar -xzf "$tmp/$archive" -C "$stage" || fail 'could not extract the archive'
-	[ -f "$stage/bin/qatlas" ] && [ ! -L "$stage/bin/qatlas" ] || fail 'archive does not contain bin/qatlas'
-	chmod 755 "$stage/bin/qatlas"
+	[ -f "$stage/bin/qconnect" ] && [ ! -L "$stage/bin/qconnect" ] || fail 'archive does not contain bin/qconnect'
+	chmod 755 "$stage/bin/qconnect"
 
 	# Same filesystem as the target, so every mv is an atomic rename; the program is replaced last.
-	mkdir -p "$prefix/bin" "$prefix/share/man/man1" "$prefix/share/doc/qatlas"
+	mkdir -p "$prefix/bin" "$prefix/share/man/man1" "$prefix/share/doc/qconnect"
 	for page in "$stage"/share/man/man1/*.1; do
 		[ -f "$page" ] || continue
 		mv -f "$page" "$prefix/share/man/man1/$(basename "$page")"
 	done
-	if [ -f "$stage/share/doc/qatlas/LICENSE" ]; then
-		mv -f "$stage/share/doc/qatlas/LICENSE" "$prefix/share/doc/qatlas/LICENSE"
+	for doc in "$stage"/share/doc/qconnect/*; do
+		[ -f "$doc" ] || continue
+		mv -f "$doc" "$prefix/share/doc/qconnect/$(basename "$doc")"
+	done
+	mv -f "$stage/bin/qconnect" "$prefix/bin/qconnect"
+
+	# A previous qatlas program becomes an alias of qconnect, so existing callers keep working. The link is
+	# created in the staging directory and renamed into place.
+	alias_done=
+	if [ -e "$prefix/bin/qatlas" ] || [ -L "$prefix/bin/qatlas" ]; then
+		if [ -d "$prefix/bin/qatlas" ] && [ ! -L "$prefix/bin/qatlas" ]; then
+			warn "$prefix/bin/qatlas is a directory; it was left alone"
+		elif ln -s qconnect "$stage/qatlas" && mv -f "$stage/qatlas" "$prefix/bin/qatlas"; then
+			alias_done=1
+		else
+			warn "could not replace $prefix/bin/qatlas by an alias of qconnect"
+		fi
 	fi
-	mv -f "$stage/bin/qatlas" "$prefix/bin/qatlas"
 
 	path_changed=
 	bindir=$prefix/bin
@@ -144,7 +180,7 @@ main() {
 			else
 				warn "fish not found; add $bindir to your PATH"
 			fi
-		elif [ -f "$profile" ] && grep -Fq "$marker" "$profile"; then
+		elif [ -f "$profile" ] && grep -Fq -e "$marker" -e "$old_marker" "$profile"; then
 			path_changed=1
 		else
 			printf '\n%s\nexport PATH="%s:$PATH"\n' "$marker" "$path_dir" >>"$profile"
@@ -153,11 +189,14 @@ main() {
 		;;
 	esac
 
-	printf '\nInstalled Qatlas %s\n  program: %s\n' "$version" "$bindir/qatlas"
-	if [ -n "$path_changed" ]; then
-		printf '  PATH:    %s was added to your login profile; open a new terminal to use `qatlas`.\n' "$bindir"
+	printf '\nInstalled Qatlas Connect %s\n  program: %s\n' "$version" "$bindir/qconnect"
+	if [ -n "$alias_done" ]; then
+		printf '  alias:   %s now points to qconnect.\n' "$bindir/qatlas"
 	fi
-	printf '\nNext: run `qatlas` (press g to connect a provider) or `qatlas web`.\n'
+	if [ -n "$path_changed" ]; then
+		printf '  PATH:    %s was added to your login profile; open a new terminal to use `qconnect`.\n' "$bindir"
+	fi
+	printf '\nNext: run `qconnect` (press g to connect a provider) or `qconnect web`.\n'
 }
 
 main "$@"

@@ -25,7 +25,7 @@ func (p *Prepared) ReadsConfig(ctx context.Context, config []byte) (bool, error)
 	if timeout <= 0 {
 		timeout = defaultCheckTimeout
 	}
-	dir, err := os.MkdirTemp("", "qatlas-check-*")
+	dir, err := os.MkdirTemp("", "qconnect-check-*")
 	if err != nil {
 		return false, fmt.Errorf("create the directory to check the configuration in: %w", err)
 	}
@@ -33,7 +33,8 @@ func (p *Prepared) ReadsConfig(ctx context.Context, config []byte) (bool, error)
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return false, fmt.Errorf("restrict the check directory: %w", err)
 	}
-	name := "qatlas"
+	// The program runs under its own name, qatlas for a release before the rename.
+	name := p.layout.Program
 	if p.goos == "windows" {
 		name += ".exe"
 	}

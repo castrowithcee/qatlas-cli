@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
 // calledByLegacyName reports whether program, the name the process was started under (os.Args[0]), is the
@@ -29,4 +31,18 @@ func noteLegacyName(program string, root *cobra.Command, args []string, stderr i
 		return
 	}
 	fmt.Fprintln(stderr, "qconnect: note: this program is now called qconnect; the name qatlas still works until the next major release")
+}
+
+// adoptProgramName gives an installation that an updater of a release before the rename left as
+// <prefix>/bin/qatlas its current name, with qatlas as an alias (see selfupdate.AdoptCurrentName), and says so
+// on stderr in the one process that did it. Hidden commands, which the program starts itself, and
+// self-contained ones leave the installation alone. Transition until the next major release.
+func adoptProgramName(c *cobra.Command) {
+	if c.Hidden || selfContained(c) {
+		return
+	}
+	if path, ok := selfupdate.AdoptCurrentName(); ok {
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: this program is now installed as %s; qatlas stays an alias of it "+
+			"until the next major release\n", path)
+	}
 }

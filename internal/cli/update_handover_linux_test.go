@@ -40,7 +40,7 @@ var updateSurfaces = map[string]func(t *testing.T, dir string, updater *selfupda
 		return strings.Contains(stdout, `"updated":true`), stderr, nil
 	},
 	"editor": func(t *testing.T, dir string, updater *selfupdate.Client) (bool, string, error) {
-		u := tuiUpdater(&Options{Updater: updater, Config: configIn(dir)}, "v1.0.0")
+		u := tuiUpdater(&Options{Updater: updater, Config: configIn(dir)}, "v3.0.0")
 		result, err := u.Update(context.Background())
 		return result.Updated, u.(interface{ Note() string }).Note(), err
 	},

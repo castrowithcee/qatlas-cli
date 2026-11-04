@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+
+	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
 )
 
 // Question is the question before an installation, the same for the command line and the editor: the
@@ -14,7 +16,8 @@ func Question(latest string) string {
 
 // TargetQuestion is Question for a release chosen by version: it says whether the version is a prerelease
 // and whether it is newer or older than the running one. An older version lacks the fixes made since, and
-// it cannot take over an unlocked vault, so the question says the vault process is locked first.
+// it cannot take over an unlocked vault, so the question says the vault process is locked first. A version
+// before the rename is also told to work on the state from before the migration.
 func TargetQuestion(version string, prerelease, older bool) string {
 	kind := "version"
 	if prerelease {
@@ -22,9 +25,20 @@ func TargetQuestion(version string, prerelease, older bool) string {
 	}
 	if older {
 		return "Install qconnect " + kind + " " + version + " (older than the running version: its fixes of later " +
-			"versions are missing)? " + consequences(runtime.GOOS, OtherProcesses(), true)
+			"versions are missing)? " + formerState(version) + consequences(runtime.GOOS, OtherProcesses(), true)
 	}
 	return "Install qconnect " + kind + " " + version + " (newer than the running version)? " + Consequences()
+}
+
+// formerState is what the question about version says when it is a release before the rename, which keeps
+// the names and the state of that time. Transition until the next major release.
+func formerState(version string) string {
+	if layout, err := releaseverify.LayoutOf(version); err != nil || !layout.Legacy {
+		return ""
+	}
+	return version + " predates the rename: it is installed as qatlas, qconnect is removed, and it works on the " +
+		"state from before the migration, the configuration in ~/.qatlas/cli/ and the keyring service qatlas-cli; " +
+		"changes made since are not there. "
 }
 
 // Consequences is ConsequencesText for this platform and the processes running now.
@@ -40,7 +54,7 @@ func ConsequencesText(goos string, others int) string { return consequences(goos
 func consequences(goos string, others int, older bool) string {
 	var b strings.Builder
 	if goos == "windows" {
-		b.WriteString("The running qatlas.exe is renamed to qatlas.exe.old and replaced; the old file is removed " +
+		b.WriteString("The running qconnect.exe is renamed to qconnect.exe.old and replaced; the old file is removed " +
 			"at the next start or update.")
 		if others > 0 {
 			fmt.Fprintf(&b, " %d other qconnect %s of yours %s running.", others, plural(others, "process", "processes"),

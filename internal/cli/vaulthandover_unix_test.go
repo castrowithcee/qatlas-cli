@@ -30,7 +30,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
-// copiedProgram copies this test binary to bin/qatlas in a directory of the test's own, which plays the
+// copiedProgram copies this test binary to bin/qconnect in a directory of the test's own, which plays the
 // installed qconnect: a vault process started from it, and every client of that process, runs from that path.
 func copiedProgram(t *testing.T) (string, []byte) {
 	t.Helper()
@@ -42,7 +42,7 @@ func copiedProgram(t *testing.T) (string, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	program := filepath.Join(t.TempDir(), "bin", "qatlas")
+	program := filepath.Join(t.TempDir(), "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(program), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -52,25 +52,25 @@ func copiedProgram(t *testing.T) (string, []byte) {
 	return program, content
 }
 
-// testRelease writes a release whose archive holds program as bin/qatlas, signed by signer.
+// testRelease writes a release whose archive holds program as bin/qconnect, signed by signer.
 func testRelease(t *testing.T, program []byte, signer ssh.Signer) vaultproc.ReleaseFiles {
 	t.Helper()
 	var archive bytes.Buffer
 	gz, _ := gzip.NewWriterLevel(&archive, gzip.BestSpeed)
 	tw := tar.NewWriter(gz)
-	if err := tw.WriteHeader(&tar.Header{Name: "bin/qatlas", Mode: 0o755, Size: int64(len(program)),
+	if err := tw.WriteHeader(&tar.Header{Name: "bin/qconnect", Mode: 0o755, Size: int64(len(program)),
 		Typeflag: tar.TypeReg}); err != nil {
 		t.Fatal(err)
 	}
 	_, _ = tw.Write(program)
 	_ = tw.Close()
 	_ = gz.Close()
-	const name = "qatlas_9.9.9_test.tar.gz"
+	const name = "qconnect_v9.9.9_linux_amd64.tar.gz"
 	sum := sha256.Sum256(archive.Bytes())
 	checksums := []byte(hex.EncodeToString(sum[:]) + "  " + name + "\n")
 	dir := t.TempDir()
 	files := vaultproc.ReleaseFiles{Checksums: filepath.Join(dir, "checksums.txt"),
-		Signature: filepath.Join(dir, "checksums.txt.sig"), Archive: filepath.Join(dir, name), ArchiveName: name}
+		Signature: filepath.Join(dir, release.SignatureAsset), Archive: filepath.Join(dir, name), ArchiveName: name}
 	for path, content := range map[string][]byte{files.Checksums: checksums, files.Archive: archive.Bytes(),
 		files.Signature: releasetest.Sign(t, signer, release.Namespace, "sha256", checksums)} {
 		if err := os.WriteFile(path, content, 0o600); err != nil {
