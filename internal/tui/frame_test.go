@@ -288,6 +288,39 @@ func TestFrameReadsWithoutColour(t *testing.T) {
 	}
 }
 
+// The header names the product in full at a usual width and gives way to the short name at the smallest
+// width, beside the vault mark and the keys, staying one row.
+func TestHeaderNameFollowsTheWidth(t *testing.T) {
+	eachLanguage(t, func(t *testing.T) {
+		for _, vc := range vaultCases(t) {
+			if len(vc.words) == 0 {
+				continue
+			}
+			t.Run(vc.name, func(t *testing.T) {
+				m := vc.m
+				for _, width := range []int{80, 150} {
+					m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
+					if row := ansi.Strip(m.headerLines()[0]); !strings.Contains(row, tr(tHeaderTitle)) {
+						t.Errorf("width %d: header %q lacks %q", width, row, tr(tHeaderTitle))
+					}
+				}
+				m.Update(tea.WindowSizeMsg{Width: minimumWidth, Height: minimumHeight})
+				lines := m.headerLines()
+				if len(lines) != 1 || ansi.StringWidth(lines[0]) > minimumWidth {
+					t.Fatalf("header %q is not one row within %d cells", lines, minimumWidth)
+				}
+				row := ansi.Strip(lines[0])
+				if strings.Contains(row, tr(tHeaderTitle)) || !strings.Contains(row, tr(tHeaderTitleShort)+" ") {
+					t.Errorf("header %q does not show the short name %q", row, tr(tHeaderTitleShort))
+				}
+				if !strings.Contains(row, "●") {
+					t.Errorf("header %q lacks the vault mark", row)
+				}
+			})
+		}
+	})
+}
+
 // From the smallest width on the header is one row in every vault state, with the admin text that asks for
 // every change too, in both languages, and it never names the config path.
 func TestHeaderIsOneRowWithoutThePathAtTheSmallestWidth(t *testing.T) {

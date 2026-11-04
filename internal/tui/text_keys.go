@@ -26,6 +26,7 @@ const (
 	tPageUpdate                              textID = "PageUpdate"
 	tPageSelftest                            textID = "PageSelftest"
 	tHeaderTitle                             textID = "HeaderTitle"
+	tHeaderTitleShort                        textID = "HeaderTitleShort"
 	tHeaderHelp                              textID = "HeaderHelp"
 	tHeaderCmd                               textID = "HeaderCmd"
 	tHeaderBack                              textID = "HeaderBack"
