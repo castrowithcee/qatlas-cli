@@ -626,9 +626,32 @@ func TestPathPriority(t *testing.T) {
 
 		got, err := Path("")
 
-		want := filepath.Join(home, ".qatlas", "cli", "config.yaml")
+		want := filepath.Join(home, ".qatlas", "connect", "config.yaml")
 		if err != nil || got != want {
 			t.Errorf("Path() = %q, %v, want %q", got, err, want)
+		}
+	})
+
+	t.Run("legacy location while only it exists", func(t *testing.T) {
+		setPathEnv(t, "", "")
+		legacy := filepath.Join(home, ".qatlas", "cli")
+		if err := os.MkdirAll(legacy, 0o700); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := Path("")
+
+		if want := filepath.Join(legacy, "config.yaml"); err != nil || got != want {
+			t.Errorf("Path() = %q, %v, want %q", got, err, want)
+		}
+
+		if err := os.MkdirAll(filepath.Join(home, ".qatlas", "connect"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		got, err = Path("")
+
+		if want := filepath.Join(home, ".qatlas", "connect", "config.yaml"); err != nil || got != want {
+			t.Errorf("Path() with both = %q, %v, want %q", got, err, want)
 		}
 	})
 }

@@ -124,7 +124,7 @@ var userRuntimeRoot = "/run/user"
 // the system empties at logout or restart. Without the variable, as under agent hosts that start qatlas
 // with a filtered environment, the user's runtime directory is found by its conventional place on
 // platforms that have one, so such a process still reaches the vault process an unlock in a terminal
-// started. Only when there is none the socket lives in run beside the vault, ~/.qatlas/cli/run by
+// started. Only when there is none the socket lives in run beside the vault, ~/.qatlas/connect/run by
 // default. Its name is derived from the vault's absolute path, so a vault under another configuration
 // directory, a test's included, never reaches the process of another vault through the shared runtime
 // directory.

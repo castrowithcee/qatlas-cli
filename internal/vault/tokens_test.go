@@ -424,7 +424,7 @@ func TestFindAgentTokenOrder(t *testing.T) {
 	}
 	write := func(dir, content string) string {
 		t.Helper()
-		path := filepath.Join(dir, ".qatlas", "local", "agent.env")
+		path := filepath.Join(dir, ".qatlas", "local", "connect", "agent.env")
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -470,6 +470,42 @@ func TestFindAgentTokenOrder(t *testing.T) {
 	}
 	if value, _ := find(env(map[string]string{AgentTokenEnv: "  "})); value != "qat_project" {
 		t.Errorf("with a blank environment variable = %q, want the files", value)
+	}
+}
+
+// The place of the versions before the rename is read where a directory has no current file, and the
+// current file wins where it has both.
+func TestFindAgentTokenLegacyPlace(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	project := filepath.Join(root, "project")
+	write := func(dir string, parts []string, content string) string {
+		t.Helper()
+		path := filepath.Join(append([]string{dir, ".qatlas", "local"}, parts...)...)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	if err := os.MkdirAll(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	legacyHome := write(home, []string{"agent.env"}, "QATLAS_AGENT_TOKEN=qat_home_legacy\n")
+	if value, source, err := FindAgentToken(project, home, nil); err != nil || value != "qat_home_legacy" ||
+		source != legacyHome {
+		t.Errorf("legacy home file = %q from %q, %v, want it read", value, source, err)
+	}
+	legacyProject := write(project, []string{"agent.env"}, "QATLAS_AGENT_TOKEN=qat_project_legacy\n")
+	if value, source, _ := FindAgentToken(project, home, nil); value != "qat_project_legacy" || source != legacyProject {
+		t.Errorf("legacy project file = %q from %q, want the nearer legacy file", value, source)
+	}
+	current := write(project, []string{"connect", "agent.env"}, "QATLAS_AGENT_TOKEN=qat_project\n")
+	if value, source, _ := FindAgentToken(project, home, nil); value != "qat_project" || source != current {
+		t.Errorf("both files = %q from %q, want the current one", value, source)
 	}
 }
 

@@ -15,7 +15,20 @@ import (
 // StoreService is the service name every qatlas entry lives under: one namespace in Secret Service on
 // Linux, in the macOS Keychain, and in the Windows Credential Manager, so the entries are recognisable in
 // the platform's own key manager and removable without qatlas.
-const StoreService = "qatlas-cli"
+const StoreService = "qatlas-connect"
+
+// LegacyStoreService is the service name of the versions before the rename. An entry missing under
+// StoreService is looked up there and taken over; the legacy entries stay for a rollback. Transitional
+// until the next major release.
+const LegacyStoreService = "qatlas-cli"
+
+// The calls into the platform store; a test replaces them to run without a desktop session.
+var (
+	storeReady    = ready
+	keyringGet    = keyring.Get
+	keyringSet    = keyring.Set
+	keyringDelete = keyring.Delete
+)
 
 // StoreSelector names the environment variable that chooses the credential store. "auto", the default,
 // uses the store of the platform. "none" replaces it with a store that holds nothing, which is what a CI
@@ -140,49 +153,102 @@ func promptable(ctx context.Context) bool {
 
 type systemStore struct{}
 
+// Get returns the entry under StoreService, else the legacy entry, which it then copies to StoreService.
+// A failed copy does not fail the read: the legacy entry answers again next time.
 func (systemStore) Get(ctx context.Context, key string) (string, error) {
 	value, err := within(ctx, func(ctx context.Context) (string, error) {
-		if err := ready(ctx); err != nil {
+		if err := storeReady(ctx); err != nil {
 			return "", err
 		}
-		return keyring.Get(StoreService, key)
+		value, err := keyringGet(StoreService, key)
+		if !errors.Is(err, keyring.ErrNotFound) {
+			return value, err
+		}
+		value, err = keyringGet(LegacyStoreService, key)
+		if err == nil {
+			_ = keyringSet(StoreService, key, value)
+		}
+		return value, err
 	})
-	switch {
-	case err == nil:
-		return value, nil
-	case errors.Is(err, keyring.ErrNotFound):
-		return "", ErrNoEntry
-	case errors.Is(err, ErrUnavailable):
-		return "", err
-	default:
-		return "", classify(err)
-	}
+	return value, storeError(err)
 }
 
 func (systemStore) Set(key, value string) error {
 	_, err := within(context.Background(), func(ctx context.Context) (struct{}, error) {
-		if err := ready(ctx); err != nil {
+		if err := storeReady(ctx); err != nil {
 			return struct{}{}, err
 		}
-		return struct{}{}, keyring.Set(StoreService, key, value)
+		return struct{}{}, keyringSet(StoreService, key, value)
 	})
-	switch {
-	case err == nil:
-		return nil
-	case errors.Is(err, ErrUnavailable):
-		return err
-	default:
-		return classify(err)
-	}
+	return storeError(err)
 }
 
+// Delete removes the entry under both service names, so the legacy entry cannot bring a deleted secret
+// back.
 func (systemStore) Delete(key string) error {
 	_, err := within(context.Background(), func(ctx context.Context) (struct{}, error) {
-		if err := ready(ctx); err != nil {
+		if err := storeReady(ctx); err != nil {
 			return struct{}{}, err
 		}
-		return struct{}{}, keyring.Delete(StoreService, key)
+		current := keyringDelete(StoreService, key)
+		legacy := keyringDelete(LegacyStoreService, key)
+		currentGone, legacyGone := errors.Is(current, keyring.ErrNotFound), errors.Is(legacy, keyring.ErrNotFound)
+		switch {
+		case current != nil && !currentGone:
+			return struct{}{}, current
+		case legacy != nil && !legacyGone:
+			return struct{}{}, legacy
+		case currentGone && legacyGone:
+			return struct{}{}, keyring.ErrNotFound
+		}
+		return struct{}{}, nil
 	})
+	return storeError(err)
+}
+
+// AdoptLegacy copies the legacy entry of each key to StoreService where StoreService has none, and reads
+// every copy back. It returns how many entries it copied. Keys without a legacy entry are skipped; an error
+// leaves the remaining keys to the lookup in Get. Nothing happens while the store is switched off.
+func AdoptLegacy(ctx context.Context, keys []string) (int, error) {
+	if os.Getenv(StoreSelector) == StoreNone {
+		return 0, nil
+	}
+	copied := 0
+	for _, key := range keys {
+		done, err := within(ctx, func(ctx context.Context) (bool, error) {
+			if err := storeReady(ctx); err != nil {
+				return false, err
+			}
+			if _, err := keyringGet(StoreService, key); !errors.Is(err, keyring.ErrNotFound) {
+				return false, err
+			}
+			value, err := keyringGet(LegacyStoreService, key)
+			if errors.Is(err, keyring.ErrNotFound) {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			if err := keyringSet(StoreService, key, value); err != nil {
+				return false, err
+			}
+			if back, err := keyringGet(StoreService, key); err != nil || back != value {
+				return false, fmt.Errorf("%w: an entry did not read back after copying", ErrUnavailable)
+			}
+			return true, nil
+		})
+		if err != nil {
+			return copied, storeError(err)
+		}
+		if done {
+			copied++
+		}
+	}
+	return copied, nil
+}
+
+// storeError maps what a store call returned onto the classes the cascade acts on.
+func storeError(err error) error {
 	switch {
 	case err == nil:
 		return nil

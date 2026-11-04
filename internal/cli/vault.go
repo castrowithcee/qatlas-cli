@@ -306,17 +306,17 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"every 'vault' command but status, unlock, and lock, for the passphrase of an encrypted vault there\n" +
 			"once before doing anything; a wrong passphrase fails with usage.\n\n" +
 			"Without a terminal it approves with an agent token instead (see 'qatlas vault token'): the one in\n" +
-			"QATLAS_AGENT_TOKEN, else in the nearest .qatlas/local/agent.env of the working directory or a\n" +
-			"directory above it, else in ~/.qatlas/local/agent.env, as a line QATLAS_AGENT_TOKEN=<token>. The\n" +
-			"vault process that holds the vault unlocked checks the token, its expiry, and each open change,\n" +
-			"approves every change a model of the token covers, or only the ones --connection names, and logs\n" +
-			"each decision in the invocation log with the token's name, never its value. No token, an unknown,\n" +
-			"revoked, or expired one, a vault that is not encrypted, or a change the token does not cover fails\n" +
-			"with admin-required, naming each change left open and what of it the token does not cover:\n" +
-			"service, credential, effects, tools, targets, paths, or that it is a model itself. Without a\n" +
-			"vault process, the vault locked, it fails with vault-locked, since only that process can check a\n" +
-			"token. The stale approval of a connection removed or renamed is a change of kind delete: a token\n" +
-			"that covers the connection it belonged to removes it.",
+			"QATLAS_AGENT_TOKEN, else in the nearest .qatlas/local/connect/agent.env of the working directory or\n" +
+			"a directory above it, else in ~/.qatlas/local/connect/agent.env, as a line\n" +
+			"QATLAS_AGENT_TOKEN=<token>. The vault process that holds the vault unlocked checks the token, its\n" +
+			"expiry, and each open change, approves every change a model of the token covers, or only the ones\n" +
+			"--connection names, and logs each decision in the invocation log with the token's name, never its\n" +
+			"value. No token, an unknown, revoked, or expired one, a vault that is not encrypted, or a change\n" +
+			"the token does not cover fails with admin-required, naming each change left open and what of it the\n" +
+			"token does not cover: service, credential, effects, tools, targets, paths, or that it is a model\n" +
+			"itself. Without a vault process, the vault locked, it fails with vault-locked, since only that\n" +
+			"process can check a token. The stale approval of a connection removed or renamed is a change of\n" +
+			"kind delete: a token that covers the connection it belonged to removes it.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultApprove(c, opts, reg, connectionNames)

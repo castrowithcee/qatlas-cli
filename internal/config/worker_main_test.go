@@ -13,6 +13,9 @@ import (
 // lockWaitMode makes the test binary a writer process of the selftest lock-wait measurement.
 const lockWaitMode = "lockwait"
 
+// migrateHomeMode makes the test binary a process that starts with the configuration directory to migrate.
+const migrateHomeMode = "migratehome"
+
 // TestMain turns the test binary into a worker process when the mode variable is set; the transaction
 // tests and the lock-wait benchmark use it to run real transactions from freshly started processes.
 func TestMain(m *testing.M) {
@@ -22,6 +25,17 @@ func TestMain(m *testing.M) {
 	}
 	if mode == lockWaitMode {
 		os.Exit(selftest.RunWorker(os.Stdin, os.Stdout, os.Stderr))
+	}
+	if mode == migrateHomeMode {
+		m, err := config.MigrateHome("")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if m != nil {
+			fmt.Println("migrated")
+		}
+		os.Exit(0)
 	}
 	store := config.NewStore(os.Getenv(config.WorkerPathEnv), config.TestProviders)
 	name := os.Getenv(config.WorkerNameEnv)
