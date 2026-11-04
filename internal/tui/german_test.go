@@ -229,7 +229,7 @@ func accessGermanScreens() []germanScreen {
 			pump(t, m, "A")
 			return m
 		}},
-		{"rename prompt", func(t *testing.T) *Model {
+		{"rename form", func(t *testing.T) *Model {
 			m, _, _ := newModel(t)
 			seedConnections(t, m, "docs")
 			startRename(t, m, sectionServices, "wiki", "handbook")
@@ -239,21 +239,21 @@ func accessGermanScreens() []germanScreen {
 			m, _, _ := newModel(t)
 			seedConnections(t, m, "docs")
 			startRename(t, m, sectionServices, "wiki", "handbook")
-			pump(t, m, "enter")
+			pump(t, m, "f2")
 			return m
 		}},
 		{"rename credential dry run", func(t *testing.T) *Model {
 			m, _, _ := newModel(t)
 			seedConnections(t, m, "docs")
 			startRename(t, m, sectionCredentials, "reader", "keyholder")
-			pump(t, m, "enter")
+			pump(t, m, "f2")
 			return m
 		}},
 		{"rename connection dry run", func(t *testing.T) *Model {
 			m, _, _ := newModel(t)
 			seedConnections(t, m, "docs")
 			startRename(t, m, sectionConnections, "docs", "manual")
-			pump(t, m, "enter")
+			pump(t, m, "f2")
 			return m
 		}},
 		{"renames found list", func(t *testing.T) *Model {

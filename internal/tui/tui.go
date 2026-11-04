@@ -149,7 +149,7 @@ const (
 	// screenTemplate asks whether a new entry or the guided setup starts empty or from an existing entry, and
 	// lists the entries to start from in a searchable picker; see template.go.
 	screenTemplate
-	// screenRename is the new-name prompt and the dry run of renaming a list entry; see rename.go.
+	// screenRename is the dry run of a rename; see rename.go.
 	screenRename
 	// screenFindings lists the renames found in the vault and offers the action for each; see renamefind.go.
 	screenFindings
@@ -457,7 +457,7 @@ type Model struct {
 	selftestID int
 	// findings is the list of screenFindings while it is open.
 	findings *findingsState
-	// rename is the prompt or dry run of screenRename while it is open.
+	// rename is the dry run of screenRename while it is open.
 	rename *renameState
 	// export and imp are the guided export or import of screenTransfer while one is open; never both.
 	export *exportState
@@ -1313,7 +1313,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 	case keyIs(key, actDuplicate):
 		return m.duplicateSelected()
 	case keyIs(key, actRename):
-		return m.askRename()
+		return m.openRename()
 	case keyIs(key, actEdit):
 		return m.editSelected()
 	case keyIs(key, actEnter):
@@ -1845,6 +1845,9 @@ func (m *Model) saveAndLeave() tea.Cmd {
 			// This save has to ask the credential stores first and completes, or explains itself, when they
 			// answered; the form stays open until then.
 			return cmd
+		}
+		if to, ok := m.formRename(); ok {
+			return m.askFormRename(to)
 		}
 		name := m.entryKey().value()
 		cmd := m.save(name)
@@ -3082,6 +3085,18 @@ func (m *Model) credentialTypeChosen() tea.Cmd {
 
 func (m *Model) buildFields(name string) []field { return m.buildFieldsFrom(name, "") }
 
+// nameField is the name row of an entry form. Where an existing entry can be renamed (see renameKind) the
+// row stays editable and saving a changed name renames it; elsewhere it is locked, and a locked field must
+// not go on describing a free choice, so it says that it is locked.
+func (m *Model) nameField(shown, edit string) field {
+	key := textField("name", shown, edit != "" && m.renameKind() == "").
+		withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail))
+	if edit != "" && !key.readOnly {
+		key.hint, key.detail = tr(tFormRenameHint), tr(tFormRenameDetail)
+	}
+	return key
+}
+
 // buildFieldsFrom builds the rows of an entry form. The values come from the entry name, or, for a new
 // entry filled from another (name empty, source set), from source; the name row is then the suggested copy
 // name and stays editable, because the entry is still new.
@@ -3093,13 +3108,11 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 	if source != "" {
 		name, shown = source, m.copyName(source)
 	}
-	key := textField("name", shown, edit != "").withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail))
+	key := m.nameField(shown, edit)
 	if m.section == sectionDefaults {
 		key.label, key.hint, key.detail = "domain", domainHint(), tr(tDomainDetail)
 	}
 	if key.readOnly {
-		// A locked field must not go on describing a free choice: that hint would claim the opposite of
-		// what the field does. It says that it is locked, and how to get the rename it refuses.
 		key.hint, key.detail = tr(tFormLockedHint), ""
 	}
 	fields := []field{key}
@@ -3244,9 +3257,18 @@ func (m *Model) submit() tea.Cmd {
 		if cmd := m.guardTypeChange(); cmd != nil {
 			return cmd
 		}
-		// The core owns every rule, including that a name must not be empty.
-		return m.save(m.entryKey().value())
+		return m.commitForm()
 	})
+}
+
+// commitForm saves the entry form. A changed name of an existing entry first goes through the rename's dry
+// run and confirmation (see askFormRename); otherwise the core owns every rule, including that a name must
+// not be empty.
+func (m *Model) commitForm() tea.Cmd {
+	if to, ok := m.formRename(); ok {
+		return m.askFormRename(to)
+	}
+	return m.save(m.entryKey().value())
 }
 
 // save applies the form to a copy of the configuration and saves it. The editor keeps the change only when
@@ -3525,6 +3547,10 @@ func (m *Model) firstEditable() int {
 	first := -1
 	for i := range m.fields {
 		if m.fields[i].readOnly || m.skipped(i) {
+			continue
+		}
+		if m.editing != "" && m.fields[i].label == "name" {
+			// The name of an existing entry is editable, but only the rename key starts there.
 			continue
 		}
 		if m.fields[i].kind != fieldProvider {

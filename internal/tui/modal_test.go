@@ -232,7 +232,7 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 			m, _, _ := newModel(t)
 			seedConnections(t, m, "docs")
 			startRename(t, m, sectionServices, "wiki", "handbook")
-			pump(t, m, "enter")
+			pump(t, m, "f2")
 			return m
 		}},
 		{"restart", "Restart qatlas tui into v2.0.0?", "Restarting replaces this editor", "y restart", func(t *testing.T) *Model {
@@ -291,7 +291,7 @@ func TestLongRenamePlanFallsBackToTheScrollingWorkspace(t *testing.T) {
 	seedConnections(t, m, "docs")
 	sizedModel(m, 100, 30)
 	startRename(t, m, sectionServices, "wiki", "handbook")
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if view := m.render(); !hasQuestionModal(view) {
 		t.Fatalf("a short plan is not a modal:\n%s", view)
 	}

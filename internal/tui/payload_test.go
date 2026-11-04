@@ -310,9 +310,9 @@ func TestEditingAPayloadSecretKeepsEmptyValuesAndDeletesRemovedFields(t *testing
 	if !h.m.isPayloadForm() {
 		t.Fatal("opening a payload secret did not build the payload form")
 	}
-	// The name and the place of the values are locked; the form opens on the description.
-	if !h.m.fields[0].readOnly || !h.m.field(storageLabel).readOnly {
-		t.Error("the name or the storage row of an existing payload secret is editable")
+	// The name can be changed (a rename); the place of the values is locked. The form opens on the description.
+	if h.m.fields[0].readOnly || !h.m.field(storageLabel).readOnly {
+		t.Error("the name of an existing payload secret is locked or its storage row is editable")
 	}
 	// Rotate username only, drop password.
 	for h.m.fields[h.m.focus].label != "username" {
@@ -340,6 +340,52 @@ func TestEditingAPayloadSecretKeepsEmptyValuesAndDeletesRemovedFields(t *testing
 	if got, _ := h.mem.Get(context.Background(), secret.StoreKey("billing", "username")); got != canaryPayload {
 		t.Error("an empty row replaced or removed the stored value")
 	}
+}
+
+func TestRenamingAPayloadSecretInItsFormMovesItsValuesAndSavesTheRest(t *testing.T) {
+	h := newPayloadHarness(t, false)
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetCredential("billing", config.Credential{
+		Type: config.CredentialTypeKeyring, Forward: true, Fields: []string{"username", "password"}}))
+	mustNoError(t, h.store.Save(cfg))
+	mustNoError(t, h.secrets.Set("billing", "username", "old-username-1"))
+	mustNoError(t, h.secrets.Set("billing", "password", "old-password-1"))
+	h.m.cfg = cfg
+	syncRevision(t, h.m)
+
+	openEntryForm(t, h.m, sectionCredentials, "billing")
+	focusField(t, h.m, "name")
+	clearField(t, h.m)
+	h.typeText(t, "invoices")
+	for h.m.fields[h.m.focus].label != "username" {
+		h.press(t, "tab")
+	}
+	h.typeText(t, canaryPayload)
+	h.press(t, "f2")
+	if h.m.screen != screenRename || h.m.rename == nil || h.m.rename.plan == nil {
+		t.Fatalf("F2 = screen %v fail %q, want the dry run", h.m.screen, h.m.fail)
+	}
+	if loaded, err := loadTestConfig(t, h.path); err != nil || len(loaded.Credentials) != 1 || loaded.Credentials["billing"].Type == "" {
+		t.Fatalf("the dry run changed the configuration: %+v, %v", loaded.Credentials, err)
+	}
+	h.press(t, "y")
+	if h.m.fail != "" {
+		t.Fatalf("renaming reported %q", h.m.fail)
+	}
+	loaded, err := loadTestConfig(t, h.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, old := loaded.Credentials["billing"]; old || !loaded.Credentials["invoices"].Forward {
+		t.Fatalf("credentials after the rename = %+v", loaded.Credentials)
+	}
+	if got, _ := h.mem.Get(context.Background(), secret.StoreKey("invoices", "username")); got != canaryPayload {
+		t.Error("the typed value was not stored under the new name")
+	}
+	if got, _ := h.mem.Get(context.Background(), secret.StoreKey("invoices", "password")); got != "old-password-1" {
+		t.Error("the untouched value did not follow the rename")
+	}
+	h.neverShown(t, canaryPayload, "old-password-1")
 }
 
 func TestPayloadSecretIsNotSavedWithoutTheAdminSession(t *testing.T) {

@@ -5,28 +5,28 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
-// Renaming a service, a credential or a connection is r on its list. The editor only asks for the new
-// name, shows the dry run manage.Service.PlanRename returns, and hands the confirmed plan to
+// Renaming a service, a credential or a connection happens in its form: the name row is editable, and saving
+// a changed name first shows the dry run manage.Service.PlanRename returns. The confirmed plan goes to
 // manage.Service.Rename; every check and every write is the core's. Both steps are managing actions, so
-// they are gated behind the admin session like every other one.
+// they are gated behind the admin session like every other one. r on a list opens the form on the name row.
 
-// renameState is the rename in progress: the name being typed, then the plan awaiting confirmation.
+// renameState is the rename awaiting its answer: the dry run.
 type renameState struct {
 	kind, old string
-	input     textinput.Model
-	// plan is nil while the new name is typed and set while the dry run waits for the answer.
-	plan *manage.RenamePlan
+	plan      *manage.RenamePlan
 	// view scrolls a dry run longer than the screen.
 	view textScroll
-	// back is the screen a cancelled dry run returns to; screenFindings for a rename found in the vault (see
-	// renamefind.go), the list otherwise.
+	// back is the screen a cancelled dry run returns to: the form it was asked from, screenFindings for a
+	// rename found in the vault (see renamefind.go).
 	back screen
+	// rest says that the form holds changes beside the name, which are saved under the new name once the
+	// rename went through.
+	rest bool
 }
 
 // renameKind is the core's kind of the active section, or "" where its entries cannot be renamed.
@@ -42,11 +42,9 @@ func (m *Model) renameKind() string {
 	return ""
 }
 
-// askRename opens the name prompt for the selected entry, once the admin session allows it.
-func (m *Model) askRename() tea.Cmd {
-	kind := m.renameKind()
-	name, ok := m.selected()
-	if kind == "" || !ok {
+// openRename is r on a list: the form of the selected entry with the cursor on its name.
+func (m *Model) openRename() tea.Cmd {
+	if m.renameKind() == "" {
 		return nil
 	}
 	if work := m.updateBlocker(); work != "" {
@@ -54,16 +52,80 @@ func (m *Model) askRename() tea.Cmd {
 		m.status = tr(tRenameWait, work)
 		return nil
 	}
-	return m.requireAdmin(func() tea.Cmd {
-		in := newTextInput()
-		in.Prompt = ""
-		in.SetValue(name)
-		in.Focus()
-		m.rename = &renameState{kind: kind, old: name, input: in}
-		m.screen = screenRename
-		m.clearMessages()
+	cmd := m.editSelected()
+	if m.screen != screenForm {
+		return cmd
+	}
+	for i := range m.fields {
+		if m.fields[i].label == "name" {
+			m.focus = i
+			m.applyFocus()
+			break
+		}
+	}
+	return cmd
+}
+
+// formRename is the new name of the open edit form when it differs from the entry's own: the rename that
+// saving has to carry out first.
+func (m *Model) formRename() (string, bool) {
+	if m.editing == "" || m.wizard != nil || m.renameKind() == "" || len(m.fields) == 0 {
+		return "", false
+	}
+	to := m.entryKey().value()
+	return to, to != m.editing
+}
+
+// askFormRename checks the rest of the form without writing anything, then asks the core for the dry run of
+// the rename and shows it. Nothing is written before it is confirmed, the other rows of the form included.
+func (m *Model) askFormRename(to string) tea.Cmd {
+	m.clearMessages()
+	if work := m.updateBlocker(); work != "" {
+		m.status = tr(tRenameWait, work)
 		return nil
-	})
+	}
+	if !m.isPayloadForm() {
+		// The payload form has checked its rows before it gets here.
+		candidate := m.cfg.Clone()
+		m.problems = problemState{}
+		err := m.apply(candidate, m.editing)
+		if err == nil {
+			err = candidate.Validate()
+		}
+		if err != nil {
+			m.reportSaveError(err, m.editing, true)
+			return nil
+		}
+	}
+	kind := m.renameKind()
+	plan, err := m.svc.PlanRename(kind, m.editing, to, true)
+	if err != nil {
+		m.fail = m.redactor.Apply(err.Error())
+		return nil
+	}
+	name := m.entryKey().label
+	m.rename = &renameState{kind: kind, old: m.editing, plan: plan, back: screenForm,
+		rest: rowsOf(m.formState(), name, nil) != rowsOf(m.pristine, name, nil)}
+	m.screen = screenRename
+	return nil
+}
+
+// rowsOf is a form state (see formState) without the row label, or, with value set, with that row holding
+// *value; a state that does not hold the row stays as it is.
+func rowsOf(state, label string, value *string) string {
+	parts := strings.Split(state, "\x00")
+	var b strings.Builder
+	for i := 0; i+1 < len(parts); i += 2 {
+		switch {
+		case parts[i] != label:
+		case value == nil:
+			continue
+		default:
+			parts[i+1] = *value
+		}
+		b.WriteString(parts[i] + "\x00" + parts[i+1] + "\x00")
+	}
+	return b.String()
 }
 
 // cancelRename leaves the rename screen with nothing changed.
@@ -80,84 +142,95 @@ func (m *Model) cancelRename() {
 	}
 	m.rename = nil
 	m.screen = screenList
-	if back == screenFindings {
+	switch back {
+	case screenFindings:
 		m.reopenFindings()
+	case screenForm:
+		// The form comes back with the typed values.
+		m.screen = screenForm
 	}
 	m.status = status
 }
 
 func (m *Model) updateRename(key tea.KeyPressMsg) tea.Cmd {
 	r := m.rename
-	if r == nil {
+	if r == nil || r.plan == nil {
 		m.screen = screenList
 		return nil
 	}
-	if r.plan != nil {
-		switch {
-		case keyIs(key, actYes):
-			return m.requireAdmin(m.runRename)
-		case keyIs(key, actNo) || keyIs(key, actBack):
-			m.cancelRename()
-		default:
-			r.view.scroll(key, halfPage(m.height))
-		}
-		return nil
-	}
 	switch {
-	case keyIs(key, actBack):
+	case keyIs(key, actYes):
+		return m.requireAdmin(m.runRename)
+	case keyIs(key, actNo) || keyIs(key, actBack):
 		m.cancelRename()
-		return nil
-	case keyIs(key, actEnter):
-		return m.requireAdmin(m.planRename)
+	default:
+		r.view.scroll(key, halfPage(m.height))
 	}
-	var cmd tea.Cmd
-	r.input, cmd = r.input.Update(inputMsg(key))
-	return cmd
-}
-
-// planRename asks the core for the dry run of the typed name.
-func (m *Model) planRename() tea.Cmd {
-	r := m.rename
-	m.clearMessages()
-	plan, err := m.svc.PlanRename(r.kind, r.old, r.input.Value(), true)
-	if err != nil {
-		m.fail = m.redactor.Apply(err.Error())
-		return nil
-	}
-	r.plan = plan
-	r.view.reset()
 	return nil
 }
 
 // runRename carries out the confirmed plan. The core refuses it when the configuration changed since the
-// dry run.
+// dry run. Asked from a form, it then saves the other changes of that form under the new name.
 func (m *Model) runRename() tea.Cmd {
 	r := m.rename
-	res, err := m.svc.Rename(context.Background(), r.plan)
-	if err != nil {
-		if m.conflicted(err) {
-			m.rename = nil
-			m.screen = screenList
-			return nil
-		}
-		m.fail = m.redactor.Apply(err.Error())
+	fromForm := r.back == screenForm
+	failed := func() {
 		m.rename = nil
 		m.screen = screenList
+		if fromForm {
+			m.screen = screenForm
+		}
+	}
+	res, err := m.svc.Rename(context.Background(), r.plan)
+	if err != nil {
+		if !m.conflicted(err) {
+			m.fail = m.redactor.Apply(err.Error())
+		}
+		failed()
 		return nil
 	}
-	plan := r.plan
+	plan, rest := r.plan, r.rest
 	m.rename = nil
 	if err := m.reloadConfig(); err != nil {
+		m.rev = staleRevision
 		m.fail = m.redactor.Apply(err.Error())
 		m.screen = screenList
+		if fromForm {
+			return m.showList()
+		}
 		return nil
 	}
 	name := plan.New
 	if plan.Revert {
 		name = plan.Old
 	}
-	cmd := m.returnToList(name)
-	m.status = m.renameResult(plan, res)
+	status := m.renameResult(plan, res)
+	if !fromForm || !rest {
+		cmd := m.returnToList(name)
+		m.status = status
+		return cmd
+	}
+	// The form is the entry under its new name now; its other rows are saved against it.
+	m.editing = name
+	m.screen = screenForm
+	label := m.entryKey().label
+	m.pristine = rowsOf(m.pristine, label, &name)
+	var cmd tea.Cmd
+	if m.isPayloadForm() {
+		cmd = m.savePayload()
+		if m.fail != "" || m.payloadSaving {
+			m.status = status
+		}
+		return cmd
+	}
+	cmd = m.save(name)
+	switch {
+	case m.fail != "":
+		// The rename stands even though the rest was refused.
+		m.status = status
+	case m.status != "":
+		m.status = status + "; " + m.status
+	}
 	return cmd
 }
 
@@ -341,18 +414,11 @@ func (m *Model) renameApprovalText(plan *manage.RenamePlan) string {
 	return tr(tRenameNotCarried, renameApprovalWord(plan.Approval), name)
 }
 
-// renameView draws the name prompt, then the dry run with the question.
+// renameView draws the dry run with the question.
 func (m *Model) renameView() string {
 	r := m.rename
-	if r == nil {
+	if r == nil || r.plan == nil {
 		return ""
-	}
-	apply := m.redactor.Apply
-	if r.plan == nil {
-		p := m.dialogPanelOf()
-		return p.top(tr(tRenameTitle, kindText(r.kind), apply(r.old)), "") + p.blank() +
-			p.styled(m.inputLineIn(p.room, "  ", r.input)) + p.hint(tr(tRenameNewName)) + p.bottom() +
-			m.keyHint("{enter} dry run · {back} cancel") + m.notes()
 	}
 	// What does not fit scrolls between the sentence and the keys; the modal shows the whole plan or, when
 	// that is too tall, leaves the room to this full screen.
@@ -396,6 +462,3 @@ func (m *Model) renameQuestion() question {
 	}
 	return q
 }
-
-// renameTyping reports whether the name prompt reads text.
-func (m *Model) renameTyping() bool { return m.rename != nil && m.rename.plan == nil }

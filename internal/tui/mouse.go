@@ -454,8 +454,6 @@ func (m *Model) backShown() bool {
 		return !m.pathRemove
 	case screenTemplate:
 		return m.template != nil
-	case screenRename:
-		return m.rename != nil && m.rename.plan == nil
 	case screenTransfer:
 		// The questions about approving and deleting are answered with esc, not left; a write in flight
 		// ignores it.

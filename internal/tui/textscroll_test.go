@@ -59,7 +59,7 @@ func TestTheWheelScrollsEveryTextAreaByThreeLines(t *testing.T) {
 			seedConnections(t, m, "docs")
 			sizedModel(m, 100, 30)
 			startRename(t, m, sectionServices, "wiki", "handbook")
-			pump(t, m, "enter")
+			pump(t, m, "f2")
 			for i := 0; i < 60; i++ {
 				m.rename.plan.References = append(m.rename.plan.References, fmt.Sprintf("connections.c%02d.service", i))
 			}
