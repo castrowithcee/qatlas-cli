@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // iconID names the meaning of an icon. Every meaning has an entry of its own in iconTable, so no two things

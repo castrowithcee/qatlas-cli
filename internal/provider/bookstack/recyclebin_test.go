@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 const recycleBinEntry = `{"id":4,"deleted_by":2,"created_at":"2026-10-01T10:00:00Z","updated_at":"x","deletable_type":"page","deletable_id":9,` +

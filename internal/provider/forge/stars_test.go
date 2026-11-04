@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const watchFixture = `{"subscribed":true,"ignored":false,"reason":"manual","created_at":"2026-01-01T00:00:00Z",` +

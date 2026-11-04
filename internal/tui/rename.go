@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // Renaming a service, a credential or a connection happens in its form: the name row is editable, and saving

@@ -8,8 +8,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const evilURL = "https://evil.example/pwn"
@@ -26,7 +26,7 @@ func withProfile(t *testing.T, p colorProfile) {
 func words(view string) string { return strings.Join(strings.Fields(view), "") }
 
 func TestProviderDocURL(t *testing.T) {
-	const base = "https://github.com/castrowithcee/qatlas-cli/blob/"
+	const base = "https://github.com/castrowithcee/qatlas-connect/blob/"
 	plain := config.ProviderMetadata{ID: "seatable.base"}
 	own := config.ProviderMetadata{ID: "brave", DocPage: "brave/README.md"}
 	for _, c := range []struct {

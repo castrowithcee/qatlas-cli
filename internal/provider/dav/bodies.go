@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The fixed request bodies. Each asks for exactly the properties the result is built from.

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // A locked encrypted vault hands a forward credential out through the vault process, to the connection that

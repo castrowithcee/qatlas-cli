@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The content width: the members of GitHub's content objects (files, directory entries, symlinks, and

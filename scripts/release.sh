@@ -45,7 +45,7 @@ printf '%s\n' "$targets" | while read -r goos goarch; do
 	fi
 
 	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath \
-		-ldflags "-s -w -X github.com/castrowithcee/qatlas-cli/internal/cli.version=$version" \
+		-ldflags "-s -w -X github.com/castrowithcee/qatlas-connect/internal/cli.version=$version" \
 		-o "$stage/bin/$binary" .
 	mkdir -p "$stage/share/doc/qatlas"
 	cp LICENSE "$stage/share/doc/qatlas/LICENSE"

@@ -10,7 +10,7 @@ import (
 	"io/fs"
 	"os"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // Upload is a local file opened for an upload. It reads exactly Size bytes, the size the file had when it

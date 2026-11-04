@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // BookStack resolves page includes ({{@ID}} and {{@ID#section}}) in the rendered html by what the token may

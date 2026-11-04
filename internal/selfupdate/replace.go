@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // fileOps are the file operations of a replacement, injectable so that the sequence and its rollback are

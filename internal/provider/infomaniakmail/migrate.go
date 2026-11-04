@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // migrateTargets carries the folder targets of a configuration of an older schema over to their current form

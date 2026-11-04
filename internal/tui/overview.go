@@ -8,8 +8,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/i18n"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 // The Overview is the start of the editor: how much of each kind exists, the state of the vault, and the

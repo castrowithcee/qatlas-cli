@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const fileList = `[{"file":"workflows/W1.json","id":"W1","name":"Flow","type":"workflow","status":"modified",` +

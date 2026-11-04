@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // groupModel is the table fixture plus one credential no connection uses and that names no provider.

@@ -18,7 +18,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // Value is one named number of a measurement. The unit is part of the name, such as "read-p95-ms".

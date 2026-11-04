@@ -27,8 +27,8 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // smtpServer is a small in-test submission server on a loopback port. It logs every command, whether TLS was

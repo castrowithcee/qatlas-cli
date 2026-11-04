@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 // ErrNotUnlocked reports a vault that was not unlocked in this process, so there is nothing to take a

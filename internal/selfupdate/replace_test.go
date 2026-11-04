@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // opsRecorder performs the real operations, records them, and fails the ones the test names.

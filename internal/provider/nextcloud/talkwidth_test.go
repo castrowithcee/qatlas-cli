@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 const fullRoomJSON = `{"id":42,"token":"abcd1234","type":2,"name":"Team","displayName":"Team","description":"Plan",` +

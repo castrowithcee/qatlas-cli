@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // bodyServer records the body of every change request. Page 1 and chapter 10 belong to book 7, page 2 and

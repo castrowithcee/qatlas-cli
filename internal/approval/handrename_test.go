@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // handFixture is the fixture's configuration with ids, after wiki-read was renamed to read-main by hand.

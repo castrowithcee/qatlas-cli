@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 func TestRenamedToolsCoverEveryChangedID(t *testing.T) {

@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // HandoverFD and ReportFD are the descriptors a vault process inherits from whatever started it with

@@ -1,7 +1,7 @@
 # Qatlas installer for Windows (Windows PowerShell 5.1 and PowerShell 7, 64-bit).
 #
-#   irm https://github.com/castrowithcee/qatlas-cli/releases/latest/download/install.ps1 | iex
-#   $env:QATLAS_VERSION = "v1.2.3-rc.1"; irm https://github.com/castrowithcee/qatlas-cli/releases/latest/download/install.ps1 | iex
+#   irm https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.ps1 | iex
+#   $env:QATLAS_VERSION = "v1.2.3-rc.1"; irm https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.ps1 | iex
 #
 # Installs the newest stable release (or the version in QATLAS_VERSION, including pre-release tags such as
 # v1.2.3-rc.1) into %LOCALAPPDATA%\Programs\qatlas; running it again updates the installation.
@@ -13,7 +13,7 @@
 # Environment (all optional; the last three exist for tests and mirrors):
 #   QATLAS_VERSION                       release tag to install instead of the latest stable release
 #   QATLAS_INSTALL_BASE_URL              releases URL; only changes where files are downloaded from
-#                                        (default https://github.com/castrowithcee/qatlas-cli/releases)
+#                                        (default https://github.com/castrowithcee/qatlas-connect/releases)
 #   QATLAS_INSTALL_PREFIX                installation prefix (default %LOCALAPPDATA%\Programs\qatlas)
 #   QATLAS_INSTALL_ALLOWED_SIGNERS_FILE  TEST ONLY: allowed-signers file used instead of the embedded key.
 #                                        It replaces only the key; the signature is still required.
@@ -24,7 +24,7 @@ function Install-Qatlas {
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
 
-    $repoUrl = 'https://github.com/castrowithcee/qatlas-cli/releases'
+    $repoUrl = 'https://github.com/castrowithcee/qatlas-connect/releases'
     $signerLine = 'qatlas-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6euNyMyw+0rV5TVSa24o374+wDn75ueHvdYAGZnEv5'
     $tmp = $null
     $stage = $null

@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // The canaries stand for the key and for text a failing Brave echoes. No test reaches Brave: every request
@@ -332,7 +332,7 @@ func TestTheKeyTravelsOnlyInItsHeader(t *testing.T) {
 	}
 	r := requests[0]
 	if r.method != http.MethodGet || r.path != "/res/v1/news/search" || r.header.Get("X-Subscription-Token") != tokenValue ||
-		r.header.Get("Accept") != "application/json" || r.header.Get("User-Agent") != "qatlas-cli" {
+		r.header.Get("Accept") != "application/json" || r.header.Get("User-Agent") != "qatlas-connect" {
 		t.Errorf("request = %+v", r)
 	}
 	if strings.Contains(r.rawQuery, tokenValue) || r.header.Get("Authorization") != "" {

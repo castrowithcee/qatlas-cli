@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // problemState holds the validation problems of the last refused save. A problem that belongs to a form row

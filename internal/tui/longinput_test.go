@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // longMark is a rune no screen of the editor draws by itself, so a line holding it holds the typed value.

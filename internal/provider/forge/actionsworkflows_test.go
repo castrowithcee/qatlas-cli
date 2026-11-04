@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 const giteaWorkflow = `{"id":"build.yml","name":"Build","path":".gitea/workflows/build.yml","state":"active","html_url":"https://forge.example.test/acme/widget/actions/workflows/build.yml","url":"https://forge.example.test/api/v1/repos/acme/widget/actions/workflows/build.yml","badge_url":"https://forge.example.test/acme/widget/actions/workflows/build.yml/badge.svg","created_at":"2030-01-01T00:00:00Z","updated_at":"2030-01-02T00:00:00Z","deleted_at":"2030-01-03T00:00:00Z"}`

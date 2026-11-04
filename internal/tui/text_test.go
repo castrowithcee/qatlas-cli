@@ -10,9 +10,9 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/i18n"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // useLanguage draws the editor in the given language until the test ends.

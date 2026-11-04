@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 func TestDiffShowsExcludeChange(t *testing.T) {

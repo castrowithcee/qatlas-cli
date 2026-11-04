@@ -10,7 +10,7 @@ import (
 
 	"github.com/emersion/go-ical"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 var completedPattern = regexp.MustCompile(`^\d{8}T\d{6}Z$`)

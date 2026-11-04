@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // takeoverModel is a locked, encrypted vault whose config.yaml still holds the three old fields; the

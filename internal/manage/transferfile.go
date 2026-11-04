@@ -9,8 +9,8 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 	yaml "go.yaml.in/yaml/v3"
 )
 

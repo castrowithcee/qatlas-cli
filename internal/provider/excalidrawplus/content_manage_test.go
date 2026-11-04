@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const textElement = `{"id":"e1","type":"text","x":1,"y":2,"width":30,"height":20,"text":"Hello","expected_version":3}`

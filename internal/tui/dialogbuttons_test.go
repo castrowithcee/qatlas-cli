@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
+	"github.com/castrowithcee/qatlas-connect/internal/i18n"
 	"github.com/charmbracelet/x/ansi"
 )
 

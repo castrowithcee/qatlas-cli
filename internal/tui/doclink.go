@@ -6,14 +6,14 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // providerDocsBase is the one place that knows where the public provider documentation lives; a later site
 // replaces it here. The reference (a release tag or main) and the page path follow it.
-const providerDocsBase = "https://github.com/castrowithcee/qatlas-cli/blob/"
+const providerDocsBase = "https://github.com/castrowithcee/qatlas-connect/blob/"
 
 var releaseVersion = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
 

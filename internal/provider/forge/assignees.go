@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The assignee tools read who can be assigned in a repository inside the connection's targets and, on Gitea,

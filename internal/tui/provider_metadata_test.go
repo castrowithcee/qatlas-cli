@@ -7,15 +7,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/lexware"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/twentycrm"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/lexware"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/nextcloud"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/seatable"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/telegram"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/twentycrm"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {

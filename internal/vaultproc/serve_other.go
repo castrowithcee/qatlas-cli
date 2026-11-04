@@ -5,7 +5,7 @@ package vaultproc
 import (
 	"context"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // StartProcess is unsupported here: this platform runs no vault process at all (see Supported).

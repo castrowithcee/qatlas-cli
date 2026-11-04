@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/projectpath"
 )
 
 // boundLayout is a directory tree with two customer repositories, kunde-a and kunde-b, and a directory

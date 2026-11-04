@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 func connectionFixture() *config.Config {

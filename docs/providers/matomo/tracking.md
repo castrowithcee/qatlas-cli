@@ -53,7 +53,7 @@ Matomo answers an accepted request with an empty HTTP 204 or an image. That is a
 ## Visitor, context, and limits
 
 Without an override Matomo takes the address of the visitor from the sender, so the request comes from the host
-that runs Qatlas, and the user agent is `qatlas-cli` unless `userAgent` is given. The tools offer the context of a
+that runs Qatlas, and the user agent is `qatlas-connect` unless `userAgent` is given. The tools offer the context of a
 visit as arguments: `referrer`, `pageTitle`, `pageViewId`, `visitorId`, `userId`, `newVisit`, `language`,
 `screenResolution`, `userAgent`, the local time (`hour`, `minute`, `second`, only together), `campaignName`,
 `campaignKeyword`, `visitCount`, `firstVisitTime`, `previousVisitTime`, and `dimensions` for custom dimensions

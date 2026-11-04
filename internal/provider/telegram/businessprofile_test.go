@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 func TestBusinessProfileToolsSendTheExactBodies(t *testing.T) {

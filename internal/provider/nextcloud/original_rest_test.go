@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // ocsRefusal is the OCS envelope of a refusal; the data holds a second canary that no original may carry.

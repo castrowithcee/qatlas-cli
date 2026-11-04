@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The raw shapes below are the parts of the Todoist API v1 answers this provider reads. Everything else a

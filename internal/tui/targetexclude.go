@@ -3,7 +3,7 @@ package tui
 import (
 	"maps"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // A target row holds targets and exclusions in one list; the excluded set tells them apart, and saving splits

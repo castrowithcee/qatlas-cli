@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/dav"
 )
 
 const filterRange = `"start":"2026-03-01T00:00:00Z","end":"2026-04-01T00:00:00Z"`

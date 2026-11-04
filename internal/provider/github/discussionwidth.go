@@ -3,7 +3,7 @@ package github
 import (
 	"strconv"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The discussion width: the members of GitHub's Discussion, DiscussionComment, DiscussionCategory, and

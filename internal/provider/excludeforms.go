@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // ExcludeFormProblems compares the exclusion forms a provider declares with its exclusion parser, for the

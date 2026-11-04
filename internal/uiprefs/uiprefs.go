@@ -17,7 +17,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // FileName is the name of the preferences file inside the configuration directory.

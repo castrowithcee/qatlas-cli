@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The pull request width: the members of GitHub's REST pull request beyond the compact view the list and get

@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
 )
 
 // Measurements for the storage architecture: reading while another writer replaces the file, and how long

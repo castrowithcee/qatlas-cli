@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // testMutation is the test-owned mutating route every admin-guard test protects with withAdminGuard,

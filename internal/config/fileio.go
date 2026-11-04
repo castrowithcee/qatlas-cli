@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // transientFile reports a file failure a short wait may cure, such as a sharing violation while another

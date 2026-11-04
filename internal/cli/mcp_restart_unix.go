@@ -5,7 +5,7 @@ package cli
 import (
 	"syscall"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // platformMCPRestart is how a server restarts itself here: it replaces its process image in place.

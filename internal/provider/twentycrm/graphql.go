@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The two GraphQL endpoints of a Twenty server. Requests go only to these paths of the configured origin.

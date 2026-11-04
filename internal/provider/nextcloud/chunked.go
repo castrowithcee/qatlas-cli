@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/localfile"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/localfile"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // Chunked upload v2 of Nextcloud (developer manual, "Chunked file upload", version 2, read 2026-10-06):

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
 )
 
 // The help topics are a section of qatlas.1, the page every installation carries, and get no page of their

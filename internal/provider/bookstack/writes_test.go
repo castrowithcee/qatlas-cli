@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // containerServer answers the reads that prove a binding and records every change. Page 1 and chapter 10

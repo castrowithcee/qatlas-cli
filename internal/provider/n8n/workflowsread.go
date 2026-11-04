@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The read view of a workflow (workflows.get and workflows.list) is kept apart from the view the change

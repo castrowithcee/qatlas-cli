@@ -4,8 +4,8 @@ import (
 	"context"
 	"slices"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // projectTree is the parent of every project a call has read to resolve project trees; a top-level

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // SuccessorFlag is the hidden flag of 'qatlas vault serve' that starts it as the successor of a running

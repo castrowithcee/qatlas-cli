@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 var fixedNow = time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC)

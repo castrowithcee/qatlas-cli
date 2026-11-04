@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The project filters beyond the status, type, repository, assignee, and label filters. Like those, each

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // syncRevision makes the model's revision the one of the file as a test just wrote it directly, the way the

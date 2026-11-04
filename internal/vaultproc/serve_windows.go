@@ -19,7 +19,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // StartProcess starts 'qatlas vault serve' for the vault at configPath, detached from this process and its

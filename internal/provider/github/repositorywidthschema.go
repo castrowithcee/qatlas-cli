@@ -3,7 +3,7 @@ package github
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // rwMember describes one output rwMember: its schema type and its field text.

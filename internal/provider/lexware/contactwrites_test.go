@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const otherContactID = "2f9d6e1a-0b3c-4d5e-8f70-123456789abc"

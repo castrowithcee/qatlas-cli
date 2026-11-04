@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // WorkerProtocol is the version of the line protocol between the runner and a writer process. Both sides

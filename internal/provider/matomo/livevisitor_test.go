@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const profileAnswer = `{"visitorId":"0123456789abcdef","hasMoreVisits":false,"nextVisitorId":"aaaaaaaaaaaaaaaa","previousVisitorId":false,` +

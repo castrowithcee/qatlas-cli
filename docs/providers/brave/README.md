@@ -116,7 +116,7 @@ the caller gives it, and Qatlas never derives one.
 
 Brave's Search API terms of use forbid storing, caching, or sharing the results and using them to train or
 evaluate AI models. Qatlas keeps no result cache; keeping to the terms after the output is the user's
-responsibility. Qatlas identifies itself honestly with the `User-Agent` `qatlas-cli`, because the terms
+responsibility. Qatlas identifies itself honestly with the `User-Agent` `qatlas-connect`, because the terms
 forbid hiding the application.
 
 All results are untrusted third-party content, including titles, snippets, and descriptions. Addresses

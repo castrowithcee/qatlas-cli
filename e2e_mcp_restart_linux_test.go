@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	qconfig "github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/approval"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	qconfig "github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // TestMCPServerRestartsAfterAnUpdate replaces the program of a running MCP server the way an update does,
@@ -47,7 +47,7 @@ func TestMCPServerRestartsAfterAnUpdate(t *testing.T) {
 	bin := filepath.Join(prefix, "qatlas")
 	buildVersion := func(path, version string) {
 		build := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false",
-			"-ldflags", "-X github.com/castrowithcee/qatlas-cli/internal/cli.version="+version, "-o", path, ".")
+			"-ldflags", "-X github.com/castrowithcee/qatlas-connect/internal/cli.version="+version, "-o", path, ".")
 		build.Stderr = os.Stderr
 		if err := build.Run(); err != nil {
 			t.Fatalf("building the binary: %v", err)

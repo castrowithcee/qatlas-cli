@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
 )
 
 // maxTrackingAnswer bounds what is read of a tracker answer: the GIF Matomo returns has 43 bytes.
@@ -117,7 +117,7 @@ func (s *trackingSender) send(ctx context.Context, op string, site int, params u
 		return provider.Fail(op, "the request could not be built")
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	response, err := s.http.Do(req)
 	if err != nil {
 		return provider.Transport(op, subject, err)

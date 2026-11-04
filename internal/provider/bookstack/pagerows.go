@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // provePages decides for each page a listed row points to whether the connection reaches it, once per page

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // ErrSecretRefNotReleased reports a reference that the connection does not release. The core refuses such a

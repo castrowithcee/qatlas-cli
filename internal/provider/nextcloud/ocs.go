@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The OCS API answers below fixed path segments of the instance. ocsRoot is the version 2 endpoint, which

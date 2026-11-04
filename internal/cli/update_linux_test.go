@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
 // updateRun runs 'qatlas update' with args against a local release and reports the exit code, stderr, the

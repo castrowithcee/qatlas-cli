@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 // questionCanary stands for the question, which no error may quote.
@@ -133,7 +133,7 @@ func TestAnswersAssemblesTheStream(t *testing.T) {
 	r := requests[0]
 	if r.method != http.MethodPost || r.path != "/res/v1/chat/completions" || r.rawQuery != "" ||
 		r.header.Get("X-Subscription-Token") != tokenValue || r.header.Get("Accept") != "text/event-stream" ||
-		r.header.Get("Content-Type") != "application/json" || r.header.Get("User-Agent") != "qatlas-cli" ||
+		r.header.Get("Content-Type") != "application/json" || r.header.Get("User-Agent") != "qatlas-connect" ||
 		r.header.Get("Authorization") != "" {
 		t.Errorf("request = %s %s?%s %v", r.method, r.path, r.rawQuery, r.header)
 	}

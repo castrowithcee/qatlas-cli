@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // ErrWrongPassphrase is the error VerifyAdmin returns for a passphrase that does not match the vault's. It

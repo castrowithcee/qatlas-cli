@@ -18,11 +18,11 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // GitHub Actions of a repository. The observer tools read compact, paged metadata of workflows,
@@ -1307,7 +1307,7 @@ func (c *Client) jobLog(ctx context.Context, id int64, lines, maxBytes int) (*Jo
 		if err != nil {
 			return nil, providerError(op, "the request could not be built")
 		}
-		download.Header.Set("User-Agent", "qatlas-cli")
+		download.Header.Set("User-Agent", "qatlas-connect")
 		download.Header.Set("Range", "bytes=-"+strconv.Itoa(maxBytes))
 		stored, err := c.http.Do(download)
 		if err != nil {

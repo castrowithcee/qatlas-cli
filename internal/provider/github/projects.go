@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // statusFieldName is the project field the status filters address. GitHub projects create it by default.

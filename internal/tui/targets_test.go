@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/seatableaccount"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/github"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/seatable"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/seatableaccount"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/telegram"
 )
 
 func targetsRegistry(t *testing.T, register func(*capability.Registry) error) *capability.Registry {

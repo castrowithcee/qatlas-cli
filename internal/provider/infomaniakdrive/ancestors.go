@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // A folder above an excluded object (an ancestor) stays reachable, but a tool that would act on everything

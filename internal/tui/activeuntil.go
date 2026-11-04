@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // The active-for row of a connection form: how long an active connection stays active. It follows the state

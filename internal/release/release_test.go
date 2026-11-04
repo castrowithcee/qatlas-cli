@@ -17,7 +17,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
+	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
 const checksumsText = "0000000000000000000000000000000000000000000000000000000000000001  qatlas_v1.0.0_linux_amd64.tar.gz\n"

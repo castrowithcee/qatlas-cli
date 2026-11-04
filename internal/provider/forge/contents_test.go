@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
 )
 
 const contentBase = "/api/v1/repos/acme/widget"

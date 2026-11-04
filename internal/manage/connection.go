@@ -3,7 +3,7 @@ package manage
 import (
 	"sort"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // ProviderServices are the services of one provider, in ascending name order.

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/castrowithcee/qatlas-cli/internal/cli"
+	"github.com/castrowithcee/qatlas-connect/internal/cli"
 )
 
 func main() {
