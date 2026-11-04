@@ -770,7 +770,7 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 	held, unsure, causes := report.Held, report.Unsure, report.Causes
 
 	if report.Settled() {
-		return m.save(msg.credential)
+		return m.commitForm()
 	}
 
 	// Both halves are said at once when both apply. Reporting only what was found would send the user to

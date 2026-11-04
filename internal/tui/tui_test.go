@@ -1354,34 +1354,33 @@ func TestDeleteRefusedWhileReferenced(t *testing.T) {
 	}
 }
 
-// The name of an existing entry cannot be changed, because renaming would break every reference to it.
-func TestNameOfAnExistingEntryIsReadOnly(t *testing.T) {
+// The name of an existing entry is editable, but a changed name is a rename: it never creates a second entry
+// and writes nothing before the dry run is confirmed.
+func TestChangedNameOfAnExistingEntryIsARenameNotACopy(t *testing.T) {
 	m, store, _ := newModel(t)
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "enter")
-	if !m.fields[0].readOnly {
-		t.Fatal("the name field of an existing entry should be read only")
+	if m.fields[0].readOnly {
+		t.Fatal("the name field of an existing entry should be editable")
 	}
-	// The field takes no editing focus either, so the keys of a rename attempt go somewhere else entirely
-	// and the stored name cannot change by any route.
 	if m.focus == 0 {
-		t.Fatal("the form opened on the locked field")
+		t.Fatal("the form opened on the name instead of the first other row")
 	}
+	focusField(t, m, "name")
 	clearField(t, m)
 	typeText(t, m, "renamed")
 	press(t, m, "f2")
-
+	if m.screen != screenRename || m.rename == nil || m.rename.plan == nil {
+		t.Fatalf("F2 = screen %v, want the dry run", m.screen)
+	}
 	saved, err := store.Load()
 	if err != nil {
 		t.Fatalf("Load() = %v", err)
 	}
-	if _, ok := saved.Services["wiki"]; !ok {
-		t.Errorf("the entry lost its name: %+v", saved.Services)
-	}
-	if _, ok := saved.Services["renamed"]; ok {
-		t.Error("a rename happened although the field is read only")
+	if _, ok := saved.Services["wiki"]; !ok || len(saved.Services) != 1 {
+		t.Errorf("the services before the answer: %+v", saved.Services)
 	}
 }
 
@@ -2050,30 +2049,39 @@ func hintBlocks(lines []string) []string {
 	return blocks
 }
 
-// The name of an existing entry says that it is locked, keeps no hint that claims otherwise, and cannot be
-// focused for editing, while every other field stays reachable and the form still saves.
+// The domain of an existing default cannot be renamed: it says that it is locked, keeps no hint that
+// claims otherwise, and cannot be focused for editing, while the other field stays reachable and the form
+// still saves.
 func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	m, store, _ := newModel(t)
 	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_READER_ID", "WIKI_READER_SECRET")
+	addConnection(t, m, "wiki", "wiki", "reader")
+	addConnection(t, m, "other", "wiki", "reader")
+	openSectionByName(t, m, sectionDefaults)
+	press(t, m, "n")
+	typeText(t, m, "wiki.example.invalid")
+	press(t, m, "tab")
+	selectChoice(t, m, "wiki")
+	press(t, m, "f2")
+	if m.fail != "" {
+		t.Fatalf("editor reported %q", m.fail)
+	}
 
-	openSectionByName(t, m, sectionServices)
+	openSectionByName(t, m, sectionDefaults)
 	press(t, m, "enter")
 
 	view := screenOf(m)
-	if !strings.Contains(view, "read-only") || !strings.Contains(view, "rename with r on the list") {
+	if !strings.Contains(view, "read-only") || !strings.Contains(view, "cannot be") {
 		t.Errorf("the locked field does not say that it is locked:\n%s", view)
 	}
-	if strings.Contains(view, "connections and --connection refer to it") {
-		t.Errorf("the locked field still claims the name can be chosen:\n%s", view)
-	}
 	// Locked is not hidden: the value stays on screen, it just cannot be entered.
-	if !strings.Contains(view, "wiki") {
+	if !strings.Contains(view, "wiki.example.invalid") {
 		t.Errorf("the locked field no longer shows its value:\n%s", view)
 	}
 
 	// Walking the form in both directions never stops on it, and the text input behind it stays blurred.
-	visited := map[string]bool{}
-	for _, key := range []string{"tab", "tab", "tab", "shift+tab", "shift+tab", "shift+tab", "down", "up"} {
+	for _, key := range []string{"tab", "tab", "shift+tab", "shift+tab", "down", "up"} {
 		press(t, m, key)
 		if m.focus == 0 {
 			t.Fatalf("%q put the focus on the locked field", key)
@@ -2081,23 +2089,11 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 		if m.fields[0].input.Focused() {
 			t.Fatalf("the locked field took editing focus after %q", key)
 		}
-		visited[m.fields[m.focus].label] = true
-	}
-	for _, f := range m.fields {
-		if !f.readOnly && !visited[f.label] {
-			t.Errorf("field %q cannot be reached any more", f.label)
-		}
 	}
 
 	// The form is not a trap: it still saves, under the name that could not be changed.
-	for i := 0; i < len(m.fields) && m.fields[m.focus].label != "base url"; i++ {
-		press(t, m, "tab")
-	}
-	if got := m.fields[m.focus].label; got != "base url" {
-		t.Fatalf("focused field = %q, want the base url", got)
-	}
-	clearField(t, m)
-	typeText(t, m, "https://wiki.example.invalid/next")
+	focusField(t, m, "connection")
+	selectChoice(t, m, "other")
 	press(t, m, "f2")
 
 	if m.fail != "" {
@@ -2107,8 +2103,8 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() = %v", err)
 	}
-	if got := saved.Services["wiki"].BaseURL; got != "https://wiki.example.invalid/next" {
-		t.Errorf("saved base url = %q, the form did not save through the locked field", got)
+	if got := saved.Defaults.Connections["wiki.example.invalid"]; got != "other" {
+		t.Errorf("saved connection = %q, the form did not save through the locked field", got)
 	}
 }
 

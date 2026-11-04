@@ -35,8 +35,6 @@ func (m *Model) typing() bool {
 		return m.pathEdit >= 0
 	case screenTemplate:
 		return m.template != nil && m.template.picking
-	case screenRename:
-		return m.renameTyping()
 	case screenTransfer:
 		return m.exportTyping() || m.importTyping()
 	case screenLogs:

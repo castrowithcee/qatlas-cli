@@ -69,10 +69,7 @@ func (m *Model) payloadFields(edit, source string) []field {
 		name, shown = source, m.copyName(source)
 	}
 	cred := m.cfg.Credentials[name]
-	key := textField("name", shown, edit != "").withHint(tr(tDomainHint)).withDetail(tr(tFormNameDetail))
-	if key.readOnly {
-		key.hint, key.detail = tr(tFormLockedHint), ""
-	}
+	key := m.nameField(shown, edit)
 	choice := storageKeyring
 	if cred.Type == config.CredentialTypeVault ||
 		(cred.Type == "" && m.cfg.SecretStore() == config.CredentialTypeVault) {
@@ -227,6 +224,10 @@ func (m *Model) savePayload() tea.Cmd {
 		}
 		values[f.label] = value
 		roles = append(roles, f.label)
+	}
+	// Everything is checked; a changed name is renamed first, and this save then continues under the new one.
+	if to, ok := m.formRename(); ok {
+		return m.askFormRename(to)
 	}
 	commit := func(offer vault.PassphraseFunc) tea.Cmd {
 		return m.commitPayload(candidate, base, name, toVault, roles, values, offer)
