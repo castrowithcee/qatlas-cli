@@ -22,7 +22,7 @@ func reachRegistry(t *testing.T) *capability.Registry {
 			{Name: "folder", Forms: []string{"folder/DRIVE_ID/FOLDER_ID"}},
 		},
 		Reaches: func(tool string, targets []string) (bool, []string) {
-			if tool != "fake.trash.list" {
+			if tool != "fake.drive.trash" {
 				return true, nil
 			}
 			for _, target := range targets {
@@ -37,7 +37,7 @@ func reachRegistry(t *testing.T) *capability.Registry {
 		t.Fatal(err)
 	}
 	var operations []capability.Operation
-	for _, id := range []string{"fake.files.list", "fake.trash.list"} {
+	for _, id := range []string{"fake.drive.files", "fake.drive.trash"} {
 		operations = append(operations, capability.Operation{
 			Descriptor: capability.Descriptor{ID: id, Version: 1, Provider: "fake", Description: "List",
 				Risk: capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -66,10 +66,10 @@ func TestThePickerMarksToolsOutsideTheTargets(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	if !strings.Contains(view, "fake.trash.list read (outside-targets: needs drive/DRIVE_ID)") {
+	if !strings.Contains(view, "fake.drive.trash read (outside-targets: needs drive/DRIVE_ID)") {
 		t.Fatalf("picker does not mark the tool outside the targets:\n%s", view)
 	}
-	if strings.Contains(view, "fake.files.list read (outside-targets") {
+	if strings.Contains(view, "fake.drive.files read (outside-targets") {
 		t.Fatalf("a tool inside the targets is marked:\n%s", view)
 	}
 	if strings.Contains(view, "secret-") {
@@ -77,11 +77,11 @@ func TestThePickerMarksToolsOutsideTheTargets(t *testing.T) {
 	}
 	typeText(t, m, "trash")
 	press(t, m, " ")
-	if !strings.Contains(screenOf(m), "[x] fake.trash.list") {
+	if !strings.Contains(screenOf(m), "[x] fake.drive.trash") {
 		t.Fatalf("the tool is not tickable:\n%s", screenOf(m))
 	}
 	press(t, m, "enter")
-	if got := m.fieldValue(toolListLabel); got != "fake.trash.list" {
+	if got := m.fieldValue(toolListLabel); got != "fake.drive.trash" {
 		t.Fatalf("tool list = %q, want the ticked tool kept", got)
 	}
 
