@@ -419,7 +419,7 @@ func (e *InvalidError) Unwrap() error { return e.Err }
 
 // Path returns the configuration file to use. An explicit path wins, then the file named by
 // QATLAS_CONFIG, then config.yaml inside the directory named by QATLAS_CLI_HOME, then
-// ~/.qatlas/cli/config.yaml.
+// ~/.qatlas/connect/config.yaml, or ~/.qatlas/cli/config.yaml while only that directory exists.
 func Path(explicit string) (string, error) {
 	if explicit != "" {
 		return explicit, nil
@@ -434,7 +434,7 @@ func Path(explicit string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot determine the user home directory: %w", err)
 	}
-	return filepath.Join(home, ".qatlas", "cli", "config.yaml"), nil
+	return filepath.Join(defaultDir(home), "config.yaml"), nil
 }
 
 // Load reads and validates the configuration at path.

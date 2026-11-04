@@ -1,6 +1,6 @@
 # Example qatlas configuration.
 #
-# Copy this file to ~/.qatlas/cli/config.yaml and replace the placeholders. It contains no real
+# Copy this file to ~/.qatlas/connect/config.yaml and replace the placeholders. It contains no real
 # endpoints and no secrets: a credential only says where its secrets come from, never what they are.
 #
 # Check your edits with:       qatlas config validate

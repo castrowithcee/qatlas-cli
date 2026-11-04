@@ -16,14 +16,19 @@ import (
 const AgentTokenEnv = "QATLAS_AGENT_TOKEN"
 
 // agentEnvPath is where an agent.env file sits below a project directory or the home directory.
-var agentEnvPath = filepath.Join(".qatlas", "local", "agent.env")
+var agentEnvPath = filepath.Join(".qatlas", "local", "connect", "agent.env")
+
+// legacyAgentEnvPath is the place of the versions before the rename, read when agentEnvPath does not exist
+// in the same directory. Transitional until the next major release.
+var legacyAgentEnvPath = filepath.Join(".qatlas", "local", "agent.env")
 
 // maxAgentEnv bounds what is read of one agent.env file.
 const maxAgentEnv = 64 << 10
 
 // FindAgentToken returns the agent token a run in dir presents, and where it came from: AgentTokenEnv when
-// getenv has a value for it; else the nearest .qatlas/local/agent.env in dir or a directory above it; else
-// ~/.qatlas/local/agent.env below home. The nearest file found decides alone: one without a
+// getenv has a value for it; else the nearest .qatlas/local/connect/agent.env in dir or a directory above
+// it; else ~/.qatlas/local/connect/agent.env below home. In each directory .qatlas/local/agent.env is read
+// when the current file is missing. The nearest file found decides alone: one without a
 // QATLAS_AGENT_TOKEN line yields no token, rather than one from further up. value is "" when there is none.
 // Qatlas only ever reads these files; a person writes them. An error never quotes a file's content.
 func FindAgentToken(dir, home string, getenv func(string) string) (value, source string, err error) {
@@ -36,7 +41,8 @@ func FindAgentToken(dir, home string, getenv func(string) string) (value, source
 	if dir != "" {
 		if abs, err := filepath.Abs(dir); err == nil {
 			for current := abs; ; {
-				candidates = append(candidates, filepath.Join(current, agentEnvPath))
+				candidates = append(candidates, filepath.Join(current, agentEnvPath),
+					filepath.Join(current, legacyAgentEnvPath))
 				parent := filepath.Dir(current)
 				if parent == current {
 					break
@@ -46,7 +52,7 @@ func FindAgentToken(dir, home string, getenv func(string) string) (value, source
 		}
 	}
 	if home != "" {
-		candidates = append(candidates, filepath.Join(home, agentEnvPath))
+		candidates = append(candidates, filepath.Join(home, agentEnvPath), filepath.Join(home, legacyAgentEnvPath))
 	}
 	for _, path := range candidates {
 		value, found, err := readAgentEnv(path)

@@ -57,8 +57,8 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"from an interactive terminal with the vault's passphrase, like every other 'vault' command. A\n" +
 			"token works in any number of projects: an agent presents it to 'qatlas vault approve' through\n" +
 			"QATLAS_AGENT_TOKEN, or else a line QATLAS_AGENT_TOKEN=<token> in the nearest\n" +
-			".qatlas/local/agent.env of its working directory or a directory above it, or else in\n" +
-			"~/.qatlas/local/agent.env. qatlas only reads these files; a person writes them.\n\n" +
+			".qatlas/local/connect/agent.env of its working directory or a directory above it, or else\n" +
+			"in ~/.qatlas/local/connect/agent.env. qatlas only reads these files; a person writes them.\n\n" +
 			"A token guards against an agent's mistakes and self-help, such as another customer's connection,\n" +
 			"another credential, or more rights, not against an agent that sets out to get around it: an agent\n" +
 			"can read every token file it finds.",
@@ -86,7 +86,7 @@ func newVaultTokenCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"credential, and shows its value: 256 random bits. --expires ends it at the start of a date\n" +
 			"(YYYY-MM-DD, local time) or at an RFC 3339 time; without it the token never expires. 'show'\n" +
 			"shows the value again later. Put it where the agent finds it, QATLAS_AGENT_TOKEN or a\n" +
-			".qatlas/local/agent.env; qatlas never writes it there itself.",
+			".qatlas/local/connect/agent.env; qatlas never writes it there itself.",
 		Args: exactlyOneArg("token name"),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runVaultTokenCreate(c, opts, reg, args[0], append(models, legacyModels...), expires)
@@ -342,7 +342,8 @@ func runVaultApproveWithToken(c *cobra.Command, opts *Options, reg *capability.R
 	}
 	if token == "" {
 		reason := "no agent token was found; approving without a terminal needs one in " + vault.AgentTokenEnv +
-			", in a .qatlas/local/agent.env of this directory or one above it, or in ~/.qatlas/local/agent.env"
+			", in a .qatlas/local/connect/agent.env of this directory or one above it, or in " +
+			"~/.qatlas/local/connect/agent.env"
 		if source != "" {
 			reason = "no agent token was found: " + source + " holds no " + vault.AgentTokenEnv + " line"
 		}

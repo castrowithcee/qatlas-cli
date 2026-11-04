@@ -8,7 +8,7 @@
 # pre-release tags such as v1.2.3-rc.1) into ~/.local; running it again updates the installation.
 # The archive is installed only after the SHA-256 listed in checksums.txt matches and, when ssh-keygen is
 # available, checksums.txt carries a valid signature of the release key embedded below. Any mismatch aborts
-# before the installation is touched. The script never uses sudo and never touches ~/.qatlas/cli.
+# before the installation is touched. The script never uses sudo and never touches the configuration under ~/.qatlas.
 #
 # Environment (all optional; the first two exist for tests and mirrors):
 #   QATLAS_VERSION                       release tag to install instead of the latest stable release

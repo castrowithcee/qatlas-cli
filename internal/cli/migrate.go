@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -12,6 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/config"
 	"github.com/castrowithcee/qatlas-connect/internal/connlog"
 	"github.com/castrowithcee/qatlas-connect/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
@@ -24,6 +27,7 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if c.Hidden || selfContained(c) {
 		return
 	}
+	migrateHome(c, opts, reg)
 	path, err := config.Path(opts.Config)
 	if err != nil {
 		return
@@ -102,4 +106,49 @@ func migrationChange(from int) string {
 		passed = append(passed, steps[to])
 	}
 	return strings.Join(passed, "; ")
+}
+
+// migrateHome copies the configuration directory of the versions before the rename to the current one and
+// takes over the keyring entries of its keyring credentials (see config.MigrateHome and secret.AdoptLegacy).
+// The legacy directory and entries stay unchanged, so a rollback works on them. Only the process that
+// migrates says so, on stderr.
+func migrateHome(c *cobra.Command, opts *Options, reg *capability.Registry) {
+	stderr := c.ErrOrStderr()
+	m, err := config.MigrateHome(opts.Config)
+	if err != nil {
+		fmt.Fprintf(stderr, "qatlas: warning: %s\n", opts.Redactor.Apply(err.Error()))
+		return
+	}
+	if m == nil {
+		return
+	}
+	fmt.Fprintf(stderr, "qatlas: copied the configuration from %s to %s; %s stays unchanged for a rollback\n",
+		m.From, m.To, m.From)
+	// A resolver set beforehand belongs to a test, which must never reach the system keyring.
+	if opts.Secrets != nil {
+		return
+	}
+	cfg, err := config.Load(filepath.Join(m.To, "config.yaml"), reg)
+	if err != nil {
+		return
+	}
+	var keys []string
+	for name, cred := range cfg.Credentials {
+		if cred.Type != config.CredentialTypeKeyring {
+			continue
+		}
+		for _, role := range cfg.ProviderSecretRoles(cred.Provider) {
+			keys = append(keys, secret.StoreKey(name, role))
+		}
+	}
+	sort.Strings(keys)
+	copied, err := secret.AdoptLegacy(context.Background(), keys)
+	if copied > 0 {
+		fmt.Fprintf(stderr, "qatlas: copied %d keyring %s to the service %s\n", copied,
+			plural(copied, "entry", "entries"), secret.StoreService)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "qatlas: warning: the remaining keyring entries stay under %s and are taken over when "+
+			"first read: %s\n", secret.LegacyStoreService, opts.Redactor.Apply(err.Error()))
+	}
 }
