@@ -96,11 +96,7 @@ defaults:
 		t.Fatalf("approving the connection: %v, %v", approved, err)
 	}
 
-	runtimeDir, err := os.MkdirTemp("", "qv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	runtimeDir := shortRuntimeDir(t)
 
 	var seen strings.Builder
 	c := &runner{bin: bin, seen: &seen, env: []string{

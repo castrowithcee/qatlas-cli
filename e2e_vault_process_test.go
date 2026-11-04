@@ -91,11 +91,7 @@ defaults:
 
 	// The socket path must stay within what a socket address holds, which a test's own temporary
 	// directory does not promise. Windows, whose vault pipe lives in no directory, ignores it.
-	runtimeDir, err := os.MkdirTemp("", "qv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	runtimeDir := shortRuntimeDir(t)
 
 	var seen strings.Builder
 	c := &runner{bin: bin, seen: &seen, env: []string{
