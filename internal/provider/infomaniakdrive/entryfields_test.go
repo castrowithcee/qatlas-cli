@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // Every field of FileV3/DirectoryV3 that Infomaniak sends without `with`, with placeholder values.

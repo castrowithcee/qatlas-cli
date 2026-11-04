@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 // widthThreadComment is a PullRequestReviewComment as the GraphQL schema describes it, with every member set.

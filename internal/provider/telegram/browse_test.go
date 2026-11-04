@@ -7,8 +7,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 func TestResolveTargetURL(t *testing.T) {

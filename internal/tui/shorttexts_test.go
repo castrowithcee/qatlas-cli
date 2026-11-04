@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // hintsFit fails for every shown row of fields whose hint is longer than the line under the focused row,

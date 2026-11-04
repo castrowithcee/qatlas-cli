@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // connectionEntries reads every entry the log under the vault directory next to configPath holds.

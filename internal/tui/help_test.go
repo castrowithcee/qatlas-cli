@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
 )
 
 // firstWords is the start of a topic's text, short enough to stand on one line of any workspace.

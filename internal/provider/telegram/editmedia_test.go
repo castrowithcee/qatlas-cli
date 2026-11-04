@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 const editedOK = `{"ok":true,"result":{"message_id":91,"date":1787220000,"caption":"secret",` +

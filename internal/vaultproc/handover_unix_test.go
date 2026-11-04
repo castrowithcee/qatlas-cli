@@ -28,11 +28,11 @@ import (
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-cli/internal/filelock"
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/release"
-	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/filelock"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/release"
+	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // These tests run the old vault process in the test process, with the program it was started from played by

@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
 )
 
 // The selftest scenarios run from the command line (':'), one command per scenario of the selftest register.

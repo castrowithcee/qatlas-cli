@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // writeStatsLog writes entries as day files named by their UTC date, with local time set to UTC so the

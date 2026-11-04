@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 var placeholderPattern = regexp.MustCompile(`\{[a-z]+\}`)

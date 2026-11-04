@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // version is a Matomo release as major.minor.patch; a suffix such as -rc1 is ignored.

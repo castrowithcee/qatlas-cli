@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 const historyCanary = "history-value-canary-seatable-9e4d"

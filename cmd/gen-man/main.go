@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra/doc"
 
-	"github.com/castrowithcee/qatlas-cli/internal/cli"
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/cli"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
 )
 
 func main() {

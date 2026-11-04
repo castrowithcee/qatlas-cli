@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // linkSensitivity classifies a share link as its own class. A link URL is an access capability for the shared

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The Git hook tools read and reset the server-side Git hooks of one repository. A script is untrusted text:

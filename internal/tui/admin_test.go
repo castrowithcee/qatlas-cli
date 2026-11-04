@@ -13,9 +13,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // newEncryptedVaultModel builds an editor whose vault is already encrypted and holds one unrelated entry

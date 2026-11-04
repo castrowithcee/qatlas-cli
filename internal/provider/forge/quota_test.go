@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // quotaInfoFixture is a QuotaInfo of the Forgejo swagger: every member, group names left out as for a non-administrator.

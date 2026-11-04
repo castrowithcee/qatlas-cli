@@ -3,9 +3,9 @@ package cli
 import (
 	"errors"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // checkInteractive reports whether a person can be at this process's terminal. requireAdmin and

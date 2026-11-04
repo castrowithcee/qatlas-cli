@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 const existingVoucher = "5b0c8f1e-2a3d-4e6f-9a7b-1c2d3e4f5a6b"

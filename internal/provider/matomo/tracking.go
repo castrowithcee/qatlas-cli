@@ -13,11 +13,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 const (
@@ -92,7 +92,7 @@ const trackingOutputSchema = `{"type":"object","properties":{"idSite":{"type":"i
 const trackingNote = "Sends one request to the tracking endpoint matomo.php of the website's Matomo and never " +
 	"retries. Without clientIp, timestamp, country, region, city, latitude, and longitude the endpoint needs no " +
 	"token and the tool reads no secret; the visitor is then the Qatlas host, whose address Matomo records, " +
-	"and whose user agent is qatlas-cli unless userAgent is given. With any of those seven the connection's token " +
+	"and whose user agent is qatlas-connect unless userAgent is given. With any of those seven the connection's token " +
 	"is read and sent as token_auth in the request body, and Matomo accepts the override only for a token with at " +
 	"least the Write role for the website, unless the instance sets tracking_requests_require_authentication=0 " +
 	"(then it accepts them from anyone); Matomo ignores a timestamp that is in the future or 20 years back, and " +
@@ -131,7 +131,7 @@ func trackingContextArguments() []capability.Argument {
 		{Name: "language", Description: "Browser language, such as de or en-US (lang)"},
 		{Name: "screenResolution", Description: "Screen resolution as WIDTHxHEIGHT, such as 1920x1080 (res)"},
 		{Name: "userAgent", Description: "User agent of the visitor (ua), up to 512 characters; without it Matomo " +
-			"sees qatlas-cli"},
+			"sees qatlas-connect"},
 		{Name: "hour", Description: "Local hour of the visitor, 0 to 23 (h); hour, minute, and second go together"},
 		{Name: "minute", Description: "Local minute of the visitor, 0 to 59 (m)"},
 		{Name: "second", Description: "Local second of the visitor, 0 to 59 (s)"},

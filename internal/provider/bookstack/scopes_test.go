@@ -14,7 +14,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // areaServer holds two books with chapters and pages, two shelves, comments, attachments, and a search. Book

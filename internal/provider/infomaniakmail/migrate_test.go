@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // olderFile is a configuration of schema 3, where folder/PATH meant exactly that folder and folder/PATH/* the

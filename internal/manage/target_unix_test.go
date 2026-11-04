@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // A vault process that holds the vault unlocked, with the draft credential's secret in it, gives a draft

@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/approval"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // PayloadFieldProblem asks the configuration core whether name is a valid field name of a payload credential,

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The members of the advisory and code quality finding tools beyond their compact views. Each is cleaned and

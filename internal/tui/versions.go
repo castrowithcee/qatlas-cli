@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
 // The version list (command version, and the Update part of Settings) lets a person install a newer

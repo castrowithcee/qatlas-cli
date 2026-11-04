@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // handRenameConnection renames connection wiki to wiki-main in the configuration of dir by hand: the key

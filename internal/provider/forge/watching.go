@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The watch tools read and change the watch state of the account behind the token on one repository inside the

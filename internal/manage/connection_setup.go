@@ -6,8 +6,8 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // ErrChooseProvider is the error of a setup whose provider is missing or unknown.

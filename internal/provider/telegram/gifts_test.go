@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // stk is a gift sticker as Telegram sends it; n separates the identifiers of several stickers.

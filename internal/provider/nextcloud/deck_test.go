@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
 )
 
 const deckCanary = "deck-provider-canary-nextcloud-4a92"

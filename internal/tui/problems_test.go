@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // rowLines returns the lines of the view from the row with the label up to the next row.

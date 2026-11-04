@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // enter on a text row goes on to the next row and never saves; on the last row it does nothing.

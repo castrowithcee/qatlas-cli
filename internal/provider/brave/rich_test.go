@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const richKey = "86d06abffc884e9ea281a40f62e0a5a6"
@@ -296,7 +296,7 @@ func TestRichGetSendsOnlyTheKey(t *testing.T) {
 	if r.method != http.MethodGet || r.path != "/res/v1/web/rich" ||
 		!reflect.DeepEqual(r.query, url.Values{"callback_key": {richKey}}) ||
 		r.header.Get("X-Subscription-Token") != tokenValue || r.header.Get("Accept") != "application/json" ||
-		r.header.Get("User-Agent") != "qatlas-cli" || r.header.Get("Cache-Control") != "" ||
+		r.header.Get("User-Agent") != "qatlas-connect" || r.header.Get("Cache-Control") != "" ||
 		strings.Contains(r.rawQuery, tokenValue) {
 		t.Errorf("request = %+v", r)
 	}

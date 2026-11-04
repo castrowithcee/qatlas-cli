@@ -14,11 +14,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // Client binds one access token to the origin of its instance and the rate limit that token shares. The
@@ -285,7 +285,7 @@ func (c *Client) fetchOnce(ctx context.Context, op, address, auth string) (*http
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	long := *c.http
 	long.Timeout = transferTimeout
 	response, err := long.Do(req)
@@ -428,7 +428,7 @@ func exchange(ctx context.Context, client *http.Client, limiter *ratelimit.Limit
 	if hasBody {
 		req.Header.Set("Content-Type", spec.contentType)
 	}
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	response, err := client.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, p.name, err)

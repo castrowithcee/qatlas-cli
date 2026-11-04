@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 // TestLogOverTheSocket runs log and logcheck through a real socket and the real peer checks: the entries

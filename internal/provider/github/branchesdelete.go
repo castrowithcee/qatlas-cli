@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // github.branches.delete deletes one branch of the bound repository through the Git refs route, offered only

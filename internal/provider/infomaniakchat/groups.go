@@ -3,8 +3,8 @@ package infomaniakchat
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // toolGroups are the subject areas the kChat tools are sorted into for display.

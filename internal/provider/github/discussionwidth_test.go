@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 const widthLabel = `{"id":"LA_1","name":"help","description":"Needs help","color":"008672","isDefault":true,` +

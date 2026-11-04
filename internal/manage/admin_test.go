@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 const adminPassphrase = "synthetic-admin-passphrase-5d1b"

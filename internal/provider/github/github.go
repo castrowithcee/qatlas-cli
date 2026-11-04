@@ -156,12 +156,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // Provider is the provider name used in the configuration and as the operation namespace.
@@ -1946,7 +1946,7 @@ func (c *Client) authorize(req *http.Request) {
 		req.Header.Set("Accept", accept)
 	}
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	if features, ok := req.Context().Value(graphQLFeaturesKey{}).(string); ok {
 		req.Header.Set("GraphQL-Features", features)
 	}

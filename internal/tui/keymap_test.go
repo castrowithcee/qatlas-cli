@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // rebind replaces the key of an action for one test.

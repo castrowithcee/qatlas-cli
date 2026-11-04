@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // Renaming a credential or a connection is two requests over the management core's own operation: a GET

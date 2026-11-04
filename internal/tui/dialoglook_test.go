@@ -11,8 +11,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/github"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
 )
 
 // dialogScreen brings a model to one dialog screen; the model is sized by the caller afterwards.

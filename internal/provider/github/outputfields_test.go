@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // outputSamples names, for every tool, a value of the Go type its handler returns. The test reads the JSON

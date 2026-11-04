@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // dropEmpty removes, recursively, every object member whose value is null, an empty array or an empty

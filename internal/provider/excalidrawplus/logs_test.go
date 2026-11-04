@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 const logsBody = `{"logs":[{"id":"l1","action":"scene:create","operation":"create","created_at":"2026-01-02T03:04:05Z",` +

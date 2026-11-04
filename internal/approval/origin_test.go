@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 func logChange(t *testing.T, logger *invokelog.Logger, surface, operation, connection string) {

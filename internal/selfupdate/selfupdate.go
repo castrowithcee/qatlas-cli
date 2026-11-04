@@ -24,11 +24,11 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	releaseverify "github.com/castrowithcee/qatlas-cli/internal/release"
+	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
 )
 
 const (
-	repositoryAPI     = "https://api.github.com/repos/castrowithcee/qatlas-cli"
+	repositoryAPI     = "https://api.github.com/repos/castrowithcee/qatlas-connect"
 	maxMetadataBytes  = 1 << 20
 	maxArchiveBytes   = 128 << 20
 	maxExecutableSize = 64 << 20
@@ -371,7 +371,7 @@ func (c *Client) fetch(ctx context.Context, rawURL string, limit int64, accept s
 	}
 	req.Header.Set("Accept", accept)
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "qatlas/"+c.Version)
+	req.Header.Set("User-Agent", "qatlas-connect/"+c.Version)
 	if token := c.token(); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

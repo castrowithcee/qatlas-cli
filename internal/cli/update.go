@@ -9,14 +9,14 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/connlog"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
-	"github.com/castrowithcee/qatlas-cli/internal/output"
-	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/connlog"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/output"
+	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion string) *cobra.Command {

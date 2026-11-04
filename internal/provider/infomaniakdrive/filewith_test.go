@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // Values that grant access without an account; none of them may leave a file tool, except the share link URL

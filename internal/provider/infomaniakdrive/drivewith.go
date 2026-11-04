@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // maxIdentifiers bounds each list of user or team identifiers of a drive; they are bare numbers, so far

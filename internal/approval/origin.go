@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 // The sources an Origin names.

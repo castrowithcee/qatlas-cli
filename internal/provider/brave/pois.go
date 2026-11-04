@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"slices"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 const (

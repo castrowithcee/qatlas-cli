@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
+	"github.com/castrowithcee/qatlas-connect/internal/fileretry"
 )
 
 // seamFile replaces the retry seam for one test. Every failure except a missing file counts as transient,

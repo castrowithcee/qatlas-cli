@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The webhook tools read and delete existing webhooks at one of three levels: a repository, an organization,

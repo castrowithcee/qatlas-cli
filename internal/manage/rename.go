@@ -8,11 +8,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/connlog"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/approval"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/connlog"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // The kinds of entry a rename applies to.

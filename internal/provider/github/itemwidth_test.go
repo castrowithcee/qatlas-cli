@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 const wideAccount = `{"__typename":"User","login":"octocat","id":"U_1","databaseId":1,"name":"The Octocat",` +

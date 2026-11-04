@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // releaseFixture is the answer of one product for a release of acme/widget. Forgejo adds the members only it

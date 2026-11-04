@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/i18n"
+	"github.com/castrowithcee/qatlas-connect/internal/i18n"
 )
 
 // Every masked passphrase dialog stays usable at the smallest supported size, with the vault header on its

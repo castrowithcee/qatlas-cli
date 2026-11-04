@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // llmFixture carries every member the LLM Context reference documents, plus members Brave may add later.

@@ -24,9 +24,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
 )
 
 // roleToken is the single secret role: a Forgejo or Gitea access token.

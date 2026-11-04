@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/dav"
 )
 
 // Sharing of DAV collections with users and groups of the instance: one oc:share POST per change and the

@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // Renames the vault shows that the configuration does not (a connection or credential renamed by hand, and

@@ -9,8 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // fakeUpdater answers the check and the installation from its fields and counts the installations.

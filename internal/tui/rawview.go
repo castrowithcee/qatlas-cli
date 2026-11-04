@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	yaml "go.yaml.in/yaml/v3"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // secretMask stands where a value that may be a secret would be.

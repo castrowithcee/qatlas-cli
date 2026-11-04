@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // The JSON routes the script's target chooser reads a connection in setup with. They accept a form-encoded

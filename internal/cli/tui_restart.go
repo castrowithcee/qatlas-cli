@@ -1,6 +1,6 @@
 package cli
 
-import "github.com/castrowithcee/qatlas-cli/internal/tui"
+import "github.com/castrowithcee/qatlas-connect/internal/tui"
 
 // tuiRestart is how the editor restarts itself after an update, the way an MCP server does; nil where the
 // platform has no such restart.

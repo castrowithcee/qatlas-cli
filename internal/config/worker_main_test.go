@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
 )
 
 // lockWaitMode makes the test binary a writer process of the selftest lock-wait measurement.

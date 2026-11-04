@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 func testLogKey(t *testing.T) *invokelog.Key {

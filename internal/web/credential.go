@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"os"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // errPassphraseMismatch reports two typed passphrases of the vault's very first secret that did not match.

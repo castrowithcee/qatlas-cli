@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // Editing only the file from disabled to active does not reach the secret: the vault approved the connection

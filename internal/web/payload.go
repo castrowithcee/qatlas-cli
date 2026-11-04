@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // A payload credential (forward: true) holds freely named fields whose values a tool may pass on to a third

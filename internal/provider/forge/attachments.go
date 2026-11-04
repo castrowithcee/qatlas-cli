@@ -7,10 +7,10 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/localfile"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/localfile"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The attachment tools act on the attachments of one issue or pull request, or of one comment, of a repository

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // A reference carries an identifier that Telegram scopes to no chat (a file, a callback query, a join request query)

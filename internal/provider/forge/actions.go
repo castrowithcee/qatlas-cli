@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The Actions tools act on the workflow runs, jobs, and tasks of one repository inside the connection's

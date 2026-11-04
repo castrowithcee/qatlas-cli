@@ -1,7 +1,7 @@
 package infomaniakdav
 
 import (
-	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/dav"
 )
 
 // Caps on what one request may read, shared with the parsers.

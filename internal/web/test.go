@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // connectionTestTimeout bounds how long the result page's "Test this connection" button waits for an

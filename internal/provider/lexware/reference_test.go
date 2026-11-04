@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const profileBody = `{"organizationId":"org-1","companyName":"Muster GmbH","created":{"userId":"user-canary",

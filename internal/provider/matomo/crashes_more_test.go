@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // Fixtures of the deeper crash reads. getLastCrashesOverview and getLastTopCrashes follow reads of the public demo.

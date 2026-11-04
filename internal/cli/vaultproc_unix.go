@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // vaultHandoverPlatform reports whether a vault process here hands the vault over to a successor when an

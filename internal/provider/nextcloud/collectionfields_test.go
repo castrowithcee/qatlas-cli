@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/dav"
 )
 
 const calendarCollectionProps = `<c:calendar-description>Team plan</c:calendar-description>` +

@@ -12,7 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
+	"github.com/castrowithcee/qatlas-connect/internal/projectpath"
 )
 
 // Every path the TUI asks for is typed into a pathField: the connection's paths, uploads and downloads, the

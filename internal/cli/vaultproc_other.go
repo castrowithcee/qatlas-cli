@@ -3,8 +3,8 @@
 package cli
 
 import (
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // vaultProcessPlatform reports whether this platform runs a vault process. Here it does not yet: 'qatlas

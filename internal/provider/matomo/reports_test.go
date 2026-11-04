@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // catalogFixture follows the form of API.getReportMetadata: standard reports, a goal report with its

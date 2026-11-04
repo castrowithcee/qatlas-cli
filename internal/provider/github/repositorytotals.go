@@ -1,6 +1,6 @@
 package github
 
-import "github.com/castrowithcee/qatlas-cli/internal/capability"
+import "github.com/castrowithcee/qatlas-connect/internal/capability"
 
 // The connections of a repository the list reports only as a count. A connection asked for totalCount alone
 // carries no first or last argument and so adds no nodes to GitHub's node count. refs needs a prefix and

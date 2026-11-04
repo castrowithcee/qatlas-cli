@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // documentedMedia carries every member of the Bot API media types, with file_path and the blocked members as

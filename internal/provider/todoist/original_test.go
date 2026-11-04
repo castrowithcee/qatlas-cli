@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const originalBody = `{"error_tag":"INVALID_ARGUMENT_VALUE","error_code":20,"error":"todoist-says-1",` +

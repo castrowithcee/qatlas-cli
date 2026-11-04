@@ -12,7 +12,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // tokenFixture is an encrypted vault on disk holding gh-a, the connection vorbild approved to read it, and

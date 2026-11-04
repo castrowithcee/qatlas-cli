@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // servingAsReplacedPeer listens at path as a vault process whose program was replaced does, answering every

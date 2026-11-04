@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // TestVaultProcessRemedyAfterAnUpdate checks the choice of the next step with synthetic errors and no vault:

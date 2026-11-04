@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // apiRoot is the only origin this provider talks to: the key belongs to this one service, so a second
@@ -48,7 +48,7 @@ const minInterval = 250 * time.Millisecond
 const maxHold = time.Minute
 
 // userAgent names Qatlas honestly: Brave's terms of use forbid hiding the identity of the application.
-const userAgent = "qatlas-cli"
+const userAgent = "qatlas-connect"
 
 // limiters holds the spacing of every key this process has used.
 var limiters = ratelimit.NewRegistry(minInterval)

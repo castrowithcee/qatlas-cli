@@ -27,14 +27,14 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	qconfig "github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
-	"github.com/castrowithcee/qatlas-cli/internal/release"
-	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/approval"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	qconfig "github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-connect/internal/release"
+	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // TestUpdateHandsTheVaultOverToTheNewProgram updates real binaries against a local signed test release while
@@ -92,9 +92,9 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 	build := func(path, version string) {
 		t.Helper()
 		cmd := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false", "-ldflags",
-			"-X github.com/castrowithcee/qatlas-cli/internal/cli.version="+version+
-				" -X 'github.com/castrowithcee/qatlas-cli/internal/release.extraKeyLines="+keyLine+"'"+
-				" -X github.com/castrowithcee/qatlas-cli/internal/selfupdate.testBaseURL="+releases.URL,
+			"-X github.com/castrowithcee/qatlas-connect/internal/cli.version="+version+
+				" -X 'github.com/castrowithcee/qatlas-connect/internal/release.extraKeyLines="+keyLine+"'"+
+				" -X github.com/castrowithcee/qatlas-connect/internal/selfupdate.testBaseURL="+releases.URL,
 			"-o", path, ".")
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

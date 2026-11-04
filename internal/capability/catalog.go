@@ -3,7 +3,7 @@ package capability
 import (
 	"fmt"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // UnknownConnectionError reports a connection that is not configured. Suggestion is the configured name the

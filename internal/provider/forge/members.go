@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // A projection copies the documented members of one API object into a result: each member keeps its name and

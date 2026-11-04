@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 const readExtraProps = `<d:creationdate/><nc:creation_time/><nc:upload_time/><d:getcontentlanguage/><oc:id/><oc:favorite/>` +

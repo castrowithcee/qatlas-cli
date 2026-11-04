@@ -9,10 +9,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/connlog"
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/connlog"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // Migration is what one migration of the configuration file to the current schema did. From is the schema

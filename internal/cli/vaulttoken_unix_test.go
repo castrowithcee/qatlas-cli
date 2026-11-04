@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // Without a terminal, 'vault approve' hands the agent token to the vault process: it approves the change

@@ -32,7 +32,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/filelock"
+	"github.com/castrowithcee/qatlas-connect/internal/filelock"
 )
 
 const (

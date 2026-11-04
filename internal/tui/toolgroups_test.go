@@ -8,10 +8,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/todoist"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/github"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/todoist"
 )
 
 // groupedPicker opens the tool picker of a new-style GitHub connection, ready for typing, at the given size.

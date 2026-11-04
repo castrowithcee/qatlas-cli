@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // maxAdminFormBytes bounds every mutating request's body, well beyond what a CSRF value and a typed

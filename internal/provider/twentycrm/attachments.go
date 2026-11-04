@@ -16,12 +16,12 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/localfile"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/localfile"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // An attachment is a row of the system object attachment: one file field and one target<Object>Id per
@@ -563,7 +563,7 @@ func (c *Client) downloadFile(ctx context.Context, op, link string, result *Atta
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	transfer := *c.http
 	transfer.Timeout = transferTimeout
 	response, err := transfer.Do(req)

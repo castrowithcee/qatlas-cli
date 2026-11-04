@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // atSettingsBar reports whether the click on the Settings tab went through: the tab line has the focus on it.

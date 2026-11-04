@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 const widthAppRaw = `{"id":1,"slug":"octoapp","node_id":"MDExOkludGVncmF0aW9uMQ==","client_id":"Iv1.8a61f9b3a7aba766",` +

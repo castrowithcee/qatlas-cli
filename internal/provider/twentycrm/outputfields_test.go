@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // outputCase is one tool whose rich answer must be described completely by its descriptor. Later tools join

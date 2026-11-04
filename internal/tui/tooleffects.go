@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // effectRowPrefix starts the name of an effect row of the tool picker. Like the group rows it contains a NUL

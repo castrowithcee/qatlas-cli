@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // hookChangeEnv answers hook reads with a hook of the given team and enabled state, records the bodies of

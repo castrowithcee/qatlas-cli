@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
 // browseFake serves a small account: Work holds Plans, which holds Q4; Home is top level. The list route

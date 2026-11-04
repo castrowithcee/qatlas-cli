@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The key tools read and delete existing SSH keys: the deploy keys of one repository and the keys of the

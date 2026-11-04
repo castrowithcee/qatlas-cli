@@ -1,6 +1,6 @@
 package web
 
-import "github.com/castrowithcee/qatlas-cli/internal/config"
+import "github.com/castrowithcee/qatlas-connect/internal/config"
 
 // loadConfig returns the configuration as the file holds it now.
 func (s *Server) loadConfig() (*config.Config, error) {

@@ -7,7 +7,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // The vault process truncates the log with the retention of settings.age and with nothing else.

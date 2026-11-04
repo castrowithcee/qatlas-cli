@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
 )
 
 // Class is the stable outcome of a connection test. Callers branch on it instead of on message text.

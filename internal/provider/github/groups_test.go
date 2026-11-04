@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 func TestEveryGitHubToolIsGrouped(t *testing.T) {

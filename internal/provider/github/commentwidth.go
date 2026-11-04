@@ -1,7 +1,7 @@
 package github
 
 import (
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The comment width: the members of GitHub's IssueComment the two comment list tools answer beyond the

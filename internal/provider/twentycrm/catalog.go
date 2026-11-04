@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The workspace catalog is the internal projection of the generated workspace document: which objects the

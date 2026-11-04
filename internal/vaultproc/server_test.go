@@ -15,7 +15,7 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // allow and refuse stand in for VerifyProgram wherever the test is about the protocol rather than about

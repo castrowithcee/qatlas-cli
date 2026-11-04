@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The dependency tools relate two issues or pull requests. issue-dependencies names what the issue depends on

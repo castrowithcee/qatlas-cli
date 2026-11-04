@@ -33,7 +33,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 const (

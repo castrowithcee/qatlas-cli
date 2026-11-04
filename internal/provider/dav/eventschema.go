@@ -1,6 +1,6 @@
 package dav
 
-import "github.com/castrowithcee/qatlas-cli/internal/capability"
+import "github.com/castrowithcee/qatlas-connect/internal/capability"
 
 const (
 	str  = `{"type":"string"}`

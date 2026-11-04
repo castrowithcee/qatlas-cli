@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
+	"github.com/castrowithcee/qatlas-connect/internal/projectpath"
 )
 
 // The kinds of an open connection change.

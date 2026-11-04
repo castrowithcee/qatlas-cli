@@ -1,4 +1,4 @@
-module github.com/castrowithcee/qatlas-cli
+module github.com/castrowithcee/qatlas-connect
 
 go 1.26.0
 

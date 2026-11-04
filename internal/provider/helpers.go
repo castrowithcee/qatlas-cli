@@ -3,7 +3,7 @@ package provider
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema. The message

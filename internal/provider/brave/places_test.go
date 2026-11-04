@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // placeFixture is one place in the members of Brave's reference, plus a member Brave may add later.

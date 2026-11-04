@@ -12,7 +12,7 @@ import (
 
 	"github.com/emersion/go-ical"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 const (

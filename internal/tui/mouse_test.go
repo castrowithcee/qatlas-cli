@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/github"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // frameLines is the frame the editor draws now, without styling, one string per screen row.

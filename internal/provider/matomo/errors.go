@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // missingError is Matomo's answer for a method, module, or plugin the instance lacks. It never leaves the

@@ -17,10 +17,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/localfile"
-	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/localfile"
+	"github.com/castrowithcee/qatlas-connect/internal/output"
 )
 
 const imageCanary = "CANARY-image-bytes-3c9a"

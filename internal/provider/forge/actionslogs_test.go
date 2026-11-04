@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
 )
 
 func plainResponse(status int, body string) *http.Response {

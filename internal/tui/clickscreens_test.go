@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // helpTabClick clicks the tab of the help topic at index i and checks that the topic switched.

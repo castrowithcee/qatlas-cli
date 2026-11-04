@@ -8,12 +8,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/localfile"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/localfile"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // filesSensitivity classifies attachment metadata; a download's content never leaves the local file.
@@ -346,7 +346,7 @@ func (c *Client) openFile(ctx context.Context, op, fileID string) (*http.Respons
 	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "*/*")
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	long := *c.http
 	long.Timeout = downloadTimeout
 	response, err := long.Do(req)

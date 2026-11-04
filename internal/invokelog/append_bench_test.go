@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/selftest"
+	"github.com/castrowithcee/qatlas-connect/internal/selftest"
 )
 
 // BenchmarkAppendManyDays measures one Append with many day files in the logs directory: the directory

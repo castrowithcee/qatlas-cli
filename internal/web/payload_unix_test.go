@@ -11,8 +11,8 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
 // serveVaultProcess starts a vault process serving the encrypted vault at dir, unlocked with passphrase, the

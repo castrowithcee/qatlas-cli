@@ -3,7 +3,7 @@ package github
 import (
 	"net/url"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The blame width: the members of GitHub's BlameRange and of the Commit of each range beyond the compact

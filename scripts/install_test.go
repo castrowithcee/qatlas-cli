@@ -16,8 +16,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/castrowithcee/qatlas-cli/internal/release"
-	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
+	"github.com/castrowithcee/qatlas-connect/internal/release"
+	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
 // installEnv is the harness shared by the installer tests: a fake release server, a test signing key whose

@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // siteRegistry registers a provider whose bare kind as a target means "all" but is no exclusion.

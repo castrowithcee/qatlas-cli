@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 // TestInvokeLogEndToEnd drives the built binary's invocation log: several reading invokes over both the CLI

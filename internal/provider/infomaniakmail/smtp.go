@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // The fixed submission endpoint: port 587 with mandatory STARTTLS.

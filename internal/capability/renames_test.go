@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // renameRegistry registers the fake wiki with a rename table and, optionally, the fake tracker with its own.

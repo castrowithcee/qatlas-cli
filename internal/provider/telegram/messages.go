@@ -3,7 +3,7 @@ package telegram
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // This file is the only mapping of the Bot API type Message for updates.list, users.personal-chat-messages and

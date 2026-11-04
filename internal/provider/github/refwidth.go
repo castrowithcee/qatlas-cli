@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The ref width: the members of GitHub's short branch, tag, Git ref, and Git tag beyond the compact views of

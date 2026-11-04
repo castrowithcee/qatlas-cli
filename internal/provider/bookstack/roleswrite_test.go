@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/output"
 )
 
 // roleServer serves roles; role 5 is the guest role, role 6 an ordinary role, role 1 the admin role.

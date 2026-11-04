@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The reviewer tools read who can review in a repository inside the targets and ask or stop asking users and

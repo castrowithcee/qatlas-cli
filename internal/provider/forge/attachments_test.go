@@ -14,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/application"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
 )
 
 // attachmentSubject is one owner kind of attachments under test: owner 7 (an issue) or 42 (a comment) of

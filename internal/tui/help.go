@@ -6,8 +6,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // openHelp shows the help topics in the workspace, over the tab line or the list it was opened from.

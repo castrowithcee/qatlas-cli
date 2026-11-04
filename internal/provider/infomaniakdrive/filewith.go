@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // fileWithValues are the values the with argument of the file and folder listings accepts, in the order the

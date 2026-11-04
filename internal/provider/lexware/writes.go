@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // rawObject is a provider object kept as received. Changing it touches only the members set explicitly, so

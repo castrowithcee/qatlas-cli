@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 // An excluded conversation answers like one Nextcloud does not find for the identity. Besides the token

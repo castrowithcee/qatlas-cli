@@ -3,7 +3,7 @@ package tui
 import (
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/uiprefs"
+	"github.com/castrowithcee/qatlas-connect/internal/uiprefs"
 )
 
 // palette names the colours of a theme by role. Screen code takes colours only from here or from the styles

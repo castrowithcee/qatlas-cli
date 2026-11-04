@@ -3,7 +3,7 @@ package telegram
 import (
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // This file maps the event objects of updates.list: the Bot API types that are not messages. Each is decoded

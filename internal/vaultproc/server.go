@@ -9,8 +9,8 @@ import (
 
 	"filippo.io/age"
 
-	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-connect/internal/invokelog"
+	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
 // Server holds an unlocked vault's secrets in memory and answers the clients on one listener. The zero

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The shared GraphQL projections: for each object a selection to embed in a query, the raw type that decodes

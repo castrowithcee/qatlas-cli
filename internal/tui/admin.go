@@ -15,7 +15,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 )
 
 // adminAuth is the masked admin passphrase dialog requireAdmin opens while it is waiting for one, and nil

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Qatlas installer for Linux, macOS and WSL.
 #
-#   curl -fsSL https://github.com/castrowithcee/qatlas-cli/releases/latest/download/install.sh | sh
-#   curl -fsSL https://github.com/castrowithcee/qatlas-cli/releases/latest/download/install.sh | sh -s -- v1.2.3
+#   curl -fsSL https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/castrowithcee/qatlas-connect/releases/latest/download/install.sh | sh -s -- v1.2.3
 #
 # Installs the newest stable release (or the version given as argument or in QATLAS_VERSION, including
 # pre-release tags such as v1.2.3-rc.1) into ~/.local; running it again updates the installation.
@@ -13,14 +13,14 @@
 # Environment (all optional; the first two exist for tests and mirrors):
 #   QATLAS_VERSION                       release tag to install instead of the latest stable release
 #   QATLAS_INSTALL_BASE_URL              releases URL; only changes where files are downloaded from
-#                                        (default https://github.com/castrowithcee/qatlas-cli/releases)
+#                                        (default https://github.com/castrowithcee/qatlas-connect/releases)
 #   QATLAS_INSTALL_PREFIX                installation prefix (default $HOME/.local)
 #   QATLAS_INSTALL_ALLOWED_SIGNERS_FILE  TEST ONLY: allowed-signers file used instead of the embedded key.
 #                                        It replaces only the key; the signature is still required.
 #   HOME, SHELL                          select the login profile that receives the PATH line
 set -eu
 
-repo_url=https://github.com/castrowithcee/qatlas-cli/releases
+repo_url=https://github.com/castrowithcee/qatlas-connect/releases
 signer_line='qatlas-release ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ6euNyMyw+0rV5TVSa24o374+wDn75ueHvdYAGZnEv5'
 marker='# added by the Qatlas installer'
 

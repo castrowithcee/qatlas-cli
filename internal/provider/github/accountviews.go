@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The views the account, search, collaborator, and team tools share on top of their own members. Everything

@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	releaseverify "github.com/castrowithcee/qatlas-cli/internal/release"
-	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
+	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
+	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
 type fixture struct {

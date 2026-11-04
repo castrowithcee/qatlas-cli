@@ -3,7 +3,7 @@ package github
 import (
 	"encoding/json"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 )
 
 // The pull request projection covers the pull-request-simple object GitHub embeds in other answers, with the

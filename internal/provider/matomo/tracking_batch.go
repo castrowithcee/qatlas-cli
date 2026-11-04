@@ -10,11 +10,11 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/redact"
+	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
 
 const (
@@ -70,7 +70,7 @@ var trackingRecordBatch = capability.Descriptor{
 		"clientIp, timestamp, country, region, city, latitude, or longitude, and requests of AI chatbots are no " +
 		"entries, so the call needs no token, reads no secret, and sends neither token_auth nor an " +
 		"Authorization header; the visitor of every entry without userAgent is the Qatlas host with the user " +
-		"agent qatlas-cli. The request is sent once and never retries. Matomo answers with the number of entries " +
+		"agent qatlas-connect. The request is sent once and never retries. Matomo answers with the number of entries " +
 		"it tracked and the number it rejected as invalid; it skips an invalid entry and records the others, so " +
 		"a call can succeed in part, and it can abort on an exception in the middle (HTTP 500) after it " +
 		"recorded the entries before it, which stay unless the instance rolls a bulk back. tracked also counts a visit that Matomo excludes, and " +
@@ -270,7 +270,7 @@ func (s *trackingSender) sendBatch(ctx context.Context, op string, site int, ent
 		return batchCounts{}, provider.Fail(op, "the request could not be built")
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "qatlas-cli")
+	req.Header.Set("User-Agent", "qatlas-connect")
 	response, err := s.http.Do(req)
 	if err != nil {
 		return batchCounts{}, provider.Transport(op, subject, err)

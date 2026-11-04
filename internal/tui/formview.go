@@ -6,7 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
 )
 
 // A form is drawn in one of three ways. With the section list, the list stands in a panel at the left and

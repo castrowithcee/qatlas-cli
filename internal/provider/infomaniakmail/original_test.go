@@ -8,7 +8,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider"
 )
 
 func originalOf(t *testing.T, err error) *provider.Original {
