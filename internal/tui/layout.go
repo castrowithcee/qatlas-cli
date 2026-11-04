@@ -77,13 +77,28 @@ func (m *Model) headerLines() []string {
 func (m *Model) headerLayout() ([]string, navSpan) {
 	width := max(m.termWidth, 1)
 	sep := lipgloss.Width(headerSep)
-	line, used := fitParts(m.headerStatus(), width)
+	rights := m.headerRights()
+	status := m.headerStatus(tHeaderTitle)
+	if !fitsBeside(status, rights, width) {
+		status = m.headerStatus(tHeaderTitleShort)
+	}
+	line, used := fitParts(status, width)
 
 	if banner := m.updateBanner(width - used - sep); banner != "" {
 		line += headerSep + styles.ok.Render(banner)
 	}
-	line, back := placeRight(line, m.headerRights(), width)
+	line, back := placeRight(line, rights, width)
 	return []string{line}, back
+}
+
+// fitsBeside reports whether the status parts fit whole into width together with the widest right block. The
+// full name gives way to the short one before a status mark or a key is cut.
+func fitsBeside(status []string, rights []headerRight, width int) bool {
+	need := lipgloss.Width(strings.Join(status, headerSep))
+	if len(rights) > 0 {
+		need += lipgloss.Width(headerSep) + lipgloss.Width(rights[0].text)
+	}
+	return need <= width
 }
 
 // headerRight is a block at the right end of the header: the cells of the back button in it, if it holds one.
@@ -178,9 +193,9 @@ func (m *Model) configPath() string {
 	return path
 }
 
-// headerStatus are the left parts of the header: the name and the status marks of the vault and admin.
-func (m *Model) headerStatus() []string {
-	name := styles.title.Render(tr(tHeaderTitle))
+// headerStatus are the left parts of the header: the name as title and the status marks of the vault and admin.
+func (m *Model) headerStatus(title textID) []string {
+	name := styles.title.Render(tr(title))
 	if icon := m.icon(iconLogo); icon != "" {
 		name = styles.active.Render(icon) + " " + name
 	}
