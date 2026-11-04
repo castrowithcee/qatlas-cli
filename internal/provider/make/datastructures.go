@@ -40,7 +40,7 @@ var dataStructureIDSchema = idSchema
 
 var dataStructureIDArgument = capability.Argument{Name: "datastructure_id", Required: true,
 	Description: "Make data structure identifier; its team is always re-checked live against Make's own " +
-		"report, and a Qatlas connection with a scenario or folder allow-list reaches no data structures at all"}
+		"report, and a Qatlas Connect connection with a scenario or folder allow-list reaches no data structures at all"}
 
 // specFieldsSchema describes the fields of a returned specification; their members are named in the spec field.
 const specFieldsSchema = `{"type":"array","items":{"type":"object"}}`
@@ -53,7 +53,7 @@ var dataStructureSummarySchema = `{"type":"object","properties":{"id":{"type":"i
 var dataStructureSummaryFields = []capability.Field{
 	{Name: "id", Description: "Make data structure identifier, used as datastructure_id by the data store tools"},
 	{Name: "name", Description: "Data structure name, untrusted data"},
-	{Name: "team_id", Description: "Team of the data structure; always the Qatlas connection's bound team"},
+	{Name: "team_id", Description: "Team of the data structure; always the Qatlas Connect connection's bound team"},
 	{Name: "strict", Description: "True when Make enforces the structure strictly on stored data"},
 	{Name: "spec", Description: specFieldsDescription},
 	{Name: "spec_truncated", Description: specTruncatedDescription},

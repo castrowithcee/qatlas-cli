@@ -31,7 +31,7 @@ type credentialFixture struct {
 
 func newCredentialFixture(t *testing.T) *credentialFixture {
 	t.Helper()
-	store := config.NewStore(filepath.Join(t.TempDir(), "qatlas", "config.yaml"), roleCatalog{})
+	store := config.NewStore(filepath.Join(t.TempDir(), "qconnect", "config.yaml"), roleCatalog{})
 	cfg := store.New()
 	for name, cred := range map[string]config.Credential{
 		"reader": {Provider: "wiki", Type: config.CredentialTypeKeyring},

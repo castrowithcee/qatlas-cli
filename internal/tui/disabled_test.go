@@ -116,7 +116,7 @@ func TestNewConnectionAndSetupStartActive(t *testing.T) {
 		t.Errorf("new connection state row = %q, want %q", got, stateActive)
 	}
 
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newResolver(t, dir, nil)
 	sm, err := buildModel(store, nil, secrets, nil)

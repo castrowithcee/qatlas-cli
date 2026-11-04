@@ -37,7 +37,7 @@ func botRisk(effect capability.Effect, idempotency capability.Idempotency, confi
 
 // botScopeNote states the shared limits of the bot tools in their descriptions.
 const botScopeNote = "Instance-wide: only on a connection that binds every team of its token and has no channel " +
-	"target. Bot tokens and creating bots are not offered through Qatlas."
+	"target. Bot tokens and creating bots are not offered through Qatlas Connect."
 
 var botSchema = `{"type":"object","properties":{` +
 	`"user_id":` + idSchema + `,"username":{"type":"string"},"display_name":{"type":"string"},` +

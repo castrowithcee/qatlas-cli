@@ -19,7 +19,7 @@ var teamsCreate = capability.Descriptor{
 	ID: Provider + ".teams.create", Version: 1, Title: "Create a Penpot team",
 	Description: "Create a new team owned by the token's account. The connection stays bound to its configured teams: " +
 		"the new team can be managed only after its identifier is added as a team/ID target of a connection, which " +
-		"Qatlas never does by itself. The name may not contain '.', ':', or '/'. Penpot limits the teams per account. " +
+		"Qatlas Connect never does by itself. The name may not contain '.', ':', or '/'. Penpot limits the teams per account. " +
 		manageNote,
 	Tags: []string{"penpot", "teams", "create", "design"}, Provider: Provider, RequiresToolAllowList: true,
 	Risk:         manageRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),

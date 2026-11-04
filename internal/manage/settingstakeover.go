@@ -88,7 +88,7 @@ func (s *Service) PrepareSettingsTakeover() (*SettingsTakeover, string, error) {
 	}
 	if done {
 		return nil, s.redact(fmt.Sprintf("%s holds %s, which has no effect: the idle timeout, the admin session "+
-			"timeout and the log retention are settings of the vault; see 'qatlas vault settings'",
+			"timeout and the log retention are settings of the vault; see 'qconnect vault settings'",
 			s.store.Path(), strings.Join(present, ", "))), nil
 	}
 	current, err := v.Settings()

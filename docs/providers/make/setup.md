@@ -49,7 +49,7 @@ Make's pages change from time to time; look for these names.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `make`, the service (the zone), a credential,
    the scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `api-token` secret.
@@ -58,16 +58,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$MAKE_API_TOKEN" | qatlas credential set make-customer-a-reader api-token
+printf %s "$MAKE_API_TOKEN" | qconnect credential set make-customer-a-reader api-token
 ```
 
 `make-customer-a-reader` is the name of the credential in your configuration and `api-token` is its only secret. To
 replace a token that Make no longer accepts, run the same command again with the new token. Run
-`qatlas config validate` to check the configuration file. It contacts no provider.
+`qconnect config validate` to check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`.
+In `qconnect tui`, open Connections, select the connection, and press `t`.
 
 - A team connection reads one page of at most one scenario of the bound team. `[ok]` means Make accepted the token
   for the zone and the token holds `scenarios:read`.
@@ -183,7 +183,7 @@ own answer follows. The class table is in [Errors](README.md#errors).
 ```text
 permission: this Make API token may not perform this operation; it needs the scenarios:read scope, added under
 Profile, API, when the token was created
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | SC403: Permission denied
 ```
 
@@ -195,8 +195,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Make rejected the API token; a token created for a different zone ... | The token is wrong, revoked, or from another zone than the service address | Create a token in the zone of the service address ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> api-token`. |
-| `auth`: the Make API token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$MAKE_API_TOKEN" \| qatlas credential set <credential> api-token`. |
+| `auth`: Make rejected the API token; a token created for a different zone ... | The token is wrong, revoked, or from another zone than the service address | Create a token in the zone of the service address ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> api-token`. |
+| `auth`: the Make API token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$MAKE_API_TOKEN" \| qconnect credential set <credential> api-token`. |
 | `permission`: this Make API token may not perform this operation; it needs ... | The token lacks a scope | Find the tool group in [Scopes per tool group](#scopes-per-tool-group), create a new token with every scope of the row, and store it. |
 | `permission` on a data store read though `datastores:read` is set | Make documents `organizations:read` for reading one store | Add `organizations:read` to the token. |
 | `permission` on an access list | Locked connections are off, or the token's user may not view or manage the list | Enable locked connections in Make, or use a token of a user with the entity manage permission on the connection. |

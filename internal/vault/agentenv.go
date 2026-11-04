@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 )
 
 // AgentTokenEnv is the environment variable an agent token is read from first, and the key of the line an
 // agent.env file carries it in.
-const AgentTokenEnv = "QATLAS_AGENT_TOKEN"
+const AgentTokenEnv = "QCONNECT_AGENT_TOKEN"
 
 // agentEnvPath is where an agent.env file sits below a project directory or the home directory.
 var agentEnvPath = filepath.Join(".qatlas", "local", "connect", "agent.env")
@@ -29,11 +31,11 @@ const maxAgentEnv = 64 << 10
 // getenv has a value for it; else the nearest .qatlas/local/connect/agent.env in dir or a directory above
 // it; else ~/.qatlas/local/connect/agent.env below home. In each directory .qatlas/local/agent.env is read
 // when the current file is missing. The nearest file found decides alone: one without a
-// QATLAS_AGENT_TOKEN line yields no token, rather than one from further up. value is "" when there is none.
+// QCONNECT_AGENT_TOKEN line yields no token, rather than one from further up. value is "" when there is none.
 // Qatlas only ever reads these files; a person writes them. An error never quotes a file's content.
 func FindAgentToken(dir, home string, getenv func(string) string) (value, source string, err error) {
 	if getenv != nil {
-		if value := strings.TrimSpace(getenv(AgentTokenEnv)); value != "" {
+		if value := strings.TrimSpace(envvar.GetWith(getenv, AgentTokenEnv)); value != "" {
 			return value, AgentTokenEnv, nil
 		}
 	}
@@ -66,7 +68,7 @@ func FindAgentToken(dir, home string, getenv func(string) string) (value, source
 	return "", "", nil
 }
 
-// readAgentEnv reads the QATLAS_AGENT_TOKEN line of the agent.env file at path. found is false when the file
+// readAgentEnv reads the QCONNECT_AGENT_TOKEN line of the agent.env file at path. found is false when the file
 // does not exist; an existing file without the line yields "" and found true.
 func readAgentEnv(path string) (value string, found bool, err error) {
 	f, err := os.Open(path)
@@ -85,17 +87,31 @@ func readAgentEnv(path string) (value string, found bool, err error) {
 		return "", false, fmt.Errorf("cannot read %s", path)
 	}
 	defer clear(data)
+	// The line with the former prefix is read only while the current one is absent, until the next major release.
+	legacyKey := envvar.Legacy(AgentTokenEnv)
+	var legacy string
+	var hasLegacy bool
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		key, rest, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) != AgentTokenEnv {
+		key = strings.TrimSpace(key)
+		if !ok || (key != AgentTokenEnv && key != legacyKey) {
 			continue
 		}
-		value = strings.TrimSpace(rest)
-		if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
-			value = value[1 : len(value)-1]
+		v := strings.TrimSpace(rest)
+		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
 		}
+		if key == AgentTokenEnv {
+			value = v
+		} else {
+			legacy, hasLegacy = v, true
+		}
+	}
+	if value == "" && hasLegacy {
+		envvar.Warn(legacyKey, AgentTokenEnv)
+		value = legacy
 	}
 	return value, true, nil
 }

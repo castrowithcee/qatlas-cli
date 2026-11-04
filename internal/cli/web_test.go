@@ -122,7 +122,7 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 			t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr.String())
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("'qatlas web' did not stop after SIGINT")
+		t.Fatal("'qconnect web' did not stop after SIGINT")
 	}
 
 	if stdout.Len() != 0 {
@@ -167,7 +167,7 @@ const webAdminSyntheticPassphrase = "web-admin-synthetic-passphrase-0123"
 
 var csrfPattern = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
 
-// TestWebCommandAdminApprovalBrowserAndTerminal exercises 'qatlas web' end to end against a real encrypted
+// TestWebCommandAdminApprovalBrowserAndTerminal exercises 'qconnect web' end to end against a real encrypted
 // synthetic vault: the coupled browser's own overview shows admin approval as not active, the masked
 // browser form grants it with the right passphrase, and this process's own terminal, reading a line and
 // then the passphrase through the same hidden path every other management command uses, grants it again
@@ -390,7 +390,7 @@ func waitForURL(t *testing.T, buf *syncBuffer) string {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("'qatlas web' never printed a local coupling URL")
+	t.Fatal("'qconnect web' never printed a local coupling URL")
 	return ""
 }
 

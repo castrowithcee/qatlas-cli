@@ -515,7 +515,7 @@ func Register(reg *capability.Registry) error {
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "Todoist personal API token from Settings, Integrations, Developer; it reaches the whole " +
-				"account, so the connection target decides which projects Qatlas exposes",
+				"account, so the connection target decides which projects Qatlas Connect exposes",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project",

@@ -112,7 +112,7 @@ func (s *mcpSession) describe(meta string) output.Code {
 	s.t.Helper()
 	s.calls++
 	id := fmt.Sprintf(`"call-%d"`, s.calls)
-	params := `"name":"qatlas.describe","arguments":{"operation":"fake.pages.get","connection":"customer"}`
+	params := `"name":"qconnect.describe","arguments":{"operation":"fake.pages.get","connection":"customer"}`
 	if meta != "" {
 		params = meta + "," + params
 	}
@@ -145,8 +145,8 @@ func rootsReply(id json.RawMessage, uris ...string) string {
 // customer is bound to the project.
 func pathsLayout(t *testing.T) (project, outside, cfg string) {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	project = filepath.Join(t.TempDir(), "kunde a")
 	outside = filepath.Join(t.TempDir(), "kunde-b")
 	for _, dir := range []string{filepath.Join(project, "src"), outside} {

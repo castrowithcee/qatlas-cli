@@ -222,7 +222,7 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 			m.screen, m.leaveFrom = screenLeave, screenTransfer
 			return m
 		}},
-		{"update", "Update qatlas to v2.0.0?", "Installs the release", "y update", func(t *testing.T) *Model {
+		{"update", "Update qconnect to v2.0.0?", "Installs the release", "y update", func(t *testing.T) *Model {
 			m, _, _ := newModel(t)
 			m.release.Latest, m.updateText = "v2.0.0", "v1.0.0 to v2.0.0"
 			m.screen, m.updateFrom = screenUpdate, screenList
@@ -235,7 +235,7 @@ func TestQuestionsReadQuestionConsequenceKeys(t *testing.T) {
 			pump(t, m, "f2")
 			return m
 		}},
-		{"restart", "Restart qatlas tui into v2.0.0?", "Restarting replaces this editor", "y restart", func(t *testing.T) *Model {
+		{"restart", "Restart qconnect tui into v2.0.0?", "Restarting replaces this editor", "y restart", func(t *testing.T) *Model {
 			m, _, _ := newModel(t)
 			m.updated = "v2.0.0"
 			m.screen, m.restartBack = screenRestart, screenList

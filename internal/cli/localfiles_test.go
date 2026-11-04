@@ -63,9 +63,9 @@ func downloadRegistry(t *testing.T, dir string) (*capability.Registry, string) {
 }
 
 func TestLocalFileOverwriteConfirmationOverCLI(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	dir := t.TempDir()
 	registry, cfg := downloadRegistry(t, dir)
 	target := filepath.Join(dir, "out.txt")
@@ -98,9 +98,9 @@ func TestLocalFileOverwriteConfirmationOverCLI(t *testing.T) {
 }
 
 func TestLocalFileOverwriteConfirmationOverMCP(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	dir := t.TempDir()
 	registry, cfg := downloadRegistry(t, dir)
 	target := filepath.Join(dir, "out.txt")
@@ -110,7 +110,7 @@ func TestLocalFileOverwriteConfirmationOverMCP(t *testing.T) {
 	call := func(id, confirm string) mcpToolResult {
 		request := `{"operation":"bookstack.files.download","connection":"wiki","arguments":{"local_path":` + strconv.Quote(target) + `}` + confirm + `}`
 		input := `{"jsonrpc":"2.0","id":"` + id + `","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.invoke","arguments":` + request + `}}` + "\n"
+			`,"name":"qconnect.invoke","arguments":` + request + `}}` + "\n"
 		responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: cfg, Redactor: &redact.Redactor{}})
 		return toolResultFrom(t, responses[`"`+id+`"`])
 	}

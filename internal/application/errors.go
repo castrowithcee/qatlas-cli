@@ -200,10 +200,10 @@ func (e *InvalidProviderResponseError) Error() string {
 // did anything: storing or removing a credential's secret of any type, and switching the vault's encryption
 // on, off, or to a new passphrase, all run only when a person is at an interactive terminal, checked before
 // any file, credential store, or vault access the command would otherwise make. An agent never manages a
-// credential or the vault, whatever route it reaches qatlas by; it asks the user to run the command
+// credential or the vault, whatever route it reaches qconnect by; it asks the user to run the command
 // themselves instead.
 //
-// Reason, when set, replaces that message: 'qatlas vault approve' without a terminal says there why the agent
+// Reason, when set, replaces that message: 'qconnect vault approve' without a terminal says there why the agent
 // token it found, or the lack of one, did not approve every open change. It never holds a secret or a
 // token's value.
 type AdminRequiredError struct{ Reason string }

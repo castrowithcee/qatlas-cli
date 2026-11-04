@@ -123,7 +123,7 @@ The `bots`, `emoji`, and `roles` tools need an instance-wide connection: all tok
 target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`
 and refuses, naming no team, on an unbound, empty, or unreadable answer, so a later-joined team locks them.
 
-A successful `qatlas connection test` proves only that the token is accepted, not that a team or channel
+A successful `qconnect connection test` proves only that the token is accepted, not that a team or channel
 of the allow-list exists or is reachable.
 
 ## Cross-group behaviour

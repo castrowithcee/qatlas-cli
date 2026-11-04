@@ -23,7 +23,7 @@ func overviewModel(t *testing.T, m *Model) *Model {
 // New opens the Overview with the tab line in focus; the Overview shows no option bar, shows the notes, and
 // takes the focus into its lines.
 func TestEditorStartsOnTheOverview(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newResolver(t, dir, nil)
 	m, err := New(testService(store, secrets, nil), store, nil, secrets, nil)
@@ -148,7 +148,7 @@ func TestOverviewNamesAnUnencryptedVaultAndEnterOpensIt(t *testing.T) {
 // Open approvals are a step, count as a tile, and enter on either opens Access > Approvals.
 func TestOverviewNamesOpenApprovalsAndEnterOpensThem(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, _, _ := newApprovalFixture(t, dir, passphrase)
 	m := openApprovalModel(t, store, dir)
 	openEntryForm(t, m, sectionServices, "wiki")
@@ -233,12 +233,12 @@ func TestOverviewShowsRunningVersion(t *testing.T) {
 		updater Updater
 		want    string
 	}{
-		{"no updater", "1.2.3", nil, "qatlas 1.2.3"},
-		{"updater without an update", "1.2.3", &fakeUpdater{}, "qatlas 1.2.3"},
-		{"empty", "", nil, "qatlas dev"},
+		{"no updater", "1.2.3", nil, "qconnect 1.2.3"},
+		{"updater without an update", "1.2.3", &fakeUpdater{}, "qconnect 1.2.3"},
+		{"empty", "", nil, "qconnect dev"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 			secrets, _ := newResolver(t, dir, nil)
 			m, err := New(testService(store, secrets, nil), store, nil, secrets, nil)

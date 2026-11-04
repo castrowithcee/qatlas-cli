@@ -19,7 +19,7 @@ func lockedVaultModel(t *testing.T) (*Model, string) {
 	t.Helper()
 	// A save applies the theme of the form to the whole process.
 	restoreRenderer(t)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
 	path := uiprefs.Path(dir)
@@ -329,7 +329,7 @@ func TestUpdatePageNamesRunningVersion(t *testing.T) {
 	m, _ := lockedVaultModel(t)
 	m.version = "1.2.3"
 	openSectionByName(t, m, sectionUpdate)
-	if view := m.render(); !strings.Contains(view, "qatlas 1.2.3") {
+	if view := m.render(); !strings.Contains(view, "qconnect 1.2.3") {
 		t.Errorf("the Update page does not name the running version:\n%s", view)
 	}
 }

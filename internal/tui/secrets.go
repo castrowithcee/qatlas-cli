@@ -81,7 +81,7 @@ func (noSecrets) Stored(string, string) secret.Placement {
 // What the row of a keyring role says once the resolver has answered. The environment is named as what it
 // is, an override. unencrypted file is shown only for a role that still resolves from a plaintext
 // credentials.yaml left over from an earlier version: this editor offers no way to write one any more, so
-// the state is read only, a nudge towards 'qatlas vault migrate' rather than a place a role can be sent to.
+// the state is read only, a nudge towards 'qconnect vault migrate' rather than a place a role can be sent to.
 const (
 	stateStored         = manage.StateStored
 	stateStoredVault    = manage.StateStoredVault
@@ -513,7 +513,7 @@ func (m *Model) updateVaultOffer(key tea.KeyPressMsg) tea.Cmd {
 			if typed == "" {
 				if o.optional {
 					// Leaving it empty and continuing is the offer declined: the vault stays, or becomes,
-					// unencrypted, the same as 'qatlas credential set' answered the same way on the terminal.
+					// unencrypted, the same as 'qconnect credential set' answered the same way on the terminal.
 					resume := o.resume
 					m.vaultOffer = nil
 					return resume(nil)
@@ -589,7 +589,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
 		// The vault already holds the change when the process hand-over warns; a vault process that holds
-		// it unlocked outside this run is told too, the same way 'qatlas credential set' already does.
+		// it unlocked outside this run is told too, the same way 'qconnect credential set' already does.
 		out, err := svc.SetSecret(context.Background(), cfg, manage.SecretWrite{
 			Name: credential, Entry: entry, Role: role, Value: value, Offer: offer, Approval: policy,
 		})
@@ -611,7 +611,7 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
 		// The vault process that holds the vault unlocked outside this run is told too, the same way
-		// 'qatlas credential delete' already does.
+		// 'qconnect credential delete' already does.
 		out, err := svc.DeleteSecret(context.Background(), cfg, manage.SecretWrite{
 			Name: credential, Entry: entry, Role: role, Approval: policy,
 		})

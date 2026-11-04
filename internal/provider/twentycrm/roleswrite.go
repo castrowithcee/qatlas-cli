@@ -36,7 +36,7 @@ const (
 	errRoleDesc  = "description must be 1 to 500 characters without control characters"
 	errRoleArgs  = "the arguments are not a valid role request"
 	errRoleNone  = "at least one of label, description, or a permission flag must be given"
-	errRoleKeys  = "this role is not changed through Qatlas: it is assigned to an API key or cannot be edited; " +
+	errRoleKeys  = "this role is not changed through Qatlas Connect: it is assigned to an API key or cannot be edited; " +
 		"change it in Twenty"
 
 	roleWriteNote = "Changing a role changes the rights of every member and API key assigned to it at once. " +
@@ -101,7 +101,7 @@ var rolesUpdate = capability.Descriptor{
 	ID: Provider + ".roles.update", Version: 1, Title: "Update a Twenty CRM role",
 	Description: "Change the label, the description, or the global rights of one role of the Twenty workspace of " +
 		"a connection; only the given values change and at least one is required. The change applies to every " +
-		"member assigned to the role. Qatlas reads the role first. " + roleWriteNote,
+		"member assigned to the role. Qatlas Connect reads the role first. " + roleWriteNote,
 	Tags:     []string{"twentycrm", "roles", "permissions", "update"},
 	Risk:     roleWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -118,7 +118,7 @@ var rolesUpdate = capability.Descriptor{
 var rolesDelete = capability.Descriptor{
 	ID: Provider + ".roles.delete", Version: 1, Title: "Delete a Twenty CRM role",
 	Description: "Delete one role of the Twenty workspace of a connection; the members assigned to it lose its " +
-		"rights. Qatlas reads the role first. " + roleWriteNote,
+		"rights. Qatlas Connect reads the role first. " + roleWriteNote,
 	Tags:     []string{"twentycrm", "roles", "permissions", "delete"},
 	Risk:     roleWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,

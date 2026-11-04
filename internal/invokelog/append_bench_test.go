@@ -9,7 +9,7 @@ import (
 
 // BenchmarkAppendManyDays measures one Append with many day files in the logs directory: the directory
 // read and sort per Append grow with the file count. "empty-newest" has an empty newest file. The fixture
-// and the measured step are those of `qatlas selftest storage` (internal/selftest). The package is external
+// and the measured step are those of `qconnect selftest storage` (internal/selftest). The package is external
 // because selftest imports invokelog.
 //
 //	go test ./internal/invokelog -run '^$' -bench BenchmarkAppendManyDays -benchtime 200x -count 3

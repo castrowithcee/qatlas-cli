@@ -94,8 +94,8 @@ func TestErrorsAreRedacted(t *testing.T) {
 
 // An agent-mode failure carries a machine-readable code and no prose.
 func TestAgentErrorIsMachineReadable(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 
 	var stdout, stderr bytes.Buffer
 	opts := &Options{}
@@ -109,7 +109,7 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	if !strings.HasPrefix(first, "qatlas: "+string(output.CodeConfigMissing)+": ") {
+	if !strings.HasPrefix(first, "qconnect: "+string(output.CodeConfigMissing)+": ") {
 		t.Errorf("first stderr line = %q, want the code prefix", first)
 	}
 }
@@ -121,8 +121,8 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 func TestNextStepByCodeAndRoute(t *testing.T) {
 	authErr := &provider.Error{Class: provider.ClassAuth}
 	for _, r := range []route{routeCLI, routeMCP} {
-		if step := nextStep(authErr, r); !strings.Contains(step, "qatlas credential set <credential> <role>") ||
-			!strings.Contains(step, "qatlas tui") {
+		if step := nextStep(authErr, r); !strings.Contains(step, "qconnect credential set <credential> <role>") ||
+			!strings.Contains(step, "qconnect tui") {
 			t.Errorf("route %d: auth step = %q, want the credential commands", r, step)
 		}
 		for _, class := range []provider.Class{provider.ClassPermission, provider.ClassNotFound,
@@ -143,33 +143,33 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 		r    route
 		want string
 	}{
-		{"CLI with provider", named, routeCLI, "list the configured connections with 'qatlas connections github'"},
-		{"MCP with tool", named, routeMCP, "call qatlas.describe with operation github.issues.list and without " +
+		{"CLI with provider", named, routeCLI, "list the configured connections with 'qconnect connections github'"},
+		{"MCP with tool", named, routeMCP, "call qconnect.describe with operation github.issues.list and without " +
 			"connection for the connections that can run it"},
 		{"CLI without provider", &capability.UnknownConnectionError{Name: "absent"}, routeCLI,
-			"list the configured connections with 'qatlas connections'"},
+			"list the configured connections with 'qconnect connections'"},
 		{"MCP without tool", &capability.UnknownConnectionError{Name: "absent", Provider: "github"}, routeMCP,
-			"call qatlas.search with list connections and provider github for the configured connections"},
+			"call qconnect.search with list connections and provider github for the configured connections"},
 		{"MCP without provider", &capability.UnknownConnectionError{Name: "absent"}, routeMCP,
-			"call qatlas.search with list connections for the configured connections"},
+			"call qconnect.search with list connections for the configured connections"},
 		{"CLI unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
-			routeCLI, "'qatlas describe github.issues.list' names the connections that offer it, or change the " +
-				"connection in 'qatlas tui'"},
+			routeCLI, "'qconnect describe github.issues.list' names the connections that offer it, or change the " +
+				"connection in 'qconnect tui'"},
 		{"MCP unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
-			routeMCP, "call qatlas.describe with operation github.issues.list and without connection for the " +
-				"connections that offer it, or change the connection in 'qatlas tui'"},
+			routeMCP, "call qconnect.describe with operation github.issues.list and without connection for the " +
+				"connections that offer it, or change the connection in 'qconnect tui'"},
 		{"unsupported without connection", &capability.UnsupportedError{Capability: "github.issues.list"},
 			routeMCP, ""},
 		{"configured name", &config.SelectionError{Name: "absent"}, routeCLI,
-			"list the configured connections with 'qatlas connections'"},
+			"list the configured connections with 'qconnect connections'"},
 		{"CLI vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, routeCLI, vaultLockedStep},
 		{"MCP vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, routeMCP, vaultLockedMCPStep},
 		{"CLI admin required", &UsageError{&application.AdminRequiredError{}}, routeCLI,
-			"run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"},
+			"run the command in a terminal and enter the passphrase, or manage it in 'qconnect tui'"},
 		{"MCP admin required", &UsageError{&application.AdminRequiredError{}}, routeMCP,
 			"agents do not manage credentials or the vault; ask the user"},
 		{"CLI approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeCLI,
-			"approve the connection as it is configured now: save it in 'qatlas tui' or run 'qatlas vault approve'"},
+			"approve the connection as it is configured now: save it in 'qconnect tui' or run 'qconnect vault approve'"},
 		{"agent approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeAgent,
 			"the change to this connection is not approved; an agent cannot approve it, ask the user"},
 		{"MCP approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeMCP,

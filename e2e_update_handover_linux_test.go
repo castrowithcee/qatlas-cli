@@ -71,7 +71,7 @@ func TestUpdateHandsTheVaultOverToTheNewProgram(t *testing.T) {
 }
 
 // updateHandoverCase runs one case; atDefault keeps the configuration in the earlier release's default
-// location instead of naming it in QATLAS_CONFIG.
+// location instead of naming it in QCONNECT_CONFIG.
 func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour, earlier, atDefault bool) {
 	const (
 		storedID     = "canary-handover-id-5d27a1"
@@ -223,7 +223,7 @@ defaults:
 		secret.StoreSelector + "=none",
 	}
 	if !atDefault {
-		env = append(env, "QATLAS_CONFIG="+configPath)
+		env = append(env, "QCONNECT_CONFIG="+configPath)
 	}
 	c := &runner{bin: bin, seen: &seen, env: env}
 	var vaultPIDs []int
@@ -274,7 +274,7 @@ defaults:
 
 	broker := startBroker(t, c)
 	pages := `{"operation":"bookstack.pages.list","connection":"wiki"}`
-	if call := broker.call(t, pages, "qatlas.invoke"); call.Result.IsError ||
+	if call := broker.call(t, pages, "qconnect.invoke"); call.Result.IsError ||
 		!strings.Contains(string(call.Result.Structured), "Handover Runbook") {
 		t.Fatalf("call before the update = %+v", call.Result)
 	}
@@ -294,7 +294,7 @@ defaults:
 		t.Fatal("the installed program is not the release's")
 	}
 
-	call := broker.call(t, pages, "qatlas.invoke")
+	call := broker.call(t, pages, "qconnect.invoke")
 	if exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", mcpPID)); err != nil || exe != bin {
 		t.Errorf("MCP server %d runs %q (%v), want the new program at %s", mcpPID, exe, err, bin)
 	}
@@ -313,7 +313,7 @@ defaults:
 
 	switch behaviour {
 	case vault.UpdateHandover:
-		if !strings.Contains(stderr, "handed over to the new program") || strings.Contains(stderr, "qatlas vault unlock") {
+		if !strings.Contains(stderr, "handed over to the new program") || strings.Contains(stderr, "qconnect vault unlock") {
 			t.Errorf("update stderr = %q, want the handover and no unlock", stderr)
 		}
 		if call.Result.IsError || !strings.Contains(string(call.Result.Structured), "Handover Runbook") {
@@ -351,7 +351,7 @@ defaults:
 			}
 		}
 	case vault.UpdateLock:
-		if !strings.Contains(stderr, "locked") || !strings.Contains(stderr, "'qatlas vault unlock'") {
+		if !strings.Contains(stderr, "locked") || !strings.Contains(stderr, "'qconnect vault unlock'") {
 			t.Errorf("update stderr = %q, want the lock and the unlock hint", stderr)
 		}
 		if !call.Result.IsError || !strings.Contains(string(call.Result.Structured), "vault-locked") {

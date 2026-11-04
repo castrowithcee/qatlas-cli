@@ -48,7 +48,7 @@ Enterprise scopes, belong to a user whose role is limited.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `n8n`, the service with its address, a
    credential, the scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the key as its `api-key` secret.
@@ -57,16 +57,16 @@ Without the guided setup, store the key on the command line. It is read from sta
 appear in the shell history:
 
 ```sh
-printf %s "$N8N_API_KEY" | qatlas credential set n8n-reader api-key
+printf %s "$N8N_API_KEY" | qconnect credential set n8n-reader api-key
 ```
 
 `n8n-reader` is the name of the credential in your configuration and `api-key` is its only secret. To replace a
-key that expired or was deleted, run the same command again with the new key. Run `qatlas config validate` to
+key that expired or was deleted, run the same command again with the new key. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means the instance accepted the
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means the instance accepted the
 key and answered a read of one workflow.
 
 **A passing test does not mean every tool works.** It proves the key, the address, and the right to list
@@ -157,7 +157,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: this n8n API key may not perform this operation; check its scopes under Settings, n8n API
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | <the message of the instance>
 ```
 
@@ -172,8 +172,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: n8n rejected the API key | The key is wrong, expired, deleted, or for another instance than the address | Create a new key ([Create an API key](#create-an-api-key)) and store it again with `qatlas credential set <credential> api-key`. Check the address of the service. |
-| `auth`: the n8n API key is unusable | The stored key holds characters a key cannot have, such as a line break or a space | Store it again with `printf %s "$N8N_API_KEY" \| qatlas credential set <credential> api-key`. |
+| `auth`: n8n rejected the API key | The key is wrong, expired, deleted, or for another instance than the address | Create a new key ([Create an API key](#create-an-api-key)) and store it again with `qconnect credential set <credential> api-key`. Check the address of the service. |
+| `auth`: the n8n API key is unusable | The stored key holds characters a key cannot have, such as a line break or a space | Store it again with `printf %s "$N8N_API_KEY" \| qconnect credential set <credential> api-key`. |
 | `permission`: this n8n API key may not perform this operation; check its scopes ... | The key lacks the scope of this tool, or its user lacks the role | On Enterprise, add the scope of the group under Settings, n8n API (a key's scopes are fixed at creation, so create a new key). Otherwise check the user's role. |
 | `permission`: n8n refused this projects operation ... or this project members operation ... | No Projects feature license, no `project:` or `user:list` scope, or a role that may not manage projects | Check the plan includes Projects, add the scopes of [Projects and members](#projects-and-members), and use a user whose role may manage projects or members. |
 | `permission`: n8n refused this data tables operation ... | No data tables in the plan, no `dataTable:` scope, or no role in the table's project | Add the `dataTable:` scope, check the license, and use a user with a role in that project. |

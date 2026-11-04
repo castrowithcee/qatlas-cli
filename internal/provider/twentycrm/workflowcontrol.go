@@ -69,7 +69,7 @@ var runIDArgument = capability.Argument{Name: "workflow_run_id", Required: true,
 
 var workflowVersionsActivate = capability.Descriptor{
 	ID: Provider + ".workflow-versions.activate", Version: 1, Title: "Activate a Twenty CRM workflow version",
-	Description: "Activate one workflow version of the Twenty workspace of a connection. Qatlas reads the version " +
+	Description: "Activate one workflow version of the Twenty workspace of a connection. Qatlas Connect reads the version " +
 		"first and activates it only when its trigger is one of " + strings.Join(activatableTriggerTypes, ", ") +
 		" and every step is one of " + strings.Join(activatableStepTypes, ", ") + "; any other version is refused " +
 		"without a change, because it would open a lasting path to the outside. The version is read once before " +
@@ -150,7 +150,7 @@ func workflowControlPermission(err error) error {
 // names at most a fixed Twenty type (typeOf reads unknown otherwise), or nil.
 func checkActivatable(trigger, steps json.RawMessage) error {
 	refuse := func(kind, name string) error {
-		return invalidRequest("this version is not activated through Qatlas: its " + kind + " (" + name +
+		return invalidRequest("this version is not activated through Qatlas Connect: its " + kind + " (" + name +
 			") is not on the list of internal types; activate it in Twenty if it is meant to reach the outside")
 	}
 	if trimmed := strings.TrimSpace(string(trigger)); trimmed == "" || trimmed == "null" {

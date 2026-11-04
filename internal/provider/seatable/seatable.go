@@ -321,7 +321,7 @@ func Register(reg *capability.Registry) error {
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIToken,
 			Description: "SeaTable API token of one base: choose permission r for reads or rw for intended " +
-				"writes; Qatlas exchanges it for a short-lived base token",
+				"writes; Qatlas Connect exchanges it for a short-lived base token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "table",

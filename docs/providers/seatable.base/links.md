@@ -31,8 +31,8 @@ and change the links between rows of two tables through one link column. The sha
 - Read the links before repeating an uncertain change.
 
 ```sh
-qatlas invoke seatable.base.links.list --connection sales-all-tables --arg table=id:0000 --arg column=Tickets \
+qconnect invoke seatable.base.links.list --connection sales-all-tables --arg table=id:0000 --arg column=Tickets \
   --arg row_ids='["Qtf7xPmoRaiFyQPO1aENTj"]'
-qatlas invoke seatable.base.links.create --connection sales-rw --confirm --arg table=id:0000 --arg column=Tickets \
+qconnect invoke seatable.base.links.create --connection sales-rw --confirm --arg table=id:0000 --arg column=Tickets \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg other_row_ids='["Ab12Cd34Ef56Gh78Ij90Kl"]'
 ```

@@ -16,7 +16,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
-// Every topic is printed by 'qatlas help <topic>' as exactly its text, and the root help lists it.
+// Every topic is printed by 'qconnect help <topic>' as exactly its text, and the root help lists it.
 func TestHelpTopicsArePrintedAndListed(t *testing.T) {
 	var root bytes.Buffer
 	if code := Run([]string{"--help"}, &root, &bytes.Buffer{}); code != exitOK {
@@ -27,7 +27,7 @@ func TestHelpTopicsArePrintedAndListed(t *testing.T) {
 		t.Fatalf("the root help lists no help topics:\n%s", root.String())
 	}
 	for _, topic := range helptopics.All() {
-		if !strings.Contains(listed, "qatlas "+topic.Name+" ") || !strings.Contains(listed, topic.Short) {
+		if !strings.Contains(listed, "qconnect "+topic.Name+" ") || !strings.Contains(listed, topic.Short) {
 			t.Errorf("the root help does not list topic %q:\n%s", topic.Name, listed)
 		}
 		var stdout, stderr bytes.Buffer
@@ -42,14 +42,14 @@ func TestHelpTopicsArePrintedAndListed(t *testing.T) {
 	// The configuration topic does not take the name of the config command.
 	var config bytes.Buffer
 	if code := Run([]string{"help", "config"}, &config, &bytes.Buffer{}); code != exitOK ||
-		!strings.Contains(config.String(), "Inspect the qatlas configuration") ||
+		!strings.Contains(config.String(), "Inspect the qconnect configuration") ||
 		!strings.Contains(config.String(), "validate") {
 		t.Errorf("help config no longer describes the config command:\n%s", config.String())
 	}
 }
 
 var (
-	quotedCommand = regexp.MustCompile(`["']qatlas ([^"']+)["']`)
+	quotedCommand = regexp.MustCompile(`["']qconnect ([^"']+)["']`)
 	flagName      = regexp.MustCompile(`--[a-z][a-z-]*`)
 	toolID        = regexp.MustCompile(`\b[a-z]+\.[a-z]+\.[a-z]+\b`)
 	listedCode    = regexp.MustCompile(`(?m)^- ([a-z-]+): \S`)
@@ -85,7 +85,7 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 		for _, snippet := range commandSnippets(topic.Text) {
 			// The former name of describe still runs, but no guide teaches it.
 			if strings.HasPrefix(snippet, "tool ") {
-				t.Errorf("topic %s names the hidden command %q; it is 'qatlas describe'", topic.Name, snippet)
+				t.Errorf("topic %s names the hidden command %q; it is 'qconnect describe'", topic.Name, snippet)
 			}
 			assertCommandSnippet(t, root, topics, topic.Name, snippet)
 		}
@@ -109,13 +109,13 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 	// Discovery starts with the providers and narrows step by step to one invocation.
 	last := -1
 	for _, step := range []string{"agents", "providers", "connections", "tools", "describe", "invoke"} {
-		at := strings.Index(agents, "qatlas "+step)
+		at := strings.Index(agents, "qconnect "+step)
 		if at <= last {
-			t.Errorf("the agents topic does not name 'qatlas %s' as the next discovery step", step)
+			t.Errorf("the agents topic does not name 'qconnect %s' as the next discovery step", step)
 		}
 		last = at
 	}
-	for _, tool := range []string{"qatlas.search", "qatlas.describe", "qatlas.invoke"} {
+	for _, tool := range []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"} {
 		if !strings.Contains(agents, tool) || !knownMCPTool(tool) {
 			t.Errorf("the agents topic and the broker disagree on %s", tool)
 		}
@@ -139,7 +139,7 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 	}
 }
 
-// commandSnippets returns every quoted qatlas command and every example line that runs qatlas.
+// commandSnippets returns every quoted qconnect command and every example line that runs qatlas.
 func commandSnippets(text string) []string {
 	var snippets []string
 	for _, match := range quotedCommand.FindAllStringSubmatch(text, -1) {
@@ -147,10 +147,10 @@ func commandSnippets(text string) []string {
 	}
 	for _, line := range strings.Split(text, "\n") {
 		trimmed := strings.TrimSpace(line)
-		if _, after, found := strings.Cut(trimmed, "| qatlas "); found {
+		if _, after, found := strings.Cut(trimmed, "| qconnect "); found {
 			snippets = append(snippets, after)
-		} else if strings.HasPrefix(line, "  ") && strings.HasPrefix(trimmed, "qatlas ") {
-			snippets = append(snippets, strings.TrimPrefix(trimmed, "qatlas "))
+		} else if strings.HasPrefix(line, "  ") && strings.HasPrefix(trimmed, "qconnect ") {
+			snippets = append(snippets, strings.TrimPrefix(trimmed, "qconnect "))
 		}
 	}
 	return snippets
@@ -161,7 +161,7 @@ func assertCommandSnippet(t *testing.T, root *cobra.Command, topics map[string]b
 	t.Helper()
 	words := strings.Fields(snippet)
 	if len(words) == 0 {
-		t.Errorf("topic %s quotes an empty qatlas command", topic)
+		t.Errorf("topic %s quotes an empty qconnect command", topic)
 		return
 	}
 	if words[0] == "help" {

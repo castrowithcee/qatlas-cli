@@ -30,7 +30,7 @@ func newTableModel(t *testing.T, width int) *Model {
 	}, nil); err != nil {
 		t.Fatalf("register tracker: %v", err)
 	}
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	secrets, keyring := newResolver(t, dir, map[string]string{"TRACKER_TOKEN": "canary-tracker-token"})
 	if err := keyring.Set(secret.StoreKey("wiki-reader", "token-id"), "canary-wiki-id"); err != nil {
 		t.Fatalf("store secret: %v", err)

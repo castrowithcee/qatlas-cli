@@ -50,7 +50,7 @@ func longInputCases() []longInputCase {
 			}},
 		{name: "vault passphrase prompt", masked: true,
 			open: func(t *testing.T, long string) (*Model, func(*testing.T, *Model)) {
-				dir := filepath.Join(t.TempDir(), "qatlas")
+				dir := filepath.Join(t.TempDir(), "qconnect")
 				store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 				secrets, _ := newVaultResolver(t, dir)
 				m, err := buildModel(store, nil, secrets, nil)
@@ -84,7 +84,7 @@ func longInputCases() []longInputCase {
 			}},
 		{name: "admin prompt", masked: true,
 			open: func(t *testing.T, long string) (*Model, func(*testing.T, *Model)) {
-				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), long, true)
+				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), long, true)
 				openSectionByName(t, m, sectionServices)
 				pressNew(t, m)
 				typeText(t, m, "wiki")
@@ -103,7 +103,7 @@ func longInputCases() []longInputCase {
 			}},
 		{name: "unlock prompt", masked: true,
 			open: func(t *testing.T, long string) (*Model, func(*testing.T, *Model)) {
-				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), long, false)
+				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), long, false)
 				openSectionByName(t, m, sectionServices)
 				pump(t, m, "ctrl+l")
 				if m.screen != screenVaultUnlock {
@@ -230,7 +230,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 // A vault secret of several hundred characters is stored whole through the secret prompt.
 func TestVaultSecretOf500CharactersIsStored(t *testing.T) {
 	long := strings.Repeat("k", 500)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("other", "role", "seed", nil))

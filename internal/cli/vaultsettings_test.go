@@ -140,7 +140,7 @@ func TestVaultSettingsCommandNeedsAdminAndEncryption(t *testing.T) {
 	}
 	for _, args := range [][]string{{"vault", "settings"}, {"vault", "settings", "--retention-days", "5"}} {
 		code, _, stderr = runWithInput(t, &Options{}, "", append(args, "--config", configIn(plain))...)
-		if code != exitUsage || !strings.Contains(stderr, "run 'qatlas vault encrypt' first") {
+		if code != exitUsage || !strings.Contains(stderr, "run 'qconnect vault encrypt' first") {
 			t.Errorf("unencrypted vault %v: exit %d, stderr %q, want the encryption named", args, code, stderr)
 		}
 	}

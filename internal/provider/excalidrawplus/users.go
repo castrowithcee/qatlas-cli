@@ -177,7 +177,7 @@ var usersRemove = capability.Descriptor{
 	Version: 1,
 	Title:   "Remove an Excalidraw+ workspace user",
 	Description: "Remove a user from the workspace. Excalidraw+ revokes the user's access and removes the " +
-		"workspace-specific data of the user; Qatlas cannot undo it. " + workspaceWide + ". " + changeNote,
+		"workspace-specific data of the user; Qatlas Connect cannot undo it. " + workspaceWide + ". " + changeNote,
 	Tags:                  []string{"excalidrawplus", "users", "remove", "delete", "whiteboard"},
 	Risk:                  peopleRisk(capability.EffectDelete),
 	Provider:              Provider,

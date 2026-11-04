@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// A bare qatlas on a pseudo-terminal opens the editor, and q ends it.
+// A bare qconnect on a pseudo-terminal opens the editor, and q ends it.
 func TestBareQatlasOpensTheEditorOnAPseudoTerminal(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the acceptance run starts the editor on a pseudo-terminal")

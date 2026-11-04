@@ -1458,7 +1458,7 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 		})
 		if !errors.As(err, &unsupported) || unsupported.Reason != tt.want ||
 			!strings.Contains(err.Error(), "("+string(tt.want)+")") ||
-			strings.Contains(err.Error(), "qatlas") {
+			strings.Contains(err.Error(), "qconnect") {
 			// The next step names discovery per route, so the surface that shows the message adds it.
 			t.Errorf("Invoke(%s, %s) = %v, want unsupported with %s", tt.operation, tt.connection, err, tt.want)
 		}

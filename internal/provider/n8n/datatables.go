@@ -39,7 +39,7 @@ const dataTableDataSensitivity = "n8n-data-tables"
 // missing license, a missing API key scope (dataTable:*), and a role that may not use the table's project,
 // without a field this provider reads to tell them apart; the body is never read into a message.
 const dataTablePermissionMessage = "n8n refused this data tables operation: license or role missing (the " +
-	"instance's license, the API key's dataTable scope, or its owner's role in the table's project); Qatlas " +
+	"instance's license, the API key's dataTable scope, or its owner's role in the table's project); Qatlas Connect " +
 	"cannot tell which"
 
 var dataTableReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,

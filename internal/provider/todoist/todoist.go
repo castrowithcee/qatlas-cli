@@ -804,7 +804,7 @@ func (c *Client) classifyStatus(op string, response *http.Response, change bool,
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Todoist answered with a redirect, which Qatlas does not follow"}
+			Message: "Todoist answered with a redirect, which Qatlas Connect does not follow"}
 	case status == http.StatusBadRequest && detail.Extra.Argument == "cursor":
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "Todoist no longer accepts this cursor; start the list again without one"}

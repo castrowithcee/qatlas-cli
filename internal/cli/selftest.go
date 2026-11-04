@@ -36,8 +36,8 @@ type quietExit struct{ code int }
 
 func (e *quietExit) Error() string { return fmt.Sprintf("exit status %d", e.code) }
 
-// newSelftestCommand is 'qatlas selftest': one subcommand per scenario of the selftest register, plus the
-// hidden worker process the scenarios start. It reads no --config, QATLAS_CONFIG, or QATLAS_CLI_HOME.
+// newSelftestCommand is 'qconnect selftest': one subcommand per scenario of the selftest register, plus the
+// hidden worker process the scenarios start. It reads no --config, QCONNECT_CONFIG, or QCONNECT_HOME.
 func newSelftestCommand(opts *Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "selftest",
@@ -45,7 +45,7 @@ func newSelftestCommand(opts *Options) *cobra.Command {
 		Long: "The selftest measures this program on this machine without a Go toolchain and without touching\n" +
 			"your installation: it works on synthetic data in a scratch directory it creates and removes\n" +
 			"again, also when it fails or is interrupted. It reads and writes no configuration, vault, or\n" +
-			"log, and ignores --config, QATLAS_CONFIG, and QATLAS_CLI_HOME. Each scenario is a subcommand.\n\n" +
+			"log, and ignores --config, QCONNECT_CONFIG, and QCONNECT_HOME. Each scenario is a subcommand.\n\n" +
 			"The scratch directory lies in the system's temporary directory; --dir picks another base\n" +
 			"directory, which decides the file system that is measured. Progress goes to stderr, the result\n" +
 			"to stdout, as a table or, with --output json, as one JSON document. A run ends with exit code 1\n" +
@@ -59,7 +59,7 @@ func newSelftestCommand(opts *Options) *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:    "worker",
-		Short:  "Writer process of a selftest scenario; started by 'qatlas selftest'",
+		Short:  "Writer process of a selftest scenario; started by 'qconnect selftest'",
 		Hidden: true,
 		Args:   noArgs,
 		RunE: func(*cobra.Command, []string) error {
@@ -79,7 +79,7 @@ func newSelftestScenarioCommand(opts *Options, scenario selftest.Scenario) *cobr
 		Use:   scenario.Name,
 		Short: scenario.Summary,
 		Long: scenario.Summary + "\n\nThe profile 'standard' is a real measurement and takes minutes; 'smoke' is a small, quick run\n" +
-			"that covers every measurement. See 'qatlas selftest --help' for what the selftest does and\n" +
+			"that covers every measurement. See 'qconnect selftest --help' for what the selftest does and\n" +
 			"does not touch.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {

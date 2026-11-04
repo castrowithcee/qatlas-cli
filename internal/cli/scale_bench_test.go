@@ -228,8 +228,8 @@ func forEachProfile(b *testing.B, fn func(b *testing.B, shape scaleShape, path s
 	dir := b.TempDir()
 	// A call that forgets its configuration path must find an empty home, never a real configuration.
 	b.Setenv("HOME", dir)
-	b.Setenv("QATLAS_CLI_HOME", dir)
-	b.Setenv("QATLAS_CONFIG", "")
+	b.Setenv("QCONNECT_HOME", dir)
+	b.Setenv("QCONNECT_CONFIG", "")
 	for _, shape := range scaleProfiles() {
 		path := writeScaleFixture(b, dir, shape)
 		b.Run(shape.name, func(b *testing.B) { fn(b, shape, path) })
@@ -402,11 +402,11 @@ func BenchmarkScaleCLI(b *testing.B) {
 func BenchmarkScaleMCP(b *testing.B) {
 	reg := scaleRegistry(b)
 	calls := map[string]string{
-		"search":          `"name":"qatlas.search","arguments":{"query":"list pages"}`,
-		"search-provider": `"name":"qatlas.search","arguments":{"query":"list","provider":"bookstack"}`,
-		"providers":       `"name":"qatlas.search","arguments":{"list":"providers"}`,
-		"connections":     `"name":"qatlas.search","arguments":{"list":"connections","provider":"bookstack"}`,
-		"describe":        `"name":"qatlas.describe","arguments":{"operation":"bookstack.pages.list"}`,
+		"search":          `"name":"qconnect.search","arguments":{"query":"list pages"}`,
+		"search-provider": `"name":"qconnect.search","arguments":{"query":"list","provider":"bookstack"}`,
+		"providers":       `"name":"qconnect.search","arguments":{"list":"providers"}`,
+		"connections":     `"name":"qconnect.search","arguments":{"list":"connections","provider":"bookstack"}`,
+		"describe":        `"name":"qconnect.describe","arguments":{"operation":"bookstack.pages.list"}`,
 	}
 	forEachProfile(b, func(b *testing.B, _ scaleShape, path string) {
 		for name, call := range calls {

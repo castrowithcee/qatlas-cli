@@ -20,7 +20,7 @@ import (
 func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Inspect the qatlas configuration, rename its entries, and move parts of it between installations",
+		Short: "Inspect the qconnect configuration, rename its entries, and move parts of it between installations",
 		Args:  noArgs,
 		RunE:  func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -36,7 +36,7 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"finds. It contacts no provider and reads no secret values. On success it prints\n" +
 			"'configuration is valid: <path>'; --output json, compact, or toon, and --agent, print the same as\n" +
 			"one object with the fields valid and path.\n\n" +
-			"A connection's optional tools list names complete tool IDs of its provider, as 'qatlas tools\n" +
+			"A connection's optional tools list names complete tool IDs of its provider, as 'qconnect tools\n" +
 			"<provider> --all' lists them. Every entry must be a tool this build registers for that provider,\n" +
 			"listed once. A connection gives either effects or tools, not both. An unknown entry is reported\n" +
 			"by its position, never quoted.\n\n" +
@@ -51,7 +51,7 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"still holds its approval or entry under the old name. It reads the vault's names, never a secret,\n" +
 			"and never asks for a passphrase or starts a vault process: an unencrypted vault is read directly,\n" +
 			"an encrypted one only where a running vault process holds it unlocked. Each rename it finds is a\n" +
-			"note on stderr with the 'qatlas config rename <kind> <old> <new> --adopt' command that moves the\n" +
+			"note on stderr with the 'qconnect config rename <kind> <old> <new> --adopt' command that moves the\n" +
 			"vault after it, or, where it cannot tell which entry is meant, a note without a command. The\n" +
 			"validation still succeeds. Where the vault cannot be read this way, one note says it was not\n" +
 			"checked. --output json adds hand_renames (kind, old, new, ambiguous, command) when there are any\n" +
@@ -81,14 +81,14 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			// warning goes to stderr so stdout keeps its answer.
 			for _, name := range sortedConnections(cfg) {
 				if warning := cfg.IdleWarning(name); warning != "" {
-					fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+					fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 				}
 			}
 			for _, warning := range append(append(cfg.PathWarnings(), cfg.FilesWarnings()...), cfg.ToolWarnings()...) {
-				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+				fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 			}
 			if legacyPath := filepath.Join(filepath.Dir(path), secret.FileName); fileExists(legacyPath) {
-				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s still holds plaintext secrets; run 'qatlas "+
+				fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s still holds plaintext secrets; run 'qconnect "+
 					"vault migrate' to move them into the vault\n", opts.Redactor.Apply(legacyPath))
 			}
 			renames, notChecked := vaultHandRenames(c, opts, cfg)
@@ -136,12 +136,12 @@ func vaultHandRenames(c *cobra.Command, opts *Options, cfg *config.Config) (foun
 	case !present:
 		return nil, false
 	case !checked:
-		fmt.Fprintln(c.ErrOrStderr(), "qatlas: note: the vault was not checked for renames made by hand: it is "+
+		fmt.Fprintln(c.ErrOrStderr(), "qconnect: note: the vault was not checked for renames made by hand: it is "+
 			"encrypted and no vault process holds it unlocked that can tell its names")
 		return nil, true
 	}
 	for _, r := range manage.HandRenames(cfg, names) {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: note: %s\n", handRenameText(opts, r))
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: note: %s\n", handRenameText(opts, r))
 		found = append(found, handRenameDocumentOf(opts, r))
 	}
 	return found, false

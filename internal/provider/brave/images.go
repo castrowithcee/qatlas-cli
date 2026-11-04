@@ -41,7 +41,7 @@ const (
 // imagesSearch searches Brave Images. It has no pages: count reaches up to 200 results.
 var imagesSearch = descriptor("images", "search", "Search Brave Images",
 	"Search images in Brave's independent index and read up to 200 results in one answer, filtered by country, "+
-		"language, and safe search. The answer carries addresses only; Qatlas fetches no image. safesearch=off "+
+		"language, and safe search. The answer carries addresses only; Qatlas Connect fetches no image. safesearch=off "+
 		"can return adult content.",
 	[]string{"images", "web"},
 	`{"type":"object","properties":{"q":{"type":"string","minLength":1,"maxLength":400},`+

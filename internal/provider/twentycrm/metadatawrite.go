@@ -103,7 +103,7 @@ var metaObjectsCreate = capability.Descriptor{
 	ID: Provider + ".meta-objects.create", Version: 1, Title: "Create a Twenty CRM custom object",
 	Description: "Create one custom object in the Twenty workspace of a connection. A new custom object is " +
 		"reachable at once by a connection without object targets; a connection with object targets reaches it " +
-		"only after it was entered there as a target, which Qatlas never does itself. " + metaWriteNote,
+		"only after it was entered there as a target, which Qatlas Connect never does itself. " + metaWriteNote,
 	Tags:     []string{"twentycrm", "metadata", "schema", "objects", "create"},
 	Risk:     metaWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -594,7 +594,7 @@ func (c *Client) UpdateMetaField(ctx context.Context, change *metaWriteChange) (
 		return nil, err
 	}
 	if current.Type == "MORPH_RELATION" {
-		return nil, invalidRequest("morph relation fields cannot be changed through Qatlas")
+		return nil, invalidRequest("morph relation fields cannot be changed through Qatlas Connect")
 	}
 	if change.options && current.Type != "SELECT" && current.Type != "MULTI_SELECT" {
 		return nil, invalidRequest("options can only be changed on a SELECT or MULTI_SELECT field")

@@ -34,7 +34,7 @@ const (
 )
 
 // trackingSentOnce words the unclear outcome of a request that may have arrived.
-const trackingSentOnce = "; sent once and never repeated by Qatlas: a repeat may be counted twice, so read the " +
+const trackingSentOnce = "; sent once and never repeated by Qatlas Connect: a repeat may be counted twice, so read the " +
 	"visit log with matomo.visits.list before repeating it"
 
 var (
@@ -91,7 +91,7 @@ const trackingOutputSchema = `{"type":"object","properties":{"idSite":{"type":"i
 
 const trackingNote = "Sends one request to the tracking endpoint matomo.php of the website's Matomo and never " +
 	"retries. Without clientIp, timestamp, country, region, city, latitude, and longitude the endpoint needs no " +
-	"token and the tool reads no secret; the visitor is then the Qatlas host, whose address Matomo records, " +
+	"token and the tool reads no secret; the visitor is then the Qatlas Connect host, whose address Matomo records, " +
 	"and whose user agent is qatlas-connect unless userAgent is given. With any of those seven the connection's token " +
 	"is read and sent as token_auth in the request body, and Matomo accepts the override only for a token with at " +
 	"least the Write role for the website, unless the instance sets tracking_requests_require_authentication=0 " +

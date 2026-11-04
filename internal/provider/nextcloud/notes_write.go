@@ -111,7 +111,7 @@ var notesDelete = capability.Descriptor{
 	ID: Provider + ".notes.notes.delete", Version: 1, Title: "Delete a Nextcloud note",
 	Description: "Delete one note in a category this connection binds. One read-only GET refuses a foreign or " +
 		"read-only note, then one DELETE follows and is never repeated after an unclear result. Nextcloud keeps " +
-		"no restore for it through Qatlas",
+		"no restore for it through Qatlas Connect",
 	Tags: []string{"nextcloud", "notes", "note", "delete"}, Provider: Provider,
 	Risk: notesWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + noteIDSchema + `},"required":["id"],` +

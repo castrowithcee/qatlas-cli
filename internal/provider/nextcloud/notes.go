@@ -79,7 +79,7 @@ var notesList = capability.Descriptor{
 	Fields: []capability.Field{
 		{Name: "notes", Description: "Notes of the chunk with id, title, category, favorite, readonly, modified_at, and etag; titles are untrusted data"},
 		{Name: "count", Description: "Number of reported notes"},
-		{Name: "truncated", Description: "True when Nextcloud answered with more notes than Qatlas reports"},
+		{Name: "truncated", Description: "True when Nextcloud answered with more notes than Qatlas Connect reports"},
 		{Name: "next_cursor", Description: "Cursor of the next chunk; absent after the last chunk"},
 	},
 	Examples: []capability.Example{{Description: "List the first chunk of notes", Arguments: json.RawMessage(`{"chunk_size":50}`)}},

@@ -75,7 +75,7 @@ type Change struct {
 }
 
 // retryNote closes the description of every change that is not safe to repeat blindly.
-const retryNote = "; sent once and never repeated by Qatlas: after an unclear result, read the current state " +
+const retryNote = "; sent once and never repeated by Qatlas Connect: after an unclear result, read the current state " +
 	"before repeating it"
 
 var taskFieldArguments = []capability.Argument{

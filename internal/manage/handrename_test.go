@@ -29,7 +29,7 @@ func (w renameWorld) handRename(t *testing.T, old, name string) []byte {
 	return edited
 }
 
-// canonical is what qatlas writes for cfg.
+// canonical is what qconnect writes for cfg.
 func canonical(t *testing.T, cfg *config.Config) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
@@ -126,7 +126,7 @@ func TestAdoptAConnectionRenamedByHand(t *testing.T) {
 		t.Fatalf("Rename() = %+v, %v", res, err)
 	}
 	if data, _ := os.ReadFile(w.path); string(data) != want {
-		t.Errorf("configuration =\n%s\nwant it as the hand rename left it, written by qatlas:\n%s", data, want)
+		t.Errorf("configuration =\n%s\nwant it as the hand rename left it, written by qconnect:\n%s", data, want)
 	}
 	// The edit moved the connection in the file, so the backup is kept as a hand version (adr-0004).
 	if name := w.backup(t, edited); !strings.Contains(name, "-hand") {

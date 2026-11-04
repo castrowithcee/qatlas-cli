@@ -50,7 +50,7 @@ var calendarColorArgument = capability.Argument{
 var calendarsCreate = capability.Descriptor{
 	ID: Provider + ".calendar.calendars.create", Version: 1, Title: "Create a Nextcloud calendar",
 	Description: "Create one calendar of the bound Nextcloud identity with a display name, an optional colour, and " +
-		"the component types it takes (events, tasks, or both). Qatlas generates the calendar id; nothing raw " +
+		"the component types it takes (events, tasks, or both). Qatlas Connect generates the calendar id; nothing raw " +
 		"comes from an argument. It needs the general calendar target of the connection and binds the new " +
 		"calendar. One MKCALENDAR follows without a pre-check; the request is never repeated after an unclear " +
 		"result",
@@ -102,7 +102,7 @@ var calendarsUpdate = capability.Descriptor{
 var calendarsDelete = capability.Descriptor{
 	ID: Provider + ".calendar.calendars.delete", Version: 1, Title: "Delete a Nextcloud calendar",
 	Description: "Delete one bound calendar that belongs to the identity, with all its events; a calendar shared " +
-		"by someone else is refused. Nextcloud moves the calendar to its calendar trash bin; Qatlas offers no " +
+		"by someone else is refused. Nextcloud moves the calendar to its calendar trash bin; Qatlas Connect offers no " +
 		"restore. One read-only pre-check of the calendar follows, then one DELETE. The request is never " +
 		"repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "delete"}, Provider: Provider,

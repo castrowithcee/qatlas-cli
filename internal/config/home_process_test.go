@@ -41,7 +41,7 @@ func TestMigrateHomeAcrossProcesses(t *testing.T) {
 			defer wg.Done()
 			cmd := exec.Command(exe)
 			cmd.Env = append(os.Environ(), config.WorkerModeEnv+"=migratehome", "HOME="+home, "USERPROFILE="+home,
-				"QATLAS_CONFIG=", "QATLAS_CLI_HOME=")
+				"QCONNECT_CONFIG=", "QCONNECT_HOME=")
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Errorf("process %d: %v: %s", i, err, out)

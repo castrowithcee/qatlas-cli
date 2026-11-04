@@ -16,7 +16,7 @@ import (
 )
 
 // serveVaultProcess starts a vault process serving the encrypted vault at dir, unlocked with passphrase, the
-// way a detached 'qatlas vault unlock' would. The server checks its clients by their program, which is this
+// way a detached 'qconnect vault unlock' would. The server checks its clients by their program, which is this
 // test binary on both ends.
 func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server, *vaultproc.Client) {
 	t.Helper()

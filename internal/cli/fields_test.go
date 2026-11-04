@@ -74,15 +74,15 @@ func TestFieldsSelectAlikeOverCLIAndMCP(t *testing.T) {
 		}
 	}
 
-	input := `{"jsonrpc":"2.0","id":"ok","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+	input := `{"jsonrpc":"2.0","id":"ok","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
 		`"arguments":{"operation":"bookstack.things.list","fields":["id","name"]}}}` + "\n" +
-		`{"jsonrpc":"2.0","id":"bad","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+		`{"jsonrpc":"2.0","id":"bad","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
 		`"arguments":{"operation":"bookstack.things.list","fields":["id","nam"]}}}` + "\n" +
-		`{"jsonrpc":"2.0","id":"none","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+		`{"jsonrpc":"2.0","id":"none","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
 		`"arguments":{"operation":"bookstack.things.get","fields":["id"]}}}` + "\n" +
-		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.describe",` +
+		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.describe",` +
 		`"arguments":{"operation":"bookstack.things.list"}}}` + "\n" +
-		`{"jsonrpc":"2.0","id":"describe-get","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.describe",` +
+		`{"jsonrpc":"2.0","id":"describe-get","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.describe",` +
 		`"arguments":{"operation":"bookstack.things.get"}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: config, Redactor: &redact.Redactor{}})
 

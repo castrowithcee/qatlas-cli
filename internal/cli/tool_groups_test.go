@@ -70,9 +70,9 @@ func groupedRegistry(t *testing.T, alphaTools, betaRead, betaCreate int) *capabi
 
 func groupedTools(t *testing.T, registry *capability.Registry, args ...string) (int, string, string) {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, validConfig)
 	var stdout, stderr bytes.Buffer
 	options := &Options{Redactor: &redact.Redactor{}}
@@ -85,7 +85,7 @@ func groupedMCPSearch(t *testing.T, registry *capability.Registry, arguments str
 	t.Helper()
 	path := writeConfig(t, validConfig)
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+		`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
@@ -94,7 +94,7 @@ func groupedMCPSearch(t *testing.T, registry *capability.Registry, arguments str
 }
 
 func TestToolsGroupsAboveTheThresholdMatchBetweenCLIAndMCP(t *testing.T) {
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	registry := groupedRegistry(t, 40, 15, 5)
 
 	code, stdout, stderr := groupedTools(t, registry, "bookstack")
@@ -114,7 +114,7 @@ func TestToolsGroupsAboveTheThresholdMatchBetweenCLIAndMCP(t *testing.T) {
 	if cli.Groups[0].Title != "Alpha" || cli.Groups[0].Description != "first area" {
 		t.Fatalf("group text = %+v", cli.Groups[0])
 	}
-	if want := "qatlas: 55 tools in 2 groups; 'qatlas tools bookstack <group>' lists one group, --query searches all\n"; stderr != want {
+	if want := "qconnect: 55 tools in 2 groups; 'qconnect tools bookstack <group>' lists one group, --query searches all\n"; stderr != want {
 		t.Fatalf("stderr = %q, want %q", stderr, want)
 	}
 
@@ -146,7 +146,7 @@ func TestToolsGroupsAllAddsOffered(t *testing.T) {
 		cli.Groups[1].Tools != 20 || *cli.Groups[1].Offered != 15 {
 		t.Fatalf("groups = %+v, want alpha 40/40 and beta 20/15", cli.Groups)
 	}
-	if !strings.HasPrefix(stderr, "qatlas: 60 tools in 2 groups;") {
+	if !strings.HasPrefix(stderr, "qconnect: 60 tools in 2 groups;") {
 		t.Fatalf("stderr = %q", stderr)
 	}
 	result := groupedMCPSearch(t, registry, `{"provider":"bookstack","all":true}`)
@@ -260,9 +260,9 @@ func TestToolsProviderWithoutGroupsStaysFlatAboveTheThreshold(t *testing.T) {
 }
 
 func TestToolsGroupsAreATOONTable(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, validConfig)
 	registry := groupedRegistry(t, 40, 15, 5)
 	for args, header := range map[string]string{
@@ -289,7 +289,7 @@ func TestGitHubToolsListGroupsBeforeTools(t *testing.T) {
 	var reads atomic.Int32
 	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--config", path)
 	if code != exitOK || !strings.Contains(stdout, "groups[12]{group,title,description,tools}:\n") ||
-		strings.Contains(stdout, "tools[") || !strings.Contains(stderr, "tools in 12 groups; 'qatlas tools github <group>'") {
+		strings.Contains(stdout, "tools[") || !strings.Contains(stderr, "tools in 12 groups; 'qconnect tools github <group>'") {
 		t.Fatalf("exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 	}
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "gists", "--config", path)

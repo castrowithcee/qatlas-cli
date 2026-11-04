@@ -269,7 +269,7 @@ func (m *Model) renameResult(plan *manage.RenamePlan, res manage.RenameResult) s
 func renameRow(label textID, text string) string { return fmt.Sprintf("%-10s%s", tr(label), text) }
 
 // renameLines are the places the dry run changes or leaves alone, one per line, in the order of
-// 'qatlas config rename'. A line that starts with the warning label is drawn as one.
+// 'qconnect config rename'. A line that starts with the warning label is drawn as one.
 func (m *Model) renameLines(plan *manage.RenamePlan) []string {
 	apply := m.redactor.Apply
 	if plan.Revert {
@@ -308,7 +308,7 @@ func (m *Model) renameLines(plan *manage.RenamePlan) []string {
 	return lines
 }
 
-// revertLines are the places putting back a credential's stopped rename changes, in the order of 'qatlas
+// revertLines are the places putting back a credential's stopped rename changes, in the order of 'qconnect
 // config rename credential --revert'.
 func (m *Model) revertLines(plan *manage.RenamePlan) []string {
 	apply := m.redactor.Apply

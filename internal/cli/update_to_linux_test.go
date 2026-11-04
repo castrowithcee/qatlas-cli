@@ -109,7 +109,7 @@ var chosenReleases = []chosenRelease{
 	{tag: "v1.4.0", unsigned: true}, {tag: "v0.29.0"},
 }
 
-// chosenRun runs 'qatlas update' with args against chosenReleases.
+// chosenRun runs 'qconnect update' with args against chosenReleases.
 func chosenRun(t *testing.T, args ...string) (code int, stdout, stderr, program string, replaced int) {
 	t.Helper()
 	executable := installedProgram(t)

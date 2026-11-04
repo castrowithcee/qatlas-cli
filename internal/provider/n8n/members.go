@@ -30,7 +30,7 @@ var memberRoles = []string{"project:admin", "project:editor", "project:viewer"}
 // Projects license, a missing API key scope (user:list, project:manageMembers), and a role that may not
 // manage members, without a field this provider reads to tell them apart; the body is never read.
 const memberPermissionMessage = "n8n refused this project members operation: license or role missing (the " +
-	"Projects feature license, the API key's member scope, or its owner's role); Qatlas cannot tell which"
+	"Projects feature license, the API key's member scope, or its owner's role); Qatlas Connect cannot tell which"
 
 var memberReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: memberDataSensitivity}

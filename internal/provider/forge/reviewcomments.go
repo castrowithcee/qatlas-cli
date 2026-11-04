@@ -334,7 +334,7 @@ var reviewCommentsReply = &tool{
 		return capability.Descriptor{
 			Title: "Reply to a " + p.name + " pull request review comment",
 			Description: "Add a reply to an inline comment of a review of a pull request of a repository inside " +
-				"the connection's targets. Qatlas reads the comments of the review first and refuses a comment " +
+				"the connection's targets. Qatlas Connect reads the comments of the review first and refuses a comment " +
 				"that is not among them. A repeated call adds a second reply.",
 			Tags:         []string{p.id, "pull-request-review-comments", "reply", "create"},
 			Risk:         changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, p.id+reviewSensitivity),
@@ -392,7 +392,7 @@ func resolveTool(action string, resolve bool) *tool {
 			}
 			return capability.Descriptor{
 				Title: verb + " a " + p.name + " pull request review comment",
-				Description: description + " The API has no thread object, so the unit is the comment. Qatlas " +
+				Description: description + " The API has no thread object, so the unit is the comment. Qatlas Connect " +
 					"reads the comments of the review first and refuses a comment that is not among them.",
 				Tags:        []string{p.id, "pull-request-review-comments", action, "update"},
 				Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, p.id+reviewSensitivity),

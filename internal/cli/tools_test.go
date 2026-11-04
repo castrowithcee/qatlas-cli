@@ -42,8 +42,8 @@ func catalogEnvironment(t *testing.T) (string, *atomic.Int32, string) {
 	}))
 	t.Cleanup(server.Close)
 
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, fmt.Sprintf(`version: 4
 services:
   wiki:
@@ -134,7 +134,7 @@ func toolSummaries(t *testing.T, stdout string) []application.SearchHit {
 	return toolIndex(t, stdout).Tools
 }
 
-// toolIndex decodes the whole answer of 'qatlas tools': the connections named once and the entries.
+// toolIndex decodes the whole answer of 'qconnect tools': the connections named once and the entries.
 func toolIndex(t *testing.T, stdout string) application.ToolsResponse {
 	t.Helper()
 	var document application.ToolsResponse
@@ -440,8 +440,8 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	t.Run("an empty listing points to --all", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "lexware", "--config", cfg)
 		if code != exitOK || stdout != "tools: []\n" ||
-			stderr != fmt.Sprintf("qatlas: no connection offers any of the %d matching tools; --all lists them with the "+
-				"reason, 'qatlas connections' lists the connections\n", len(sharedRegistry().Provider("lexware"))) {
+			stderr != fmt.Sprintf("qconnect: no connection offers any of the %d matching tools; --all lists them with the "+
+				"reason, 'qconnect connections' lists the connections\n", len(sharedRegistry().Provider("lexware"))) {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 		code, stdout, stderr = runTools(t, nil, "tools", "--query", "absent", "--config", cfg)
@@ -454,7 +454,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	// the cascade exists to avoid. It names the first step instead.
 	t.Run("a bare tools call names the first step", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "--config", cfg)
-		if code != exitUsage || stdout != "" || !strings.Contains(stderr, "qatlas providers") {
+		if code != exitUsage || stdout != "" || !strings.Contains(stderr, "qconnect providers") {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -710,7 +710,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 
 	t.Run("an unknown tool is a stable error", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "describe", "absent.pages.list", "--config", cfg)
-		if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: unknown-operation:") {
+		if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qconnect: unknown-operation:") {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -721,7 +721,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 		} {
 			for _, format := range []string{"table", "compact"} {
 				code, stdout, stderr := runTools(t, nil, append(args, "--config", cfg, "--output", format)...)
-				want := "qatlas: usage: 'qatlas " + args[0] + "' writes toon or json, not " + format +
+				want := "qconnect: usage: 'qconnect " + args[0] + "' writes toon or json, not " + format +
 					"; omit --output for toon or pass --output json\n"
 				if code != exitUsage || stdout != "" || stderr != want {
 					t.Errorf("%v --output %s: exit=%d stdout=%q stderr=%q, want %q", args, format, code,
@@ -862,8 +862,8 @@ func commandNames(cmd *cobra.Command) []string {
 // Acceptance 7: a large catalog grows the catalog data only. The command tree and the MCP tool list stay
 // exactly as they are.
 func TestLargeCatalogGrowsOnlyTheData(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, "version: 4\n")
 
 	small := newRootCommand(&Options{}, syntheticRegistry(t, 1))
@@ -905,7 +905,7 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	}
 
 	manuals := t.TempDir()
-	header := &doc.GenManHeader{Section: "1", Source: "Qatlas CLI test", Manual: "Qatlas CLI Manual"}
+	header := &doc.GenManHeader{Section: "1", Source: "Qatlas Connect test", Manual: "Qatlas Connect Manual"}
 	if err := doc.GenManTree(root, header, manuals); err != nil {
 		t.Fatalf("GenManTree() = %v", err)
 	}
@@ -917,26 +917,26 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	for _, entry := range entries {
 		pages[entry.Name()] = true
 	}
-	for _, page := range []string{"qatlas-connections.1", "qatlas-tools.1", "qatlas-describe.1", "qatlas-invoke.1"} {
+	for _, page := range []string{"qconnect-connections.1", "qconnect-tools.1", "qconnect-describe.1", "qconnect-invoke.1"} {
 		if !pages[page] {
 			t.Errorf("manpage %s is missing: %v", page, pages)
 		}
 	}
 	for _, page := range []string{
-		"qatlas-capabilities.1", "qatlas-search.1", "qatlas-tool.1", "qatlas-knowledge.1", "qatlas-tool-show.1",
+		"qconnect-capabilities.1", "qconnect-search.1", "qconnect-tool.1", "qconnect-knowledge.1", "qconnect-tool-show.1",
 	} {
 		if pages[page] {
 			t.Errorf("manpage %s still exists", page)
 		}
 	}
-	singular := regexp.MustCompile(`qatlas tool\b`)
+	singular := regexp.MustCompile(`qconnect tool\b`)
 	for _, entry := range entries {
 		page, err := os.ReadFile(filepath.Join(manuals, entry.Name()))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if singular.Match(page) {
-			t.Errorf("manpage %s names the hidden command 'qatlas tool'", entry.Name())
+			t.Errorf("manpage %s names the hidden command 'qconnect tool'", entry.Name())
 		}
 	}
 
@@ -946,8 +946,8 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 		t.Fatalf("Help() = %v", err)
 	}
 	for _, want := range []string{
-		"qatlas providers", "qatlas connections <provider>", "qatlas tools <provider>",
-		"qatlas describe <tool-id>", "qatlas invoke <tool-id>", "TOON 4.1",
+		"qconnect providers", "qconnect connections <provider>", "qconnect tools <provider>",
+		"qconnect describe <tool-id>", "qconnect invoke <tool-id>", "TOON 4.1",
 	} {
 		if !strings.Contains(help.String(), want) {
 			t.Errorf("help does not mention %q:\n%s", want, help.String())
@@ -956,13 +956,13 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	// The help starts with the way in: the agents guide for an agent, the editor for a person. Discovery
 	// then begins with the providers, before their connections.
 	intro, _, _ := strings.Cut(help.String(), "Usage:")
-	agents, tui := strings.Index(intro, "qatlas agents"), strings.Index(intro, "qatlas tui")
-	providers, connections := strings.Index(intro, "qatlas providers"), strings.Index(intro, "qatlas connections")
+	agents, tui := strings.Index(intro, "qconnect agents"), strings.Index(intro, "qconnect tui")
+	providers, connections := strings.Index(intro, "qconnect providers"), strings.Index(intro, "qconnect connections")
 	if agents < 0 || tui < 0 || !(agents < providers && tui < providers) {
-		t.Errorf("the help does not start with 'qatlas agents' and 'qatlas tui':\n%s", intro)
+		t.Errorf("the help does not start with 'qconnect agents' and 'qconnect tui':\n%s", intro)
 	}
 	if providers < 0 || !(providers < connections) {
-		t.Errorf("the help does not name 'qatlas providers' before 'qatlas connections':\n%s", intro)
+		t.Errorf("the help does not name 'qconnect providers' before 'qconnect connections':\n%s", intro)
 	}
 	_, listed, found := strings.Cut(help.String(), "Available Commands:")
 	if !found {
@@ -980,7 +980,7 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 			return
 		}
 		if singular.MatchString(c.Long) || singular.MatchString(c.Short) {
-			t.Errorf("the help of %q names the hidden command 'qatlas tool'", c.CommandPath())
+			t.Errorf("the help of %q names the hidden command 'qconnect tool'", c.CommandPath())
 		}
 		for _, sub := range c.Commands() {
 			walk(sub)
@@ -1004,7 +1004,7 @@ func TestToolRunsAsAHiddenAliasOfDescribe(t *testing.T) {
 		}
 	}
 	code, _, stderr := runTools(t, nil, "tool", "bookstack.pages.list", "--connection", "alerts", "--config", cfg)
-	if code != exitUsage || !strings.HasPrefix(stderr, "qatlas: unsupported-capability: ") {
+	if code != exitUsage || !strings.HasPrefix(stderr, "qconnect: unsupported-capability: ") {
 		t.Errorf("tool with a foreign connection: exit=%d stderr=%q", code, stderr)
 	}
 }
@@ -1150,7 +1150,7 @@ func TestConnectionsListTheConfiguredRoutes(t *testing.T) {
 	}
 	code, stdout, stderr = runTools(t, &reads, "connections", "absent", "--config", cfg)
 	if code != exitUsage || stdout != "" || strings.Contains(stderr, "Usage:") ||
-		!strings.HasPrefix(stderr, `qatlas: usage: unknown provider "absent"; run 'qatlas providers'`) {
+		!strings.HasPrefix(stderr, `qconnect: usage: unknown provider "absent"; run 'qconnect providers'`) {
 		t.Errorf("connections absent: exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	if reads.Load() != 0 || calls.Load() != 0 {
@@ -1174,9 +1174,9 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runTools(t, &reads, append(tt.args, "--config", cfg)...)
 			lines := strings.Split(strings.TrimSuffix(stderr, "\n"), "\n")
-			wantMessage := `qatlas: unsupported-capability: connection "wiki" does not offer tool ` +
-				`"bookstack.pages.delete" (effect-not-permitted); 'qatlas describe bookstack.pages.delete' names ` +
-				`the connections that offer it, or change the connection in 'qatlas tui'`
+			wantMessage := `qconnect: unsupported-capability: connection "wiki" does not offer tool ` +
+				`"bookstack.pages.delete" (effect-not-permitted); 'qconnect describe bookstack.pages.delete' names ` +
+				`the connections that offer it, or change the connection in 'qconnect tui'`
 			if code != exitUsage || stdout != "" || len(lines) != 2 || lines[0] != wantMessage {
 				t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 			}
@@ -1202,7 +1202,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	}
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.delete","connection":"wiki",` +
+		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.delete","connection":"wiki",` +
 		`"arguments":{"id":1},"confirm":true}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 		&Options{Config: cfg, Redactor: &redact.Redactor{}})
@@ -1211,15 +1211,15 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	decodeRaw(t, result.Structured, &detail)
 	// Over MCP the step names the broker tool instead of the command, and the person's editor as before.
 	wantText := `unsupported-capability: connection "wiki" does not offer tool "bookstack.pages.delete" ` +
-		`(effect-not-permitted); call qatlas.describe with operation bookstack.pages.delete and without ` +
-		`connection for the connections that offer it, or change the connection in 'qatlas tui'`
+		`(effect-not-permitted); call qconnect.describe with operation bookstack.pages.delete and without ` +
+		`connection for the connections that offer it, or change the connection in 'qconnect tui'`
 	if mcpStderr != "" || !result.IsError || result.Content[0].Text != wantText ||
 		detail["reason"] != "effect-not-permitted" || detail["connection"] != "wiki" {
 		t.Errorf("MCP invoke = %+v detail=%v stderr=%q", result, detail, mcpStderr)
 	}
 }
 
-// qatlas.search follows the catalog rule of 'qatlas tools': the offered tools by default, and with all the
+// qconnect.search follows the catalog rule of 'qconnect tools': the offered tools by default, and with all the
 // others as well, each with the reason the CLI names.
 func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
@@ -1237,7 +1237,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 		indexed := toolIndex(t, stdout)
 
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
 		responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		var page application.SearchResponse
@@ -1253,8 +1253,8 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 // the confirmation, and the connections named once. A query also finds a tool whose description alone
 // carries the term, listed below the tools that carry it in the ID or title.
 func TestToolsQueryFindsByDescriptionAndCarriesTheCallContract(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, `version: 4
 services:
   gh:

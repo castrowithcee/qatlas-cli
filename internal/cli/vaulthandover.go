@@ -17,13 +17,13 @@ var releaseKeys = release.TrustedKeys
 
 // errHandoverNeedsEncryption refuses the update behaviour of a vault without a passphrase.
 var errHandoverNeedsEncryption = errors.New("the update behaviour is stored in an encrypted vault: without a " +
-	"passphrase nobody could manage it; run 'qatlas vault encrypt' first")
+	"passphrase nobody could manage it; run 'qconnect vault encrypt' first")
 
 func newVaultHandoverCommand(opts *Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "handover [handover|lock]",
-		Short: "Show or set what 'qatlas update' does with an unlocked vault",
-		Long: "The update behaviour controls whether 'qatlas update' hands an unlocked vault over to the new\n" +
+		Short: "Show or set what 'qconnect update' does with an unlocked vault",
+		Long: "The update behaviour controls whether 'qconnect update' hands an unlocked vault over to the new\n" +
 			"program or locks it. handover, the default, keeps the vault unlocked across the update; lock locks\n" +
 			"it the way an update always did. Without an argument the command shows the current value; with\n" +
 			"handover or lock it sets it. Windows has no handover: there an update always locks the vault process,\n" +
@@ -34,8 +34,8 @@ func newVaultHandoverCommand(opts *Options) *cobra.Command {
 			"forms need an interactive terminal and ask for the passphrase every time, like every 'vault'\n" +
 			"command but status, unlock, and lock; without a terminal they fail with admin-required, with a\n" +
 			"wrong passphrase with usage, before anything is read or written. A vault that is not encrypted\n" +
-			"has no place for the setting and is refused. 'qatlas vault passphrase' keeps the setting and\n" +
-			"'qatlas vault decrypt' removes it.",
+			"has no place for the setting and is refused. 'qconnect vault passphrase' keeps the setting and\n" +
+			"'qconnect vault decrypt' removes it.",
 		Args: atMostOneArg("update behaviour"),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runVaultHandover(c, opts, args)

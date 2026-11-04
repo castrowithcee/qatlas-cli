@@ -18,7 +18,7 @@ const (
 	maxBotStatus = math.MaxUint16
 	maxBotNumber = math.MaxUint32
 	maxBotSource = 50
-	botSentOnce  = "; sent once and never repeated by Qatlas: a repeat is counted twice, so check the bot reports of " +
+	botSentOnce  = "; sent once and never repeated by Qatlas Connect: a repeat is counted twice, so check the bot reports of " +
 		"the website before repeating it"
 	botSent = "sent to Matomo; this does not confirm that Matomo processed the request, because Matomo stores " +
 		"only requests whose user agent matches its list of AI chatbots and answers every other request the same way"

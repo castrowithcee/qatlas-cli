@@ -179,7 +179,7 @@ func TestRenameConnectionCarriesItsApprovalAndLogsOneRename(t *testing.T) {
 		t.Errorf("LapsedTokens = %v, want the token whose model is renamed", plan.LapsedTokens)
 	}
 	if len(plan.Outside) == 0 || !strings.Contains(strings.Join(plan.Outside, "\n"), "--connection vault-wiki") {
-		t.Errorf("Outside = %v, want the places qatlas cannot change", plan.Outside)
+		t.Errorf("Outside = %v, want the places qconnect cannot change", plan.Outside)
 	}
 
 	after := w.load(t)

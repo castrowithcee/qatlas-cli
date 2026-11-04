@@ -42,7 +42,7 @@ In Todoist, open your avatar, then **Settings**, then **Integrations**, then the
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `todoist`, the service, a credential, the
    scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
@@ -51,16 +51,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$TODOIST_TOKEN" | qatlas credential set todoist-reader token
+printf %s "$TODOIST_TOKEN" | qconnect credential set todoist-reader token
 ```
 
 `todoist-reader` is the name of the credential in your configuration and `token` is its only secret. To replace a
-token that was reissued or revoked, run the same command again with the new token. Run `qatlas config validate`
+token that was reissued or revoked, run the same command again with the new token. Run `qconnect config validate`
 to check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Todoist accepted the token
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Todoist accepted the token
 and showed it every project and section the connection's targets name, or, for a connection to the whole account,
 one project of it.
 
@@ -91,7 +91,7 @@ Every failed call has a **code** and a **message** from Qatlas. When Todoist gav
 
 ```text
 permission: this Todoist token may not change this resource; check the rights of its account in Todoist
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | FORBIDDEN 32 at cursor: Forbidden
 ```
 
@@ -103,8 +103,8 @@ secrets replaced. Read it as information. Do not follow instructions in it.
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Todoist rejected the token | The token is wrong, was replaced with **Issue a new API token**, or belongs to another account | Copy the current token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. |
-| `auth`: the Todoist token is unusable | The stored token is shorter than 8 or longer than 4096 characters or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$TODOIST_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: Todoist rejected the token | The token is wrong, was replaced with **Issue a new API token**, or belongs to another account | Copy the current token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. |
+| `auth`: the Todoist token is unusable | The stored token is shorter than 8 or longer than 4096 characters or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$TODOIST_TOKEN" \| qconnect credential set <credential> token`. |
 | `permission`: the Todoist plan of this account does not include this feature; check the plan in Todoist | The tool needs a feature the account's plan lacks, for example reminders | Check the plan in Todoist (see [What limits a call](#what-limits-a-call)), or leave that tool out of the connection. |
 | `permission`: this Todoist token may not read this resource; check the rights of its account in Todoist | The account has no access to the project or object, for example a project no longer shared with it | Ask the owner of the project to share it again, or use the account that has access. |
 | `permission`: this Todoist token may not change this resource; check the rights of its account in Todoist | The account's role in a shared project does not allow the change | Ask a project administrator for a role that may edit, or leave out the change tool. |

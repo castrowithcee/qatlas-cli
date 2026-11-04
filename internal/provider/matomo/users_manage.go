@@ -50,7 +50,7 @@ var usersLogout = capability.Descriptor{
 	Description: "End all web sessions of one user (UsersManager.logoutUser); the user must log in again. Personal " +
 		"tokens stay valid. It needs Super User rights and a connection whose targets name the instance, and rejects " +
 		"anonymous. A personal token needs no password confirmation and the tool takes no password. Repeating it " +
-		"ends the sessions again; sent once and never repeated by Qatlas",
+		"ends the sessions again; sent once and never repeated by Qatlas Connect",
 	Tags: []string{"matomo", "users", "logout", "sessions", "instance", "personal-data"},
 	Risk: userChangeRisk(capability.EffectExecute), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + userLoginSchema +

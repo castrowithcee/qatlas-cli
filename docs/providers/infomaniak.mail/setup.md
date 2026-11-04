@@ -49,7 +49,7 @@ but a leaked password is not narrowed: it reaches the whole mailbox and can send
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `infomaniak.mail`, the service, a credential,
    the scope (targets: the mailbox, optionally folders and senders), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and enter the mailbox password as its `password`
@@ -62,16 +62,16 @@ Without the guided setup, store the password on the command line. It is read fro
 appear in the shell history:
 
 ```sh
-printf %s "$INFOMANIAK_MAIL_PASSWORD" | qatlas credential set customer-a-mail password
+printf %s "$INFOMANIAK_MAIL_PASSWORD" | qconnect credential set customer-a-mail password
 ```
 
 `customer-a-mail` is the name of the credential in your configuration and `password` is its only secret. To replace a
-changed or removed password, run the same command again with the new one. Run `qatlas config validate` to check the
+changed or removed password, run the same command again with the new one. Run `qconnect config validate` to check the
 configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the
 mailbox address and password over IMAP and answered a folder query for the inbox.
 
 **A passing test does not mean every tool works.** It does not try SMTP, so it does not show that sending works. It
@@ -113,7 +113,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: this mailbox may not perform this operation
-provider answer (untrusted, not written by qatlas):
+provider answer (untrusted, not written by qconnect):
   | <type> <response code>: <server text>
 ```
 
@@ -130,8 +130,8 @@ provider answer (untrusted, not written by qatlas):
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Infomaniak Mail rejected the mailbox address or password | The password is wrong, was replaced or removed, or you entered your account password; or the address in the `mailbox/` target is wrong | Check the address in the target. Create a new mailbox password ([Create a mailbox password](#create-a-mailbox-password)) and store it again with `qatlas credential set <credential> password`. |
-| `auth`: the mailbox password is unusable | The stored password is empty, longer than 1024 characters, or holds a control character such as a line break | Store it again with `printf %s "$INFOMANIAK_MAIL_PASSWORD" \| qatlas credential set <credential> password`. |
+| `auth`: Infomaniak Mail rejected the mailbox address or password | The password is wrong, was replaced or removed, or you entered your account password; or the address in the `mailbox/` target is wrong | Check the address in the target. Create a new mailbox password ([Create a mailbox password](#create-a-mailbox-password)) and store it again with `qconnect credential set <credential> password`. |
+| `auth`: the mailbox password is unusable | The stored password is empty, longer than 1024 characters, or holds a control character such as a line break | Store it again with `printf %s "$INFOMANIAK_MAIL_PASSWORD" \| qconnect credential set <credential> password`. |
 | `auth` ending in "the message was not sent" | SMTP refused the login for the address and password | Same as above. |
 | `permission`: this mailbox may not perform this operation | The server refused the operation on this folder or message | Open the folder in the Infomaniak web mail as the same mailbox. Read the provider answer for the server's reason. |
 | `not-found`: Infomaniak Mail does not hold this folder or does not show it to this mailbox | The folder name is wrong, or the mailbox cannot see it | Check the name against `infomaniak.mail.folders.list`. |
@@ -150,7 +150,7 @@ provider answer (untrusted, not written by qatlas):
 ### Connection invalid after an update: choose the folders again
 
 **You see:** one of your mail connections offers no tools, and a call through it is refused with
-`connection-targets-outdated`. `qatlas config validate` names the connection and says that its targets keep a former
+`connection-targets-outdated`. `qconnect config validate` names the connection and says that its targets keep a former
 meaning. The rest of your configuration, and your other connections, keep working.
 
 **Why:** the two folder forms now mean something different from when this connection was written (see
@@ -158,13 +158,13 @@ meaning. The rest of your configuration, and your other connections, keep workin
 connections over on its own. For this one it could not keep exactly the same folders, so it left the connection as
 it was and locked it, rather than guess and give it more or fewer folders.
 
-**What to do:** choose the folders again in `qatlas tui`:
+**What to do:** choose the folders again in `qconnect tui`:
 
 1. Open Connections and the connection the message names. Its Targets row says that the targets are outdated.
 2. Choose its folders again in the Targets list and save. Check the folder entries already marked as exclusions as
    well: they mean the same as the targets. See [Scope](README.md#scope) for the forms.
-3. Run `qatlas config validate`. It says the configuration is valid once the connection is correct.
-4. If your vault is encrypted, the changed connection needs its approval again: run `qatlas vault approve`, or open
-   Access > Approvals in `qatlas tui`.
+3. Run `qconnect config validate`. It says the configuration is valid once the connection is correct.
+4. If your vault is encrypted, the changed connection needs its approval again: run `qconnect vault approve`, or open
+   Access > Approvals in `qconnect tui`.
 
 Saving the same folders again does not unlock the connection; the choice has to differ from the stored one.

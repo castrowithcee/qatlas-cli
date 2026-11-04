@@ -27,11 +27,11 @@ page. [Set up GitHub](setup.md) leads through creating a token and lists the rig
 A service is `https://api.github.com` (the default), `https://api.SUBDOMAIN.ghe.com` for GitHub Enterprise
 Cloud with data residency, or `https://HOST/api/v3` for GitHub Enterprise Server. A service without
 `base_url` uses the default; Qatlas applies it when reading the file and leaves the file unchanged, so
-`qatlas config validate` accepts `provider: github` alone. Qatlas derives the GraphQL
+`qconnect config validate` accepts `provider: github` alone. Qatlas derives the GraphQL
 endpoint from it (`/graphql`, or `https://HOST/api/graphql` on Enterprise Server). Filtered project items
 need a server that supports the `query` argument of `ProjectV2.items`.
 
-`qatlas config validate` checks the base URL against these same forms, so a host that is not an
+`qconnect config validate` checks the base URL against these same forms, so a host that is not an
 `https://api.…` API host and does not end in `/api/v3`, or one that is not even `https`, fails validation
 with `config-invalid` instead of only at the first call.
 
@@ -112,8 +112,8 @@ the project, not a target. The owner lists `github.projects.list` and `github.re
 
 An argument may be left out only when the targets allow exactly one repository, exactly one project, or
 exactly one owner as an owner entry, and not as a pattern: that one is the default of its kind. Nothing else
-chooses a target; in particular, the git remote of the working directory never does, for `qatlas invoke` and
-a `qatlas mcp` broker alike, and neither does it choose an owner. A connection without targets, or with a
+chooses a target; in particular, the git remote of the working directory never does, for `qconnect invoke` and
+a `qconnect mcp` broker alike, and neither does it choose an owner. A connection without targets, or with a
 pattern, therefore needs `repository` as `OWNER/REPO` on every repository call.
 
 A default never widens or narrows the targets, and an explicit argument always wins. Every target is checked
@@ -156,7 +156,7 @@ for, where the call named one.
 
 | Code | GitHub's answer |
 | --- | --- |
-| `auth` | HTTP 401: GitHub rejected the token itself, or Qatlas cannot send it; the message adds the next step, checking or renewing the credential with `qatlas credential set <credential> <role>` or in `qatlas tui` |
+| `auth` | HTTP 401: GitHub rejected the token itself, or Qatlas cannot send it; the message adds the next step, checking or renewing the credential with `qconnect credential set <credential> <role>` or in `qconnect tui` |
 | `permission` | HTTP 403, or GraphQL `FORBIDDEN` or `INSUFFICIENT_SCOPES`: GitHub saw the target and refused this token explicitly; the message names the target and, as the next step, the scopes or permissions of the token to check, see [Fixing errors](setup.md#fixing-errors) |
 | `not-found` | HTTP 404 or GraphQL `NOT_FOUND`: the target or a resource inside it does not exist, or the token may not see it |
 | `invalid-request` | the number an issue tool names belongs to a pull request, which issue tools do not handle |

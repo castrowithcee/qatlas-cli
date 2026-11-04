@@ -12,8 +12,8 @@ import (
 )
 
 // The version list (command version, and the Update part of Settings) lets a person install a newer
-// release, a prerelease, or an older version. It shows the choice 'qatlas update --list' shows, installs a
-// newer one or a prerelease like 'qatlas update --to', and treats an older one as the checked rollback of
+// release, a prerelease, or an older version. It shows the choice 'qconnect update --list' shows, installs a
+// newer one or a prerelease like 'qconnect update --to', and treats an older one as the checked rollback of
 // that command.
 
 // versionUpdater is implemented by an Updater that can install a chosen version. Without it the editor
@@ -236,7 +236,7 @@ func (m *Model) askVersion(e selfupdate.Entry) {
 }
 
 // consequencesOf is the part of the core's question after the version, which says what the installation does
-// to running qatlas processes; the question is built for a terminal and holds the version in front of it.
+// to running qconnect processes; the question is built for a terminal and holds the version in front of it.
 func consequencesOf(question string) string {
 	if _, after, ok := strings.Cut(question, "? "); ok {
 		return after

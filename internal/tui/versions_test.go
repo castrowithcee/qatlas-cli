@@ -164,7 +164,7 @@ func TestChoosingAPrereleaseAsksWithTheDirectionAndInstalls(t *testing.T) {
 		t.Fatalf("enter did not ask: screen %v", m.screen)
 	}
 	view := boxText(screenOf(m))
-	for _, want := range []string{"Install qatlas v0.6.0-rc.1?", "prerelease, newer than the running version v0.4.0",
+	for _, want := range []string{"Install qconnect v0.6.0-rc.1?", "prerelease, newer than the running version v0.4.0",
 		"y install n/esc cancel"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
@@ -204,7 +204,7 @@ func TestChoosingAnOlderVersionNamesTheLossAndTheVault(t *testing.T) {
 	typeText(t, m, "v0.3.1")
 	pump(t, m, "enter")
 	view := boxText(screenOf(m))
-	for _, want := range []string{"Install qatlas v0.3.1?", "Older than the running version v0.4.0",
+	for _, want := range []string{"Install qconnect v0.3.1?", "Older than the running version v0.4.0",
 		"the fixes made since are missing", "The vault is locked first", "reads your configuration"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
@@ -389,7 +389,7 @@ func TestUStillInstallsTheNewestStableRelease(t *testing.T) {
 	fake := choosable()
 	m := startedVersions(t, fake)
 	pump(t, m, "U")
-	if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") {
+	if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qconnect to v0.5.0?") {
 		t.Fatalf("u did not ask the update question: screen %v", m.screen)
 	}
 	pump(t, m, "y")
@@ -417,7 +417,7 @@ func TestTheVersionQuestionIsGerman(t *testing.T) {
 	typeText(t, m, "v0.3.1")
 	pump(t, m, "enter")
 	view = boxText(screenOf(m))
-	for _, want := range []string{"qatlas v0.3.1 installieren?", "Fehlerbehebungen fehlen", "Tresor wird zuerst gesperrt"} {
+	for _, want := range []string{"qconnect v0.3.1 installieren?", "Fehlerbehebungen fehlen", "Tresor wird zuerst gesperrt"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
 		}

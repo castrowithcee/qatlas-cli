@@ -33,7 +33,7 @@ func must(t *testing.T, err error) {
 
 func newTarget(t *testing.T) (*Store, string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "qatlas", "config.yaml")
+	path := filepath.Join(t.TempDir(), "qconnect", "config.yaml")
 	return NewStore(path, testProviders), path
 }
 

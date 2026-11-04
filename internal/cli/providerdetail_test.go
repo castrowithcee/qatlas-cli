@@ -89,8 +89,8 @@ func runProviderFailure(t *testing.T, args ...string) string {
 
 func TestCLIPrintsProviderAnswerAsSeparateBlock(t *testing.T) {
 	got := runProviderFailure(t)
-	want := "qatlas: permission: list: this token may not read x\n" +
-		"provider answer (untrusted, not written by qatlas), HTTP 200:\n" +
+	want := "qconnect: permission: list: this token may not read x\n" +
+		"provider answer (untrusted, not written by qconnect), HTTP 200:\n" +
 		"  | INSUFFICIENT_SCOPES at node.name: needs read:org, token [redacted] has only [repo]\n"
 	if got != want {
 		t.Errorf("stderr = %q, want %q", got, want)
@@ -100,7 +100,7 @@ func TestCLIPrintsProviderAnswerAsSeparateBlock(t *testing.T) {
 func TestCLIJSONOutputCarriesProviderSection(t *testing.T) {
 	got := runProviderFailure(t, "--output", "json")
 	lines := strings.Split(strings.TrimSpace(got), "\n")
-	if len(lines) != 2 || !strings.HasPrefix(lines[0], "qatlas: permission: ") {
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "qconnect: permission: ") {
 		t.Fatalf("stderr = %q", got)
 	}
 	if strings.Contains(got, providerDetailSecret) {

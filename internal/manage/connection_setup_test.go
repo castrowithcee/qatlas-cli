@@ -298,7 +298,7 @@ type setupFixture struct {
 
 func newSetupFixture(t *testing.T) *setupFixture {
 	t.Helper()
-	store := config.NewStore(filepath.Join(t.TempDir(), "qatlas", "config.yaml"), setupCatalog{})
+	store := config.NewStore(filepath.Join(t.TempDir(), "qconnect", "config.yaml"), setupCatalog{})
 	if err := store.Save(setupConfig(t)); err != nil {
 		t.Fatal(err)
 	}

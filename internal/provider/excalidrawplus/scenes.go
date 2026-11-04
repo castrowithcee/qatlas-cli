@@ -92,7 +92,7 @@ var scenesList = capability.Descriptor{
 			"allows several collections, defaults to the only allowed one, and optional with the * wildcard",
 			Target: "collection"},
 		{Name: "name", Description: "When set, keep only scenes of the page whose name contains this text, " +
-			"case-insensitive; applied by Qatlas to the page, so a later page may still match"},
+			"case-insensitive; applied by Qatlas Connect to the page, so a later page may still match"},
 	}, pageArguments...),
 	Fields:   append(append([]capability.Field{}, sceneFields...), pageFields...),
 	Examples: []capability.Example{{Description: "List scenes of one collection", Arguments: json.RawMessage(`{"collection_id":"abc123"}`)}},
@@ -144,7 +144,7 @@ var scenesContent = capability.Descriptor{
 		`"additionalProperties":false}`),
 	Arguments: []capability.Argument{sceneIDArgument,
 		{Name: "query", Description: "Keep only elements whose text or name contains this text, " +
-			"case-insensitive; the search runs in Qatlas over the scene's content"},
+			"case-insensitive; the search runs in Qatlas Connect over the scene's content"},
 		{Name: "offset", Description: "Matching elements to skip; 0 when omitted"},
 		{Name: "limit", Description: "Elements per answer, 1 to " + strconv.Itoa(maxElementLimit) + "; " +
 			strconv.Itoa(defaultElementLimit) + " when omitted; the answer also stops at a text budget"},

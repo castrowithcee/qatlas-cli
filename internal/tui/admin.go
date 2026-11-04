@@ -125,7 +125,7 @@ func (m *Model) updateAdminAuth(key tea.KeyPressMsg) tea.Cmd {
 }
 
 // verifyAdminPassphrase checks the typed passphrase, as a command so the scrypt work it does never runs on
-// the event loop: unlocking a locked vault with vault.Vault.Unlock, the same call 'qatlas credential set'
+// the event loop: unlocking a locked vault with vault.Vault.Unlock, the same call 'qconnect credential set'
 // makes for requireAdmin's CLI counterpart (see internal/cli/admin.go), or, for one already unlocked in this
 // process, verifying it without any other side effect with vault.Vault.VerifyPassphrase, the same call the
 // vault form's own "change passphrase" and "turn off encryption" already use. Either is the one existing

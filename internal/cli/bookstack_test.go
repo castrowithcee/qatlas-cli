@@ -26,8 +26,8 @@ const (
 // bookstackConfig points a connection at a test server. Only environment variable names are stored.
 func bookstackConfig(t *testing.T, baseURL string) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	t.Setenv("TEST_TOKEN_ID", canaryID)
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
 
@@ -189,7 +189,7 @@ func TestBookStackInvokeReadsPages(t *testing.T) {
 
 	t.Run("an unknown tool is a usage error", func(t *testing.T) {
 		code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.absent", "--config", cfg)
-		if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: unknown-operation:") {
+		if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qconnect: unknown-operation:") {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -204,7 +204,7 @@ func TestBookStackInvokeReadsPages(t *testing.T) {
 	t.Run("arguments that are not one JSON object are a usage error", func(t *testing.T) {
 		for _, arguments := range []string{"[]", "{}{}", "not json"} {
 			code, stdout, stderr := runInvoke(t, arguments, "invoke", "bookstack.pages.list", "--config", cfg)
-			if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: invalid-request:") {
+			if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qconnect: invalid-request:") {
 				t.Errorf("arguments %q: exit=%d stdout=%q stderr=%q", arguments, code, stdout, stderr)
 			}
 		}
@@ -246,8 +246,8 @@ func TestInvokeArgumentsAreBoundedAndValidatedBeforeTheProvider(t *testing.T) {
 	}}); err != nil {
 		t.Fatalf("Register() = %v", err)
 	}
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, validConfig)
 
 	var stdout, stderr bytes.Buffer
@@ -256,7 +256,7 @@ func TestInvokeArgumentsAreBoundedAndValidatedBeforeTheProvider(t *testing.T) {
 	code := run(newRootCommand(opts, reg), opts,
 		[]string{"invoke", "bookstack.pages.list", "--config", cfg}, &stdout, &stderr)
 	if code != exitUsage || stdout.Len() != 0 ||
-		!strings.HasPrefix(stderr.String(), "qatlas: invalid-request:") {
+		!strings.HasPrefix(stderr.String(), "qconnect: invalid-request:") {
 		t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	if calls.Load() != 0 {
@@ -304,8 +304,8 @@ func TestBookStackInvokeKeepsConnectionsSeparate(t *testing.T) {
 	t.Setenv("PRIMARY_SECRET", primarySecret)
 	t.Setenv("AUDIT_ID", auditID)
 	t.Setenv("AUDIT_SECRET", auditSecret)
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, fmt.Sprintf(`
 version: 4
 services:
@@ -398,7 +398,7 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 			if code != exitRuntime || stdout != "" {
 				t.Errorf("exit=%d stdout=%q", code, stdout)
 			}
-			if !strings.HasPrefix(stderr, "qatlas: "+tt.code+": ") {
+			if !strings.HasPrefix(stderr, "qconnect: "+tt.code+": ") {
 				t.Errorf("stderr = %q, want the %s code", stderr, tt.code)
 			}
 		})
@@ -500,7 +500,7 @@ func TestBookStackInvokeRedactsSuccessfulPayloads(t *testing.T) {
 // when the provider said 401. The secret the request carried never appears, even where the provider echoes it.
 func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 	const step = "; check or renew the credential of this connection with " +
-		"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+		"'qconnect credential set <credential> <role>' or in 'qconnect tui'"
 	for _, status := range []int{http.StatusUnauthorized} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -513,9 +513,9 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 
 			code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.list", "--config", cfg)
 			// The first line is Qatlas' own message; BookStack's answer follows as a separate part.
-			cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr), "qatlas: ")
+			cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr), "qconnect: ")
 			message, answer, _ := strings.Cut(cliDiagnostic, "\n")
-			if !strings.HasPrefix(answer, "provider answer (untrusted, not written by qatlas), HTTP 401:") {
+			if !strings.HasPrefix(answer, "provider answer (untrusted, not written by qconnect), HTTP 401:") {
 				t.Errorf("stderr = %q, want the provider answer part", stderr)
 			}
 			if code != exitRuntime || stdout != "" || !strings.HasPrefix(message, "auth: ") ||
@@ -527,7 +527,7 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			opts.Config = cfg
 			var out, errOut bytes.Buffer
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-				`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+				`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
 			if err := newMCPServer(opts, sharedRegistry(), &out, &errOut).serve(context.Background(),
 				strings.NewReader(input)); err != nil {
 				t.Fatal(err)
@@ -555,8 +555,8 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 // bookstackTargetsConfig is bookstackConfig with a targets list on the connection.
 func bookstackTargetsConfig(t *testing.T, baseURL string, targets ...string) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	t.Setenv("TEST_TOKEN_ID", canaryID)
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
 	var list strings.Builder

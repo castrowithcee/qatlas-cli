@@ -68,7 +68,7 @@ func mismatch(op string, p *product) *provider.Error {
 
 func tooOld(op string, p *product) *provider.Error {
 	return provider.Fail(op, "the instance runs a "+p.name+" version older than "+p.minimum.String()+
-		", which Qatlas does not support")
+		", which Qatlas Connect does not support")
 }
 
 // versionTTL is how long a version read stays valid in this process. A long-running broker sees an upgrade of

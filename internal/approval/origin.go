@@ -10,13 +10,13 @@ import (
 
 // The sources an Origin names.
 const (
-	// OriginTUI, OriginWeb, and OriginCLI: qatlas itself changed the connection on that surface, as its
+	// OriginTUI, OriginWeb, and OriginCLI: qconnect itself changed the connection on that surface, as its
 	// invocation log entry says.
 	OriginTUI = "tui"
 	OriginWeb = "web"
 	OriginCLI = "cli"
 	// OriginOutside: no log entry explains the change, so the configuration file was changed by something
-	// that is not qatlas.
+	// that is not qconnect.
 	OriginOutside = "outside"
 	// OriginVault: only the credential entry was stored anew in the vault; the configuration did not change.
 	OriginVault = "vault"
@@ -29,7 +29,7 @@ const (
 type Origin struct {
 	// Source is one of the Origin constants.
 	Source string
-	// Time is when qatlas logged the change, or, for OriginOutside, when the configuration file was last
+	// Time is when qconnect logged the change, or, for OriginOutside, when the configuration file was last
 	// modified; zero when that is not known.
 	Time time.Time
 	// Seq is the sequence number of the log entry found, 0 when none was.
@@ -54,7 +54,7 @@ func (o Origin) Text() string {
 	}
 	switch o.Source {
 	case OriginTUI, OriginWeb, OriginCLI:
-		text := "changed in qatlas " + o.Source + when(", ")
+		text := "changed in qconnect " + o.Source + when(", ")
 		if o.As != "" {
 			text += ", then named " + o.As
 		}
@@ -67,7 +67,7 @@ func (o Origin) Text() string {
 		if !o.Time.IsZero() {
 			modified = " (last modified " + o.Time.In(time.Local).Format("2006-01-02 15:04") + ")"
 		}
-		return "changed outside qatlas: config.yaml edited directly" + modified
+		return "changed outside qconnect: config.yaml edited directly" + modified
 	case OriginVault:
 		return fmt.Sprintf("the vault entry of %s was stored anew; the configuration did not change", o.Credential)
 	}
@@ -105,7 +105,7 @@ func LogWindow(change Change, now time.Time, retentionDays int) time.Time {
 // files of vaultDir since the oldest such approval (a connection never approved is looked up over the last
 // retentionDays days, or over all of it for zero) and checked with checker, which may be nil. A change whose
 // only difference is a credential stored anew is OriginVault and needs no log. Where no entry is found, the
-// change was made outside qatlas, to the configuration file last modified at configModTime. A log that cannot
+// change was made outside qconnect, to the configuration file last modified at configModTime. A log that cannot
 // be read leaves OriginUnknown, never an error.
 func Origins(vaultDir string, checker invokelog.Checker, changes []Change, configModTime, now time.Time,
 	retentionDays int) map[string]Origin {

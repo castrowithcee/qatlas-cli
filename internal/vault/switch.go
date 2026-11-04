@@ -20,7 +20,7 @@ var ErrEmptyPassphrase = errors.New("a passphrase must not be empty")
 // the private key with passphrase, and re-encrypts whatever document already exists, or an empty one for a
 // vault that did not exist yet. The plaintext document is removed only once the encrypted one was written
 // successfully. Called on a vault that is already encrypted, it changes nothing and reports
-// ErrAlreadyEncrypted; 'qatlas vault passphrase' is the way to change the passphrase of one.
+// ErrAlreadyEncrypted; 'qconnect vault passphrase' is the way to change the passphrase of one.
 func (v *Vault) Encrypt(passphrase string) error {
 	if passphrase == "" {
 		return ErrEmptyPassphrase

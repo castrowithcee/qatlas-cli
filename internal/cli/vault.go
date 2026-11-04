@@ -49,40 +49,40 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "vault",
 		Short: "Inspect and unlock the vault a credential of type vault reads from",
 		Long: "The vault is a directory named vault beside the configuration file, unencrypted or\n" +
-			"encrypted to a passphrase. 'qatlas credential set' fills it for a credential of type vault, and\n" +
+			"encrypted to a passphrase. 'qconnect credential set' fills it for a credential of type vault, and\n" +
 			"offers a passphrase the first time it stores a secret there. 'vault encrypt', 'vault passphrase',\n" +
 			"and 'vault decrypt' set, change, and remove that passphrase; 'vault migrate' carries the entries\n" +
 			"of a plaintext credentials.yaml left over from an earlier version into the vault and removes it.\n\n" +
-			"'qatlas credential set', 'qatlas credential delete', and every 'vault' command but status,\n" +
+			"'qconnect credential set', 'qconnect credential delete', and every 'vault' command but status,\n" +
 			"unlock, and lock manage a credential or the vault, keyring credentials included, and run only from an\n" +
 			"interactive terminal; where the vault is encrypted they ask for its passphrase there too, once per\n" +
 			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
 			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault,\n" +
 			"with one exception: an agent token lets 'vault approve' release, without a terminal, the open\n" +
 			"connection changes that reach no further than one of the token's model connections; see\n" +
-			"'qatlas vault token'.\n\n" +
+			"'qconnect vault token'.\n\n" +
 			"An encrypted vault also needs its passphrase to answer a read outside such a command, unless a\n" +
 			"vault process holds it unlocked, and asks for it on the terminal, never as a command line\n" +
 			"argument, an environment variable, or a file. Without a terminal to ask on, such as an agent\n" +
-			"talking to qatlas over MCP, such an access fails with the code vault-locked, and 'qatlas\n" +
-			"connections' marks the connections it affects; a person runs 'qatlas vault unlock' to open it, or\n" +
-			"presses ctrl+l in 'qatlas tui', which unlocks it the same way. An encrypted vault hands a\n" +
+			"talking to qconnect over MCP, such an access fails with the code vault-locked, and 'qconnect\n" +
+			"connections' marks the connections it affects; a person runs 'qconnect vault unlock' to open it, or\n" +
+			"presses ctrl+l in 'qconnect tui', which unlocks it the same way. An encrypted vault hands a\n" +
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
 			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
 			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
-			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
+			"'vault handover' shows or sets whether 'qconnect update' hands an unlocked vault over to the new\n" +
 			"program or locks it; Windows has no handover and always locks. 'vault settings' shows or sets\n" +
 			"the idle timeout, the maximum unlock time (counted from the unlock, independent of reads, off by\n" +
 			"default), the admin session timeout, and the log retention.\n\n" +
 			"On Linux, macOS, and Windows 'vault unlock' hands the unlocked vault to a vault process that holds\n" +
 			"it open until it is idle for the vault's idle timeout (12h unless 'vault settings' sets another),\n" +
 			"'vault lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current\n" +
-			"process. On Windows it guards its memory less strictly than on Linux; see 'qatlas vault unlock'.\n" +
-			"ctrl+l in 'qatlas tui' unlocks and locks it the same way. Every later\n" +
+			"process. On Windows it guards its memory less strictly than on Linux; see 'qconnect vault unlock'.\n" +
+			"ctrl+l in 'qconnect tui' unlocks and locks it the same way. Every later\n" +
 			"command and the MCP broker, one started before included, read their secrets from that process\n" +
 			"without asking for anything. 'credential set', 'credential delete', and 'vault migrate' hand it\n" +
-			"what they changed; 'vault passphrase', 'vault decrypt', and 'qatlas update' lock it first. A\n" +
+			"what they changed; 'vault passphrase', 'vault decrypt', and 'qconnect update' lock it first. A\n" +
 			"process at the vault's socket that fails the check or does not answer is reported with its\n" +
 			"process id and how to end it, never answered by asking for the passphrase instead. No command\n" +
 			"ever shows a stored secret back.\n\n" +
@@ -105,7 +105,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"way reading a secret does. The state is the effective one: unlocked while a vault process holds\n" +
 			"the vault open for every connection. For an encrypted vault it also reports that process\n" +
 			"(process running, with its pid, when it locks itself, and its update behaviour, which says\n" +
-			"whether 'qatlas update' hands the vault over to the new program or locks it, or none); for an\n" +
+			"whether 'qconnect update' hands the vault over to the new program or locks it, or none); for an\n" +
 			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
 			"passphrase and shows no secret value.",
 		Args: noArgs,
@@ -121,7 +121,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"entry that was queued in pending while it was locked. On Linux, macOS, and Windows it then starts a\n" +
 			"vault process that holds the unlocked vault in memory, detached from the terminal, so it outlives\n" +
 			"the session that started it; it locks itself after the idle timeout of 'vault settings' without a\n" +
-			"read, on 'qatlas vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
+			"read, on 'qconnect vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
 			"not started a second time, and nothing is asked. Where systemd-logind would end the process at\n" +
 			"logout or remove its socket, a warning names the setting, such as 'loginctl enable-linger'.\n\n" +
 			"On Windows the process listens on a named pipe only this user can open, has no console, so closing\n" +
@@ -157,7 +157,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	var successor bool
 	serve := &cobra.Command{
 		Use:    "serve",
-		Short:  "Hold the unlocked vault open; started by 'qatlas vault unlock'",
+		Short:  "Hold the unlocked vault open; started by 'qconnect vault unlock'",
 		Hidden: true,
 		Args:   noArgs,
 		RunE: func(*cobra.Command, []string) error {
@@ -177,7 +177,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"pair is generated, the private key is wrapped with the passphrase as key.age, and whatever the\n" +
 			"vault already holds is re-encrypted as secrets.age. The plaintext document is removed only once\n" +
 			"the encrypted one is safely written. Run against a vault that is already encrypted, it changes\n" +
-			"nothing and says to use 'qatlas vault passphrase' instead; a passphrase left empty, or a mismatch\n" +
+			"nothing and says to use 'qconnect vault passphrase' instead; a passphrase left empty, or a mismatch\n" +
 			"between the two entries, aborts the same way, without touching any file.\n\n" +
 			"From then on the vault hands a secret only to a connection it approved as it is configured, and\n" +
 			"fails any other with approval-required. Every connection that reads from the vault at this\n" +
@@ -195,9 +195,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"re-encrypts only key.age with it. Every stored secret, the key pair, and the recipient stay\n" +
 			"exactly as they were. A wrong current passphrase, an empty new one, or a mismatch between the\n" +
 			"two new entries aborts without touching any file. Run against a vault that is not encrypted, it\n" +
-			"refuses and says to use 'qatlas vault encrypt' instead. A vault process that holds the vault\n" +
+			"refuses and says to use 'qconnect vault encrypt' instead. A vault process that holds the vault\n" +
 			"unlocked with the old passphrase is locked once all three entries are made, and the command\n" +
-			"says so; 'qatlas vault unlock' opens the vault again.",
+			"says so; 'qconnect vault unlock' opens the vault again.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultPassphrase(c, opts)
@@ -211,7 +211,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Long: "Asks for the current passphrase on the terminal, merges every entry queued in pending first so\n" +
 			"nothing is lost, and then writes the document as plain secrets.json and removes key.age,\n" +
 			"recipient, and secrets.age. --confirm is required, and a wrong passphrase aborts without\n" +
-			"touching any file. Afterwards 'qatlas vault status' warns that the vault is unencrypted, the same\n" +
+			"touching any file. Afterwards 'qconnect vault status' warns that the vault is unencrypted, the same\n" +
 			"way it does for a vault that was never encrypted at all. Run against a vault that is not\n" +
 			"encrypted, it refuses and says there is nothing to decrypt. A vault process that holds the vault\n" +
 			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.\n" +
@@ -229,7 +229,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "migrate",
 		Short: "Carry the entries of a plaintext credentials.yaml into the vault",
 		Long: "Reads every entry credentials.yaml still holds, regardless of whether it was switched on, and\n" +
-			"stores each one in the vault the same way 'qatlas credential set' does: the vault's very first\n" +
+			"stores each one in the vault the same way 'qconnect credential set' does: the vault's very first\n" +
 			"secret offers a passphrase on the terminal, leaving it empty keeps the vault unencrypted. Managing\n" +
 			"an already encrypted vault needs its passphrase up front instead, asked by the admin check every\n" +
 			"'vault' command but status, unlock, and lock runs before it does anything.\n\n" +
@@ -242,7 +242,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"warning, never a value.\n\n" +
 			"A credential that is not, or no longer, of type keyring — most often one an earlier run already\n" +
 			"switched, its deletion question answered no or never asked — is never touched that way: a role it\n" +
-			"already holds in the vault, from that earlier run or from 'qatlas credential set', keeps its value,\n" +
+			"already holds in the vault, from that earlier run or from 'qconnect credential set', keeps its value,\n" +
 			"and only a role still missing is added from credentials.yaml. Checking what the vault already\n" +
 			"holds needs it unlocked exactly like any other read, which the admin check already did before\n" +
 			"credentials.yaml was even opened; without a terminal the command fails there instead, with the\n" +
@@ -254,7 +254,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"the message names this command as the next step to run again. Run with nothing left to migrate,\n" +
 			"it says so and changes nothing. Run again after a partial or a complete migration, it repeats\n" +
 			"safely: a role already in the vault keeps its value, and only a role still missing is written. A\n" +
-			"vault process that holds the vault unlocked is handed every entry written, the same way 'qatlas\n" +
+			"vault process that holds the vault unlocked is handed every entry written, the same way 'qconnect\n" +
 			"credential set' hands it one.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -272,11 +272,11 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"value, or a switch between a mode and a list ('every tool of its effects', 'every project',\n" +
 			"'no local files'), shows before -> after; a list that stays a list shows what is newly asked for\n" +
 			"(+) and what falls away (-), then only how many entries are unchanged. Each entry starts with a\n" +
-			"source line saying where the change came from. 'changed in qatlas tui' (or web, cli) with the time names the\n" +
+			"source line saying where the change came from. 'changed in qconnect tui' (or web, cli) with the time names the\n" +
 			"latest entry of the invocation log, config.connection.create or .change, written after the\n" +
 			"connection was last approved, under its current name or, past a config.connection.rename, the name it\n" +
 			"had then, marked (unverified) when its check value could not be matched; 'changed\n" +
-			"outside qatlas' means no such entry exists, so something that is not qatlas, an agent among others,\n" +
+			"outside qconnect' means no such entry exists, so something that is not qconnect, an agent among others,\n" +
 			"edited config.yaml, last modified at the time shown; 'the vault entry of <credential> was stored\n" +
 			"anew' means only the credential's vault entry was replaced; an unreadable log gives 'origin unknown'.\n" +
 			"The source is information, never an authorization. --output json writes one\n" +
@@ -287,13 +287,13 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"change does. What is approved is always the whole scope as configured now, however the change reads.\n\n" +
 			"An approval a connection no longer belongs to, because it was renamed, removed, or switched away\n" +
 			"from the vault, is stale; approving every open connection also removes it and names it. One that\n" +
-			"a 'qatlas config rename' left when it stopped early is also named with its connection and the\n" +
+			"a 'qconnect config rename' left when it stopped early is also named with its connection and the\n" +
 			"rename that gives the connection that name. So is a credential whose vault entry such a rename\n" +
 			"left under the new name, unencrypted vault included, with the command that finishes the rename\n" +
 			"and the one that puts it back. --output json lists both under rename_leftovers, each with its kind:\n" +
 			"connection with approval and connection, or credential with credential, new, and approvals.\n" +
 			"A connection or credential renamed by hand in config.yaml, while the vault still holds its\n" +
-			"approval or entry under the old name, is always named with the 'qatlas config rename <kind> <old>\n" +
+			"approval or entry under the old name, is always named with the 'qconnect config rename <kind> <old>\n" +
 			"<new> --adopt' command that moves them after it, or without a command where it is unclear which\n" +
 			"is meant; --output json lists them under hand_renames (kind, old, new, ambiguous, command). Such\n" +
 			"an approval is not removed as stale, so that adopting still finds it: it releases nothing while no\n" +
@@ -305,10 +305,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"changes nothing; with nothing open it says so too. Run from an interactive terminal it asks, like\n" +
 			"every 'vault' command but status, unlock, and lock, for the passphrase of an encrypted vault there\n" +
 			"once before doing anything; a wrong passphrase fails with usage.\n\n" +
-			"Without a terminal it approves with an agent token instead (see 'qatlas vault token'): the one in\n" +
-			"QATLAS_AGENT_TOKEN, else in the nearest .qatlas/local/connect/agent.env of the working directory or\n" +
+			"Without a terminal it approves with an agent token instead (see 'qconnect vault token'): the one in\n" +
+			"QCONNECT_AGENT_TOKEN, else in the nearest .qatlas/local/connect/agent.env of the working directory or\n" +
 			"a directory above it, else in ~/.qatlas/local/connect/agent.env, as a line\n" +
-			"QATLAS_AGENT_TOKEN=<token>. The vault process that holds the vault unlocked checks the token, its\n" +
+			"QCONNECT_AGENT_TOKEN=<token>. The vault process that holds the vault unlocked checks the token, its\n" +
 			"expiry, and each open change, approves every change a model of the token covers, or only the ones\n" +
 			"--connection names, and logs each decision in the invocation log with the token's name, never its\n" +
 			"value. No token, an unknown, revoked, or expired one, a vault that is not encrypted, or a change\n" +
@@ -343,12 +343,12 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"version, the connection, the tool's effect, the result (success or the error code the diagnostic\n" +
 			"leads with), how long it took, and the byte sizes of the arguments (req_bytes) and of a\n" +
 			"successful result (resp_bytes), absent where not recorded. Over mcp, an entry also carries the\n" +
-			"random session ID of its 'qatlas mcp' process, and the sizes are those of the whole JSON-RPC\n" +
+			"random session ID of its 'qconnect mcp' process, and the sizes are those of the whole JSON-RPC\n" +
 			"request and response messages, an error response included. The initialize, server/discover, and\n" +
-			"tools/list exchanges and the qatlas.search and qatlas.describe calls get entries of their own,\n" +
-			"without a connection; a qatlas.invoke that failed before it named a known tool has no tool ID.\n" +
+			"tools/list exchanges and the qconnect.search and qconnect.describe calls get entries of their own,\n" +
+			"without a connection; a qconnect.invoke that failed before it named a known tool has no tool ID.\n" +
 			"An entry is written after the response, so a request that never got one is not logged, except a\n" +
-			"qatlas.invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
+			"qconnect.invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
 			"term, result, secret, target, or URL query ever reaches the log, and an entry is written even\n" +
 			"where the vault does not exist yet, is locked, or is unencrypted; a logging failure, such as an\n" +
 			"unwritable directory, is a warning beside the invoke's own result, never a reason to change it.\n\n" +
@@ -381,13 +381,13 @@ func newVaultLogsVerifyCommand(opts *Options) *cobra.Command {
 			"written right after the log retention removed something names what it removed.\n\n" +
 			"An entry also carries a check value, an HMAC-SHA256 of the line under a log key derived from the\n" +
 			"vault's own key, when it was written while the vault's key was at hand: by the vault process that\n" +
-			"'qatlas vault unlock' starts, or by a run that unlocked the vault itself. Every other entry, one\n" +
+			"'qconnect vault unlock' starts, or by a run that unlocked the vault itself. Every other entry, one\n" +
 			"written while the vault was locked without a vault process, unencrypted, or absent, carries none\n" +
 			"and is unverified, which never breaks the chain by itself. While a vault process holds the vault\n" +
 			"unlocked, verify has it check every check value, without the key ever leaving it; a check value\n" +
 			"that does not match marks its entry changed and breaks the chain, even on the very last entry. While\n" +
 			"the vault is locked, verify checks the chain alone and reports the check values as not checked; it\n" +
-			"never asks for the passphrase, so run 'qatlas vault unlock' first to have them checked.\n\n" +
+			"never asks for the passphrase, so run 'qconnect vault unlock' first to have them checked.\n\n" +
 			"The report says whether the check values were checked (mac_check: checked, vault-locked, or\n" +
 			"no-vault-key for a vault that is unencrypted or absent) and has one row per day: its date, how many\n" +
 			"entries it holds, how many of those carry no check value (unverified), how many carry one nobody\n" +
@@ -428,16 +428,16 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 			"size has only operation, connection, calls, and no_counter. The token figures are an\n" +
 			"approximation of 3.5 bytes per token, not a tokenizer count. A recorded 0 counts as a size. The\n" +
 			"groups come largest resp_bytes_total first, then most calls, then by operation and connection.\n\n" +
-			"sessions sums up what each MCP session (one 'qatlas mcp' process, in the order of its first entry)\n" +
+			"sessions sums up what each MCP session (one 'qconnect mcp' process, in the order of its first entry)\n" +
 			"put into the agent's context, in three areas: baseline (the initialize response with the server\n" +
-			"instructions and the tools/list response with the tool descriptions), navigation (qatlas.search\n" +
-			"and qatlas.describe), and invoke (qatlas.invoke, failed calls included). Per area and per\n" +
+			"instructions and the tools/list response with the tool descriptions), navigation (qconnect.search\n" +
+			"and qconnect.describe), and invoke (qconnect.invoke, failed calls included). Per area and per\n" +
 			"operation it has calls, req_bytes and resp_bytes (the byte lengths of the whole JSON-RPC request\n" +
 			"and response messages, an error response included; a missing counter adds 0), total_bytes, and\n" +
 			"est_tokens_total (total_bytes at 3.5 bytes per token, the figure the editor's Logs screen shows\n" +
 			"as ~tokens, an estimate only the model's own count can replace).\n" +
 			"Baseline and navigation operations are named mcp/initialize (also for server/discover),\n" +
-			"mcp/tools-list, qatlas.search, and qatlas.describe; an invoke without a tool ID has an empty\n" +
+			"mcp/tools-list, qconnect.search, and qconnect.describe; an invoke without a tool ID has an empty\n" +
 			"operation. Entries without a session ID, written before it existed or over the CLI, appear\n" +
 			"only in the groups.\n\n" +
 			"--from and --to (YYYY-MM-DD, both inclusive, local days like the editor's Logs section) narrow\n" +
@@ -587,7 +587,7 @@ func runVaultLogsVerify(c *cobra.Command, opts *Options) error {
 	v := vault.New(filepath.Dir(configPath))
 	ctx := contextOrBackground(c.Context())
 	checker, macCheck, done := logChecker(ctx, v, func(warning string) {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 	})
 	defer done()
 	report, err := invokelog.VerifyWith(v.Dir(), checker)
@@ -666,7 +666,7 @@ func logsVerifyResponse(report invokelog.Report, macCheck string) logsVerifyDocu
 }
 
 // vaultOf returns the vault this run resolves credentials from. It is nil only for a resolver a test built
-// directly with secret.NewWith, which never happens in a real qatlas invocation.
+// directly with secret.NewWith, which never happens in a real qconnect invocation.
 func vaultOf(opts *Options) (*vault.Vault, error) {
 	secrets, err := opts.resolver()
 	if err != nil {
@@ -694,7 +694,7 @@ func runVaultStatus(c *cobra.Command, opts *Options) error {
 	}
 	if legacyCredentialsExist(v) {
 		addWarning(&status.Warning,
-			"credentials.yaml still holds plaintext secrets; run 'qatlas vault migrate' to move them into the vault")
+			"credentials.yaml still holds plaintext secrets; run 'qconnect vault migrate' to move them into the vault")
 	}
 	process := vaultProcessOf(c.Context(), v, status.State, &status.Warning)
 	return emit(c, opts, vaultStatusObject(status, process))
@@ -810,7 +810,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		status, err := client.Status(ctx)
 		if err == nil {
 			fmt.Fprintf(c.OutOrStdout(), "the vault is already unlocked in a vault process (pid %d) until %s, "+
-				"later when it is read before; 'qatlas vault lock' locks it at once\n",
+				"later when it is read before; 'qconnect vault lock' locks it at once\n",
 				status.PID, formatLocksAt(status.LocksAt))
 			return nil
 		}
@@ -822,7 +822,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 				return endErr
 			}
 			if pid > 0 {
-				fmt.Fprintf(c.ErrOrStderr(), "qatlas: ended the vault process (pid %d), whose program was "+
+				fmt.Fprintf(c.ErrOrStderr(), "qconnect: ended the vault process (pid %d), whose program was "+
 					"replaced since it started\n", pid)
 			}
 		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
@@ -850,7 +850,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		return err
 	}
 	if _, err := vault.EffectiveSettings(v); errors.Is(err, vault.ErrSettingsUntrusted) {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", err)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", err)
 	}
 	offerSettingsTakeover(c, opts, reg, v)
 	mergedText := fmt.Sprintf("merged %d pending %s", merged, plural(merged, "entry", "entries"))
@@ -871,16 +871,16 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		return fmt.Errorf("%s, but the vault stays locked for later invocations: %w", mergedText, err)
 	}
 	fmt.Fprintf(c.OutOrStdout(), "the vault is unlocked in a vault process (pid %d) until %s, later when it is "+
-		"read before; 'qatlas vault lock' locks it at once; %s\n", status.PID, formatLocksAt(status.LocksAt), mergedText)
+		"read before; 'qconnect vault lock' locks it at once; %s\n", status.PID, formatLocksAt(status.LocksAt), mergedText)
 	for _, warning := range sessionWarnings(client.Path) {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 	}
 	printNote(c, notice)
 	return nil
 }
 
 // pendingApprovalNotice reports, right after a locked vault was just unlocked, that it holds connections
-// that are not approved as they are configured now, so 'qatlas vault approve' has something to release; ""
+// that are not approved as they are configured now, so 'qconnect vault approve' has something to release; ""
 // when there is nothing to say, because none is open, the vault holds no approvals to compare with (an
 // unencrypted vault, unreachable here since 'vault unlock' only ever asked for a passphrase to reach this
 // point), or the configuration cannot be read, which is not this command's own failure to report.
@@ -897,8 +897,8 @@ func pendingApprovalNotice(opts *Options, reg *capability.Registry, v *vault.Vau
 	if err != nil || len(report.Open) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("qatlas: %d %s %s from the vault but %s not approved as configured; "+
-		"run 'qatlas vault approve'", len(report.Open), plural(len(report.Open), "connection", "connections"),
+	return fmt.Sprintf("qconnect: %d %s %s from the vault but %s not approved as configured; "+
+		"run 'qconnect vault approve'", len(report.Open), plural(len(report.Open), "connection", "connections"),
 		plural(len(report.Open), "reads", "read"), plural(len(report.Open), "is", "are"))
 }
 
@@ -981,12 +981,12 @@ func syncVaultProcess(c *cobra.Command, opts *Options, v *vault.Vault, change fu
 	}
 }
 
-// withQatlasPrefix puts the command line's "qatlas: " in front of a service message; "" stays "".
+// withQatlasPrefix puts the command line's "qconnect: " in front of a service message; "" stays "".
 func withQatlasPrefix(message string) string {
 	if message == "" {
 		return ""
 	}
-	return "qatlas: " + message
+	return "qconnect: " + message
 }
 
 // absConfigPath returns the configuration file of this run as an absolute path, the form a vault process
@@ -1084,7 +1084,7 @@ func runVaultEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	}
 	if state == vault.StateLocked || state == vault.StateUnlocked {
 		return &UsageError{errors.New(
-			"the vault is already encrypted; run 'qatlas vault passphrase' to change its passphrase")}
+			"the vault is already encrypted; run 'qconnect vault passphrase' to change its passphrase")}
 	}
 
 	passphrase, err := askNewPassphrase("passphrase to encrypt the vault: ")
@@ -1116,16 +1116,16 @@ func approveOnEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry,
 	})
 	switch {
 	case res.ConfigErr != nil:
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault, "+
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: no connection was approved to read from the vault, "+
 			"because the configuration cannot be read: %s\n", opts.Redactor.Error(res.ConfigErr))
 		return ""
 	case res.ApproveErr != nil:
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault: %s\n",
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: no connection was approved to read from the vault: %s\n",
 			opts.Redactor.Error(res.ApproveErr))
 		return ""
 	}
 	if res.Warning != "" {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", res.Warning)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", res.Warning)
 	}
 	if len(res.Approved) == 0 {
 		return ""
@@ -1253,7 +1253,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	}
 
 	for _, left := range report.Leftovers {
-		fmt.Fprintf(out, "the approval of %s is left over from an unfinished rename of connection %s: 'qatlas "+
+		fmt.Fprintf(out, "the approval of %s is left over from an unfinished rename of connection %s: 'qconnect "+
 			"config rename connection %s %s' gives the connection that name, and approving every open "+
 			"connection removes the leftover and keeps the name %s\n",
 			opts.Redactor.Apply(left.Approval), opts.Redactor.Apply(left.Connection),
@@ -1270,7 +1270,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 			return classifyUserError(err)
 		}
 		if warning != "" {
-			fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+			fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 		}
 		if len(approved) > 0 {
 			fmt.Fprintf(out, "approved %d %s: %s\n", len(approved),
@@ -1289,7 +1289,7 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 			return classifyUserError(err)
 		}
 		if warning != "" {
-			fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+			fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: %s\n", warning)
 		}
 		if removed > 0 {
 			fmt.Fprintf(out, "removed %d stale %s no longer read from the vault: %s\n", removed,
@@ -1394,8 +1394,8 @@ func writeCredentialLeftovers(out io.Writer, opts *Options, cfg *config.Config, 
 			carried = fmt.Sprintf(", with the approvals of %s", redactAll(opts.Redactor, left.Approvals))
 		}
 		fmt.Fprintf(out, "the vault holds credential %s under the name %s%s, left over from an unfinished rename; "+
-			"until it is resolved, %s is not read from the vault: 'qatlas config rename credential %s %s' finishes "+
-			"the rename, and 'qatlas config rename credential %s %s --revert' puts it back under %s\n",
+			"until it is resolved, %s is not read from the vault: 'qconnect config rename credential %s %s' finishes "+
+			"the rename, and 'qconnect config rename credential %s %s --revert' puts it back under %s\n",
 			apply(left.Credential), apply(left.New), carried, apply(left.Credential), apply(left.Credential),
 			apply(left.New), apply(left.Credential), apply(left.New), apply(left.Credential))
 		doc.RenameLeftovers = append(doc.RenameLeftovers, renameLeftoverDocument{Kind: manage.RenameCredential,
@@ -1443,7 +1443,7 @@ type approvalChangeDocument struct {
 	Fields         []approvalFieldDocument `json:"fields"`
 }
 
-// approvalOriginDocument is where a change came from: source is tui, web, or cli for a change qatlas
+// approvalOriginDocument is where a change came from: source is tui, web, or cli for a change qconnect
 // logged, outside for one made to the configuration file by something else, vault for a credential entry
 // stored anew, or unknown when the log could not be read. time is the log entry's, or the configuration
 // file's last modification for outside, as RFC 3339; log_seq and verified are there only when a log entry
@@ -1583,7 +1583,7 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 	}
 	if state != vault.StateLocked && state != vault.StateUnlocked {
 		return &UsageError{errors.New(
-			"the vault is not encrypted; run 'qatlas vault encrypt' to switch encryption on")}
+			"the vault is not encrypted; run 'qconnect vault encrypt' to switch encryption on")}
 	}
 
 	oldPassphrase, err := readVaultPassphrase("current vault passphrase: ")
@@ -1601,7 +1601,7 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 	// A passphrase is changed because the old one should no longer open the vault; a vault process
 	// unlocked with it would keep the vault open regardless, so it is locked first.
 	note := lockVaultProcess(c.Context(), opts, v, "before the passphrase changed",
-		"run 'qatlas vault unlock' to unlock the vault again")
+		"run 'qconnect vault unlock' to unlock the vault again")
 	defer printNote(c, note)
 	if err := v.ChangePassphrase(oldPassphrase, newPassphrase); err != nil {
 		if errors.Is(err, vault.ErrWrongPassphrase) {
@@ -1662,7 +1662,7 @@ func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
 		return classifyUserError(err)
 	}
 	fmt.Fprintln(c.OutOrStdout(),
-		"the vault is decrypted; 'qatlas vault status' warns until it is encrypted again")
+		"the vault is decrypted; 'qconnect vault status' warns until it is encrypted again")
 	return nil
 }
 
@@ -1674,7 +1674,7 @@ func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
 // found, and asking whether to delete credentials.yaml stay here, on this command's own terminal.
 //
 // vaultmigrate.Write reuses Vault.Set for every entry rather than inventing a locked-vault path of its own:
-// an absent vault offers a passphrase exactly like 'qatlas credential set' does, and an encrypted, locked
+// an absent vault offers a passphrase exactly like 'qconnect credential set' does, and an encrypted, locked
 // vault takes the entry as a pending write that needs no passphrase and is merged in on the next unlock.
 // That is the simplest correct choice available, since the vault already has to support exactly that write
 // for every other caller, and it keeps a migration from ever demanding a passphrase this command never had
@@ -1740,7 +1740,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	}
 
 	for _, name := range storeUnsureFor {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: the system keyring could not be checked for %s; only "+
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: warning: the system keyring could not be checked for %s; only "+
 			"its plaintext credentials.yaml entries were migrated, and a secret held only in the keyring may "+
 			"still be there and is not deleted\n", name)
 	}
@@ -1782,7 +1782,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 		"migrated %d %s into the vault; delete %s now? [y/N] ", len(plan), noun, file.Path()))
 	if err != nil {
 		if errors.Is(err, vault.ErrNoTerminal) {
-			fmt.Fprintf(c.OutOrStdout(), "migrated %d %s into the vault; run 'qatlas vault migrate' again in a "+
+			fmt.Fprintf(c.OutOrStdout(), "migrated %d %s into the vault; run 'qconnect vault migrate' again in a "+
 				"terminal to delete %s, or remove it by hand once nothing else needs it\n", len(plan), noun, file.Path())
 			return nil
 		}

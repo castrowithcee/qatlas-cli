@@ -33,7 +33,7 @@ import (
 )
 
 // serveVaultInProcess serves the encrypted vault of the fixture in dir from this test process, the way
-// 'qatlas vault unlock' hands it to a vault process, and lets every command of the test reach it. The
+// 'qconnect vault unlock' hands it to a vault process, and lets every command of the test reach it. The
 // server checks its clients by their program, which is this test binary on both ends.
 func serveVaultInProcess(t *testing.T, dir string) (*vaultproc.Server, *vaultproc.Client) {
 	t.Helper()
@@ -153,7 +153,7 @@ func TestCredentialSetWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 
 	code, _, stderr := runWithInput(t, &Options{}, "changed-"+canaryVault+"\n",
 		"credential", "set", "wiki-vault", "token-id", "--config", configIn(dir))
-	if code != exitOK || !strings.Contains(stderr, "qatlas: warning: the vault holds the change") ||
+	if code != exitOK || !strings.Contains(stderr, "qconnect: warning: the vault holds the change") ||
 		!strings.Contains(stderr, "kill "+strconv.Itoa(os.Getpid())) || strings.Contains(stderr, canaryVault) {
 		t.Fatalf("set: exit code = %d, stderr = %q, want a warning naming the process", code, stderr)
 	}
@@ -175,13 +175,13 @@ func TestCredentialSetRedactsTheVaultProcessWarning(t *testing.T) {
 	opts.Redactor.Add("could not take it and still answers")
 	code, _, stderr := runWithInput(t, opts, "changed-"+canaryVault+"\n",
 		"credential", "set", "wiki-vault", "token-id", "--config", configIn(dir))
-	if code != exitOK || !strings.HasPrefix(stderr, "qatlas: warning: the vault holds the change") ||
+	if code != exitOK || !strings.HasPrefix(stderr, "qconnect: warning: the vault holds the change") ||
 		strings.Contains(stderr, "could not take it and still answers") || !strings.Contains(stderr, redact.Marker) {
 		t.Fatalf("set: exit code = %d, stderr = %q, want the warning redacted", code, stderr)
 	}
 }
 
-// 'qatlas connections' names a vault connection unusable exactly while the vault is locked, and asks for
+// 'qconnect connections' names a vault connection unusable exactly while the vault is locked, and asks for
 // no passphrase to find out.
 func TestConnectionsShowTheLockedVault(t *testing.T) {
 	dir := encryptedVaultFixture(t, "")
@@ -220,9 +220,9 @@ func TestRekeyingLocksTheVaultProcess(t *testing.T) {
 		want string
 	}{
 		{[]string{"vault", "passphrase"}, sequencedPassphrases("s3cret-phrase", "new-phrase", "new-phrase"),
-			"qatlas: the vault process was locked before the passphrase changed; run 'qatlas vault unlock'"},
+			"qconnect: the vault process was locked before the passphrase changed; run 'qconnect vault unlock'"},
 		{[]string{"vault", "decrypt", "--confirm"}, sequencedPassphrases("s3cret-phrase"),
-			"qatlas: the vault process was locked before the vault was decrypted"},
+			"qconnect: the vault process was locked before the vault was decrypted"},
 	} {
 		dir := encryptedVaultFixture(t, "")
 		_, client := serveVaultInProcess(t, dir)
@@ -247,7 +247,7 @@ func TestRekeyingLocksTheVaultProcess(t *testing.T) {
 	}
 }
 
-// 'qatlas update' locks a running vault process right before it replaces the program, which the process
+// 'qconnect update' locks a running vault process right before it replaces the program, which the process
 // would no longer serve, and says how to unlock again; a process that cannot be locked does not stop the
 // update, and the warning names it.
 func TestUpdateLocksTheVaultProcess(t *testing.T) {
@@ -273,10 +273,10 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 		if code != exitOK || !strings.Contains(stdout, `"updated":true`) {
 			t.Fatalf("refuse=%v: exit code = %d, stdout = %q, stderr = %q", refuse, code, stdout, stderr)
 		}
-		want := "qatlas: the vault process did not hand the vault over and locked itself; run 'qatlas vault unlock' to " +
+		want := "qconnect: the vault process did not hand the vault over and locked itself; run 'qconnect vault unlock' to " +
 			"unlock the vault again\n"
 		if refuse {
-			want = "qatlas: warning: the vault process could not be locked"
+			want = "qconnect: warning: the vault process could not be locked"
 		}
 		if !strings.HasPrefix(stderr, want) || (refuse && !strings.Contains(stderr, "kill "+strconv.Itoa(os.Getpid()))) {
 			t.Fatalf("refuse=%v: stderr = %q, want %q", refuse, stderr, want)

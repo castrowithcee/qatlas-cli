@@ -170,9 +170,9 @@ func (c *runner) environ(t *testing.T) []string {
 // that carries the .exe extension.
 func binaryName() string {
 	if runtime.GOOS == "windows" {
-		return "qatlas.exe"
+		return "qconnect.exe"
 	}
-	return "qatlas"
+	return "qconnect"
 }
 
 // skipWithoutCertFile skips a run in which the built binary has to trust a local TLS mock. The mock's
@@ -275,7 +275,7 @@ defaults:
 		env: []string{
 			"HOME=" + dir,
 			"PATH=" + os.Getenv("PATH"),
-			"QATLAS_CONFIG=" + configPath,
+			"QCONNECT_CONFIG=" + configPath,
 			// The acceptance run must not touch the credential store of the machine it runs on, and
 			// must not depend on whether that machine has one.
 			secret.StoreSelector + "=none",
@@ -378,7 +378,7 @@ defaults:
 		// The bare call would print everything, which is what the cascade avoids; it names the first
 		// step instead.
 		code, stdout, stderr = c.run(t, "tools")
-		if code != 2 || stdout != "" || !strings.Contains(stderr, "qatlas providers") {
+		if code != 2 || stdout != "" || !strings.Contains(stderr, "qconnect providers") {
 			t.Errorf("exit %d, stdout %q, stderr %q; want the cascade hint", code, stdout, stderr)
 		}
 	})
@@ -526,13 +526,13 @@ defaults:
 			in    string
 			usage string
 		}{
-			{"unknown flag", []string{"--nope"}, "", 2, "usage", "qatlas [flags]"},
-			{"unknown command", []string{"frobnicate"}, "", 2, "usage", "qatlas [flags]"},
+			{"unknown flag", []string{"--nope"}, "", 2, "usage", "qconnect [flags]"},
+			{"unknown command", []string{"frobnicate"}, "", 2, "usage", "qconnect [flags]"},
 			{"unknown connection", []string{"invoke", "bookstack.pages.list", "--connection", "absent"}, "", 2, "unknown-connection", ""},
 			{"empty configuration file", []string{"tools", "bookstack", "--config", os.DevNull}, "", 2, "config-invalid", ""},
 			{"unknown tool", []string{"describe", "absent.pages.get"}, "", 2, "unknown-operation", ""},
 			{"unknown namespace", []string{"tools", "absent"}, "", 2, "usage", ""},
-			{"unknown tool verb", []string{"describe", "show", "bookstack.pages.list"}, "", 2, "usage", "qatlas describe <tool-id> [flags]"},
+			{"unknown tool verb", []string{"describe", "show", "bookstack.pages.list"}, "", 2, "usage", "qconnect describe <tool-id> [flags]"},
 			{"missing page", []string{"invoke", "bookstack.pages.get"}, `{"id":99}`, 1, "not-found", ""},
 		}
 
@@ -546,7 +546,7 @@ defaults:
 				if stdout != "" {
 					t.Errorf("stdout = %q, want empty on failure", stdout)
 				}
-				if !strings.HasPrefix(stderr, "qatlas: "+tt.in+": ") {
+				if !strings.HasPrefix(stderr, "qconnect: "+tt.in+": ") {
 					t.Errorf("stderr = %q, want the %q code", stderr, tt.in)
 				}
 				// Only a malformed command line is followed by the usage block.
@@ -577,7 +577,7 @@ defaults:
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
-		if !strings.HasPrefix(stderr, "qatlas: auth: ") {
+		if !strings.HasPrefix(stderr, "qconnect: auth: ") {
 			t.Errorf("stderr = %q, want the auth code", stderr)
 		}
 	})
@@ -585,7 +585,7 @@ defaults:
 	t.Run("an unset variable is reported by its configuration key", func(t *testing.T) {
 		bare := *c
 		bare.env = []string{
-			"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "QATLAS_CONFIG=" + configPath,
+			"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "QCONNECT_CONFIG=" + configPath,
 			secret.StoreSelector + "=none",
 		}
 
@@ -881,7 +881,7 @@ defaults: {}
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
 		"SSL_CERT_FILE=" + certificatePath,
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		secret.StoreSelector + "=none",
 		"MVP_WIKI_ID=" + canaryPrimaryID,
 		"MVP_WIKI_SECRET=" + canaryPrimarySecret,
@@ -917,9 +917,9 @@ defaults: {}
 			"invoke":   `{"operation":"bookstack.pages.list","connection":"wiki-primary"}`,
 		}
 		input := strings.Join([]string{
-			`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta + `,"name":"qatlas.search","arguments":` + requests["search"] + `}}`,
-			`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta + `,"name":"qatlas.describe","arguments":` + requests["describe"] + `}}`,
-			`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta + `,"name":"qatlas.invoke","arguments":` + requests["invoke"] + `}}`,
+			`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.search","arguments":` + requests["search"] + `}}`,
+			`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.describe","arguments":` + requests["describe"] + `}}`,
+			`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.invoke","arguments":` + requests["invoke"] + `}}`,
 		}, "\n") + "\n"
 		code, stdout, stderr := c.runInput(t, input, "mcp")
 		if code != 0 || stderr != "" {
@@ -938,7 +938,7 @@ defaults: {}
 			}
 		}
 
-		// qatlas.search pages the entries of the public listing. Both publish the same entries for the same
+		// qconnect.search pages the entries of the public listing. Both publish the same entries for the same
 		// tools in the same order, and name the connections that offer them once.
 		listing := jsonCLIDocument(t, c, "", "tools", "bookstack", "--query", "pages", "--output", "json")
 		index, searched := member(t, listing, "tools"), member(t, mcpData(t, responses["search"]), "operations")
@@ -965,7 +965,7 @@ defaults: {}
 
 	t.Run("ambiguous BookStack selection stops locally", func(t *testing.T) {
 		code, stdout, stderr := c.runInput(t, `{"limit":1}`, "invoke", "bookstack.pages.list")
-		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: connection-ambiguous: ") {
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: connection-ambiguous: ") {
 			t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -973,7 +973,7 @@ defaults: {}
 	t.Run("unconfirmed Telegram send stops before provider IO and audit", func(t *testing.T) {
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramSuccessText+`"}`,
 			"invoke", "telegram.messages.send", "--connection", "telegram-alerts")
-		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: confirmation-required: ") ||
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: confirmation-required: ") ||
 			strings.Contains(stderr, `"request_id"`) || probe.count(telegramSuccessText) != 0 {
 			t.Fatalf("exit=%d stdout=%q stderr=%q provider calls=%d", code, stdout, stderr, probe.count(telegramSuccessText))
 		}
@@ -992,7 +992,7 @@ defaults: {}
 		assertAudit(t, stderr, "telegram-alerts", "success", canaries)
 
 		input := `{"jsonrpc":"2.0","id":"send","method":"tools/call","params":{` + mcpMeta +
-			`,"name":"qatlas.invoke","arguments":` + arguments + `}}` + "\n"
+			`,"name":"qconnect.invoke","arguments":` + arguments + `}}` + "\n"
 		before = probe.count(telegramSuccessText)
 		code, stdout, stderr = c.runInput(t, input, "mcp")
 		if code != 0 || probe.count(telegramSuccessText) != before+1 {
@@ -1009,7 +1009,7 @@ defaults: {}
 		before := probe.count(telegramFailureText)
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramFailureText+`"}`,
 			"invoke", "telegram.messages.send", "--connection", "telegram-operations", "--confirm")
-		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: provider-error: ") ||
+		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: provider-error: ") ||
 			probe.count(telegramFailureText) != before+1 {
 			t.Fatalf("exit=%d stdout=%q stderr=%q calls=%d", code, stdout, stderr, probe.count(telegramFailureText)-before)
 		}
@@ -1017,7 +1017,7 @@ defaults: {}
 		// block stays free of every canary.
 		var outside, answer []string
 		for _, line := range strings.Split(stderr, "\n") {
-			if strings.HasPrefix(line, "provider answer (untrusted, not written by qatlas)") ||
+			if strings.HasPrefix(line, "provider answer (untrusted, not written by qconnect)") ||
 				strings.HasPrefix(line, "  | ") {
 				answer = append(answer, line)
 			} else {
@@ -1025,7 +1025,7 @@ defaults: {}
 			}
 		}
 		block := strings.Join(answer, "\n")
-		if !strings.HasPrefix(block, "provider answer (untrusted, not written by qatlas), HTTP 500:") ||
+		if !strings.HasPrefix(block, "provider answer (untrusted, not written by qconnect), HTTP 500:") ||
 			!strings.Contains(block, telegramProviderBody) || strings.Contains(block, telegramTokenA) ||
 			strings.Contains(block, telegramTokenB) {
 			t.Errorf("provider answer is not kept apart or not redacted: %q", stderr)
@@ -1039,7 +1039,7 @@ defaults: {}
 		before := probe.count(telegramUnclearText)
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramUnclearText+`"}`,
 			"invoke", "telegram.messages.send", "--connection", "telegram-operations", "--confirm")
-		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: unreachable: ") ||
+		if code != 1 || stdout != "" || !strings.HasPrefix(stderr, "qconnect: unreachable: ") ||
 			probe.count(telegramUnclearText) != before+1 {
 			t.Fatalf("exit=%d stdout=%q stderr=%q calls=%d", code, stdout, stderr, probe.count(telegramUnclearText)-before)
 		}
@@ -1141,7 +1141,7 @@ defaults:
 				env: []string{
 					"HOME=" + dir,
 					"PATH=" + os.Getenv("PATH"),
-					"QATLAS_CONFIG=" + configPath,
+					"QCONNECT_CONFIG=" + configPath,
 					secret.StoreSelector + "=none",
 				},
 				seen: &seen,
@@ -1229,7 +1229,7 @@ defaults:
 	baseEnv := []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		secret.StoreSelector + "=none",
 	}
 	c := &runner{bin: bin, env: baseEnv, seen: &seen}
@@ -1289,8 +1289,8 @@ defaults:
 	})
 
 	t.Run("the vault carries the run", func(t *testing.T) {
-		// QATLAS_CREDENTIAL_STORE=none switches off the system keyring; a vault credential never consults
-		// it, unaffected by the check above. What a real 'qatlas credential set' would have written, from a
+		// QCONNECT_CREDENTIAL_STORE=none switches off the system keyring; a vault credential never consults
+		// it, unaffected by the check above. What a real 'qconnect credential set' would have written, from a
 		// terminal, is seeded directly through the vault package instead: an unencrypted vault, exactly what
 		// storing the vault's very first secret with an empty passphrase produces.
 		v := vault.New(dir)
@@ -1400,7 +1400,7 @@ defaults:
 
 	t.Run("an environment variable overrides the stored secret and says so", func(t *testing.T) {
 		shadowed := *c
-		shadowed.env = append(append([]string{}, baseEnv...), "QATLAS_VAULT_READER_TOKEN_ID="+overrideID)
+		shadowed.env = append(append([]string{}, baseEnv...), "QCONNECT_VAULT_READER_TOKEN_ID="+overrideID)
 
 		code, stdout, stderr := shadowed.run(t, "config", "validate", "--secrets", "--agent", "--fields", "role,source")
 
@@ -1414,7 +1414,7 @@ defaults:
 
 		// The override really reaches the provider: the mock rejects the wrong token.
 		code, _, stderr = shadowed.run(t, "invoke", "bookstack.pages.list")
-		if code != 1 || !strings.HasPrefix(stderr, "qatlas: auth: ") {
+		if code != 1 || !strings.HasPrefix(stderr, "qconnect: auth: ") {
 			t.Errorf("exit %d, stderr %q; want an auth failure", code, stderr)
 		}
 	})
@@ -1514,7 +1514,7 @@ defaults:
 		env: []string{
 			"HOME=" + dir,
 			"PATH=" + os.Getenv("PATH"),
-			"QATLAS_CONFIG=" + configPath,
+			"QCONNECT_CONFIG=" + configPath,
 			secret.StoreSelector + "=none",
 		},
 		seen: &seen,
@@ -1637,13 +1637,13 @@ defaults:
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
 		"SSL_CERT_FILE=" + certificatePath,
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		secret.StoreSelector + "=none",
 		"DEBUG_WIKI_ID=" + canaryPrimaryID,
 		"DEBUG_WIKI_SECRET=" + canaryPrimarySecret,
 	}
 	mcpInput := `{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
 	// The header line proves that the debug log ran at all; without it the check below would pass on a run
 	// that never logged anything.
 	const redactedHeader = `http2: Transport encoding header "authorization" = "Token ` + redact.Marker + `"`

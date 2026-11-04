@@ -192,7 +192,7 @@ func (s *Server) renameNotice(lead string, res manage.RenameResult) string {
 			pairs[i] = env.Old + " -> " + env.New
 		}
 		parts = append(parts, "Environment variables that override the stored secrets are read under the new name: "+
-			strings.Join(pairs, ", ")+"; qatlas changed no environment.")
+			strings.Join(pairs, ", ")+"; qconnect changed no environment.")
 	}
 	for _, warning := range res.Warnings {
 		parts = append(parts, "Warning: "+warning)

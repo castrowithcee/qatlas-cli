@@ -1,7 +1,7 @@
 // The Tokens section (see the sectionTokens comment in tui.go): the agent tokens of an encrypted vault, each
 // with its model connections and its expiry, and the screens that create, show, and revoke one.
 //
-// Every function here that reads or changes a token defers to package vault, the same core 'qatlas vault
+// Every function here that reads or changes a token defers to package vault, the same core 'qconnect vault
 // token' uses, and asks package approval which models cover nothing now; nothing here reimplements
 // either. A token's value is read from the vault only to draw it on the detail screen, and only while it is
 // revealed there in an admin session: it never enters the model, a message, a status, or an error.
@@ -245,7 +245,7 @@ func (m *Model) newToken() tea.Cmd {
 	return m.requireAdmin(func() tea.Cmd { return m.openForm("") })
 }
 
-// parseTokenExpiry reads the expires row through the shared expiry rule, which 'qatlas vault token create
+// parseTokenExpiry reads the expires row through the shared expiry rule, which 'qconnect vault token create
 // --expires' follows too.
 func parseTokenExpiry(text string, now time.Time) (*time.Time, error) {
 	at, err := config.ParseExpiry(text, now)

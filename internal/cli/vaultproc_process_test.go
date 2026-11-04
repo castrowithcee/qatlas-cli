@@ -19,7 +19,7 @@ import (
 )
 
 // withVaultProcess lets 'vault unlock' start a real vault process for the duration of a test: this test
-// binary, run as qatlas, with its socket in a runtime directory of the test's own, or on Windows on a pipe
+// binary, run as qconnect, with its socket in a runtime directory of the test's own, or on Windows on a pipe
 // named after the test's own vault. Every process a test
 // starts this way is ended on cleanup, whatever the test did with it.
 func withVaultProcess(t *testing.T, dir string) *vaultproc.Client {
@@ -316,7 +316,7 @@ func TestVaultServeRefusesToRunByHand(t *testing.T) {
 	cmd.Env = append(os.Environ(), runAsQatlasEnv+"=1", "XDG_RUNTIME_DIR="+t.TempDir())
 	out, err := cmd.CombinedOutput()
 	var exit *exec.ExitError
-	if !errors.As(err, &exit) || exit.ExitCode() != exitUsage || !strings.Contains(string(out), "'qatlas vault unlock'") {
+	if !errors.As(err, &exit) || exit.ExitCode() != exitUsage || !strings.Contains(string(out), "'qconnect vault unlock'") {
 		t.Fatalf("vault serve by hand = %v, %q, want a usage error naming vault unlock", err, out)
 	}
 	checkServeStreams(t, dir)
@@ -334,7 +334,7 @@ func mustOpen(t *testing.T, path string) *os.File {
 
 // The next steps of vault-locked where a vault process keeps the vault unlocked for later calls.
 const (
-	vaultLockedStep    = "run 'qatlas vault unlock' in a terminal, which keeps it unlocked for later commands, then try again"
-	vaultLockedMCPStep = "agents cannot unlock the vault; ask the user to run 'qatlas vault unlock' in a terminal, " +
+	vaultLockedStep    = "run 'qconnect vault unlock' in a terminal, which keeps it unlocked for later commands, then try again"
+	vaultLockedMCPStep = "agents cannot unlock the vault; ask the user to run 'qconnect vault unlock' in a terminal, " +
 		"which keeps it unlocked for later calls, then try again"
 )

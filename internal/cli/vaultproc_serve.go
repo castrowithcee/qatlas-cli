@@ -25,7 +25,7 @@ import (
 // vaultProcessPlatform reports whether this platform runs a vault process.
 const vaultProcessPlatform = true
 
-// runVaultServe is 'qatlas vault serve', the vault process itself. It is started by 'qatlas vault unlock',
+// runVaultServe is 'qconnect vault serve', the vault process itself. It is started by 'qconnect vault unlock',
 // or by the TUI's own 'ctrl+l' (see vaultproc.StartProcess, which both run to start it), with the
 // handover and the report it inherits (see serveStreams); run any other way, it refuses before it reads
 // anything.
@@ -38,7 +38,7 @@ const vaultProcessPlatform = true
 func runVaultServe(opts *Options, _ *capability.Registry, successor bool) error {
 	handover, report, ok := serveStreams()
 	if !ok {
-		return &UsageError{errors.New("'qatlas vault serve' is started by 'qatlas vault unlock'; run that instead")}
+		return &UsageError{errors.New("'qconnect vault serve' is started by 'qconnect vault unlock'; run that instead")}
 	}
 	reported := false
 	answer := func(word string) {
@@ -187,7 +187,7 @@ func successorConfigPath(path, vaultDir string, key *age.X25519Identity) (string
 	return current, nil
 }
 
-// readHandover reads the vault's key and secrets from the pipe 'qatlas vault unlock' writes them to, and
+// readHandover reads the vault's key and secrets from the pipe 'qconnect vault unlock' writes them to, and
 // closes it. The bytes read are overwritten once decoded; an error never quotes them.
 func readHandover(f *os.File) (vault.Snapshot, error) {
 	data, err := io.ReadAll(io.LimitReader(f, vaultproc.MaxHandover+1))

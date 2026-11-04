@@ -76,7 +76,7 @@ var (
 
 	// ErrRefused reports a peer that is not this program run by this user. It wraps the reason, which
 	// never contains a secret.
-	ErrRefused = errors.New("the process at the other end of the vault socket is not this qatlas of this user")
+	ErrRefused = errors.New("the process at the other end of the vault socket is not this qconnect of this user")
 
 	// ErrTooLarge reports a message above MaxMessage.
 	ErrTooLarge = fmt.Errorf("a vault process message exceeds %d bytes", MaxMessage)

@@ -19,7 +19,7 @@ import (
 func offerSettingsTakeover(c *cobra.Command, opts *Options, reg *capability.Registry, v *vault.Vault) {
 	stderr := c.ErrOrStderr()
 	warn := func(text string) {
-		fmt.Fprintf(stderr, "qatlas: warning: %s\n", opts.Redactor.Apply(text))
+		fmt.Fprintf(stderr, "qconnect: warning: %s\n", opts.Redactor.Apply(text))
 	}
 	path, err := config.Path(opts.Config)
 	if err != nil {
@@ -38,7 +38,7 @@ func offerSettingsTakeover(c *cobra.Command, opts *Options, reg *capability.Regi
 	}
 	yes := false
 	if take.Ask() {
-		fmt.Fprintln(stderr, "qatlas: the configuration file still holds settings that now live in the vault:")
+		fmt.Fprintln(stderr, "qconnect: the configuration file still holds settings that now live in the vault:")
 		for _, o := range take.Offered {
 			fmt.Fprintf(stderr, "  %s: %s\n", o.Field, o.Value)
 		}
@@ -61,8 +61,8 @@ func offerSettingsTakeover(c *cobra.Command, opts *Options, reg *capability.Regi
 	}
 	switch {
 	case res.Backup != "" && yes:
-		fmt.Fprintf(stderr, "qatlas: took the values over and removed them from the configuration file; backup: %s\n", res.Backup)
+		fmt.Fprintf(stderr, "qconnect: took the values over and removed them from the configuration file; backup: %s\n", res.Backup)
 	case res.Backup != "":
-		fmt.Fprintf(stderr, "qatlas: removed the old values from the configuration file; backup: %s\n", res.Backup)
+		fmt.Fprintf(stderr, "qconnect: removed the old values from the configuration file; backup: %s\n", res.Backup)
 	}
 }

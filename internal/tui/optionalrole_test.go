@@ -32,7 +32,7 @@ func newOptionalModel(t *testing.T) (*Model, *config.Store, *secret.MemoryStore)
 	}, nil); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := config.NewStore(filepath.Join(dir, "config.yaml"), reg)
 	secrets, mem := newVaultResolver(t, dir)
 	m, err := buildModel(store, nil, secrets, nil)

@@ -126,7 +126,7 @@ var sitesUpdate = capability.Descriptor{
 	Description: "Change the settings of one website (SitesManager.updateSite); it needs an admin right on it. A value " +
 		"not given stays unchanged. Matomo would clear the six comma-separated lists (searchKeywordParameters, " +
 		"searchCategoryParameters, excludedIps, excludedQueryParameters, excludedUserAgents, excludedReferrers) when " +
-		"they are left out, so Qatlas reads the website first and sends the current value of each list that is not " +
+		"they are left out, so Qatlas Connect reads the website first and sends the current value of each list that is not " +
 		"given. group needs Super User rights; urls, when given, replace all addresses. Idempotent, since the same " +
 		"values leave the same state; sent once and never repeated",
 	Tags: []string{"matomo", "sites", "websites", "update"}, Risk: siteChangeRisk(capability.EffectUpdate,

@@ -103,15 +103,15 @@ func TestMCPSessionLogRecordsBaselineNavigationAndInvokes(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"list","method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":"cursor","method":"tools/list","params":{"cursor":"x"}}`,
 		`{"jsonrpc":"2.0","id":"discover","method":"server/discover","params":{"bogus":1}}`,
-		mcpLogCall("search", "qatlas.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
-		mcpLogCall("overview", "qatlas.search", `{"list":"connections","provider":"fake"}`),
-		mcpLogCall("describe", "qatlas.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
-		mcpLogCall("describe-bad", "qatlas.describe", `{"operation":"fake.nothing.`+logMarkerArg+`"}`),
-		mcpLogCall("invoke", "qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
-		mcpLogCall("invoke-bad", "qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
-		mcpLogCall("invoke-schema", "qatlas.invoke", `{"operation":"fake.pages.get","arguments":"`+logMarkerArg+`"}`),
-		mcpLogCall("forged", "qatlas.invoke", `{"operation":"qatlas.search","connection":"primary"}`),
-		mcpLogCall("forged-base", "qatlas.invoke", `{"operation":"mcp/initialize"}`),
+		mcpLogCall("search", "qconnect.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
+		mcpLogCall("overview", "qconnect.search", `{"list":"connections","provider":"fake"}`),
+		mcpLogCall("describe", "qconnect.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
+		mcpLogCall("describe-bad", "qconnect.describe", `{"operation":"fake.nothing.`+logMarkerArg+`"}`),
+		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("invoke-bad", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
+		mcpLogCall("invoke-schema", "qconnect.invoke", `{"operation":"fake.pages.get","arguments":"`+logMarkerArg+`"}`),
+		mcpLogCall("forged", "qconnect.invoke", `{"operation":"qconnect.search","connection":"primary"}`),
+		mcpLogCall("forged-base", "qconnect.invoke", `{"operation":"mcp/initialize"}`),
 		`{"jsonrpc":"2.0","id":"unknown","method":"tools/call","params":{"name":"qatlas.other","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":"nomethod","method":"resources/list"}`,
 	}
@@ -210,10 +210,10 @@ func TestMCPSessionLogRecordsBaselineNavigationAndInvokes(t *testing.T) {
 func TestMCPSessionLogHoldsNoContent(t *testing.T) {
 	registry, path := mcpLogRegistry(t)
 	_, stderr := runMCPLines(t, registry, mcpLogOptions(path), []string{
-		mcpLogCall("search", "qatlas.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
-		mcpLogCall("describe", "qatlas.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
-		mcpLogCall("invoke", "qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
-		mcpLogCall("invoke-bad", "qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
+		mcpLogCall("search", "qconnect.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
+		mcpLogCall("describe", "qconnect.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
+		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("invoke-bad", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
 	})
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
@@ -238,8 +238,8 @@ func TestMCPSessionLogHoldsNoContent(t *testing.T) {
 func TestMCPSessionLogFailureLeavesResponsesAsTheyAre(t *testing.T) {
 	lines := []string{
 		`{"jsonrpc":"2.0","id":"list","method":"tools/list"}`,
-		mcpLogCall("search", "qatlas.search", `{"provider":"fake"}`),
-		mcpLogCall("invoke", "qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("search", "qconnect.search", `{"provider":"fake"}`),
+		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
 	}
 	registry, path := mcpLogRegistry(t)
 	healthy, stderr := runMCPLines(t, registry, mcpLogOptions(path), lines)
@@ -259,7 +259,7 @@ func TestMCPSessionLogFailureLeavesResponsesAsTheyAre(t *testing.T) {
 	if !reflect.DeepEqual(healthy, broken) {
 		t.Errorf("responses changed with an unwritable log:\n%v\n%v", healthy, broken)
 	}
-	if n := strings.Count(stderr, "qatlas: warning: could not write the invocation log"); n != 3 {
+	if n := strings.Count(stderr, "qconnect: warning: could not write the invocation log"); n != 3 {
 		t.Errorf("%d warnings, want 3: %q", n, stderr)
 	}
 }

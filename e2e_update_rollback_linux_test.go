@@ -142,7 +142,7 @@ defaults:
 
 	var seen strings.Builder
 	c := &runner{bin: bin, seen: &seen, env: []string{
-		"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "QATLAS_CONFIG=" + configPath, secret.StoreSelector + "=none",
+		"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "QCONNECT_CONFIG=" + configPath, secret.StoreSelector + "=none",
 	}}
 	installed := func() []byte {
 		data, _ := os.ReadFile(bin)

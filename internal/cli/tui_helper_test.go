@@ -9,8 +9,8 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
-// runAsTUIEnv makes the test binary run 'qatlas tui' with an updater that reads a release server of the
-// test, and any other command as qatlas itself, so a vault process it starts still works. The program
+// runAsTUIEnv makes the test binary run 'qconnect tui' with an updater that reads a release server of the
+// test, and any other command as qconnect itself, so a vault process it starts still works. The program
 // that replaces it starts the same binary again with a newer version.
 const (
 	runAsTUIEnv     = "QATLAS_CLI_TEST_RUN_AS_TUI"

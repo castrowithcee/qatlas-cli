@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/zalando/go-keyring"
+
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 )
 
-// StoreService is the service name every qatlas entry lives under: one namespace in Secret Service on
+// StoreService is the service name every qconnect entry lives under: one namespace in Secret Service on
 // Linux, in the macOS Keychain, and in the Windows Credential Manager, so the entries are recognisable in
-// the platform's own key manager and removable without qatlas.
+// the platform's own key manager and removable without qconnect.
 const StoreService = "qatlas-connect"
 
 // LegacyStoreService is the service name of the versions before the rename. An entry missing under
@@ -33,7 +35,7 @@ var (
 // StoreSelector names the environment variable that chooses the credential store. "auto", the default,
 // uses the store of the platform. "none" replaces it with a store that holds nothing, which is what a CI
 // run, a container, and every test wants: no D-Bus call, no unlock prompt, no dependency on the machine.
-const StoreSelector = "QATLAS_CREDENTIAL_STORE"
+const StoreSelector = "QCONNECT_CREDENTIAL_STORE"
 
 // The values StoreSelector accepts. They are exported because a caller that switched the store off has to
 // be able to say so: a command that skipped the store must not look like one that cleared it.
@@ -52,7 +54,7 @@ const (
 // the three platforms this project targets. Anything richer would add a backend zoo that nothing in the
 // cascade needs.
 func SystemStore() (Store, error) {
-	switch os.Getenv(StoreSelector) {
+	switch envvar.Get(StoreSelector) {
 	case "", StoreAuto:
 		return systemStore{}, nil
 	case StoreNone:
@@ -109,9 +111,9 @@ func StoreAdvice(state StoreState, goos string) string {
 		fix := "make sure this session can reach it"
 		switch StoreName(goos) {
 		case "macOS Keychain":
-			fix = "run qatlas in your logged-in macOS user session"
+			fix = "run qconnect in your logged-in macOS user session"
 		case "Windows Credential Manager":
-			fix = "run qatlas as the signed-in Windows user"
+			fix = "run qconnect as the signed-in Windows user"
 		case "Secret Service":
 			fix = "start a provider such as GNOME Keyring or KWallet in this login session; SSH sessions " +
 				"and containers usually have none"
@@ -210,7 +212,7 @@ func (systemStore) Delete(key string) error {
 // every copy back. It returns how many entries it copied. Keys without a legacy entry are skipped; an error
 // leaves the remaining keys to the lookup in Get. Nothing happens while the store is switched off.
 func AdoptLegacy(ctx context.Context, keys []string) (int, error) {
-	if os.Getenv(StoreSelector) == StoreNone {
+	if envvar.Get(StoreSelector) == StoreNone {
 		return 0, nil
 	}
 	copied := 0

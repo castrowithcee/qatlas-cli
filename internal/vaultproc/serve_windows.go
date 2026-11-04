@@ -22,9 +22,9 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
-// StartProcess starts 'qatlas vault serve' for the vault at configPath, detached from this process and its
+// StartProcess starts 'qconnect vault serve' for the vault at configPath, detached from this process and its
 // console, hands it snap through an inherited pipe, and waits until client reaches it. It is the shared core
-// 'qatlas vault unlock' and the TUI's own 'ctrl+l' unlock both run, so a vault process is started exactly
+// 'qconnect vault unlock' and the TUI's own 'ctrl+l' unlock both run, so a vault process is started exactly
 // the same way whichever asks; only how the passphrase that produced snap was asked differs, and neither
 // belongs to this package.
 //

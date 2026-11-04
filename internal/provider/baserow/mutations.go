@@ -93,7 +93,7 @@ var rowsUpdate = capability.Descriptor{
 
 var rowsDelete = capability.Descriptor{
 	ID: Provider + ".rows.delete", Version: 1, Title: "Delete a Baserow row",
-	Description: "Delete one row of a table. Baserow may keep it in the trash for a while; Qatlas does not restore it",
+	Description: "Delete one row of a table. Baserow may keep it in the trash for a while; Qatlas Connect does not restore it",
 	Tags:        []string{"baserow", "rows", "delete", "records"}, Provider: Provider, RequiresToolAllowList: true,
 	Risk: rowChangeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table_id":` + idSchema + `,"row_id":` + idSchema +

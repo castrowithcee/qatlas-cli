@@ -250,7 +250,7 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 }
 
 // A vault process that ends stops serving its socket before it releases its lock. Whoever finds it not running
-// in that moment and starts a new one at once, as 'ctrl+l' and 'qatlas vault unlock' do after ending a process
+// in that moment and starts a new one at once, as 'ctrl+l' and 'qconnect vault unlock' do after ending a process
 // whose program was replaced, gets the socket as soon as the lock is released instead of ErrRunning.
 func TestListenRightAfterAProcessEndedWaitsForItsLock(t *testing.T) {
 	path := socketIn(t)

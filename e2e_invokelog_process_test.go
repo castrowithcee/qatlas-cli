@@ -102,7 +102,7 @@ defaults:
 	c := &runner{bin: bin, seen: &seen, env: []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		"XDG_RUNTIME_DIR=" + runtimeDir,
 		secret.StoreSelector + "=none",
 	}}
@@ -182,7 +182,7 @@ defaults:
 	if code, _, stderr := c.runInput(t, `{"id":1}`, "invoke", "bookstack.pages.get"); code != 0 || stderr != "" {
 		t.Fatalf("invoke pages.get: exit %d, stderr %q", code, stderr)
 	}
-	if invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke"); invoke.Result.IsError {
+	if invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke"); invoke.Result.IsError {
 		t.Fatalf("MCP invoke = %s", invoke.Result.Structured)
 	}
 
@@ -203,7 +203,7 @@ defaults:
 	}
 	awaitEntries(t, 4)
 
-	if search := broker.call(t, `{"query":"pages"}`, "qatlas.search"); search.Result.IsError {
+	if search := broker.call(t, `{"query":"pages"}`, "qconnect.search"); search.Result.IsError {
 		t.Fatalf("MCP search = %s", search.Result.Structured)
 	}
 	file, entries := awaitEntries(t, 5)
@@ -222,7 +222,7 @@ defaults:
 			t.Fatalf("the former release's day file %s was rewritten", filepath.Base(file))
 		}
 	}
-	if entries[3]["path"] != "mcp" || entries[4]["path"] != "mcp" || entries[4]["operation"] != "qatlas.search" ||
+	if entries[3]["path"] != "mcp" || entries[4]["path"] != "mcp" || entries[4]["operation"] != "qconnect.search" ||
 		entries[3]["session"] == nil || entries[3]["session"] != entries[4]["session"] || entries[4]["connection"] != nil {
 		t.Fatalf("last entries = %v, %v, want the broker's invoke and search under one session", entries[3], entries[4])
 	}

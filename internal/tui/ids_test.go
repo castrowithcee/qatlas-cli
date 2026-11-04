@@ -15,7 +15,7 @@ const (
 
 // A schema-2 file keeps the ids of every entry when the editor saves a form that rebuilds the entry.
 func TestSavingKeepsStableIDs(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestSavingKeepsStableIDs(t *testing.T) {
 
 func idModel(t *testing.T, withIDs bool) (*Model, string) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)

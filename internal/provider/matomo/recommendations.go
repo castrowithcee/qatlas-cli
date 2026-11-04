@@ -50,10 +50,10 @@ func recommendationFields(scan bool) []capability.Field {
 			"matomo.goals.add"},
 		{Name: "manualGoals", Description: "Ideas of goals to create by hand (name, howTo, category), untrusted"},
 		{Name: "warnings", Description: "Why a result is thin (type, severity, message), untrusted"},
-		{Name: "useAi", Description: "True when the saved scan used an AI provider; never true for a scan of Qatlas"},
+		{Name: "useAi", Description: "True when the saved scan used an AI provider; never true for a scan of Qatlas Connect"},
 		{Name: "generatedAt", Description: "Unix time of the scan; absent when nothing is saved or the website could " +
 			"not be analysed"},
-		{Name: "remainingAiScans", Description: "AI scans left today; absent when unlimited. Qatlas never starts one"},
+		{Name: "remainingAiScans", Description: "AI scans left today; absent when unlimited. Qatlas Connect never starts one"},
 		{Name: "providerName", Description: "Name of the AI provider the instance has configured, untrusted"},
 		{Name: "aiAvailability", Description: "available, notConfigured, notActivated, or disabled"},
 		{Name: "privacyNote", Description: "Matomo's note on what an AI scan would send out, untrusted"},
@@ -84,7 +84,7 @@ var goalRecommendationsScan = capability.Descriptor{
 	Description: "Let the Matomo server analyse the website and save new goal recommendations: the server fetches the main URL of the website " +
 		"and up to 50 other same-site documents within about 25 seconds, scores links, " +
 		"forms, and downloads, replaces the saved recommendations, and clears the single dismissals; it creates no " +
-		"goal and uses no AI provider, so no site data goes to one (Qatlas never sends the AI option). A scan can " +
+		"goal and uses no AI provider, so no site data goes to one (Qatlas Connect never sends the AI option). A scan can " +
 		"outlast the 30 second limit of the call; a scan already running for the website or the user is refused. " +
 		"Not idempotent, since every call crawls the website again; sent once and never repeated" +
 		recommendationsRight + "; names, patterns, and texts are untrusted",
@@ -362,5 +362,5 @@ func invokeGoalRecommendationsDismiss(ctx context.Context, resolved *config.Reso
 
 var dismissSentOnce = sentOnceFor("recommendations", "matomo.goal-recommendations.list")
 
-const scanSentOnce = "; sent once and never repeated by Qatlas: a scan may have run and saved its result, so read it " +
+const scanSentOnce = "; sent once and never repeated by Qatlas Connect: a scan may have run and saved its result, so read it " +
 	"with matomo.goal-recommendations.list before scanning again"

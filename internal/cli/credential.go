@@ -34,14 +34,14 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"lands in the configuration file.\n\n" +
 			"A credential of type vault keeps its secrets in the vault instead: a directory beside the\n" +
 			"configuration, unencrypted or encrypted to a passphrase, for a machine without a usable system\n" +
-			"keyring. 'qatlas vault status' shows whether it exists, is encrypted, and is unlocked; 'qatlas\n" +
-			"vault encrypt', 'qatlas vault passphrase', and 'qatlas vault decrypt' switch its encryption on,\n" +
+			"keyring. 'qconnect vault status' shows whether it exists, is encrypted, and is unlocked; 'qconnect\n" +
+			"vault encrypt', 'qconnect vault passphrase', and 'qconnect vault decrypt' switch its encryption on,\n" +
 			"change its passphrase, and switch it off again.\n\n" +
-			"The other sources stay separate. A set variable QATLAS_<CREDENTIAL>_<ROLE> overrides a stored\n" +
-			"secret, which suits CI and containers. QATLAS_CREDENTIAL_STORE=none switches the system keyring\n" +
+			"The other sources stay separate. A set variable QCONNECT_<CREDENTIAL>_<ROLE> overrides a stored\n" +
+			"secret, which suits CI and containers. QCONNECT_CREDENTIAL_STORE=none switches the system keyring\n" +
 			"off for a run.\n\n" +
 			"These commands write and remove the entries. No command ever shows a stored secret back, not\n" +
-			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.\n\n" +
+			"even masked; 'qconnect config validate --secrets' shows which source delivers each role.\n\n" +
 			"Both commands manage a credential's secret and run only from an interactive terminal, keyring\n" +
 			"credentials included; where the vault this configuration uses is encrypted they also ask for its\n" +
 			"passphrase there, once per command and before doing anything, whatever credential they target. No\n" +
@@ -53,7 +53,7 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"bus as unavailable, without starting one. After such a failure the keyring is not asked again\n" +
 			"for 60 seconds, so an invoke asks it once and the MCP broker asks again after that. The message\n" +
 			"names the next step: unlock the keyring in a desktop session of the same user, or export\n" +
-			"QATLAS_<CREDENTIAL>_<ROLE> for the session.",
+			"QCONNECT_<CREDENTIAL>_<ROLE> for the session.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -63,8 +63,8 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		Short: "Store the secret of one credential role",
 		Long: "The secret is read from standard input, so it never appears in the command line or in the\n" +
 			"shell history:\n\n" +
-			"    printf %s \"$TOKEN\" | qatlas credential set wiki-reader token-id\n" +
-			"    qatlas credential set wiki-reader token-id < token.txt\n\n" +
+			"    printf %s \"$TOKEN\" | qconnect credential set wiki-reader token-id\n" +
+			"    qconnect credential set wiki-reader token-id < token.txt\n\n" +
 			"A keyring credential's secret goes into the system keyring. When the keyring is locked, cannot\n" +
 			"be reached, or is switched off, the command fails rather than falling back silently, and says\n" +
 			"what to do on this platform, or points at the vault as the way out on a machine without one.\n\n" +
@@ -91,7 +91,7 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"credentials.yaml left over from an earlier version, if any. For a vault credential, it is removed\n" +
 			"from the vault, unlocked first by this command's own admin check if it was encrypted and locked,\n" +
 			"and from a vault process that holds the vault unlocked.\n" +
-			"An environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
+			"An environment variable is not touched: it belongs to the shell, not to qconnect. When the keyring\n" +
 			"is locked or cannot be reached, the command says so and what to do, and never reports a secret\n" +
 			"as removed that may still be stored.\n" +
 			"The command first asks \"delete the secret of <credential> <role>? [y/N]\" at the terminal and\n" +
@@ -142,7 +142,7 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 			// The advice is built from the class of the failure, never from what the platform said.
 			return &UsageError{fmt.Errorf("cannot store the secret for %s.%s: %s, then run the command "+
 				"again; or export %s; or, on a machine without a usable keyring, change this credential to "+
-				"type vault in 'qatlas tui' or config.yaml and store it there", name, role,
+				"type vault in 'qconnect tui' or config.yaml and store it there", name, role,
 				secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS), secret.DerivedEnvName(name, role))}
 		}
 		return classifyUserError(err)
@@ -153,9 +153,9 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 
 	// Overriding is allowed, so a shadowing variable must be named the moment it starts shadowing. A forward
 	// credential reads no variable, so nothing shadows it.
-	if env := secret.DerivedEnvName(name, role); !cred.Forward && secrets.Lookup(env) {
+	if env := secret.DerivedEnvName(name, role); !cred.Forward && secrets.LookupDerived(env) {
 		fmt.Fprintf(c.ErrOrStderr(),
-			"qatlas: warning: %s is set and overrides what was just stored for %s.%s\n", env, name, role)
+			"qconnect: warning: %s is set and overrides what was just stored for %s.%s\n", env, name, role)
 	}
 	return nil
 }
@@ -238,12 +238,12 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 	// not mean.
 	if cred.Type != config.CredentialTypeVault && secrets.StoreSkipped() {
 		fmt.Fprintf(c.ErrOrStderr(),
-			"qatlas: warning: %s=%s, so the credential store was not touched and may still hold the "+
+			"qconnect: warning: %s=%s, so the credential store was not touched and may still hold the "+
 				"secret for %s.%s\n", secret.StoreSelector, secret.StoreNone, name, role)
 	}
-	if env := secret.DerivedEnvName(name, role); secrets.Lookup(env) {
+	if env := secret.DerivedEnvName(name, role); secrets.LookupDerived(env) {
 		fmt.Fprintf(c.ErrOrStderr(),
-			"qatlas: warning: %s is still set and keeps delivering the secret for %s.%s\n", env, name, role)
+			"qconnect: warning: %s is still set and keeps delivering the secret for %s.%s\n", env, name, role)
 	}
 	return nil
 }
@@ -278,7 +278,7 @@ func readSecret(c *cobra.Command) (string, error) {
 		info, err := f.Stat()
 		if err == nil && info.Mode()&os.ModeCharDevice != 0 {
 			return "", &UsageError{errors.New("the secret is read from standard input: pipe it in, or open " +
-				"'qatlas tui', go to Credentials, open the keyring credential, and press s on the role")}
+				"'qconnect tui', go to Credentials, open the keyring credential, and press s on the role")}
 		}
 	}
 

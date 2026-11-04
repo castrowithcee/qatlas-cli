@@ -104,7 +104,7 @@ defaults:
 	c := &runner{bin: bin, seen: &seen, env: []string{
 		"HOME=" + dir,
 		"PATH=" + os.Getenv("PATH"),
-		"QATLAS_CONFIG=" + configPath,
+		"QCONNECT_CONFIG=" + configPath,
 		"XDG_RUNTIME_DIR=" + runtimeDir,
 		secret.StoreSelector + "=none",
 	}}
@@ -178,7 +178,7 @@ defaults:
 	invoke := func() string {
 		t.Helper()
 		callID++
-		send(fmt.Sprintf(`{"jsonrpc":"2.0","id":"call-%d","method":"tools/call","params":{"name":"qatlas.invoke",`+
+		send(fmt.Sprintf(`{"jsonrpc":"2.0","id":"call-%d","method":"tools/call","params":{"name":"qconnect.invoke",`+
 			`"arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}`, callID))
 		for {
 			message := next()

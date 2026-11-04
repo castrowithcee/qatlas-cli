@@ -341,7 +341,7 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 }
 
 // A connection that offers no tool is valid, so the editor keeps it and names it instead: in the list of
-// connections and in the summary of the guided setup, with the words 'qatlas config validate' uses.
+// connections and in the summary of the guided setup, with the words 'qconnect config validate' uses.
 func TestAConnectionThatOffersNoToolIsNamed(t *testing.T) {
 	m, _ := toolsModel(t, wikiRegistry(t), map[string]config.Connection{
 		"closed": {Service: "wiki", Credential: "reader", Tools: []string{}},

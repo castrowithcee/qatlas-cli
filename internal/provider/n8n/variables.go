@@ -35,7 +35,7 @@ const variableDataSensitivity = "n8n-variables"
 // missing license (feat:variables), a missing API key scope (variable:*), and a role without the right to
 // manage variables; the body is never read into a message.
 const variablePermissionMessage = "n8n refused this variables operation: license or role missing (the " +
-	"instance's feat:variables license, the API key's variable scope, or its owner's role); Qatlas cannot " +
+	"instance's feat:variables license, the API key's variable scope, or its owner's role); Qatlas Connect cannot " +
 	"tell which"
 
 var variableReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,

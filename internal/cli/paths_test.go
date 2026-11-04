@@ -13,8 +13,8 @@ import (
 // A connection bound to paths exists for discovery and invoke only in a project inside them. Everywhere
 // else every command leaves it out, and naming it is refused as unknown without naming any path.
 func TestBoundConnectionsFollowTheWorkingDirectory(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	project := filepath.Join(t.TempDir(), "kunde-a")
 	outside := filepath.Join(t.TempDir(), "kunde-ab")
 	for _, dir := range []string{filepath.Join(project, "src"), outside} {
@@ -116,7 +116,7 @@ defaults:
 	t.Chdir(outside)
 	code, stdout, stderr = runTools(t, &reads, "config", "validate", "--config", cfg)
 	if code != exitOK || !strings.HasPrefix(stdout, "configuration is valid") ||
-		!strings.Contains(stderr, `qatlas: warning: connection "ghost": paths[0] names no existing directory`) ||
+		!strings.Contains(stderr, `qconnect: warning: connection "ghost": paths[0] names no existing directory`) ||
 		strings.Contains(stderr, absent) || strings.Contains(stderr, `"customer"`) {
 		t.Errorf("validate: exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}

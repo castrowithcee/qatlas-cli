@@ -65,7 +65,7 @@ const (
 )
 
 // ErrNoTerminal is returned by a PassphraseFunc that could not ask for a passphrase because no terminal is
-// attached, for example a headless session or an agent talking to qatlas mcp over stdio.
+// attached, for example a headless session or an agent talking to qconnect mcp over stdio.
 var ErrNoTerminal = errors.New("no terminal is attached to ask for the vault passphrase")
 
 // ErrWrongPassphrase reports a passphrase that does not unlock the vault's key.

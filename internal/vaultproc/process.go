@@ -8,14 +8,14 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
-// SuccessorFlag is the hidden flag of 'qatlas vault serve' that starts it as the successor of a running
+// SuccessorFlag is the hidden flag of 'qconnect vault serve' that starts it as the successor of a running
 // vault process, part of the successor contract; see StartSuccessorProcess and HandoverFD.
 const SuccessorFlag = "--successor"
 
 // SyncChange hands a change already written to the vault on to the vault process client of v, once one is
 // reached: change runs against it, get, set, or delete, whatever the caller just did to the vault itself.
 // It is the shared core the CLI's own syncVaultProcess and the TUI's equivalent both run, so 'qatlas
-// credential set', 'qatlas credential delete', 'qatlas vault migrate', and the TUI's own role rows, guided
+// credential set', 'qconnect credential delete', 'qconnect vault migrate', and the TUI's own role rows, guided
 // setup, and migrate action all reach a running process the very same way.
 //
 // A change that went through is followed by the bindings of v, when it is unlocked in this process, so the
@@ -56,8 +56,8 @@ func SyncChange(ctx context.Context, v *vault.Vault, change func(context.Context
 // LockProcess locks the vault process client of v, waiting a moment for its socket to close once it
 // answers, so the very next read already finds the vault locked. It is the shared core the CLI's own
 // lockVaultProcess and the TUI's equivalent both run ahead of a change after which a still-running process
-// would serve what the vault no longer holds, or has no key to check any more: 'qatlas vault passphrase'
-// and 'qatlas vault decrypt' retire the identity a process was unlocked with, and the TUI's own change
+// would serve what the vault no longer holds, or has no key to check any more: 'qconnect vault passphrase'
+// and 'qconnect vault decrypt' retire the identity a process was unlocked with, and the TUI's own change
 // passphrase and turn off encryption actions do the same. The change goes ahead either way.
 //
 // locked is true only once the process actually answered a lock; false with a nil err means there was
@@ -113,7 +113,7 @@ func awaitProcessLocked(ctx context.Context, client *Client) {
 }
 
 // ProcessClientOf returns the client of the vault process that would hold v unlocked, checked against v's
-// own recipient: the same few lines 'qatlas vault status' and 'qatlas credential set' already build for
+// own recipient: the same few lines 'qconnect vault status' and 'qconnect credential set' already build for
 // themselves, exposed here so a caller outside internal/cli, such as the TUI's own migrate action, can
 // reach one too without a copy of its own. It is nil-safe only in the sense that a v without a recipient, an
 // unencrypted vault, reports vault.ErrNotEncrypted rather than a client that could never work.

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 	"github.com/castrowithcee/qatlas-connect/internal/filelock"
 )
 
@@ -47,10 +48,10 @@ type HomeMigration struct {
 
 // MigrateHome copies the legacy configuration directory to the current one when the configuration is
 // resolved from the default location and only the legacy directory exists. It returns nil when nothing was
-// to do. explicit is the --config value; QATLAS_CONFIG or QATLAS_CLI_HOME point to an explicit place as
+// to do. explicit is the --config value; QCONNECT_CONFIG or QCONNECT_HOME point to an explicit place as
 // well, and an explicit place is never migrated.
 func MigrateHome(explicit string) (*HomeMigration, error) {
-	if explicit != "" || os.Getenv("QATLAS_CONFIG") != "" || os.Getenv("QATLAS_CLI_HOME") != "" {
+	if explicit != "" || envvar.Set("QCONNECT_CONFIG") || envvar.Set("QCONNECT_HOME") {
 		return nil, nil
 	}
 	home, err := os.UserHomeDir()
@@ -61,11 +62,11 @@ func MigrateHome(explicit string) (*HomeMigration, error) {
 }
 
 // LegacyDefault reports whether path is the default configuration file of the versions before the rename,
-// compared after cleaning and without resolving symbolic links, while neither QATLAS_CONFIG nor
-// QATLAS_CLI_HOME point to an explicit place. A vault process of those versions that serves its default
+// compared after cleaning and without resolving symbolic links, while neither QCONNECT_CONFIG nor
+// QCONNECT_HOME point to an explicit place. A vault process of those versions that serves its default
 // location starts its successor with this file.
 func LegacyDefault(path string) bool {
-	if path == "" || os.Getenv("QATLAS_CONFIG") != "" || os.Getenv("QATLAS_CLI_HOME") != "" {
+	if path == "" || envvar.Set("QCONNECT_CONFIG") || envvar.Set("QCONNECT_HOME") {
 		return false
 	}
 	home, err := os.UserHomeDir()

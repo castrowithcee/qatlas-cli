@@ -231,7 +231,7 @@ func TestQuestionAndPromptFillTheWorkspaceInAPanel(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	press(t, m, "U")
 	view := ansi.Strip(m.framedText(m.updateView))
-	if !strings.Contains(view, "╭") || !strings.Contains(view, warnMark+" Update qatlas to v0.5.0?") {
+	if !strings.Contains(view, "╭") || !strings.Contains(view, warnMark+" Update qconnect to v0.5.0?") {
 		t.Errorf("the update question is not a panel with its mark:\n%s", view)
 	}
 	checkFits(t, view, m.width, m.height)

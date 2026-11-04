@@ -63,7 +63,7 @@ type RenamePlan struct {
 	// VaultUnread is true when the vault is encrypted but not unlocked in this process, so approvals and agent
 	// tokens are neither shown nor checked; Rename refuses such a plan.
 	VaultUnread bool
-	// Outside names what may refer to the entry by its name and is out of qatlas's reach.
+	// Outside names what may refer to the entry by its name and is out of qconnect's reach.
 	Outside []string
 	// Adopt says the configuration carries the new name already (see PlanAdopt): References are what the hand
 	// rename changed there, and Rename writes the configuration as it is.
@@ -191,7 +191,7 @@ func (s *Service) planVault(plan *RenamePlan, cfg *config.Config, approve bool) 
 	}
 	if taken, ok := approvals[plan.New]; ok && (!approve || taken.ConnectionID == "" || taken.ConnectionID != plan.ID) {
 		return &RenameRefusedError{fmt.Errorf("the vault holds a stale approval under the name %s; remove it "+
-			"with 'qatlas vault approve' before a connection takes that name", plan.New)}
+			"with 'qconnect vault approve' before a connection takes that name", plan.New)}
 	}
 	if _, ok := approvals[plan.Old]; !ok {
 		return nil
@@ -293,7 +293,7 @@ func (s *Service) Rename(ctx context.Context, plan *RenamePlan) (RenameResult, e
 		if _, err := v.Revoke([]string{plan.Old}); err != nil {
 			res.Warnings = append(res.Warnings, s.redact(fmt.Sprintf("warning: the approval under the old name "+
 				"%s could not be removed: %v; it approves nothing while no connection has that name, and "+
-				"'qatlas vault approve' removes it", plan.Old, err)))
+				"'qconnect vault approve' removes it", plan.Old, err)))
 		}
 		if warning := s.SyncVaultProcess(ctx, func(ctx context.Context, client *vaultproc.Client) error {
 			bindings, err := v.Bindings()

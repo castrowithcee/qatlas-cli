@@ -33,7 +33,7 @@ var (
 
 	pluginName = regexp.MustCompile(pluginPattern)
 
-	operationsSentOnce = "; sent once and never repeated by Qatlas: after an unclear result, check the state in " +
+	operationsSentOnce = "; sent once and never repeated by Qatlas Connect: after an unclear result, check the state in " +
 		"Matomo before repeating it"
 )
 
@@ -81,7 +81,7 @@ var trustedHostsSet = capability.Descriptor{
 	Description: "WARNING: replace the complete list of host names under which Matomo accepts requests " +
 		"(CoreAdminHome.setTrustedHosts). Matomo refuses every request whose host is not on the list, so a wrong list " +
 		"locks everybody out of the instance, this connection included, and only a change in Matomo's configuration " +
-		"file repairs it. Qatlas therefore refuses a list that lacks the host of the connection's base URL (the host " +
+		"file repairs it. Qatlas Connect therefore refuses a list that lacks the host of the connection's base URL (the host " +
 		"with its port when the URL names one other than 443) and sends nothing; entries must be host names, IPv4 " +
 		"addresses, or bracketed IPv6 addresses, each with an optional port. A list is never empty, because Matomo " +
 		"ignores an empty one." + operationsNote + "; offered only where a connection's tools list names it" +

@@ -56,7 +56,7 @@ Settings that some tools depend on are made in BotFather as well:
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `telegram`, the service, a credential, the
    scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `bot-token` secret.
@@ -65,11 +65,11 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$TELEGRAM_BOT_TOKEN" | qatlas credential set telegram-bot bot-token
+printf %s "$TELEGRAM_BOT_TOKEN" | qconnect credential set telegram-bot bot-token
 ```
 
 `telegram-bot` is the name of the credential in your configuration and `bot-token` is its only secret. To replace a
-token, run the same command again with the new token. Run `qatlas config validate` to check the configuration file.
+token, run the same command again with the new token. Run `qconnect config validate` to check the configuration file.
 It contacts no provider.
 
 The targets name the chats the bot may act in; see [Targets](README.md#targets). Telegram offers no chat list, so you
@@ -77,7 +77,7 @@ give the chat ID, the `@username`, or a `t.me` link; see [Link resolution](READM
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Telegram accepted the token.
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Telegram accepted the token.
 The test calls only the read-only `getMe` and never sends to a chat.
 
 **A passing test does not mean every tool works.** It checks neither the chats nor the bot's rights there. Telegram
@@ -214,7 +214,7 @@ Every failed call has a **code** and a **message** from Qatlas. The message name
 
 ```text
 permission: Telegram refused this operation; check the rights of the bot in Telegram
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | 403: Forbidden: bot is not a member of the channel chat
 ```
 
@@ -229,8 +229,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Telegram rejected the bot token | The token is wrong, revoked, or from another bot, or the service address is another one | Copy the token again from @BotFather (`/token` generates a new one) and store it with `qatlas credential set <credential> bot-token`. |
-| `auth`: the bot token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$TELEGRAM_BOT_TOKEN" \| qatlas credential set <credential> bot-token`. |
+| `auth`: Telegram rejected the bot token | The token is wrong, revoked, or from another bot, or the service address is another one | Copy the token again from @BotFather (`/token` generates a new one) and store it with `qconnect credential set <credential> bot-token`. |
+| `auth`: the bot token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$TELEGRAM_BOT_TOKEN" \| qconnect credential set <credential> bot-token`. |
 | `permission`: Telegram refused this operation; check the rights of the bot in Telegram | The bot lacks the right in that chat or is not a member of it | Find the tool in [Rights per tool group](#rights-per-tool-group) and give the right, for example `can_delete_messages` to delete or `can_pin_messages` to pin. Add the bot to the chat if it is not a member. |
 | `provider-error`: Telegram rejected the operation (HTTP 400) | Telegram refuses the request: a wrong chat or message, an invalid value, or a missing right. Telegram's reason is not shown | Check the chat and the message first, then the right of the tool group in [Rights per tool group](#rights-per-tool-group). |
 | `provider-error`: Telegram rejected the operation (HTTP 404) | Telegram rejects the request; its reason is not shown | Check the token with the connection test and the chat ID of the target. |

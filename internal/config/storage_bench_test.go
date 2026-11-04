@@ -11,7 +11,7 @@ import (
 )
 
 // Measurements for the storage architecture: reading while another writer replaces the file, and how long
-// writer processes wait for the cross-process lock. The measuring code is that of `qatlas selftest
+// writer processes wait for the cross-process lock. The measuring code is that of `qconnect selftest
 // storage` (internal/selftest); these benchmarks only drive it with b.N. Fixtures are synthetic, generated
 // into b.TempDir() (TMPDIR picks the file system), and never touch a real configuration. The benchmarks run
 // only with -bench.

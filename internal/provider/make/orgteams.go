@@ -151,7 +151,7 @@ var teamsUpdate = capability.Descriptor{
 var teamsDelete = capability.Descriptor{
 	ID: Provider + ".teams.delete", Version: 1, Title: "Delete a team of the bound Make organization",
 	Description: "Delete one team of the bound organization for good. Make also deletes all data of the team: " +
-		"its scenarios, webhooks, and custom team variables; Qatlas does not look them up, check them first. " +
+		"its scenarios, webhooks, and custom team variables; Qatlas Connect does not look them up, check them first. " +
 		"The team is read first and bound to the connection's organization; a team of another organization or " +
 		"a personal space is refused. Make requires its confirmed flag, which is sent only when confirmed is " +
 		"true. Sends one request and never repeats it. Offered only when a connection's tools list names it, " +

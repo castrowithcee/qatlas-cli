@@ -135,7 +135,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 		fake := newerRelease()
 		m := startedWith(t, fake)
 		press(t, m, "U")
-		if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qatlas to v0.5.0?") ||
+		if m.screen != screenUpdate || !strings.Contains(screenOf(m), "Update qconnect to v0.5.0?") ||
 			!strings.Contains(flatText(screenOf(m)), "y update n/esc cancel") {
 			t.Fatalf("u did not ask:\n%s", m.render())
 		}
@@ -169,7 +169,7 @@ func TestUAsksBeforeItInstalls(t *testing.T) {
 		t.Fatalf("y ran %d installations, want 1", fake.updates)
 	}
 	view = m.render()
-	for _, want := range []string{"Updated to v0.5.0 · restart qatlas tui", "Updated to v0.5.0. Restart qatlas tui to use it."} {
+	for _, want := range []string{"Updated to v0.5.0 · restart qconnect tui", "Updated to v0.5.0. Restart qconnect tui to use it."} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the finished update does not say %q:\n%s", want, view)
 		}
@@ -192,7 +192,7 @@ func TestUpdateFailuresAreReported(t *testing.T) {
 		{name: "unsupported installation",
 			err: &selfupdate.UnsupportedInstallationError{Reason: "the executable is a symlink"},
 			want: []string{"error: cannot self-update this installation: the executable is a symlink",
-				"'qatlas update --help'"}},
+				"'qconnect update --help'"}},
 		{name: "download failure", err: errors.New("GitHub returned 502 for token s3cr3t-value"),
 			want: []string{"error: update failed: GitHub returned 502"}},
 	}
@@ -301,11 +301,11 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	m := startedWith(t, fake)
 	press(t, m, "U")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	wants := []string{"Update qatlas to v0.5.0?", "A running vault process is handed over to the new version",
-		"'qatlas tui' and 'qatlas web'"}
+	wants := []string{"Update qconnect to v0.5.0?", "A running vault process is handed over to the new version",
+		"'qconnect tui' and 'qconnect web'"}
 	if runtime.GOOS == "windows" {
 		// Windows has no vault process; the question names the rename and the processes that keep running.
-		wants = []string{"Update qatlas to v0.5.0?", "renamed to qatlas.exe.old", "'qatlas tui' and 'qatlas web'"}
+		wants = []string{"Update qconnect to v0.5.0?", "renamed to qatlas.exe.old", "'qconnect tui' and 'qconnect web'"}
 	}
 	for _, want := range wants {
 		if !strings.Contains(view, want) {

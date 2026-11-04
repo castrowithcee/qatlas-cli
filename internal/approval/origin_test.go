@@ -42,7 +42,7 @@ func TestOriginsFindsTheYoungestEntryAfterTheLastApproval(t *testing.T) {
 	if got.Source != OriginTUI || !got.Verified || got.Seq != 2 || got.Time.IsZero() {
 		t.Fatalf("origin = %+v, want a verified tui entry #2", got)
 	}
-	if text := got.Text(); !strings.HasPrefix(text, "changed in qatlas tui, ") || strings.Contains(text, "unverified") {
+	if text := got.Text(); !strings.HasPrefix(text, "changed in qconnect tui, ") || strings.Contains(text, "unverified") {
 		t.Fatalf("Text() = %q", text)
 	}
 
@@ -63,7 +63,7 @@ func TestOriginsIgnoresEntriesBeforeTheLastApproval(t *testing.T) {
 	if got.Source != OriginOutside || !got.Time.Equal(modified) || got.Seq != 0 {
 		t.Fatalf("origin = %+v, want outside with the file time", got)
 	}
-	if text := got.Text(); !strings.Contains(text, "outside qatlas") || !strings.Contains(text, "last modified") {
+	if text := got.Text(); !strings.Contains(text, "outside qconnect") || !strings.Contains(text, "last modified") {
 		t.Fatalf("Text() = %q", text)
 	}
 }
@@ -142,7 +142,7 @@ func TestOriginsFollowARename(t *testing.T) {
 	if got.Source != OriginTUI || got.As != "alpha" || got.Seq != 1 {
 		t.Fatalf("origin = %+v, want the tui change made under the former name", got)
 	}
-	if text := got.Text(); !strings.Contains(text, "changed in qatlas tui") || !strings.Contains(text, "then named alpha") {
+	if text := got.Text(); !strings.Contains(text, "changed in qconnect tui") || !strings.Contains(text, "then named alpha") {
 		t.Fatalf("Text() = %q", text)
 	}
 

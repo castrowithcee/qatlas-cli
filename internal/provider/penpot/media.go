@@ -106,7 +106,7 @@ var mediaUpload = capability.Descriptor{
 var mediaFromURL = capability.Descriptor{
 	ID: Provider + ".media.from-url", Version: 1, Title: "Add an image to a Penpot file from a URL",
 	Description: "Let Penpot fetch an image from an https URL and store it as a media object of one file of a project " +
-		"of a bound team. Qatlas accepts only an https URL with a public DNS host name on the default port, without " +
+		"of a bound team. Qatlas Connect accepts only an https URL with a public DNS host name on the default port, without " +
 		"user info or fragment; IP addresses, single-label names, and local or internal name suffixes are refused. " +
 		"Penpot itself fetches the URL and follows up to three redirects. " + mediaNote,
 	Tags: []string{"penpot", "media", "url", "image", "design"}, Provider: Provider,

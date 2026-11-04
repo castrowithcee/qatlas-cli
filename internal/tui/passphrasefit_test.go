@@ -31,7 +31,7 @@ func TestPassphraseDialogsFitMinimumSize(t *testing.T) {
 	for name, open := range cases {
 		t.Run(name, func(t *testing.T) {
 			eachLanguage(t, func(t *testing.T) {
-				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+				m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 				open(m)
 				sizedModel(m, minimumWidth, minimumHeight)
 				view := m.render()

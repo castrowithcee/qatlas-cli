@@ -42,7 +42,7 @@ const (
 
 // Settings are the vault's own settings, authenticated as a whole in settings.age.
 type Settings struct {
-	// Update is what 'qatlas update' does with an unlocked vault process.
+	// Update is what 'qconnect update' does with an unlocked vault process.
 	Update UpdateBehaviour
 	// IdleTimeout is the idle time after which the vault locks itself. It is positive.
 	IdleTimeout time.Duration
@@ -91,7 +91,7 @@ func (s Settings) Validate() error {
 	return nil
 }
 
-// UpdateBehaviour says what 'qatlas update' does with a vault process that holds the vault unlocked.
+// UpdateBehaviour says what 'qconnect update' does with a vault process that holds the vault unlocked.
 type UpdateBehaviour string
 
 const (

@@ -12,7 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/selfupdate"
 )
 
-// Updater checks for and installs a newer stable release of qatlas itself. The caller supplies it, and
+// Updater checks for and installs a newer stable release of qconnect itself. The caller supplies it, and
 // leaves it nil where no check may run: in a dev build, or when the person opted out.
 type Updater interface {
 	Check(ctx context.Context) (selfupdate.Result, error)

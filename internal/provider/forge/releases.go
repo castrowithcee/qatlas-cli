@@ -162,7 +162,7 @@ var releaseMembers = []member{
 	{name: "zipball_url", kind: kindText, address: true, note: "Address of the zip source archive; left out " +
 		"when it carries user info or a query"},
 	{name: "upload_url", kind: kindText, address: true, note: "Address the instance reports for asset uploads, " +
-		"never used by Qatlas; left out when it carries user info or a query"},
+		"never used by Qatlas Connect; left out when it carries user info or a query"},
 	{name: "created_at", kind: kindText, note: "Creation time"},
 	{name: "published_at", kind: kindText, note: "Publication time"},
 }

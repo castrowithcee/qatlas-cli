@@ -26,11 +26,11 @@ type heatmapDeletion struct {
 var heatmapDeletions = []heatmapDeletion{
 	{action: "delete", method: "HeatmapSessionRecording.deleteHeatmap", op: "delete heatmap",
 		title: "Delete a Matomo heatmap",
-		summary: "Delete a heatmap with its configuration; Qatlas offers no way to restore it. Matomo does not " +
+		summary: "Delete a heatmap with its configuration; Qatlas Connect offers no way to restore it. Matomo does not " +
 			"document what happens to the recorded data"},
 	{action: "delete-screenshot", method: "HeatmapSessionRecording.deleteHeatmapScreenshot", op: "delete heatmap screenshot",
 		title:   "Delete the screenshot of a Matomo heatmap",
-		summary: "Delete the stored page screenshot of a heatmap; Qatlas offers no way to restore it, and the heatmap itself stays", captureOption: true},
+		summary: "Delete the stored page screenshot of a heatmap; Qatlas Connect offers no way to restore it, and the heatmap itself stays", captureOption: true},
 }
 
 func (d heatmapDeletion) descriptor() capability.Descriptor {

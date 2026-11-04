@@ -22,11 +22,11 @@ const (
 	userRolesMax    = 100
 	usersWriteScope = "user management"
 
-	userGuestRefused   = "a guest user (public access) cannot be changed through Qatlas"
+	userGuestRefused   = "a guest user (public access) cannot be changed through Qatlas Connect"
 	userMigrateRefused = "content ownership cannot be migrated to a guest user (public access)"
 
 	usersWriteRoles = "Needs the BookStack role permission users-manage for the token's user. The tool is only " +
-		"available through the tool allow list, and only on a connection without targets. No tool of Qatlas " +
+		"available through the tool allow list, and only on a connection without targets. No tool of Qatlas Connect " +
 		"creates users or sets an e-mail address, a password, or an external authentication identifier"
 )
 
@@ -45,7 +45,7 @@ var (
 		Description: "Change the name, the language, or the roles of one existing user, in one request. A field that " +
 			"is left out stays unchanged; roles replaces all roles of the user, so an empty list removes every role. " +
 			"The guest role (system role public) is never granted and a guest user is never changed through roles: " +
-			"when roles is given, Qatlas determines the guest role first and refuses, without a change, when the " +
+			"when roles is given, Qatlas Connect determines the guest role first and refuses, without a change, when the " +
 			"user is a guest user, when roles contains the guest role, or when the guest role cannot be determined; " +
 			"that needs the role permission user-roles-manage as well. " + usersWriteRoles,
 		Tags: []string{"administration", "users", "bookstack", "update"}, Risk: usersUpdateRisk, Provider: Provider,
@@ -71,7 +71,7 @@ var (
 		ID: Provider + ".users.delete", Version: 1, Title: "Delete a BookStack user",
 		Description: "Permanently delete one existing user. This cannot be undone. Without migrate_ownership_id the " +
 			"content of the user stays without an owner; with it, the ownership of that content passes to the " +
-			"given user. Qatlas refuses, without a change, to migrate ownership to a guest user (public access) and " +
+			"given user. Qatlas Connect refuses, without a change, to migrate ownership to a guest user (public access) and " +
 			"fails closed when the guest role cannot be determined; that needs the role permission user-roles-manage " +
 			"as well. BookStack refuses to delete the only administrator and the guest user. " + usersWriteRoles,
 		Tags: []string{"administration", "users", "bookstack", "delete"}, Risk: usersDeleteRisk, Provider: Provider,

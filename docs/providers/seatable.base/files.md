@@ -48,8 +48,8 @@ shared rules are in [the README](README.md#shared-boundaries).
   are not offered.
 
 ```sh
-qatlas invoke seatable.base.files.upload --connection sales-rw --confirm --arg table=id:0000 \
+qconnect invoke seatable.base.files.upload --connection sales-rw --confirm --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg local_path=~/uploads/offer.pdf
-qatlas invoke seatable.base.files.get --connection sales-rw --arg table=id:0000 \
+qconnect invoke seatable.base.files.get --connection sales-rw --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg name=offer.pdf --arg local_path=~/downloads/offer.pdf
 ```

@@ -635,8 +635,8 @@ func TestImportRefusesForeignFiles(t *testing.T) {
 	tests := []struct {
 		name, text, want string
 	}{
-		{"other format", strings.Replace(string(goodText), TransferFormat, "something-else", 1), "not a qatlas configuration export"},
-		{"no format", "services: {}\n", "not a qatlas configuration export"},
+		{"other format", strings.Replace(string(goodText), TransferFormat, "something-else", 1), "not a qconnect configuration export"},
+		{"no format", "services: {}\n", "not a qconnect configuration export"},
 		{"future version", strings.Replace(string(goodText), "format_version: 1", "format_version: 2", 1), "format version 2"},
 		{"unknown section", string(goodText) + "secrets:\n    mail-key:\n        api-key: LEAKED-VALUE-1\n", "unknown key"},
 		{"unknown key in entry", strings.Replace(string(goodText), "provider: mail\n", "provider: mail\n        token: LEAKED-VALUE-2\n", 1), "unknown key"},

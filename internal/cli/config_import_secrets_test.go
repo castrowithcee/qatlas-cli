@@ -276,7 +276,7 @@ func TestConfigImportSecretsApprovalQuestion(t *testing.T) {
 		if approved != approve || open == approve {
 			t.Errorf("approve=%v: stdout %q", approve, stdout)
 		}
-		if !approve && !strings.Contains(stdout, "qatlas vault approve") {
+		if !approve && !strings.Contains(stdout, "qconnect vault approve") {
 			t.Errorf("stdout = %q, want the hint to approve later", stdout)
 		}
 		noSecretValue(t, target, stdout, stderr)

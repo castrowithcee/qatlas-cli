@@ -28,7 +28,7 @@ const tagsInstanceWide = "tags"
 // tagPermissionMessage is the one message of a 403 on a tags endpoint: the API key's tag scope or its
 // owner's role may be missing. The body is never read into a message.
 const tagPermissionMessage = "n8n refused this tags operation: the API key may lack the tag scope or its " +
-	"owner's role may not manage tags; Qatlas cannot tell which"
+	"owner's role may not manage tags; Qatlas Connect cannot tell which"
 
 var tagReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: tagDataSensitivity}

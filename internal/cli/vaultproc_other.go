@@ -7,7 +7,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
 
-// vaultProcessPlatform reports whether this platform runs a vault process. Here it does not yet: 'qatlas
+// vaultProcessPlatform reports whether this platform runs a vault process. Here it does not yet: 'qconnect
 // vault unlock', and the TUI's own 'ctrl+l', unlock the vault for their own process only (see
 // vaultproc.StartProcess, which reports vaultproc.ErrUnsupported here too).
 const vaultProcessPlatform = false

@@ -21,7 +21,7 @@ import (
 // newEncryptedVaultModel builds an editor whose vault is already encrypted and holds one unrelated entry
 // ("other"/"role"), so a save under test is never the vault's very first secret. unlockedInProcess decides
 // whether the model's own resolver already unlocked it (state vault.StateUnlocked: admin session only, no
-// unlocking needed) or starts genuinely locked, the way a freshly started 'qatlas tui' would (unlock and
+// unlocking needed) or starts genuinely locked, the way a freshly started 'qconnect tui' would (unlock and
 // admin together), by building the vault through a throwaway resolver first and, for the locked case,
 // handing the model a second, fresh one over the same directory.
 func newEncryptedVaultModel(t *testing.T, dir, passphrase string, unlockedInProcess bool) (*Model, *config.Store) {
@@ -67,7 +67,7 @@ func TestAdminSessionEditorOpensReadOnly(t *testing.T) {
 		{"unlocked in process", true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			m, store := newEncryptedVaultModel(t, dir, "hunter2", tt.unlockedInProcess)
 
 			cfg := newTestConfig(t)
@@ -103,7 +103,7 @@ func TestAdminSessionEditorOpensReadOnly(t *testing.T) {
 // with the error shown and writes nothing, and the right one saves at once and starts the session, so a
 // second, unrelated managing action right after runs without asking again.
 func TestAdminSessionAsksOnceThenStaysActive(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
@@ -161,7 +161,7 @@ func TestAdminSessionAsksOnceThenStaysActive(t *testing.T) {
 // Cancelling the admin dialog (esc) runs nothing: the vault stays exactly as it was, and every field already
 // typed into the open form is still there, so the same save can be tried again without retyping anything.
 func TestAdminSessionCancelPreservesFormInput(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
@@ -201,7 +201,7 @@ func TestAdminSessionCancelPreservesFormInput(t *testing.T) {
 // An admin session time of 0 never keeps a session at all: every single managing action asks for the passphrase
 // again, immediately after the previous one succeeded.
 func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 	setAdminTimeout(t, m, "0")
 
@@ -227,7 +227,7 @@ func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 // action asks again. Any key press while the session is still active renews its idle deadline instead, so
 // it never expires while someone is actually using the window.
 func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	addKeyringCredentialGated(t, m, "reader", "hunter2")
@@ -266,7 +266,7 @@ func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
 // An unencrypted vault has no passphrase and so no admin session at all: every managing action runs exactly
 // as it did before this window ever existed.
 func TestAdminSessionNoneForUnencryptedVault(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -341,7 +341,7 @@ func addKeyringCredentialGated(t *testing.T, m *Model, name, passphrase string) 
 // save asks for it first, and the setup's typed secrets, still only held in memory, are written only once
 // the right passphrase answers it.
 func TestAdminSessionGatesGuidedSetupSave(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	walkSetup(t, m, stepCredential)
@@ -378,7 +378,7 @@ func TestAdminSessionGatesGuidedSetupSave(t *testing.T) {
 // it is tested here directly, by holding the first command back instead of running it, since a real race
 // only ever shows up under timing this package's tests cannot control.
 func TestAdminSessionSecondEnterWhileCheckingIsIgnored(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
@@ -419,7 +419,7 @@ func TestAdminSessionFailsClosedWhenVaultStateCannotBeRead(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file modes do not carry on Windows")
 	}
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	// unlockedInProcess: false, so this model's own vault.Vault never cached its state in memory and a
 	// State() call genuinely has to read the directory below.
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
@@ -482,7 +482,7 @@ func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 		{"timeout 10m", "10m", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 			setAdminTimeout(t, m, tc.timeout)
 
@@ -517,7 +517,7 @@ func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 // A connection with a new service and a new credential, started with n in Connections, asks for the admin
 // passphrase once for the whole flow, at the summary's save, and writes all three entries then.
 func TestAdminSessionAsksOnceForNewInConnections(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 	openSectionByName(t, m, sectionConnections)
 	m.screen = screenList
@@ -546,7 +546,7 @@ func TestAdminSessionAsksOnceForNewInConnections(t *testing.T) {
 // A locked vault cannot read its settings, so no proof yet means the safe 0 whatever vault.admin_timeout says
 // in the configuration; the passphrase proof unlocks the vault and the stored time applies.
 func TestAdminTimeoutLockedUntilProofThenStored(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	seed, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 	setAdminTimeout(t, seed, "7m")
 
@@ -579,7 +579,7 @@ func TestAdminTimeoutLockedUntilProofThenStored(t *testing.T) {
 
 // An untrusted settings.age never gives more than 0; a vault without encryption has the default.
 func TestAdminTimeoutUntrustedAndUnencrypted(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 	setAdminTimeout(t, m, "1h")
 	mustNoError(t, os.WriteFile(filepath.Join(m.secrets.Vault().Dir(), "settings.age"), []byte("not an age file"), 0o600))
@@ -588,7 +588,7 @@ func TestAdminTimeoutUntrustedAndUnencrypted(t *testing.T) {
 		t.Fatalf("admin timeout with an untrusted settings.age = %v, want 0", got)
 	}
 
-	plain := filepath.Join(t.TempDir(), "qatlas")
+	plain := filepath.Join(t.TempDir(), "qconnect")
 	secrets, _ := newVaultResolver(t, plain)
 	m2, err := buildModel(newTestStore(t, filepath.Join(plain, "config.yaml")), nil, secrets, nil)
 	mustNoError(t, err)

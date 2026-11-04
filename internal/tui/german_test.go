@@ -65,15 +65,15 @@ func vaultGermanScreens() []germanScreen {
 	return []germanScreen{
 		{"vault unencrypted", func(t *testing.T) *Model { return vaultForm(t, unencryptedVaultModel(t)) }},
 		{"vault locked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			return vaultForm(t, m)
 		}},
 		{"vault unlocked", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			return vaultForm(t, m)
 		}},
 		{"vault with credentials.yaml", func(t *testing.T) *Model {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 			secrets, _ := newVaultResolver(t, dir)
 			writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": "canary-german-1"}})
@@ -82,7 +82,7 @@ func vaultGermanScreens() []germanScreen {
 			return vaultForm(t, m)
 		}},
 		{"migrate preview", func(t *testing.T) *Model {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 			secrets, _ := newVaultResolver(t, dir)
 			cfg := newTestConfig(t)
@@ -100,7 +100,7 @@ func vaultGermanScreens() []germanScreen {
 			return m
 		}},
 		{"migrate result", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			vaultForm(t, m)
 			m.migrate = &migratePlan{}
 			m.migrateResult = tr(tMigrateDone, countNoun(2))
@@ -108,7 +108,7 @@ func vaultGermanScreens() []germanScreen {
 			return m
 		}},
 		{"unlock dialog", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", false)
 			openSectionByName(t, m, sectionServices)
 			pump(t, m, "ctrl+l")
 			typeText(t, m, "wrong-passphrase")
@@ -116,13 +116,13 @@ func vaultGermanScreens() []germanScreen {
 			return m
 		}},
 		{"lock question", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			openSectionByName(t, m, sectionServices)
 			pump(t, m, "ctrl+l")
 			return m
 		}},
 		{"admin dialog", func(t *testing.T) *Model {
-			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", true)
+			m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qconnect"), "hunter2", true)
 			vaultForm(t, m)
 			focusField(t, m, "idle timeout")
 			typeText(t, m, "1")
@@ -163,7 +163,7 @@ func accessGermanScreens() []germanScreen {
 		return m, dir
 	}
 	approvals := func(t *testing.T) *Model {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store, _, _ := newApprovalFixture(t, dir, tokenPassphrase)
 		m := openApprovalModel(t, store, dir)
 		openSectionByName(t, m, sectionApprovals)
@@ -211,7 +211,7 @@ func accessGermanScreens() []germanScreen {
 			return m
 		}},
 		{"approvals locked", func(t *testing.T) *Model {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store, _, _ := newApprovalFixture(t, dir, tokenPassphrase)
 			m := openApprovalModel(t, store, dir)
 			openSectionByName(t, m, sectionApprovals)

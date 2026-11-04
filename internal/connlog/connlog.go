@@ -1,4 +1,4 @@
-// Package connlog writes the invocation log entries of qatlas's own changes to connections in the
+// Package connlog writes the invocation log entries of qconnect's own changes to connections in the
 // configuration file, one per connection that changed, and the writer that signs an entry wherever the
 // vault's key is at hand. An entry names the operation, the surface the change was made on, the connection,
 // and the result, never a value of the connection.

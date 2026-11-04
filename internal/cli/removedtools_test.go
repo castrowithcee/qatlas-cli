@@ -95,7 +95,7 @@ func TestRemovedToolsEndAsUnknownOperationWithoutSecretAccess(t *testing.T) {
 			var reads atomic.Int32
 			for _, args := range [][]string{{"describe", id}, {"invoke", id, "--confirm"}} {
 				code, stdout, stderr := runTools(t, &reads, append(args, "--config", cfg)...)
-				if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: unknown-operation:") {
+				if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qconnect: unknown-operation:") {
 					t.Errorf("%v: exit=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 				}
 				// A suggestion may name another tool, never a removed one.
@@ -116,8 +116,8 @@ func TestRemovedToolsEndAsUnknownOperationWithoutSecretAccess(t *testing.T) {
 // An older file that still lists a removed tool stays valid: validate warns once per entry with the
 // connection and the ID, the remaining tools stay offered, and any other unknown entry stays an error.
 func TestConfigValidateWarnsAboutRemovedTools(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	for c, tc := range removedToolCases {
 		list := "[" + strings.Join(append(append([]string{}, tc.removed...), tc.remaining), ", ") + "]"
 		cfg := writeConfig(t, removedToolsConfig(c, list))
@@ -126,7 +126,7 @@ func TestConfigValidateWarnsAboutRemovedTools(t *testing.T) {
 			t.Errorf("%s: exit=%d stdout=%q stderr=%q", tc.provider, code, stdout, stderr)
 		}
 		for _, id := range tc.removed {
-			want := fmt.Sprintf("qatlas: warning: connections.conn.tools: tool %q was removed from qatlas and is ignored", id)
+			want := fmt.Sprintf("qconnect: warning: connections.conn.tools: tool %q was removed from qconnect and is ignored", id)
 			if !strings.Contains(stderr, want) {
 				t.Errorf("%s: stderr %q lacks %q", tc.provider, stderr, want)
 			}
@@ -153,8 +153,8 @@ func TestConfigValidateWarnsAboutRemovedTools(t *testing.T) {
 // The removed kDrive tools keep their former IDs: a file that still names the former provider ID warns about
 // them as removed, next to the provider rename.
 func TestConfigValidateWarnsAboutRemovedToolsUnderTheFormerProviderID(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, strings.Replace(removedToolsConfig(4, "[infomaniakdrive.links.create, infomaniakdrive.links.get]"),
 		"provider: infomaniak.drive", "provider: infomaniakdrive", 1))
 	code, stdout, stderr := runTools(t, nil, "config", "validate", "--config", cfg)
@@ -162,7 +162,7 @@ func TestConfigValidateWarnsAboutRemovedToolsUnderTheFormerProviderID(t *testing
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		`tool "infomaniakdrive.links.create" was removed from qatlas and is ignored`,
+		`tool "infomaniakdrive.links.create" was removed from qconnect and is ignored`,
 		`tool "infomaniakdrive.links.get" was renamed to "infomaniak.drive.links.get"`,
 		`"infomaniak.drive"`,
 	} {

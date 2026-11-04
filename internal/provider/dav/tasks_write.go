@@ -208,7 +208,7 @@ func (s Server) ExistingTaskOf(op string, data []byte) (found ExistingTask, err 
 	if decodeErr != nil {
 		return ExistingTask{}, provider.InvalidResponse(op, notValid)
 	}
-	unmodeled := provider.Fail(op, "this task carries content that Qatlas does not write (such as recurrence, alarms, attachments, or extensions); change it in a task application")
+	unmodeled := provider.Fail(op, "this task carries content that Qatlas Connect does not write (such as recurrence, alarms, attachments, or extensions); change it in a task application")
 	var chosen *ical.Component
 	for _, child := range calendar.Children {
 		switch {

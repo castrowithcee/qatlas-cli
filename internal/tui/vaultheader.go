@@ -246,7 +246,7 @@ func (m *Model) vaultUnlockHint() string { return tr(tUnlockAlsoAdmin) }
 
 // vaultUnlockedMsg carries the outcome of unlocking the vault back into the event loop: the scrypt work
 // vault.Vault.Unlock does never runs on it. back is the screen to return to; merged is how many pending
-// entries were merged into the vault, the same count 'qatlas vault unlock' itself reports.
+// entries were merged into the vault, the same count 'qconnect vault unlock' itself reports.
 type vaultUnlockedMsg struct {
 	err    error
 	back   screen
@@ -324,7 +324,7 @@ type vaultProcessStartedMsg struct {
 // building the snapshot, still runs for real.
 var startVaultProcessFn = vaultproc.StartProcess
 
-// startVaultProcess hands the just-unlocked vault to a vault process on Linux, macOS, and Windows, exactly the way 'qatlas
+// startVaultProcess hands the just-unlocked vault to a vault process on Linux, macOS, and Windows, exactly the way 'qconnect
 // vault unlock' does (see vaultproc.StartProcess, the shared core both run): nil where this platform
 // runs no vault process at all, so the caller never has to ask vaultproc.Supported itself. A process already
 // running elsewhere, or none running yet because this platform never starts one, stays silent; any other
@@ -350,11 +350,11 @@ func (m *Model) startVaultProcess() tea.Cmd {
 			return vaultProcessStartedMsg{err: err}
 		}
 		if _, err := client.Status(context.Background()); err == nil {
-			// Another window, or another terminal's 'qatlas vault unlock', already started one: nothing more
+			// Another window, or another terminal's 'qconnect vault unlock', already started one: nothing more
 			// to do.
 			return vaultProcessStartedMsg{}
 		} else if errors.Is(err, vaultproc.ErrReplaced) {
-			// Its program was replaced and no successor took over: it is ended, as 'qatlas vault lock'
+			// Its program was replaced and no successor took over: it is ended, as 'qconnect vault lock'
 			// does, and a new one started with the vault unlocked here.
 			pid, endErr := vaultproc.EndReplaced(context.Background(), client, err)
 			if endErr != nil {
@@ -408,7 +408,7 @@ func (m *Model) vaultLockConfirmView() string {
 type vaultLockedMsg struct{ err error }
 
 // beginVaultLock runs the three things 'ctrl+l' answered "y" does: locks the vault process that
-// holds it unlocked outside this run, the same way 'qatlas vault lock' does (see vaultproc.LockProcess,
+// holds it unlocked outside this run, the same way 'qconnect vault lock' does (see vaultproc.LockProcess,
 // the shared core both run); forgets the key and document this process itself holds, the closest the vault
 // API comes to undoing Unlock (see vault.Vault.Forget); and, once the command returns, ends this window's
 // admin session (see handleVaultLocked), since managing without an unlocked vault is not possible anyway.

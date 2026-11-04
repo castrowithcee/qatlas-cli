@@ -22,7 +22,7 @@ func handRenameConnection(t *testing.T, dir string) {
 	}
 }
 
-// handRenameCredential records the config id in the vault entry wiki-vault, as qatlas does, then renames the
+// handRenameCredential records the config id in the vault entry wiki-vault, as qconnect does, then renames the
 // credential to wiki-cred in the configuration by hand.
 func handRenameCredential(t *testing.T, dir string, v *vault.Vault) {
 	t.Helper()
@@ -187,7 +187,7 @@ func TestVaultApproveNamesHandRenames(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(doc.HandRenames) != 1 || doc.HandRenames[0].Kind != "connection" || doc.HandRenames[0].Old != "wiki" ||
-		doc.HandRenames[0].Command != "qatlas config rename connection wiki wiki-main --adopt" {
+		doc.HandRenames[0].Command != "qconnect config rename connection wiki wiki-main --adopt" {
 		t.Errorf("hand_renames = %+v", doc.HandRenames)
 	}
 	if len(doc.RenameLeftovers) != 0 || len(doc.RemovedStale) != 0 {
@@ -207,7 +207,7 @@ func TestVaultApproveNamesAHandRenamedCredential(t *testing.T) {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	if !strings.Contains(stdout, "credential wiki-vault was renamed to wiki-cred by hand") ||
-		!strings.Contains(stdout, "'qatlas config rename credential wiki-vault wiki-cred --adopt'") ||
+		!strings.Contains(stdout, "'qconnect config rename credential wiki-vault wiki-cred --adopt'") ||
 		strings.Contains(stdout, "left over") {
 		t.Errorf("stdout = %q", stdout)
 	}
@@ -263,8 +263,8 @@ func TestConfigValidateNotesHandRenamesOfAnUnencryptedVault(t *testing.T) {
 
 	code, stdout, stderr := validateNotes(t, dir)
 	if code != exitOK || !strings.HasPrefix(stdout, "configuration is valid: ") ||
-		!strings.Contains(stderr, "qatlas: note: credential wiki-vault was renamed to wiki-cred by hand") ||
-		!strings.Contains(stderr, "'qatlas config rename credential wiki-vault wiki-cred --adopt'") {
+		!strings.Contains(stderr, "qconnect: note: credential wiki-vault was renamed to wiki-cred by hand") ||
+		!strings.Contains(stderr, "'qconnect config rename credential wiki-vault wiki-cred --adopt'") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	code, stdout, _ = validateNotes(t, dir, "--output", "json")

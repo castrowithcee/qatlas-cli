@@ -68,15 +68,15 @@ func TestRenameVaultCredentialRenamesTheEntryAndCarriesValidApprovals(t *testing
 	}
 	// The credential names no provider, so it accepts every role.
 	wantEnv := []EnvRename{
-		{Role: "api-key", Old: "QATLAS_VAULT_READER_API_KEY", New: "QATLAS_READER_API_KEY"},
-		{Role: "key-id", Old: "QATLAS_VAULT_READER_KEY_ID", New: "QATLAS_READER_KEY_ID"},
-		{Role: "key-secret", Old: "QATLAS_VAULT_READER_KEY_SECRET", New: "QATLAS_READER_KEY_SECRET"},
+		{Role: "api-key", Old: "QCONNECT_VAULT_READER_API_KEY", New: "QCONNECT_READER_API_KEY"},
+		{Role: "key-id", Old: "QCONNECT_VAULT_READER_KEY_ID", New: "QCONNECT_READER_KEY_ID"},
+		{Role: "key-secret", Old: "QCONNECT_VAULT_READER_KEY_SECRET", New: "QCONNECT_READER_KEY_SECRET"},
 	}
 	if !reflect.DeepEqual(plan.EnvVars, wantEnv) || !reflect.DeepEqual(res.EnvVars, wantEnv) {
 		t.Errorf("env = %v / %v, want %v", plan.EnvVars, res.EnvVars, wantEnv)
 	}
 	if outside := strings.Join(plan.Outside, "\n"); !strings.Contains(outside, "environment variables named after the credential") ||
-		!strings.Contains(outside, "qatlas changes no environment") {
+		!strings.Contains(outside, "qconnect changes no environment") {
 		t.Errorf("Outside = %v", plan.Outside)
 	}
 	if !reflect.DeepEqual(res.Carried, []string{"second-wiki", "vault-wiki"}) || len(res.VaultCopies) == 0 {

@@ -33,7 +33,7 @@ const addressbookOwnProbeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 
 var addressbooksCreate = capability.Descriptor{
 	ID: Provider + ".contacts.address-books.create", Version: 1, Title: "Create a Nextcloud address book",
-	Description: "Create one address book of the bound Nextcloud identity with a display name. Qatlas generates the " +
+	Description: "Create one address book of the bound Nextcloud identity with a display name. Qatlas Connect generates the " +
 		"address book id; nothing raw comes from an argument. It needs the general addressbook target of the " +
 		"connection and binds the new address book. One extended MKCOL follows without a pre-check; the request " +
 		"is never repeated after an unclear result",
@@ -80,7 +80,7 @@ var addressbooksUpdate = capability.Descriptor{
 var addressbooksDelete = capability.Descriptor{
 	ID: Provider + ".contacts.address-books.delete", Version: 1, Title: "Delete a Nextcloud address book",
 	Description: "Delete one bound address book that belongs to the identity, with all its contacts; the system " +
-		"address book and an address book shared by someone else are refused. Qatlas offers no restore. One " +
+		"address book and an address book shared by someone else are refused. Qatlas Connect offers no restore. One " +
 		"read-only pre-check of the address book follows, then one DELETE. The request is never repeated after " +
 		"an unclear result",
 	Tags: []string{"nextcloud", "contacts", "addressbook", "delete"}, Provider: Provider,

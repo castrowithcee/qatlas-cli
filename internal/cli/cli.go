@@ -1,4 +1,4 @@
-// Package cli defines the command surface of the qatlas binary. Commands stay thin adapters: they parse
+// Package cli defines the command surface of the qconnect binary. Commands stay thin adapters: they parse
 // global options, hand typed results to the encoders, and translate errors into exit codes.
 package cli
 
@@ -15,6 +15,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 	"github.com/castrowithcee/qatlas-connect/internal/helptopics"
 	"github.com/castrowithcee/qatlas-connect/internal/output"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
@@ -41,7 +42,7 @@ type Options struct {
 	Output     string
 	Input      io.Reader
 	Updater    *selfupdate.Client
-	// Opener starts a browser on the given URL for 'qatlas web'. A test injects a fake so no run of the
+	// Opener starts a browser on the given URL for 'qconnect web'. A test injects a fake so no run of the
 	// test suite ever spawns a real browser; nil selects the platform default.
 	Opener func(string) error
 
@@ -69,7 +70,7 @@ func (o *Options) resolver() (*secret.Resolver, error) {
 		return nil, err
 	}
 	// The plaintext fallback lives beside the configuration, so it follows the same resolution: an
-	// explicit --config, QATLAS_CONFIG, QATLAS_CLI_HOME, or the default directory.
+	// explicit --config, QCONNECT_CONFIG, QCONNECT_HOME, or the default directory.
 	resolver, err := secret.New(filepath.Dir(path), o.Redactor)
 	if err != nil {
 		// An unusable store selector is a mistake in the invocation, not a runtime failure.
@@ -114,7 +115,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	// example the HTTP/2 transport under GODEBUG=http2debug, which prints every request header. Routing it
 	// through the redactor of this run keeps a credential out of stderr even there.
 	log.SetOutput(opts.Redactor.Writer(stderr))
-	return run(newRootCommand(opts, defaultRegistry()), opts, args, stdout, stderr)
+	// Fallbacks to the former QATLAS_ variable names warn on stderr, never on stdout.
+	defer envvar.SetWarnWriter(opts.Redactor.Writer(stderr))()
+	root := newRootCommand(opts, defaultRegistry())
+	code := run(root, opts, args, stdout, stderr)
+	noteLegacyName(os.Args[0], root, args, stderr)
+	return code
 }
 
 func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Writer) int {
@@ -140,7 +146,7 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 	}
 	err = withNextStep(err, r)
 	// Redaction happens before anything is shown, including unexpected provider errors.
-	fmt.Fprintf(stderr, "qatlas: %s: %s\n", codeFor(err), opts.Redactor.Error(err))
+	fmt.Fprintf(stderr, "qconnect: %s: %s\n", codeFor(err), opts.Redactor.Error(err))
 	// A detail follows the diagnostic as one JSON line, so a caller reads its fields instead of the text.
 	if detail := errorDetailFor(err, opts.Redactor); detail != nil {
 		if provided, ok := detail.(*providerErrorDetail); ok && opts.Format != output.FormatJSON {
@@ -177,20 +183,20 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:   "qatlas",
+		Use:   "qconnect",
 		Short: "Command-line client for self-hosted knowledge and service backends",
-		Long: "Qatlas CLI is a single command-line entry point to the knowledge and service backends you\n" +
+		Long: "Qatlas Connect is a single command-line entry point to the knowledge and service backends you\n" +
 			"already run. People configure named connections; agents discover and invoke tools through them.\n\n" +
 			"Start here:\n" +
-			"  qatlas agents   an agent: how to discover, describe, and invoke tools\n" +
-			"  qatlas          a person: at a terminal, the editor to set up connections and what each one\n" +
-			"                  may do ('qatlas tui' opens it too)\n\n" +
-			"An agent discovers in small steps: 'qatlas providers' lists every provider with its tools and\n" +
-			"connections, 'qatlas connections <provider>' the configured routes and what each one may do,\n" +
-			"'qatlas tools <provider>' the tools they offer, 'qatlas describe <tool-id>' one complete\n" +
-			"contract, and 'qatlas invoke <tool-id>' runs it. Discovery writes " + toonContract + ";\n" +
-			"--output json is the interoperable alternative. 'qatlas mcp' serves the same steps as fixed\n" +
-			"MCP tools over stdio and hands the guide of 'qatlas agents' to its client.",
+			"  qconnect agents   an agent: how to discover, describe, and invoke tools\n" +
+			"  qconnect          a person: at a terminal, the editor to set up connections and what each one\n" +
+			"                  may do ('qconnect tui' opens it too)\n\n" +
+			"An agent discovers in small steps: 'qconnect providers' lists every provider with its tools and\n" +
+			"connections, 'qconnect connections <provider>' the configured routes and what each one may do,\n" +
+			"'qconnect tools <provider>' the tools they offer, 'qconnect describe <tool-id>' one complete\n" +
+			"contract, and 'qconnect invoke <tool-id>' runs it. Discovery writes " + toonContract + ";\n" +
+			"--output json is the interoperable alternative. 'qconnect mcp' serves the same steps as fixed\n" +
+			"MCP tools over stdio and hands the guide of 'qconnect agents' to its client.",
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -223,7 +229,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 
 	f := cmd.PersistentFlags()
 	f.StringVar(&opts.Config, "config", "", "path to the configuration file")
-	f.StringVar(&opts.Connection, "connection", "", "name, id, or name|id of the connection to use (the id decides; 'qatlas connections' shows it); left out, the default or the one connection that offers the tool is used")
+	f.StringVar(&opts.Connection, "connection", "", "name, id, or name|id of the connection to use (the id decides; 'qconnect connections' shows it); left out, the default or the one connection that offers the tool is used")
 	f.BoolVar(&opts.Agent, "agent", false, "agent mode: default output compact, next steps for agents, no progress display, update needs --yes, tui is refused")
 	// The default depends on the command, so the flag carries none of its own; resolveFormat and the
 	// commands with a narrower choice apply it.
@@ -247,7 +253,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newUpdateCommand(opts, reg, version),
 		newSelftestCommand(opts),
 	)
-	// A command without a run function is a help topic: 'qatlas help <topic>' prints its text, and the
+	// A command without a run function is a help topic: 'qconnect help <topic>' prints its text, and the
 	// root help lists it under the additional help topics.
 	for _, topic := range helptopics.All() {
 		cmd.AddCommand(&cobra.Command{

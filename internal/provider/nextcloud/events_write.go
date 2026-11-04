@@ -85,7 +85,7 @@ var (
 
 var eventsCreate = capability.Descriptor{
 	ID: Provider + ".calendar.events.create", Version: 1, Title: "Create a Nextcloud calendar event",
-	Description: "Create one confirmed event in a bound, writable calendar from structured fields. Qatlas builds " +
+	Description: "Create one confirmed event in a bound, writable calendar from structured fields. Qatlas Connect builds " +
 		"the iCalendar object itself and generates its UID and resource id; nothing raw comes from an argument. " +
 		"One read-only pre-check of the calendar refuses a read-only calendar, then one PUT that never replaces " +
 		"an existing event stores it. A repeating event is one series, never expanded. With attendees the change " +
@@ -115,7 +115,7 @@ var eventsUpdate = capability.Descriptor{
 	Description: "Replace one confirmed event of a bound, writable calendar completely by structured fields, bound " +
 		"to its etag. One read-only pre-check reads the event and refuses a read-only calendar, a changed etag, " +
 		"and an event that holds overrides of single occurrences or other components; then one PUT with the etag " +
-		"follows. The UID is kept and SEQUENCE raised; everything Qatlas does not model, such as alarms, is lost. " +
+		"follows. The UID is kept and SEQUENCE raised; everything Qatlas Connect does not model, such as alarms, is lost. " +
 		"With attendees the change reaches outside: Nextcloud sends them updates by e-mail. The request is never " +
 		"repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "event", "update"}, Provider: Provider,
@@ -142,7 +142,7 @@ var eventsDelete = capability.Descriptor{
 	ID: Provider + ".calendar.events.delete", Version: 1, Title: "Delete a Nextcloud calendar event",
 	Description: "Delete one confirmed event of a bound, writable calendar, bound to its etag; a changed etag " +
 		"deletes nothing. One read-only pre-check of the calendar refuses a read-only calendar, then one DELETE " +
-		"follows. Nextcloud may keep the event in its calendar trash bin for a while; Qatlas offers no restore. " +
+		"follows. Nextcloud may keep the event in its calendar trash bin for a while; Qatlas Connect offers no restore. " +
 		"With attendees the change reaches outside: Nextcloud sends them a cancellation by e-mail. The request " +
 		"is never repeated after an unclear result",
 	Tags: []string{"nextcloud", "calendar", "event", "delete"}, Provider: Provider,

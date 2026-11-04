@@ -1737,7 +1737,7 @@ const messageForeignEntry = "Nextcloud answered with an entry outside the reques
 
 // messageRedirect answers every 3xx status. Qatlas follows no redirect, so the server did not act on the
 // request; the message names neither the location nor the path.
-const messageRedirect = "Nextcloud answered with a redirect, which Qatlas does not follow"
+const messageRedirect = "Nextcloud answered with a redirect, which Qatlas Connect does not follow"
 
 func isRedirect(status int) bool { return status >= 300 && status < 400 }
 

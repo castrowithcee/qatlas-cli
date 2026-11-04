@@ -66,7 +66,7 @@ var vouchersBook = capability.Descriptor{
 
 var vouchersUpdate = capability.Descriptor{
 	ID: Provider + ".vouchers.update", Version: 1, Title: "Update a booked Lexware bookkeeping voucher",
-	Description: "Change a booked bookkeeping voucher (status open): Qatlas reads it, replaces the voucher fields " +
+	Description: "Change a booked bookkeeping voucher (status open): Qatlas Connect reads it, replaces the voucher fields " +
 		"with the given set and writes it back with the version it read; positions are replaced as a whole and " +
 		"an omitted optional field is removed. Attached files and other members are always kept. A voucher " +
 		"with another status is refused, a change made by someone else in between is a conflict. Offered only " +

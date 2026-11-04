@@ -24,16 +24,16 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 	var to string
 	cmd := &cobra.Command{
 		Use:   "update",
-		Short: "Update qatlas to the latest stable release",
+		Short: "Update qconnect to the latest stable release",
 		Long: "Update checks the latest stable GitHub release, verifies the signature of its checksums.txt\n" +
-			"(checksums.txt.sig, an SSH signature checked against the release keys built into qatlas)\n" +
+			"(checksums.txt.sig, an SSH signature checked against the release keys built into qconnect)\n" +
 			"and the selected archive with its published SHA-256 checksum, and replaces a direct\n" +
 			"<prefix>/bin/qatlas installation. A release with an invalid signature is refused and nothing is\n" +
 			"changed, and so is a release without a signature. Only signed releases are offered or installed.\n" +
 			"It also refreshes qatlas.1 in the same prefix. On Windows the installation is\n" +
 			"<prefix>\\bin\\qatlas.exe: the running file is renamed to qatlas.exe.old, the new one takes its place\n" +
 			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
-			"Running 'qatlas mcp', 'qatlas tui' and 'qatlas web' keep running the old version until they are\n" +
+			"Running 'qconnect mcp', 'qconnect tui' and 'qconnect web' keep running the old version until they are\n" +
 			"restarted or reconnected.\n" +
 			"At a terminal, update shows how much of the archive has downloaded. A slow download goes on as\n" +
 			"long as data arrives; one that receives nothing for 30 seconds ends, and nothing is changed.\n" +
@@ -57,14 +57,14 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 			"program, whatever the update behaviour says, and never touches the vault's files. If the\n" +
 			"replacement fails, the configuration it replaced is put back.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
-			"running qatlas processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
+			"running qconnect processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +
 			"an agent runs it only after the user approved the update, and then with --yes.\n\n" +
 			"A vault process that holds the vault unlocked would not serve the new program. When the update\n" +
-			"behaviour is handover (the default, see 'qatlas vault handover'), the vault process verifies the\n" +
+			"behaviour is handover (the default, see 'qconnect vault handover'), the vault process verifies the\n" +
 			"release itself and hands the unlocked vault over to the new program, so running agents go on\n" +
 			"without an unlock. In every other case, the setting lock or a handover that cannot be prepared,\n" +
-			"it is locked right before qatlas is replaced; 'qatlas vault unlock' unlocks the vault again. The\n" +
+			"it is locked right before qconnect is replaced; 'qconnect vault unlock' unlocks the vault again. The\n" +
 			"command says which of the two happened. Should the process not lock, the update goes ahead and the warning names its process\n" +
 			"id and how to end it. On Windows there is no handover: the vault process is always locked, whatever the\n" +
 			"update behaviour says, and the command says so. A release with an invalid signature is refused\n" +
@@ -104,7 +104,7 @@ func newUpdateCommand(opts *Options, reg *capability.Registry, buildVersion stri
 							return client.Update(c.Context())
 						})
 					} else {
-						fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+						fmt.Fprintln(c.ErrOrStderr(), "qconnect: update cancelled, nothing was changed")
 					}
 				}
 			}
@@ -160,14 +160,14 @@ func updateTo(c *cobra.Command, opts *Options, reg *capability.Registry, updater
 		return selfupdate.Result{}, err
 	}
 	if target.Current {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: %s is already installed, nothing was changed\n", tag)
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: %s is already installed, nothing was changed\n", tag)
 		return updater.UpdateTo(c.Context(), target)
 	}
 	if !yes && (opts.Agent || !checkInteractive()) {
 		return selfupdate.Result{}, &UsageError{errors.New(refusal)}
 	}
 	if !yes && !confirmTarget(target) {
-		fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+		fmt.Fprintln(c.ErrOrStderr(), "qconnect: update cancelled, nothing was changed")
 		return selfupdate.Result{Current: updater.Version, Latest: tag, UpdateAvailable: true}, nil
 	}
 	if target.Older {
@@ -217,14 +217,14 @@ func rollbackTo(c *cobra.Command, opts *Options, reg *capability.Registry, updat
 				return selfupdate.Result{}, &UsageError{errors.New(restoreOffer(target.Version, *check.Offer) +
 					" Run again with --restore-backup to restore it; nothing was changed.")}
 			}
-			fmt.Fprintln(c.ErrOrStderr(), "qatlas: update cancelled, nothing was changed")
+			fmt.Fprintln(c.ErrOrStderr(), "qconnect: update cancelled, nothing was changed")
 			return selfupdate.Result{Current: updater.Version, Latest: target.Version, UpdateAvailable: true}, nil
 		}
 	}
 	result, err := svc.Rollback(c.Context(), client, prepared, check, restore)
 	printNote(c, replacement.finish())
 	if err == nil && restore {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: the configuration was restored from the backup %s; the configuration "+
+		fmt.Fprintf(c.ErrOrStderr(), "qconnect: the configuration was restored from the backup %s; the configuration "+
 			"it replaced is saved in the backups directory\n", check.Offer.Name)
 	}
 	return result, err
@@ -274,9 +274,9 @@ func downloadProgress(c *cobra.Command, opts *Options) (func(done, total int64),
 	}
 	last, shown := "", false
 	return func(done, total int64) {
-			line := fmt.Sprintf("qatlas: downloading %.1f MB", float64(done)/(1<<20))
+			line := fmt.Sprintf("qconnect: downloading %.1f MB", float64(done)/(1<<20))
 			if total > 0 {
-				line = fmt.Sprintf("qatlas: downloading %d%%", done*100/total)
+				line = fmt.Sprintf("qconnect: downloading %d%%", done*100/total)
 			}
 			if line != last {
 				last, shown = line, true
@@ -321,7 +321,7 @@ func (r *vaultReplacement) hooked(base *selfupdate.Client) *selfupdate.Client {
 	return &c
 }
 
-const unlockAgain = "run 'qatlas vault unlock' to unlock the vault again"
+const unlockAgain = "run 'qconnect vault unlock' to unlock the vault again"
 
 // before prepares the handover, or locks the vault process.
 func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Release) {
@@ -333,13 +333,13 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 	if err != nil || v == nil {
 		return
 	}
-	why := "before qatlas was replaced"
+	why := "before qconnect was replaced"
 	if r.lock {
-		why = "because an older version cannot take over an unlocked vault, before qatlas was replaced"
+		why = "because an older version cannot take over an unlocked vault, before qconnect was replaced"
 	} else if !vaultHandoverPlatform {
 		// Windows has no handover, so neither the update behaviour nor the signature matters here: the vault
 		// process is locked.
-		why = "because Windows locks the vault process instead of handing it over, before qatlas was replaced"
+		why = "because Windows locks the vault process instead of handing it over, before qconnect was replaced"
 	} else if client, err := vaultproc.ProcessClientOf(v); err == nil {
 		behaviour, handover, err := client.PrepareHandover(contextOrBackground(ctx), vaultproc.ReleaseFiles{
 			Checksums: release.Checksums, Signature: release.Signature, Archive: release.Archive,
@@ -349,14 +349,14 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 		case errors.Is(err, vaultproc.ErrNotRunning):
 			return
 		case errors.Is(err, vaultproc.ErrHandover):
-			r.note = "qatlas: the vault process did not hand the vault over and locked itself; " + unlockAgain
+			r.note = "qconnect: the vault process did not hand the vault over and locked itself; " + unlockAgain
 			return
 		case err == nil && behaviour == vault.UpdateHandover:
 			r.handover = handover
 			return
 		case err == nil:
 			// The vault process locked itself, as the update behaviour lock says.
-			r.note = "qatlas: the vault process was locked as the update behaviour says, before qatlas was " +
+			r.note = "qconnect: the vault process was locked as the update behaviour says, before qconnect was " +
 				"replaced; " + unlockAgain
 			return
 		}
@@ -373,11 +373,11 @@ func (r *vaultReplacement) after(ctx context.Context) {
 	r.handover = nil
 	pid, err := handover.Commit(contextOrBackground(ctx))
 	if err != nil {
-		r.note = fmt.Sprintf("qatlas: the vault process could not hand the vault over to the new program "+
+		r.note = fmt.Sprintf("qconnect: the vault process could not hand the vault over to the new program "+
 			"and locked itself: %s; %s", err, unlockAgain)
 		return
 	}
-	r.note = fmt.Sprintf("qatlas: the vault was handed over to the new program (vault process %d) and stays "+
+	r.note = fmt.Sprintf("qconnect: the vault was handed over to the new program (vault process %d) and stays "+
 		"unlocked", pid)
 }
 
@@ -387,7 +387,7 @@ func (r *vaultReplacement) finish() string {
 	if r.handover != nil {
 		_ = r.handover.Close()
 		r.handover = nil
-		r.note = "qatlas: the vault process locked itself because the update did not complete; " + unlockAgain
+		r.note = "qconnect: the vault process locked itself because the update did not complete; " + unlockAgain
 	}
 	return r.note
 }

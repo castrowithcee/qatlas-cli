@@ -23,7 +23,7 @@ const tokenPassphrase = "correct horse battery staple"
 // openApprovalModel.
 func newTokenFixture(t *testing.T) (*config.Store, string, *vault.Vault) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store, cfg, _ := newApprovalFixture(t, dir, tokenPassphrase)
 	v := vault.New(dir)
 	if _, err := v.Unlock(tokenPassphrase); err != nil {
@@ -70,7 +70,7 @@ func assertNoTokenValue(t *testing.T, m *Model) {
 // An unencrypted or absent vault has no passphrase and so no agent tokens: the section says so, points at
 // Vault, and offers no action; n is refused with the same words.
 func TestTokensNeedAnEncryptedVault(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	m, err := buildModel(store, nil, secrets, nil)

@@ -570,7 +570,7 @@ var pullRequestsMerge = &tool{
 		return capability.Descriptor{
 			Title: "Merge a " + p.name + " pull request",
 			Description: "Merge one pull request of a repository inside the connection's targets, only while its " +
-				"head is still sha. Qatlas reads the pull request first: one already merged with exactly this head " +
+				"head is still sha. Qatlas Connect reads the pull request first: one already merged with exactly this head " +
 				"is a success without a request, one merged with another head or whose head is not sha is " +
 				"refused, and otherwise exactly one merge request is sent and never repeated. The instance applies " +
 				"its protections, so a merge it does not allow fails. A merge cannot be undone. Only a connection " +
@@ -662,7 +662,7 @@ var pullRequestBranchesUpdate = &tool{
 			Title: "Update the head branch of a " + p.name + " pull request",
 			Description: "Bring the base branch of one pull request of a repository inside the connection's targets " +
 				"into its head branch by a merge or a rebase, which changes the head branch. The instance takes no " +
-				"head condition, so Qatlas compares expected_head_sha with the head it read just before the request; " +
+				"head condition, so Qatlas Connect compares expected_head_sha with the head it read just before the request; " +
 				"a push in between is not detected. Only a connection whose tools list names it offers this tool.",
 			Tags:                  []string{p.id, "pull-request-branches", "update"},
 			Risk:                  changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent, p.id+pullSensitivity),

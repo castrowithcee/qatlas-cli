@@ -230,7 +230,7 @@ func mapsKeys(m map[string]config.Connection) func(func(string) bool) {
 // Saving a duplicate is a managing action: against an encrypted vault without an admin session it opens the
 // admin dialog first and writes nothing before the passphrase.
 func TestDuplicateSavesOnlyInAnAdminSession(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))

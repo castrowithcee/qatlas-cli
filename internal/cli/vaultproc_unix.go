@@ -24,7 +24,7 @@ const socketCheckInterval = 10 * time.Second
 var stopSignals = []os.Signal{syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT}
 
 // serveStreams returns the handover and the report a vault process inherits from StartProcess, on
-// vaultproc.HandoverFD and vaultproc.ReportFD, or false when either is not a pipe: 'qatlas vault
+// vaultproc.HandoverFD and vaultproc.ReportFD, or false when either is not a pipe: 'qconnect vault
 // serve' run by hand.
 func serveStreams() (handover, report *os.File, ok bool) {
 	if !inheritedPipe(vaultproc.HandoverFD) || !inheritedPipe(vaultproc.ReportFD) {
@@ -42,7 +42,7 @@ func allowHandover(server *vaultproc.Server, vaultDir, configPath string) {
 	})
 }
 
-// inheritedPipe reports whether fd is open and a pipe, which is what 'qatlas vault unlock' hands a vault
+// inheritedPipe reports whether fd is open and a pipe, which is what 'qconnect vault unlock' hands a vault
 // process. A descriptor that is anything else is left alone.
 func inheritedPipe(fd int) bool {
 	var stat syscall.Stat_t

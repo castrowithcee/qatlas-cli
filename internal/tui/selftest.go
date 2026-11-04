@@ -104,7 +104,7 @@ func (m *Model) selftestUnavailable() string {
 	return onScreens("start a selftest", screenNav, screenList, screenSelftest)(m)
 }
 
-// startSelftest runs one scenario with the same default profile as 'qatlas selftest <name>'. The run
+// startSelftest runs one scenario with the same default profile as 'qconnect selftest <name>'. The run
 // reports on a channel, from which one command at a time reads the next event.
 func (m *Model) startSelftest(name string) tea.Cmd {
 	if reason := m.selftestUnavailable(); reason != "" {
@@ -210,7 +210,7 @@ func (m *Model) updateSelftest(key tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// saveSelftest writes the report as the JSON 'qatlas selftest <name> --json' prints, into the system's
+// saveSelftest writes the report as the JSON 'qconnect selftest <name> --json' prints, into the system's
 // temporary directory (not the scratch directory, which is gone), so it can be handed on as it is.
 func (m *Model) saveSelftest() {
 	st := m.st
@@ -238,7 +238,7 @@ func (m *Model) saveSelftest() {
 	}
 }
 
-// selftestText is the report as the 'qatlas selftest' table shows it.
+// selftestText is the report as the 'qconnect selftest' table shows it.
 func selftestText(r *selftest.Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, tr(tSelftestRepHead)+"\n", r.Scenario, r.Profile)

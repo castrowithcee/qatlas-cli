@@ -4,7 +4,7 @@
 //  1. the environment variable
 //  2. the system credential store
 //  3. the plaintext fallback file, read for compatibility while it still exists, and only when it was
-//     switched on; nothing in this build writes it any more, and 'qatlas vault migrate' carries its
+//     switched on; nothing in this build writes it any more, and 'qconnect vault migrate' carries its
 //     content into the vault and removes it
 //
 // A credential of type vault is resolved from the vault alone, unencrypted or encrypted to a passphrase, and
@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-connect/internal/config"
+	"github.com/castrowithcee/qatlas-connect/internal/envvar"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
@@ -125,16 +126,16 @@ func (e *MissingSecretError) remedy() string {
 		case StoreOff:
 			return fmt.Sprintf("%s; or export %s", StoreAdvice(state, runtime.GOOS), env)
 		}
-		return fmt.Sprintf("store it in the system keyring with 'qatlas credential set %s %s', or export %s",
+		return fmt.Sprintf("store it in the system keyring with 'qconnect credential set %s %s', or export %s",
 			e.Credential, e.Role, env)
 	}
 	if e.Type == config.CredentialTypeVault {
 		env := DerivedEnvName(e.Credential, e.Role)
-		return fmt.Sprintf("store it in the vault with 'qatlas credential set %s %s', or export %s",
+		return fmt.Sprintf("store it in the vault with 'qconnect credential set %s %s', or export %s",
 			e.Credential, e.Role, env)
 	}
 	return fmt.Sprintf("set the environment variable that credentials.%s.values.%s names, or change that "+
-		"credential to type keyring and use 'qatlas credential set'", e.Credential, e.Role)
+		"credential to type keyring and use 'qconnect credential set'", e.Credential, e.Role)
 }
 
 // VaultLockedError reports that a vault is encrypted and locked, no vault process holds it unlocked, and no
@@ -145,7 +146,7 @@ func (e *MissingSecretError) remedy() string {
 //
 // Credential and Role name the secret an access was resolving when the vault turned out to be locked; both
 // are empty when the locked vault itself, rather than one secret in it, was the target, for example
-// 'qatlas vault unlock' run without a terminal.
+// 'qconnect vault unlock' run without a terminal.
 type VaultLockedError struct {
 	Credential string
 	Role       string
@@ -269,28 +270,28 @@ func (e *VaultProcessError) Unwrap() error { return e.Err }
 // locking the vault and unlocking it again, which ends such a process.
 func VaultProcessRemedy(err error) string {
 	if step, ok := updatedStep(err); ok {
-		return "qatlas was updated since this process started; " + step
+		return "qconnect was updated since this process started; " + step
 	}
 	if errors.Is(err, vaultproc.ErrReplaced) {
-		return EndVaultProcess(err) + ", then 'qatlas vault unlock'"
+		return EndVaultProcess(err) + ", then 'qconnect vault unlock'"
 	}
 	if errors.Is(err, vaultproc.ErrRefused) || errors.Is(err, vaultproc.ErrVersion) {
-		return EndVaultProcess(err) + ", then run 'qatlas vault unlock'"
+		return EndVaultProcess(err) + ", then run 'qconnect vault unlock'"
 	}
-	return "run 'qatlas vault lock', then 'qatlas vault unlock'"
+	return "run 'qconnect vault lock', then 'qconnect vault unlock'"
 }
 
 // EndVaultProcess says how to end the vault process err came from: by its id where the error carries one,
 // otherwise by finding it first. Where the vault process only refused this process because an update
 // replaced its program, the step is the restart instead; no kill helps there. A vault process whose own
-// program was replaced is ended by 'qatlas vault lock'. On Windows a vault process has no console and no
+// program was replaced is ended by 'qconnect vault lock'. On Windows a vault process has no console and no
 // window to close, so it is ended with taskkill, and found by its program.
 func EndVaultProcess(err error) string {
 	if step, ok := updatedStep(err); ok {
 		return step
 	}
 	if errors.Is(err, vaultproc.ErrReplaced) {
-		return "run 'qatlas vault lock'"
+		return "run 'qconnect vault lock'"
 	}
 	var peer *vaultproc.PeerError
 	if runtime.GOOS == "windows" {
@@ -329,9 +330,9 @@ func updatedStep(err error) (string, bool) {
 		return "", false
 	}
 	if command == "mcp" {
-		return "reconnect the qatlas MCP server in the client", true
+		return "reconnect the qconnect MCP server in the client", true
 	}
-	return "restart 'qatlas " + command + "'", true
+	return "restart 'qconnect " + command + "'", true
 }
 
 // Errors a Store reports. Anything else from a store is treated like ErrUnavailable, because a store that
@@ -428,10 +429,10 @@ func EnvName(credential string, cred config.Credential, role string) string {
 }
 
 // DerivedEnvName is the deterministic variable name of a credential that does not name one itself:
-// QATLAS_<CREDENTIAL>_<ROLE>, upper-cased, with every character that is not a letter or a digit replaced
+// QCONNECT_<CREDENTIAL>_<ROLE>, upper-cased, with every character that is not a letter or a digit replaced
 // by an underscore. The fixed prefix also guarantees a name that cannot start with a digit.
 func DerivedEnvName(credential, role string) string {
-	return "QATLAS_" + envPart(credential) + "_" + envPart(role)
+	return envvar.Prefix + envPart(credential) + "_" + envPart(role)
 }
 
 func envPart(s string) string {
@@ -528,7 +529,14 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	checked := make([]string, 0, 3)
 
 	envName := EnvName(credential, cred, role)
-	switch value := r.env(envName); {
+	var value string
+	if cred.Type == config.CredentialTypeEnv {
+		value = r.env(envName)
+	} else {
+		// A derived name also reads the name of the versions before the rename, until the next major release.
+		value = envvar.GetWith(r.env, envName)
+	}
+	switch {
 	case envName == "":
 		// Only a credential of type env can stay silent about its variable, and then the role is not
 		// configured at all. The message names the stage, never the text behind the key.
@@ -971,7 +979,7 @@ func (p Placement) Settled() bool { return len(p.Unknown) == 0 }
 
 // StoreValue reads one (credential, role) pair directly from the system credential store, bypassing the
 // environment variable and the plaintext fallback. It answers "what does the store hold", the value Stored
-// deliberately discards, for a caller that has to move that exact value elsewhere: 'qatlas vault migrate'
+// deliberately discards, for a caller that has to move that exact value elsewhere: 'qconnect vault migrate'
 // uses it to resolve the value the keyring-then-plaintext cascade used to deliver for a role, the one a
 // type change to vault must carry over, without letting a set environment variable — which would win
 // regardless of where the secret used to sit — decide what moves.
@@ -1177,6 +1185,16 @@ func (r *Resolver) StoreSkipped() bool {
 // Lookup reports whether an environment variable carries a value, without returning it. It answers the one
 // question a user interface has about stage one: does something shadow the store?
 func (r *Resolver) Lookup(name string) bool { return name != "" && r.env(name) != "" }
+
+// LookupDerived is Lookup for a derived name (see DerivedEnvName): it also sees the name of the versions
+// before the rename, without a warning.
+func (r *Resolver) LookupDerived(name string) bool {
+	if r.Lookup(name) {
+		return true
+	}
+	old := envvar.Legacy(name)
+	return old != "" && r.env(old) != ""
+}
 
 func (r *Resolver) fallback(credential, role string) (string, error) {
 	if r.plaintext == nil {

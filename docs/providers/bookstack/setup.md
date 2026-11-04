@@ -47,7 +47,7 @@ BookStack changes its pages from time to time; look for these names. The interfa
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `bookstack`, the service with the instance
    address, a credential, the scope (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and enter the two values as the secrets
@@ -57,17 +57,17 @@ Without the guided setup, store both values on the command line. Each is read fr
 appear in the shell history:
 
 ```sh
-printf %s "$BOOKSTACK_TOKEN_ID" | qatlas credential set bookstack-reader token-id
-printf %s "$BOOKSTACK_TOKEN_SECRET" | qatlas credential set bookstack-reader token-secret
+printf %s "$BOOKSTACK_TOKEN_ID" | qconnect credential set bookstack-reader token-id
+printf %s "$BOOKSTACK_TOKEN_SECRET" | qconnect credential set bookstack-reader token-secret
 ```
 
 `bookstack-reader` is the name of the credential in your configuration. To replace a token that expired or was
-revoked, run both commands again with the new values. Run `qatlas config validate` to check the configuration
+revoked, run both commands again with the new values. Run `qconnect config validate` to check the configuration
 file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means BookStack accepted the token
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means BookStack accepted the token
 for one read of the page list (a single entry).
 
 **A passing test does not mean every tool works.** It shows that the token is valid, not expired, and may use the
@@ -169,7 +169,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 provider-error: BookStack rejected the input (HTTP 422); invalid: name
-provider answer (untrusted, not written by qatlas), HTTP 422:
+provider answer (untrusted, not written by qconnect), HTTP 422:
   | 422: The given data was invalid.
   | name: The name field is required.
 ```
@@ -185,7 +185,7 @@ is under [Errors](README.md#errors).
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: BookStack rejected the API token | HTTP 401. The token ID or secret is wrong, the token was deleted, or it belongs to another BookStack than the instance address | Create a new token ([Create a token](#create-a-token)) and store both values again with `qatlas credential set <credential> token-id` and `token-secret`. Check that the address names the right instance. |
+| `auth`: BookStack rejected the API token | HTTP 401. The token ID or secret is wrong, the token was deleted, or it belongs to another BookStack than the instance address | Create a new token ([Create a token](#create-a-token)) and store both values again with `qconnect credential set <credential> token-id` and `token-secret`. Check that the address names the right instance. |
 | `auth`: BookStack refused the API token (connection test) | HTTP 403 on the test. The user lacks **Access System API**, or the token expired | Add `access-api` to a role of the user, or create a new token with a later expiry. |
 | `provider-error`: a BookStack service needs a usable https URL | The address is `http`, or holds user information, a query, or a fragment | Use the plain `https://host` address, optionally with the installation path such as `https://host/wiki`. Put TLS in front of the instance if it has none. |
 | `permission`: the token's user lacks the BookStack role permission for this action, or the token expired or lacks API access | HTTP 403 on a call | Find the tool group in [Permissions per tool group](#permissions-per-tool-group) and add the permission to a role of the user. If every call fails, check `access-api` and the token's expiry first. |

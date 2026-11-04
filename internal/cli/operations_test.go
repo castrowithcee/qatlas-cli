@@ -19,8 +19,8 @@ import (
 )
 
 func TestOversizedInvokeStopsBeforeHandler(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, validConfig)
 
 	calls := 0
@@ -57,7 +57,7 @@ func TestOversizedInvokeStopsBeforeHandler(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
-	if !strings.HasPrefix(stderr.String(), "qatlas: invalid-request:") {
+	if !strings.HasPrefix(stderr.String(), "qconnect: invalid-request:") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 	if calls != 0 {
@@ -68,8 +68,8 @@ func TestOversizedInvokeStopsBeforeHandler(t *testing.T) {
 // Invoke writes its result as JSON only: --output json and --agent are accepted, any other format is
 // refused before the arguments are read or a provider is called, instead of being ignored.
 func TestInvokeRefusesAnOutputFormatItDoesNotWrite(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, validConfig)
 
 	calls := 0
@@ -104,7 +104,7 @@ func TestInvokeRefusesAnOutputFormatItDoesNotWrite(t *testing.T) {
 
 	for _, format := range []string{"table", "compact", "toon"} {
 		code, stdout, stderr := invoke("--output", format)
-		want := "qatlas: usage: 'qatlas invoke' writes its result as json, not " + format +
+		want := "qconnect: usage: 'qconnect invoke' writes its result as json, not " + format +
 			"; omit --output or pass --output json\n"
 		if code != exitUsage || stdout != "" || stderr != want {
 			t.Errorf("--output %s: exit=%d stdout=%q stderr=%q, want %q", format, code, stdout, stderr, want)
@@ -122,8 +122,8 @@ func TestInvokeRefusesAnOutputFormatItDoesNotWrite(t *testing.T) {
 }
 
 func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, "version: 4\n")
 
 	calls := 0
@@ -159,7 +159,7 @@ func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	if !strings.HasPrefix(first, "qatlas: connection-selection: no configured connection can invoke tool") {
+	if !strings.HasPrefix(first, "qconnect: connection-selection: no configured connection can invoke tool") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 	if strings.Contains(first, "--connection") {
@@ -171,8 +171,8 @@ func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 }
 
 func TestConfirmedMutationWritesMinimalAuditToStderr(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, `version: 4
 services:
   telegram:
@@ -241,8 +241,8 @@ defaults: {}
 }
 
 func TestConfirmedProviderFailureKeepsCodeFirstAndAuditLast(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, `version: 4
 services:
   telegram:
@@ -297,7 +297,7 @@ defaults: {}
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
-	if len(lines) != 2 || !strings.HasPrefix(lines[0], "qatlas: permission: send message: private [redacted]") {
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "qconnect: permission: send message: private [redacted]") {
 		t.Fatalf("stderr lines = %#v", lines)
 	}
 	var event map[string]any
@@ -316,8 +316,8 @@ defaults: {}
 }
 
 func TestDefaultConnectionRefusalStopsBeforeSecretsAndAudit(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	cfg := writeConfig(t, `version: 4
 services:
   telegram:
@@ -376,8 +376,8 @@ defaults:
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	want := `qatlas: unsupported-capability: connection "alerts" does not offer tool "fake.messages.send" (effect-not-permitted); ` +
-		`'qatlas describe fake.messages.send' names the connections that offer it, or change the connection in 'qatlas tui'`
+	want := `qconnect: unsupported-capability: connection "alerts" does not offer tool "fake.messages.send" (effect-not-permitted); ` +
+		`'qconnect describe fake.messages.send' names the connections that offer it, or change the connection in 'qconnect tui'`
 	if first != want {
 		t.Fatalf("first stderr line = %q, want %q", first, want)
 	}
@@ -445,8 +445,8 @@ func TestArgumentFlagsAreTypedByTheSchema(t *testing.T) {
 // --arg is the whole request: stdin is not read, so an agent that leaves its stdin open, or a shell with a
 // terminal on it, never waits for an end of input nobody sends.
 func TestArgumentFlagsLeaveStdinUnread(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	shortenInvokeTimeout(t, 2*time.Second)
 	cfg := writeConfig(t, validConfig)
 
@@ -476,8 +476,8 @@ func TestArgumentFlagsLeaveStdinUnread(t *testing.T) {
 // Without --arg, stdin is read, but only until the invoke's time limit: an input that never ends is a
 // timeout that names the way out, not a wait without end.
 func TestStdinThatNeverEndsTimesOut(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	shortenInvokeTimeout(t, 50*time.Millisecond)
 	cfg := writeConfig(t, validConfig)
 
@@ -492,7 +492,7 @@ func TestStdinThatNeverEndsTimesOut(t *testing.T) {
 			code := run(newRootCommand(opts, fakeRegistry(t)), opts,
 				[]string{"invoke", "bookstack.pages.list", "--config", cfg}, &stdout, &stderr)
 
-			want := "qatlas: timeout: stdin did not end within 50ms; close it after the JSON arguments object, " +
+			want := "qconnect: timeout: stdin did not end within 50ms; close it after the JSON arguments object, " +
 				"or pass the arguments with --arg\n"
 			if code != exitRuntime || stdout.Len() != 0 || stderr.String() != want {
 				t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
@@ -519,12 +519,12 @@ func TestInvokeEndsAtItsLimitWithTheNextStep(t *testing.T) {
 	}{
 		"a provider that did not answer": {
 			fail: func(ctx context.Context) error { return provider.Transport("get page", "Fake", ctx.Err()) },
-			want: "qatlas: timeout: get page: Fake did not answer in time; check that the service answers, " +
+			want: "qconnect: timeout: get page: Fake did not answer in time; check that the service answers, " +
 				"then try again\n",
 		},
 		"a bare context error": {
 			fail: func(ctx context.Context) error { return ctx.Err() },
-			want: "qatlas: timeout: the request did not finish within 50ms; check that the service answers, " +
+			want: "qconnect: timeout: the request did not finish within 50ms; check that the service answers, " +
 				"then try again\n",
 		},
 	} {
@@ -565,7 +565,7 @@ func TestKeyringThatNeverAnswersTimesOutWithTheWayOut(t *testing.T) {
 		code := run(newRootCommand(opts, registry), opts,
 			[]string{"invoke", "fake.pages.get", "--connection", "primary", "--config", path}, &stdout, &stderr)
 
-		if code != exitRuntime || !strings.HasPrefix(stderr.String(), "qatlas: timeout: credentials.reader") ||
+		if code != exitRuntime || !strings.HasPrefix(stderr.String(), "qconnect: timeout: credentials.reader") ||
 			!strings.Contains(stderr.String(), "credential store (timed out)") ||
 			!strings.Contains(stderr.String(), "export "+env+" for this session") {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
@@ -577,7 +577,7 @@ func TestKeyringThatNeverAnswersTimesOutWithTheWayOut(t *testing.T) {
 		server := newMCPServer(&Options{Config: path, Redactor: &redact.Redactor{}, Secrets: stuck()},
 			registry, &stdout, &stderr)
 		server.timeout = 50 * time.Millisecond
-		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 		if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
 			t.Fatal(err)
 		}

@@ -21,11 +21,11 @@ func TestVaultProcessRemedyAfterAnUpdate(t *testing.T) {
 	refusedOther := peer(fmt.Errorf("%w: it runs another program", vaultproc.ErrRefused))
 	refusedUnproven := peer(fmt.Errorf("%w: it cannot prove that it holds this vault's key", vaultproc.ErrRefused))
 
-	const updated = "qatlas was updated since this process started; "
+	const updated = "qconnect was updated since this process started; "
 	steps := map[string]string{
-		"tui": "restart 'qatlas tui'",
-		"web": "restart 'qatlas web'",
-		"mcp": "reconnect the qatlas MCP server in the client",
+		"tui": "restart 'qconnect tui'",
+		"web": "restart 'qconnect web'",
+		"mcp": "reconnect the qconnect MCP server in the client",
 	}
 	plain := func(err error) string {
 		SetLongRunning("")
@@ -80,10 +80,10 @@ func TestVaultProcessRemedyForAReplacedProcess(t *testing.T) {
 	t.Cleanup(func() { SetLongRunning("") })
 	SetLongRunning("")
 	err := &vaultproc.PeerError{PID: 4242, Err: vaultproc.ErrReplaced}
-	if got, want := VaultProcessRemedy(err), "run 'qatlas vault lock', then 'qatlas vault unlock'"; got != want {
+	if got, want := VaultProcessRemedy(err), "run 'qconnect vault lock', then 'qconnect vault unlock'"; got != want {
 		t.Errorf("remedy = %q, want %q", got, want)
 	}
-	if got, want := EndVaultProcess(err), "run 'qatlas vault lock'"; got != want {
+	if got, want := EndVaultProcess(err), "run 'qconnect vault lock'"; got != want {
 		t.Errorf("end = %q, want %q", got, want)
 	}
 	if got := VaultProcessRemedy(vaultproc.ErrReplaced); strings.Contains(got, "kill") {

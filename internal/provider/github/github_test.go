@@ -843,7 +843,7 @@ func alteredCursors(t *testing.T, cursor string) map[string]string {
 	t.Helper()
 	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil || len(decoded) <= cursorBinding+1 {
-		t.Fatalf("cursor %q is not a Qatlas cursor", cursor)
+		t.Fatalf("cursor %q is not a Qatlas Connect cursor", cursor)
 	}
 	last := byte('A')
 	if cursor[len(cursor)-1] == last {
@@ -1763,7 +1763,7 @@ func TestFailuresCarryTheProvidersOwnAnswer(t *testing.T) {
 				t.Errorf("original = %+v, want %+v", *failure.Original, tt.want)
 			}
 			if strings.Contains(failure.Error(), "Validation Failed") || strings.Contains(failure.Error(), "requires one of") {
-				t.Errorf("Qatlas' message copies the provider text: %v", failure)
+				t.Errorf("Qatlas Connect's message copies the provider text: %v", failure)
 			}
 		})
 	}

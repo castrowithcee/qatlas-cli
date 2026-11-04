@@ -59,7 +59,7 @@ func shortRuntimeDir(t *testing.T) string {
 	return dir
 }
 
-// startProcess serves the vault in dir from this test process, the way 'qatlas vault unlock' hands it to a
+// startProcess serves the vault in dir from this test process, the way 'qconnect vault unlock' hands it to a
 // vault process. key replaces the vault's own key when it is not nil.
 func startProcess(t *testing.T, dir string, key age.Identity) *vaultproc.Server {
 	t.Helper()

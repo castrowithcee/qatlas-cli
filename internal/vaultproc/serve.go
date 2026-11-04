@@ -20,7 +20,7 @@ const (
 	ReportRunning = "running"
 )
 
-// serveArgs are the arguments of 'qatlas vault serve' for the configuration at configPath, as a successor
+// serveArgs are the arguments of 'qconnect vault serve' for the configuration at configPath, as a successor
 // when successor is set. On Linux and macOS they are part of the successor contract; see HandoverFD there.
 func serveArgs(configPath string, successor bool) []string {
 	args := []string{"vault", "serve", "--config", configPath}

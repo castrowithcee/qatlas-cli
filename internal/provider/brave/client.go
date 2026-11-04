@@ -187,7 +187,7 @@ var errUnfinished = errors.New("the event stream ended before its closing marker
 
 // billedNote ends the message of a streamed request that may have reached Brave: Brave bills an answer it
 // began, and a second request would be billed again.
-const billedNote = "; Brave may have billed the request, and Qatlas does not repeat it"
+const billedNote = "; Brave may have billed the request, and Qatlas Connect does not repeat it"
 
 // stream sends one POST request with a JSON body, once, and hands the data of every server-sent event of a
 // successful answer to each until the closing marker [DONE]. The whole exchange, the rate-limit wait
@@ -337,7 +337,7 @@ func (c *Client) refusal(op string, status int, info rateInfo, body io.Reader) *
 		// Qatlas checked the arguments before sending, so this is a mismatch with the API. Brave also
 		// answers 422 for a key it does not accept, and gives no field Qatlas could safely name.
 		return failed(provider.ClassInvalidResponse, fmt.Sprintf("Brave rejected the request as invalid "+
-			"(HTTP %d) although Qatlas checked it; the API may have changed, or the key is not accepted", status))
+			"(HTTP %d) although Qatlas Connect checked it; the API may have changed, or the key is not accepted", status))
 	case http.StatusBadGateway:
 		return failed(provider.ClassUnreachable, "Brave is unavailable")
 	}

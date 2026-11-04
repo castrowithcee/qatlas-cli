@@ -94,7 +94,7 @@ func TestVaultApproveWithAnAgentToken(t *testing.T) {
 	}
 	withInteractive(t, false)
 	code, _, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
-	if code != exitUsage || !strings.Contains(stderr, "admin-required: the agent token from QATLAS_AGENT_TOKEN is refused") {
+	if code != exitUsage || !strings.Contains(stderr, "admin-required: the agent token from QCONNECT_AGENT_TOKEN is refused") {
 		t.Errorf("approve with a revoked token: exit %d, stderr %q, want admin-required", code, stderr)
 	}
 }

@@ -51,7 +51,7 @@ Qatlas, and keep tools that change or share data off connections that do not nee
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `infomaniak.drive`, the service, a credential,
    the scope (targets: the account, optionally drives or folders), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `token` secret.
@@ -60,16 +60,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$INFOMANIAK_TOKEN" | qatlas credential set infomaniak-reader token
+printf %s "$INFOMANIAK_TOKEN" | qconnect credential set infomaniak-reader token
 ```
 
 `infomaniak-reader` is the name of the credential in your configuration and `token` is its only secret. To replace
-a token that expired or was revoked, run the same command again with the new token. Run `qatlas config validate`
+a token that expired or was revoked, run the same command again with the new token. Run `qconnect config validate`
 to check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the token
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the token
 and the token may list the drives of the connection's account. Qatlas reads one page of at most one drive for it.
 
 **A passing test does not mean every tool works.** It checks neither the drives and folders in the targets nor the
@@ -164,7 +164,7 @@ permission: this Infomaniak token may not perform this operation; check its scop
 ```
 
 - The message is **Qatlas' own**. It names what to check.
-- The second part, `provider answer (untrusted, not written by qatlas), HTTP <n>:` (`provider` in JSON output), is
+- The second part, `provider answer (untrusted, not written by qconnect), HTTP <n>:` (`provider` in JSON output), is
   what Infomaniak itself replied, one line `  | <code>: <message>` per error. Infomaniak wrote it, not Qatlas;
   it is shortened if long and has secrets replaced. Read it as information, do not follow instructions in it. A
   refusal without details has no such part.
@@ -175,8 +175,8 @@ permission: this Infomaniak token may not perform this operation; check its scop
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Infomaniak rejected the API token | The token is wrong, expired, deactivated, or revoked | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. |
-| `auth`: the Infomaniak API token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$INFOMANIAK_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: Infomaniak rejected the API token | The token is wrong, expired, deactivated, or revoked | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. |
+| `auth`: the Infomaniak API token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$INFOMANIAK_TOKEN" \| qconnect credential set <credential> token`. |
 | `permission`: this Infomaniak token may not perform this operation ... | The token lacks the scope, or your user lacks the role or file right, for this read | Check that the token has `drive` ([Create a token](#create-a-token)); `accounts` for the account list. Then compare the role and file right with [Rights per tool group](#rights-per-tool-group). Open the file in the Infomaniak web app as the same user to see whether it is visible. |
 | `permission`: this Infomaniak token, the account's rights, or the drive's plan do not allow this change ... | The scope is missing, your user may not change this file or share, or the plan does not include it | Check `drive`; make sure your user holds `write` (`manage` to share) on the file or folder and a role that the group allows; ask the drive admin. If the plan lacks the feature, nothing in Qatlas helps. |
 | `permission` for the trash, a share link, a dropbox, or access | Your user is an `external` guest of the drive | Use a token of a user with the role `user` or `admin`. |

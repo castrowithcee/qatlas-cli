@@ -439,7 +439,7 @@ func (c *Client) classifyStatus(op string, response *http.Response) *provider.Er
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "kChat rate-limited the operation"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "kChat answered with a redirect, which Qatlas does not follow"}
+			Message: "kChat answered with a redirect, which Qatlas Connect does not follow"}
 	case status == http.StatusGatewayTimeout:
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "kChat did not answer in time"}
 	case status == http.StatusRequestEntityTooLarge:
@@ -550,7 +550,7 @@ func Register(reg *capability.Registry) error {
 			Description: "kChat bearer token: an Infomaniak Manager API token with the kChat scope (valid " +
 				"account-wide), or a bot token created in the kChat interface; it reaches every team and " +
 				"channel its owner can reach on this one kChat instance, so the connection target decides " +
-				"which teams, and optionally which channels, Qatlas exposes",
+				"which teams, and optionally which channels, Qatlas Connect exposes",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "teams and channels",

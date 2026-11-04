@@ -81,7 +81,7 @@ func experimentDefinitionArguments(full bool) []capability.Argument {
 		{Name: "hypothesis", Required: true, Description: "The hypothesis to test, 1 to 2048 characters" + given},
 		{Name: "variations", Required: true, Description: "1 to 100 variations, each an object with name (1 to 255 " +
 			"characters) and optionally percentage (integer 1 to 100) and redirect_url (up to 2048 characters; text that " +
-			"Qatlas never fetches)" + given},
+			"Qatlas Connect never fetches)" + given},
 		{Name: "includedTargets", Required: true, Description: "1 to 100 rules that must match for the experiment to " +
 			"run, each an object with attribute and type (lowercase letters and underscores, values from " +
 			"matomo.experiment-options.list), value (up to 2048 characters, may be empty), and optionally inverted" + given},
@@ -163,7 +163,7 @@ var experimentsUpdate = capability.Descriptor{
 
 var experimentsDelete = capability.Descriptor{
 	ID: Provider + ".experiments.delete", Version: 1, Title: "Delete a Matomo A/B test experiment",
-	Description: "Permanently delete an A/B test experiment of a website; Qatlas offers no way to restore it, and Matomo " +
+	Description: "Permanently delete an A/B test experiment of a website; Qatlas Connect offers no way to restore it, and Matomo " +
 		"does not document what happens to its reports. The experiment is read first and must belong to the website, " +
 		"otherwise it is not found. Needs the premium plugin AbTesting and, expected, a write right on the website; " +
 		"idempotent in effect" + experimentSentOnceGet + "; offered only where a connection's tools list names it",

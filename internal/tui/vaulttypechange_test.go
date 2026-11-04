@@ -16,7 +16,7 @@ import (
 func TestVaultTypeChangeRefusedWhileASecretIsStored(t *testing.T) {
 	for _, newStorage := range []string{storageKeyring, storageEnv} {
 		t.Run(newStorage, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			path := filepath.Join(dir, "config.yaml")
 			store := newTestStore(t, path)
 			secrets, _ := newVaultResolver(t, dir)
@@ -89,7 +89,7 @@ func TestVaultTypeChangeRefusedWhileASecretIsStored(t *testing.T) {
 // already-unlocked vault applies, because unlocking only answers "may this be checked at all", never "is it
 // safe to change".
 func TestVaultTypeChangeUnlocksThenAppliesTheSameGuard(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 
@@ -139,7 +139,7 @@ func TestVaultTypeChangeUnlocksThenAppliesTheSameGuard(t *testing.T) {
 // A vault credential may switch to another storage freely once the vault holds nothing of it: the vault's
 // very first secret, still unwritten.
 func TestVaultTypeChangeAllowedWithNothingStoredYet(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)

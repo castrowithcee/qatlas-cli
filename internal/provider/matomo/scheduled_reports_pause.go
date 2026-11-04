@@ -89,7 +89,7 @@ type pauseView struct {
 
 // unwritable is the refusal before the write; nothing has been sent.
 func unwritable(op, what string) error {
-	return provider.InvalidResponse(op, "the scheduled report has "+what+" that Qatlas cannot hand back to Matomo "+
+	return provider.InvalidResponse(op, "the scheduled report has "+what+" that Qatlas Connect cannot hand back to Matomo "+
 		"unchanged; nothing was changed, pause it in Matomo")
 }
 
@@ -121,7 +121,7 @@ func pauseViewOf(op string, row json.RawMessage) (pauseView, error) {
 	}
 	for name := range members {
 		if !slices.Contains(storedReportKeys, name) {
-			return pauseView{}, unwritable(op, "a member unknown to Qatlas")
+			return pauseView{}, unwritable(op, "a member unknown to Qatlas Connect")
 		}
 	}
 	var view pauseView
@@ -166,7 +166,7 @@ func pauseViewOf(op string, row json.RawMessage) (pauseView, error) {
 	}
 	for name, value := range view.Parameters {
 		if !slices.Contains(emailParameterKeys, name) {
-			return pauseView{}, unwritable(op, "a parameter unknown to Qatlas")
+			return pauseView{}, unwritable(op, "a parameter unknown to Qatlas Connect")
 		}
 		if list, isList := value.([]any); isList {
 			texts := make([]string, 0, len(list))

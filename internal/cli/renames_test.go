@@ -98,20 +98,20 @@ func runRenameMCP(t *testing.T, path, tool, arguments string) string {
 }
 
 func TestFormerNamesLoadWarnAndKeepTheFileUntouched(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, formerNamesConfig)
 	code, stdout, stderr := runRenameCLI(t, "config", "validate", "--config", path)
 	if code != exitOK || !strings.HasPrefix(stdout, "configuration is valid") {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		`qatlas: warning: services.svc.provider: provider "acmechat" was renamed to "acme.chat"`,
-		`qatlas: warning: connections.conn.tools: tool "acmechat.messages.fetch" was renamed to "acme.chat.messages.get"`,
-		`qatlas: warning: defaults.connections.acmechat: provider "acmechat" was renamed to "acme.chat"`,
-		`qatlas: warning: defaults.connections.acmechat.messages.fetch: tool "acmechat.messages.fetch" was renamed`,
-		`qatlas: warning: provider_notes.acmechat: provider "acmechat" was renamed to "acme.chat"`,
-		`qatlas: warning: connections.conn.tools: tool "acmechat.messages.purge" was removed from qatlas`,
+		`qconnect: warning: services.svc.provider: provider "acmechat" was renamed to "acme.chat"`,
+		`qconnect: warning: connections.conn.tools: tool "acmechat.messages.fetch" was renamed to "acme.chat.messages.get"`,
+		`qconnect: warning: defaults.connections.acmechat: provider "acmechat" was renamed to "acme.chat"`,
+		`qconnect: warning: defaults.connections.acmechat.messages.fetch: tool "acmechat.messages.fetch" was renamed`,
+		`qconnect: warning: provider_notes.acmechat: provider "acmechat" was renamed to "acme.chat"`,
+		`qconnect: warning: connections.conn.tools: tool "acmechat.messages.purge" was removed from qconnect`,
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, stderr)
@@ -123,8 +123,8 @@ func TestFormerNamesLoadWarnAndKeepTheFileUntouched(t *testing.T) {
 }
 
 func TestFormerToolIDEndsAsUnknownOperationNamingTheNewOne(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, formerNamesConfig)
 	const want = `unknown-operation: unknown tool "acmechat.messages.fetch": it was renamed to "acme.chat.messages.get"`
 	for _, args := range [][]string{
@@ -132,13 +132,13 @@ func TestFormerToolIDEndsAsUnknownOperationNamingTheNewOne(t *testing.T) {
 	} {
 		code, stdout, stderr := runRenameCLI(t, append(args, "--config", path)...)
 		first, _, _ := strings.Cut(stderr, "\n")
-		if code != exitUsage || stdout != "" || first != "qatlas: "+want {
+		if code != exitUsage || stdout != "" || first != "qconnect: "+want {
 			t.Errorf("%v: exit=%d stdout=%q stderr=%q", args, code, stdout, stderr)
 		}
 	}
 	for tool, arguments := range map[string]string{
-		"qatlas.describe": `{"operation":"acmechat.messages.fetch"}`,
-		"qatlas.invoke":   `{"operation":"acmechat.messages.fetch","confirm":true}`,
+		"qconnect.describe": `{"operation":"acmechat.messages.fetch"}`,
+		"qconnect.invoke":   `{"operation":"acmechat.messages.fetch","confirm":true}`,
 	} {
 		if got := runRenameMCP(t, path, tool, arguments); got != want {
 			t.Errorf("%s = %q, want %q", tool, got, want)
@@ -151,8 +151,8 @@ func TestFormerToolIDEndsAsUnknownOperationNamingTheNewOne(t *testing.T) {
 }
 
 func TestFormerProviderNameIsUnknownAndNamesTheNewOne(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, formerNamesConfig)
 	for _, args := range [][]string{{"tools", "acmechat"}, {"connections", "acmechat"}} {
 		code, stdout, stderr := runRenameCLI(t, append(args, "--config", path)...)
@@ -162,7 +162,7 @@ func TestFormerProviderNameIsUnknownAndNamesTheNewOne(t *testing.T) {
 		}
 	}
 	for _, arguments := range []string{`{"provider":"acmechat"}`, `{"list":"connections","provider":"acmechat"}`} {
-		got := runRenameMCP(t, path, "qatlas.search", arguments)
+		got := runRenameMCP(t, path, "qconnect.search", arguments)
 		if !strings.HasPrefix(got, "invalid-request: unknown provider \"acmechat\" (renamed to \"acme.chat\")") {
 			t.Errorf("search %s = %q", arguments, got)
 		}
@@ -200,8 +200,8 @@ func (f formerCatalog) ProviderMetadataAll() []config.ProviderMetadata {
 // the one a user still has on disk.
 func vaultRenameFixture(t *testing.T, tools string) string {
 	t.Helper()
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	dir := t.TempDir()
 	body := `version: 4
 services:

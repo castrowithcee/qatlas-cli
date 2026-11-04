@@ -45,7 +45,7 @@ func scaleConfigYAML(units int) []byte {
 
 func scaleStore(tb testing.TB, units int) *config.Store {
 	tb.Helper()
-	dir := filepath.Join(tb.TempDir(), "qatlas")
+	dir := filepath.Join(tb.TempDir(), "qconnect")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		tb.Fatal(err)
 	}

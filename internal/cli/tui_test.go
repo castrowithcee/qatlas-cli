@@ -10,7 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 )
 
-// 'qatlas tui' must never let its resolver ask this process's own terminal for the vault passphrase:
+// 'qconnect tui' must never let its resolver ask this process's own terminal for the vault passphrase:
 // bubbletea holds that terminal in raw mode for its own screen, so a term.ReadPassword prompt there would
 // corrupt it instead of being seen, and typed input would race between the prompt and the editor. This is
 // checked behaviourally, never by inspecting a private field: the ask this test attaches would fail it at
@@ -31,7 +31,7 @@ func TestTUISecretsNeverAsksForTheVaultPassphrase(t *testing.T) {
 		asked = true
 		return "", errors.New("the vault passphrase was asked on this process's terminal")
 	}
-	// A fresh vault.Vault over the same directory starts locked in this process, the way 'qatlas tui'
+	// A fresh vault.Vault over the same directory starts locked in this process, the way 'qconnect tui'
 	// would find one a previous run encrypted. Its ask is one that fails the test the moment it runs, so a
 	// regression that lets tuiSecrets keep it shows up here instead of hanging a real terminal.
 	base := secret.NewWith(nil, nil, nil, nil).WithVault(vault.New(dir), failIfAsked)

@@ -54,7 +54,7 @@ the identity's calendars and address books.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `infomaniak.dav`, the service, a credential,
    the scope (targets: calendars and address books), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and enter the user name as its `user-id` secret
@@ -67,17 +67,17 @@ Without the guided setup, store both secrets on the command line. Each is read f
 appear in the shell history:
 
 ```sh
-printf %s "$INFOMANIAK_SYNC_USER" | qatlas credential set customer-a-dav user-id
-printf %s "$INFOMANIAK_SYNC_PASSWORD" | qatlas credential set customer-a-dav app-password
+printf %s "$INFOMANIAK_SYNC_USER" | qconnect credential set customer-a-dav user-id
+printf %s "$INFOMANIAK_SYNC_PASSWORD" | qconnect credential set customer-a-dav app-password
 ```
 
 `customer-a-dav` is the name of the credential in your configuration. To replace a revoked password, run the second
-command again with the new one. Run `qatlas config validate` to check the configuration file. It contacts no
+command again with the new one. Run `qconnect config validate` to check the configuration file. It contacts no
 provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the user
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Infomaniak accepted the user
 name and the application password: Qatlas asks the sync service once for the identity's principal.
 
 **A passing test does not mean every tool works.** It checks neither the calendars and address books in the targets
@@ -121,7 +121,7 @@ Infomaniak's own answer follows.
 
 ```text
 permission: this Infomaniak identity may not change this calendar
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | Sabre\DAV\Exception\Forbidden: Permission denied
 ```
 
@@ -136,9 +136,9 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Infomaniak rejected the user name or the application password | The user name is wrong, the password is wrong or revoked, or you entered your account password or login e-mail | Check the user name in the sync assistant, create a new application password ([Create the application password](#create-the-application-password)), and store it again with `qatlas credential set <credential> app-password`. |
-| `auth`: the Infomaniak user name is unusable | The stored user name is empty, too long, or holds a space, a line break, or a colon | Store it again with `printf %s "$INFOMANIAK_SYNC_USER" \| qatlas credential set <credential> user-id`. |
-| `auth`: the Infomaniak application password is unusable | The stored password is shorter than 8 characters, or holds a space, a line break, or a character that is not plain ASCII | Store it again with `printf %s "$INFOMANIAK_SYNC_PASSWORD" \| qatlas credential set <credential> app-password`. |
+| `auth`: Infomaniak rejected the user name or the application password | The user name is wrong, the password is wrong or revoked, or you entered your account password or login e-mail | Check the user name in the sync assistant, create a new application password ([Create the application password](#create-the-application-password)), and store it again with `qconnect credential set <credential> app-password`. |
+| `auth`: the Infomaniak user name is unusable | The stored user name is empty, too long, or holds a space, a line break, or a colon | Store it again with `printf %s "$INFOMANIAK_SYNC_USER" \| qconnect credential set <credential> user-id`. |
+| `auth`: the Infomaniak application password is unusable | The stored password is shorter than 8 characters, or holds a space, a line break, or a character that is not plain ASCII | Store it again with `printf %s "$INFOMANIAK_SYNC_PASSWORD" \| qconnect credential set <credential> app-password`. |
 | `permission`: this Infomaniak identity may not read this collection | The identity has no read access to this calendar or address book | Open it in the Infomaniak web app as the same user. If it is shared, ask its owner for read access. |
 | `permission`: this Infomaniak identity may not change this calendar (or address book) | The identity may read but not write the collection | Ask the owner of the shared collection for write access, or use a collection the identity owns. |
 | `permission`: this connection does not allow this calendar (or address book) | The ID is not in the connection's targets | Not an Infomaniak problem. Pass an ID the connection allows, or add the target; see [Scope](README.md#scope). |

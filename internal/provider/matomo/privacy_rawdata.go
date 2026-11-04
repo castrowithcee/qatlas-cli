@@ -33,7 +33,7 @@ var (
 	anonymizeDate = regexp.MustCompile(`^(` + anonymizeDatePart + `)(?:,(` + anonymizeDatePart + `))?$`)
 )
 
-const rawDataSentOnce = "; sent once and never repeated by Qatlas: after an unclear result the job may have run or " +
+const rawDataSentOnce = "; sent once and never repeated by Qatlas Connect: after an unclear result the job may have run or " +
 	"been scheduled, so check the logs and the anonymization settings in Matomo before repeating it"
 
 var rawDataAnonymize = capability.Descriptor{
@@ -42,7 +42,7 @@ var rawDataAnonymize = capability.Descriptor{
 		"(PrivacyManager.anonymizeSomeRawData): IP addresses, locations, user IDs, and chosen log columns are " +
 		"replaced for good. It cannot be undone. Matomo only schedules the job; its scheduled task runs it later, so " +
 		"scheduled means accepted, not done. It needs Super User rights, a connection whose targets name the " +
-		"instance, and websites inside its site targets. Qatlas sends only the explicit website IDs, never all " +
+		"instance, and websites inside its site targets. Qatlas Connect sends only the explicit website IDs, never all " +
 		"websites. At least one anonymize choice or column is required. Matomo asks for a password confirmation: the " +
 		"credential needs the secret role " + rolePasswordConfirmation + ", which no argument carries. Sent once and " +
 		"never repeated; offered only where a connection's tools list names it",

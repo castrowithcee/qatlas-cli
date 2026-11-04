@@ -64,7 +64,7 @@ obtains an account token has not been verified.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `seatable.account`, the service, a
    credential, the base (target), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `account-token`
@@ -74,16 +74,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$SEATABLE_ACCOUNT_TOKEN" | qatlas credential set seatable-account-token account-token
+printf %s "$SEATABLE_ACCOUNT_TOKEN" | qconnect credential set seatable-account-token account-token
 ```
 
 `seatable-account-token` is the name of the credential in your configuration and `account-token` is its only
-secret. To replace a token, run the same command again with the new token. Run `qatlas config validate` to check
+secret. To replace a token, run the same command again with the new token. Run `qconnect config validate` to check
 the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means SeaTable accepted the token
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means SeaTable accepted the token
 and answered a read of one snapshot entry of the connection's base. The test changes nothing.
 
 **A passing test does not mean every tool works.** The test only reads. SeaTable checks the account again on every
@@ -123,7 +123,7 @@ SeaTable's own answer follows.
 
 ```text
 permission: this SeaTable account may not perform this operation on the bound base
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | Permission denied.
 ```
 
@@ -138,8 +138,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 | You see | Cause | What to do |
 | --- | --- | --- |
 | A message that the secret role `account-token` does not yield a secret | No token is stored or reachable for the credential | Store it with the command under [Add it to Qatlas](#add-it-to-qatlas). |
-| `auth`: the SeaTable account token is unusable | The stored token is empty or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$SEATABLE_ACCOUNT_TOKEN" \| qatlas credential set <credential> account-token`. |
-| `auth`: SeaTable rejected the account token | The token is wrong, no longer valid, or from another SeaTable server than the service address | Create a new token on the configured server ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> account-token`. |
+| `auth`: the SeaTable account token is unusable | The stored token is empty or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$SEATABLE_ACCOUNT_TOKEN" \| qconnect credential set <credential> account-token`. |
+| `auth`: SeaTable rejected the account token | The token is wrong, no longer valid, or from another SeaTable server than the service address | Create a new token on the configured server ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> account-token`. |
 | `permission`: this SeaTable account may not perform this operation on the bound base | The account may not read the snapshots of the base or create a base by restoring | Use a token of an account that may open the base and create bases; see [Rights per tool](#rights-per-tool). |
 | `not-found`: SeaTable does not hold this resource or does not show it to this account | The workspace ID or base name of the target is wrong, the base was renamed or deleted, **or** the account cannot see it. SeaTable answers all of these the same | Pick the target again from the list of your bases ([Choosing the base](README.md#choosing-the-base)), and check that the token is from an account that can open the base. |
 | `rate-limited`: SeaTable rate-limited the operation | Too many requests for this token | Wait and retry. |

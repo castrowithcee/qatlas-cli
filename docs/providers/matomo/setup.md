@@ -44,7 +44,7 @@ from time to time; look for these names.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `matomo`, the service with its address, a
    credential (choose where to keep it and paste the token as its `token` secret), the scope (websites), and the
    access (by effect or by tools).
@@ -53,11 +53,11 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$MATOMO_TOKEN" | qatlas credential set matomo-reader token
+printf %s "$MATOMO_TOKEN" | qconnect credential set matomo-reader token
 ```
 
 `matomo-reader` is the name of the credential in your configuration and `token` is its secret. To replace a
-token that expired or was deleted, run the same command again with the new token. Run `qatlas config validate` to
+token that expired or was deleted, run the same command again with the new token. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ### Password confirmation
@@ -68,12 +68,12 @@ user. Matomo asks for it on a few privacy tools even when a token is used; see t
 any request:
 
 ```sh
-printf %s "$MATOMO_PASSWORD" | qatlas credential set matomo-admin password-confirmation
+printf %s "$MATOMO_PASSWORD" | qconnect credential set matomo-admin password-confirmation
 ```
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Matomo accepted the token,
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Matomo accepted the token,
 the instance is Matomo 5 or newer, and each website the connection's targets name could be read.
 
 **A passing test does not mean every tool works.** It proves the token and those websites, not write rights, not
@@ -315,7 +315,7 @@ every call alone. Two cases differ:
 
 ```text
 permission: this token may not use the requested website or function; check its rights for the website
-provider answer (untrusted, not written by qatlas), HTTP 200:
+provider answer (untrusted, not written by qconnect), HTTP 200:
   | You can't access this resource as it requires 'view' access for the website id = 3.
 ```
 
@@ -327,11 +327,11 @@ provider answer (untrusted, not written by qatlas), HTTP 200:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Matomo rejected the token | The token is wrong, expired, deleted, or belongs to another Matomo; the instance accepts only secure tokens, or only listed IP addresses (`login_allowlist_ip`) | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> token`. Keep **Only allow secure requests** on, and put the machine that runs Qatlas on the instance's `login_allowlist_ip`. |
-| `auth`: the Matomo token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$MATOMO_TOKEN" \| qatlas credential set <credential> token`. |
+| `auth`: Matomo rejected the token | The token is wrong, expired, deleted, or belongs to another Matomo; the instance accepts only secure tokens, or only listed IP addresses (`login_allowlist_ip`) | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> token`. Keep **Only allow secure requests** on, and put the machine that runs Qatlas on the instance's `login_allowlist_ip`. |
+| `auth`: the Matomo token is unusable | The stored token holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$MATOMO_TOKEN" \| qconnect credential set <credential> token`. |
 | `auth`: Matomo rejected the token or the token has no view access to any website | Matomo answers an unusable token and a user without any view right the same way | Give the Matomo user at least a view right on one website, or create a new token. |
 | `auth`: Matomo accepted the token only in the request body; check that the Authorization header reaches it | Matomo 5.4.0 or newer reads the token from the `Authorization` header, and a proxy in front of Matomo removes it | Let the header through on the proxy in front of Matomo. |
-| `auth`: Matomo refused the password confirmation; check the secret role password-confirmation of this connection's credential | The stored password is wrong or is not the password of the token's user | Store the current password of that Matomo user: `qatlas credential set <credential> password-confirmation`. |
+| `auth`: Matomo refused the password confirmation; check the secret role password-confirmation of this connection's credential | The stored password is wrong or is not the password of the token's user | Store the current password of that Matomo user: `qconnect credential set <credential> password-confirmation`. |
 | `this tool needs the secret role password-confirmation ...` | The tool is one of the privacy tools marked "password" and the credential lacks the secret | Store the Matomo password of the token's user as `password-confirmation` ([Password confirmation](#password-confirmation)). |
 | `permission`: this token may not use the requested website or function; check its rights for the website | The Matomo user lacks the view, write, admin, or Super User right of this call, or has no access to this website | Find the tool group in [Rights per tool group](#rights-per-tool-group). Give the user the right in Matomo. |
 | `permission`: Matomo refused the operation for this token | The same, or Matomo answered HTTP 403, for example from a proxy or a firewall | Check the rights as in the row above, then the proxy in front of Matomo. |

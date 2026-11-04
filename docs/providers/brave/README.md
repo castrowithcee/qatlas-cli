@@ -89,7 +89,7 @@ and is not read.
 
 ## Connection test
 
-`qatlas connection test` sends one real request to the cheapest endpoint the connection offers: Spellcheck
+`qconnect connection test` sends one real request to the cheapest endpoint the connection offers: Spellcheck
 with `q=brave`, otherwise Suggest with `q=brave` and `count=1`, otherwise News with `q=brave` and `count=1`,
 otherwise LLM Context with `maximum_number_of_urls=1`, otherwise Web Search, Videos, Images, or Place Search
 (`q=brave`) with `count=1`, whichever tool the connection allows first. The two endpoints that take place ids

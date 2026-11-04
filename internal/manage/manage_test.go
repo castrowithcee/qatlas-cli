@@ -103,7 +103,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "qatlas", "config.yaml")
+	path := filepath.Join(t.TempDir(), "qconnect", "config.yaml")
 	store := config.NewStore(path)
 	cfg := store.New()
 	if err := cfg.SetCredential("base", config.Credential{Type: config.CredentialTypeKeyring}); err != nil {
@@ -227,7 +227,7 @@ func TestCommitSecretsNamesSecretsThatCannotBeRemoved(t *testing.T) {
 	}
 	for _, want := range []string{
 		"storing the secret for new.c: keyring offline",
-		"the secrets already stored for new (a) could not be removed again, remove them with 'qatlas credential delete new <role>'",
+		"the secrets already stored for new (a) could not be removed again, remove them with 'qconnect credential delete new <role>'",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q lacks %q", err, want)

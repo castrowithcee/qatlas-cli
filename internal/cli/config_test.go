@@ -46,8 +46,8 @@ func writeConfig(t *testing.T, content string) string {
 
 func TestConfigValidate(t *testing.T) {
 	// The command must not fall back to the developer's own configuration.
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 
 	valid := writeConfig(t, validConfig)
 	broken := writeConfig(t, "version: 4\nservices:\n  wiki:\n    provider: confluence\n    base_url: x\n")
@@ -90,8 +90,8 @@ func TestConfigValidate(t *testing.T) {
 
 // A machine-readable format reports the success as one object with the same data.
 func TestConfigValidateReportsSuccessMachineReadably(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	valid := writeConfig(t, validConfig)
 	for _, tt := range []struct {
 		args []string
@@ -233,9 +233,9 @@ defaults: {}
 `)
 	var stdout, stderr bytes.Buffer
 	code := Run([]string{"config", "validate", "--config", path}, &stdout, &stderr)
-	want := "qatlas: warning: connection \"closed\" offers no tool: its effects are empty " +
+	want := "qconnect: warning: connection \"closed\" offers no tool: its effects are empty " +
 		"('effects: []'), so no agent can use it\n" +
-		"qatlas: warning: connection \"muted\" offers no tool: its tools list is empty ('tools: []'), so no " +
+		"qconnect: warning: connection \"muted\" offers no tool: its tools list is empty ('tools: []'), so no " +
 		"agent can use it\n"
 	if code != exitOK || !strings.HasPrefix(stdout.String(), "configuration is valid: ") || stderr.String() != want {
 		t.Errorf("exit=%d stdout=%q stderr=%q, want success and %q", code, stdout.String(), stderr.String(), want)
@@ -244,8 +244,8 @@ defaults: {}
 
 // Validation is deterministic: it reads only the file and reports problems in a stable order.
 func TestConfigValidateIsDeterministic(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, "version: 4\nservices:\n  b:\n    provider: nope\n    base_url: x\n  a:\n    provider: nope\n    base_url: y\n")
 
 	run := func() string {

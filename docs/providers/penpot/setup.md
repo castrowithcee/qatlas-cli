@@ -47,7 +47,7 @@ time; look for these names.
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `penpot`, the service, a credential, the scope
    (teams, projects, and files as targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `access-token` secret.
@@ -56,16 +56,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$PENPOT_ACCESS_TOKEN" | qatlas credential set penpot-reader access-token
+printf %s "$PENPOT_ACCESS_TOKEN" | qconnect credential set penpot-reader access-token
 ```
 
 `penpot-reader` is the name of the credential in your configuration and `access-token` is its only secret. To replace
-a token that expired or was deleted, run the same command again with the new token. Run `qatlas config validate` to
+a token that expired or was deleted, run the same command again with the new token. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means Penpot accepted the token for
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means Penpot accepted the token for
 reading the list of teams of its account.
 
 **A passing test does not mean every tool works.** The test checks neither a role nor a team of the connection.
@@ -122,7 +122,7 @@ Every failed call has a **code** and a **message** from Qatlas. For a refusal by
 
 ```text
 permission: Penpot refused this access token; check that the access-tokens flag is enabled on the instance and that the account may read this resource
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | <type> <code>: <hint>
 ```
 
@@ -142,8 +142,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: Penpot rejected the access token ... | The token is wrong, expired, deleted, belongs to another Penpot instance than the service address, or the instance has not enabled the `access-tokens` flag | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> access-token`. Check the service address ([Credential and base URL](README.md#credential-and-base-url)). On a self-hosted instance, ask the administrator to enable `access-tokens`. |
-| `auth`: the Penpot access token is unusable | The stored token holds characters a token cannot have, such as a line break or a space, or is shorter than 8 characters | Store it again with `printf %s "$PENPOT_ACCESS_TOKEN" \| qatlas credential set <credential> access-token`. |
+| `auth`: Penpot rejected the access token ... | The token is wrong, expired, deleted, belongs to another Penpot instance than the service address, or the instance has not enabled the `access-tokens` flag | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> access-token`. Check the service address ([Credential and base URL](README.md#credential-and-base-url)). On a self-hosted instance, ask the administrator to enable `access-tokens`. |
+| `auth`: the Penpot access token is unusable | The stored token holds characters a token cannot have, such as a line break or a space, or is shorter than 8 characters | Store it again with `printf %s "$PENPOT_ACCESS_TOKEN" \| qconnect credential set <credential> access-token`. |
 | `permission`: Penpot refused this access token ... | The account's role is too low for this tool, or the instance does not allow access tokens | Find the tool group in [Rights per tool group](#rights-per-tool-group) and ask a team admin for the role it names. Check that `access-tokens` is enabled on the instance. |
 | `permission` when changing members or roles | The account is not an admin of the team, or the change concerns the owner or the account itself | Use an admin account; only the owner changes the owner. |
 | `permission` when deleting a team | Only the owner may delete a team, and never the default team | Use the owner's account. |

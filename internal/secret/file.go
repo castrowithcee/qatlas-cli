@@ -16,7 +16,7 @@ import (
 // FileName is the plaintext fallback of earlier versions. It lives beside config.yaml, in the same
 // directory the configuration was resolved from, and never inside it: the configuration file must stay a
 // file that can be read, diffed, and shared without exposing a secret. Nothing in this build creates it any
-// more; 'qatlas vault migrate' is the way to carry its content into the vault and remove it.
+// more; 'qconnect vault migrate' is the way to carry its content into the vault and remove it.
 const FileName = "credentials.yaml"
 
 // fileVersion is the schema version of the fallback file.
@@ -29,11 +29,11 @@ const (
 )
 
 // header explains the file to whoever finds it later. It is a comment, so reading it back is unaffected.
-const header = `# Qatlas CLI plaintext credential fallback.
+const header = `# Qatlas Connect plaintext credential fallback.
 #
 # This file holds secrets in clear text. An earlier version wrote it when it was switched on explicitly,
 # and it is read only while allow_plaintext is true. Nothing writes new secrets here any more: run
-# 'qatlas vault migrate' to move its entries into the vault and remove this file.
+# 'qconnect vault migrate' to move its entries into the vault and remove this file.
 #
 # The file must stay readable by its owner alone (mode 0600).
 `
@@ -69,7 +69,7 @@ func (f *File) Get(credential, role string) (string, error) {
 }
 
 // All returns every credential and role this file holds on disk, regardless of whether the fallback is
-// switched on: an absent or empty file holds none. It is how 'qatlas vault migrate' reads what to carry
+// switched on: an absent or empty file holds none. It is how 'qconnect vault migrate' reads what to carry
 // into the vault, because the switch decides what Get may deliver, never what is there to migrate away.
 func (f *File) All() (map[string]map[string]string, error) {
 	c, err := f.load()

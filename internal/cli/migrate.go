@@ -19,9 +19,9 @@ import (
 )
 
 // migrateConfig moves a configuration file of an older schema to the current one before any command reads
-// it, so every way in migrates, 'qatlas mcp' included (see manage.Service.MigrateSchema). It never fails the
-// command and writes only to stderr: stdout carries the command's answer, for 'qatlas mcp' its JSON-RPC.
-// A hidden command is a process qatlas starts itself, such as the vault process, and leaves the file alone;
+// it, so every way in migrates, 'qconnect mcp' included (see manage.Service.MigrateSchema). It never fails the
+// command and writes only to stderr: stdout carries the command's answer, for 'qconnect mcp' its JSON-RPC.
+// A hidden command is a process qconnect starts itself, such as the vault process, and leaves the file alone;
 // so does every self-contained command, the selftest, which must never touch the installation.
 func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if c.Hidden || selfContained(c) {
@@ -32,7 +32,7 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	if err != nil {
 		return
 	}
-	// Even under 'qatlas mcp' the migration runs before any MCP session exists, and the log keeps the mcp
+	// Even under 'qconnect mcp' the migration runs before any MCP session exists, and the log keeps the mcp
 	// path for the entries of a session.
 	surface := connlog.SurfaceCLI
 	// The vault beside the file, not the run's resolver: building that here would fix its prompting before
@@ -51,44 +51,44 @@ func migrateConfig(c *cobra.Command, opts *Options, reg *capability.Registry) {
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "qatlas: warning: %s\n", opts.Redactor.Apply(err.Error()))
+		fmt.Fprintf(stderr, "qconnect: warning: %s\n", opts.Redactor.Apply(err.Error()))
 		return
 	}
 	if m == nil {
 		return
 	}
-	fmt.Fprintf(stderr, "qatlas: migrated %s to configuration schema %d: %s\n", m.Path, config.Version, migrationChange(m.From))
-	fmt.Fprintf(stderr, "qatlas: the previous file is backed up as %s\n", m.Backup)
+	fmt.Fprintf(stderr, "qconnect: migrated %s to configuration schema %d: %s\n", m.Path, config.Version, migrationChange(m.From))
+	fmt.Fprintf(stderr, "qconnect: the previous file is backed up as %s\n", m.Backup)
 	if len(m.VaultCopies) > 0 {
-		fmt.Fprintf(stderr, "qatlas: the vault files are backed up as %s\n", strings.Join(m.VaultCopies, ", "))
+		fmt.Fprintf(stderr, "qconnect: the vault files are backed up as %s\n", strings.Join(m.VaultCopies, ", "))
 	}
 	switch {
 	case m.VaultIDs > 0 && m.Pending:
-		fmt.Fprintf(stderr, "qatlas: the locked vault takes the ids of %d %s on its next unlock\n", m.VaultIDs,
+		fmt.Fprintf(stderr, "qconnect: the locked vault takes the ids of %d %s on its next unlock\n", m.VaultIDs,
 			plural(m.VaultIDs, "credential", "credentials"))
 	case m.VaultIDs > 0:
-		fmt.Fprintf(stderr, "qatlas: %d vault %s now %s its credential's id\n", m.VaultIDs,
+		fmt.Fprintf(stderr, "qconnect: %d vault %s now %s its credential's id\n", m.VaultIDs,
 			plural(m.VaultIDs, "entry", "entries"), plural(m.VaultIDs, "carries", "carry"))
 	}
 	for _, r := range m.Renamings {
-		fmt.Fprintf(stderr, "qatlas: %s.%s: the former %s %q is now written as %q\n", r.Section, r.Name, r.Kind, r.Old, r.New)
+		fmt.Fprintf(stderr, "qconnect: %s.%s: the former %s %q is now written as %q\n", r.Section, r.Name, r.Kind, r.Old, r.New)
 	}
 	if len(m.Reapproval) > 0 {
-		fmt.Fprintf(stderr, "qatlas: the effects of these connections now follow their tools, so each needs its vault "+
-			"approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n", strings.Join(m.Reapproval, ", "))
+		fmt.Fprintf(stderr, "qconnect: the effects of these connections now follow their tools, so each needs its vault "+
+			"approval once more ('qconnect vault approve' or 'qconnect tui'): %s\n", strings.Join(m.Reapproval, ", "))
 	}
 	if len(m.Retargeted) > 0 {
-		fmt.Fprintf(stderr, "qatlas: the targets of these connections are now written in their current form with the "+
-			"same reach, so each needs its vault approval once more ('qatlas vault approve' or 'qatlas tui'): %s\n",
+		fmt.Fprintf(stderr, "qconnect: the targets of these connections are now written in their current form with the "+
+			"same reach, so each needs its vault approval once more ('qconnect vault approve' or 'qconnect tui'): %s\n",
 			strings.Join(m.Retargeted, ", "))
 	}
 	if len(m.OutdatedTargets) > 0 {
-		fmt.Fprintf(stderr, "qatlas: no current form keeps the reach of the targets of these connections, so each "+
-			"stays as it was and offers no tool until its targets are chosen again ('qatlas tui'); the rest of "+
+		fmt.Fprintf(stderr, "qconnect: no current form keeps the reach of the targets of these connections, so each "+
+			"stays as it was and offers no tool until its targets are chosen again ('qconnect tui'); the rest of "+
 			"the configuration stays usable: %s\n",
 			strings.Join(m.OutdatedTargets, ", "))
 	}
-	fmt.Fprintln(stderr, "qatlas: to go back, copy the backups back in place and install the previous qatlas version")
+	fmt.Fprintln(stderr, "qconnect: to go back, copy the backups back in place and install the previous qconnect version")
 	if m.Warning != "" {
 		fmt.Fprintln(stderr, withQatlasPrefix(m.Warning))
 	}
@@ -116,13 +116,13 @@ func migrateHome(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	stderr := c.ErrOrStderr()
 	m, err := config.MigrateHome(opts.Config)
 	if err != nil {
-		fmt.Fprintf(stderr, "qatlas: warning: %s\n", opts.Redactor.Apply(err.Error()))
+		fmt.Fprintf(stderr, "qconnect: warning: %s\n", opts.Redactor.Apply(err.Error()))
 		return
 	}
 	if m == nil {
 		return
 	}
-	fmt.Fprintf(stderr, "qatlas: copied the configuration from %s to %s; %s stays unchanged for a rollback\n",
+	fmt.Fprintf(stderr, "qconnect: copied the configuration from %s to %s; %s stays unchanged for a rollback\n",
 		m.From, m.To, m.From)
 	// A resolver set beforehand belongs to a test, which must never reach the system keyring.
 	if opts.Secrets != nil {
@@ -144,11 +144,11 @@ func migrateHome(c *cobra.Command, opts *Options, reg *capability.Registry) {
 	sort.Strings(keys)
 	copied, err := secret.AdoptLegacy(context.Background(), keys)
 	if copied > 0 {
-		fmt.Fprintf(stderr, "qatlas: copied %d keyring %s to the service %s\n", copied,
+		fmt.Fprintf(stderr, "qconnect: copied %d keyring %s to the service %s\n", copied,
 			plural(copied, "entry", "entries"), secret.StoreService)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "qatlas: warning: the remaining keyring entries stay under %s and are taken over when "+
+		fmt.Fprintf(stderr, "qconnect: warning: the remaining keyring entries stay under %s and are taken over when "+
 			"first read: %s\n", secret.LegacyStoreService, opts.Redactor.Apply(err.Error()))
 	}
 }

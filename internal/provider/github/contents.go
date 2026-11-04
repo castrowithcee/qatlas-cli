@@ -132,7 +132,7 @@ var treesGet = capability.Descriptor{
 		{Name: "entries", Description: "Tree entries: path, type (blob, tree, or commit for a submodule), " +
 			"sha, size for a blob, mode, and links (the REST url)"},
 		{Name: "truncated", Description: "True when GitHub's own tree was too large to return in full, or " +
-			"Qatlas cut it at its own bound"},
+			"Qatlas Connect cut it at its own bound"},
 		{Name: "ref", Description: "Branch, tag, or commit SHA the tree was read at"},
 		{Name: "recursive", Description: "True when every entry below every directory was read"},
 	}, treeWidthFields...),

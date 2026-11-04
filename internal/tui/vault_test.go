@@ -29,7 +29,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 			[]string{storageKeyring, storageVault, storageEnv}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "qatlas")
+			dir := filepath.Join(t.TempDir(), "qconnect")
 			store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 			cfg := newTestConfig(t)
 			cfg.Defaults.SecretStore = tt.store
@@ -103,7 +103,7 @@ func TestVaultOfferSetsAPassphrase(t *testing.T) {
 		secretValue = "canary-first-vault-secret-91af"
 		passphrase  = "correct horse battery staple"
 	)
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
@@ -175,7 +175,7 @@ func TestVaultOfferSetsAPassphrase(t *testing.T) {
 // nothing is written until it is answered one way or the other.
 func TestVaultOfferMismatchStaysOpen(t *testing.T) {
 	const secretValue = "canary-mismatch-4b19"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -223,10 +223,10 @@ func TestVaultOfferMismatchStaysOpen(t *testing.T) {
 }
 
 // Skipping the offer, by leaving it empty, stores the secret in an unencrypted vault, the same as
-// 'qatlas credential set' answered the same way on the terminal.
+// 'qconnect credential set' answered the same way on the terminal.
 func TestVaultOfferSkippedLeavesTheVaultUnencrypted(t *testing.T) {
 	const secretValue = "canary-skipped-2e88"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -270,7 +270,7 @@ func TestVaultOfferSkippedLeavesTheVaultUnencrypted(t *testing.T) {
 // esc on the offer cancels the whole pending write: nothing reaches the vault, and the form is left as it
 // was before s was pressed.
 func TestVaultOfferCancelledWritesNothing(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
@@ -320,7 +320,7 @@ func (b vaultBlockingSecrets) SetVaultUndoable(credential, credentialID, role, v
 // The scrypt cost of a vault write, or of the offer that may lead to one, never blocks the event loop, and
 // a second s or x on a vault role while one is in flight is refused rather than started.
 func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	// Seed an unrelated entry so the vault is already unencrypted: the write under test is not the vault's
@@ -400,7 +400,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 // nothing, esc cancels the whole pending delete without unlocking or removing anything, and the right
 // passphrase unlocks the vault and this window's admin session together, then removes the entry at once.
 func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 
@@ -410,7 +410,7 @@ func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
 		func(string) (string, error) { return "hunter2", nil }))
 
 	// The model's own resolver is a fresh vault.Vault over the same directory: nothing here ever unlocked
-	// it, so it genuinely starts locked, the way a freshly started 'qatlas tui' would find one.
+	// it, so it genuinely starts locked, the way a freshly started 'qconnect tui' would find one.
 	locked, _ := newVaultResolver(t, dir)
 
 	cfg := newTestConfig(t)

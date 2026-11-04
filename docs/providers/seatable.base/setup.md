@@ -50,7 +50,7 @@ Qatlas exchanges the token in memory for a short-lived base token and does not s
 
 The guided setup does all of this for you:
 
-1. Run `qatlas tui`.
+1. Run `qconnect tui`.
 2. In the Connections area, press `n` and follow the steps: provider `seatable.base`, the service, a credential,
    the tables (targets), and the access (by effect or by tools).
 3. When the setup asks for the credential, choose where to keep it and paste the token as its `api-token` secret.
@@ -59,16 +59,16 @@ Without the guided setup, store the token on the command line. It is read from s
 appear in the shell history:
 
 ```sh
-printf %s "$SEATABLE_API_TOKEN" | qatlas credential set seatable-reader api-token
+printf %s "$SEATABLE_API_TOKEN" | qconnect credential set seatable-reader api-token
 ```
 
 `seatable-reader` is the name of the credential in your configuration and `api-token` is its only secret. To
-replace a token that was deleted, run the same command again with the new token. Run `qatlas config validate` to
+replace a token that was deleted, run the same command again with the new token. Run `qconnect config validate` to
 check the configuration file. It contacts no provider.
 
 ## Check the connection
 
-In `qatlas tui`, open Connections, select the connection, and press `t`. `[ok]` means SeaTable accepted the token,
+In `qconnect tui`, open Connections, select the connection, and press `t`. `[ok]` means SeaTable accepted the token,
 the token belongs to the configured server, and every table and view the connection's targets name exists in the
 base. With the whole-base target `*`, only the access to the base is checked. The test reads the metadata of the
 base and changes nothing.
@@ -124,7 +124,7 @@ SeaTable's own answer follows.
 
 ```text
 permission: this SeaTable API token may not perform this operation; check the permission of the API token in SeaTable
-provider answer (untrusted, not written by qatlas), HTTP 403:
+provider answer (untrusted, not written by qconnect), HTTP 403:
   | Permission denied.
 ```
 
@@ -138,8 +138,8 @@ provider answer (untrusted, not written by qatlas), HTTP 403:
 
 | You see | Cause | What to do |
 | --- | --- | --- |
-| `auth`: the SeaTable API token is unusable | The stored token is empty, shorter than 8 characters, or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$SEATABLE_API_TOKEN" \| qatlas credential set <credential> api-token`. |
-| `auth`: SeaTable rejected the token | The token is wrong or was deleted in SeaTable | Create a new token ([Create a token](#create-a-token)) and store it again with `qatlas credential set <credential> api-token`. |
+| `auth`: the SeaTable API token is unusable | The stored token is empty, shorter than 8 characters, or holds characters a token cannot have, such as a line break or a space | Store it again with `printf %s "$SEATABLE_API_TOKEN" \| qconnect credential set <credential> api-token`. |
+| `auth`: SeaTable rejected the token | The token is wrong or was deleted in SeaTable | Create a new token ([Create a token](#create-a-token)) and store it again with `qconnect credential set <credential> api-token`. |
 | `permission`: this SeaTable API token may not perform this operation | The token cannot do this. Usually a read-only token was used for a change | Create a token with the permission **Read-write** (`rw`) in the base, store it ([Add it to Qatlas](#add-it-to-qatlas)), and keep it only for the connection that changes data. See [Rights per tool group](#rights-per-tool-group). |
 | `invalid-provider-response`: this API token belongs to a different SeaTable server than the configured service | The token comes from another SeaTable server than the service address | Set the service address to the server the token was created on, or create the token on the configured server. |
 | `invalid-provider-response`: this SeaTable base does not hold one table (or view) in the connection allow-list | A table or view of the connection's targets does not exist in the token's base, was renamed, or the token is for another base | Check the targets with the table list of the base. Use the `id:TABLEID` form so a rename does not break the target. Check that the token was created in the right base. |

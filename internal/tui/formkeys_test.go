@@ -61,7 +61,7 @@ func TestF2SavesFromTextAndChoiceRows(t *testing.T) {
 }
 
 func TestF2SavesFromAnActionRow(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 	openVaultSection(t, m)

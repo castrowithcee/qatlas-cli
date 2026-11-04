@@ -198,7 +198,7 @@ func (s Server) StoredContactUID(op string, data []byte) (uid string, err error)
 	}
 	for key := range card {
 		if !modeledFields[strings.ToUpper(key)] {
-			return "", provider.Fail(op, "this contact holds a photo, a group, or other properties that Qatlas does not write; change it in a contacts application")
+			return "", provider.Fail(op, "this contact holds a photo, a group, or other properties that Qatlas Connect does not write; change it in a contacts application")
 		}
 	}
 	uid, ok := ValidText(card.Value(vcard.FieldUID), MaxContactText, false)

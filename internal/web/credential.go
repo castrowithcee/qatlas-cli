@@ -356,7 +356,7 @@ func (s *Server) roleState(credential string, cred config.Credential, role strin
 
 // handleReplaceRole replaces the stored secret of one role of one existing credential, without touching any
 // other role and without changing the configuration file: a keyring or vault credential's roles are never
-// named in it. A vault write follows the exact path 'qatlas credential set' already takes for a vault
+// named in it. A vault write follows the exact path 'qconnect credential set' already takes for a vault
 // credential (secrets.SetVault, then a vault process outside this run is told); it never sweeps any
 // connection approval, the same restraint the CLI already keeps, so replacing a secret here never grants an
 // approval nobody gave.
@@ -421,7 +421,7 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-// vaultOfferFromForm reads a masked vault passphrase form's two fields, the same offer 'qatlas credential
+// vaultOfferFromForm reads a masked vault passphrase form's two fields, the same offer 'qconnect credential
 // set' and internal/tui's own guided setup make for the vault's very first secret: a passphrase typed twice
 // becomes the vault's encryption; leaving both empty keeps the vault unencrypted. It is harmless to pass on
 // every vault write, since vault.Vault.Set only ever consults it when the vault does not exist yet.

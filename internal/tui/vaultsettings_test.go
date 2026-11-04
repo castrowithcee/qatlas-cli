@@ -76,7 +76,7 @@ func TestVaultSectionNavigatesLikeASingleLevel(t *testing.T) {
 // never turning it on again.
 func TestVaultSectionShowsStateAndActions(t *testing.T) {
 	t.Run("absent", func(t *testing.T) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		secrets, _ := newVaultResolver(t, dir)
 		m, err := buildModel(store, nil, secrets, nil)
@@ -96,7 +96,7 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 	})
 
 	t.Run("unencrypted", func(t *testing.T) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		secrets, _ := newVaultResolver(t, dir)
 		mustNoError(t, secrets.SetVault("reader", "token-id", "canary-unencrypted-88a1", nil))
@@ -121,13 +121,13 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 	})
 
 	t.Run("locked", func(t *testing.T) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		setup, _ := newVaultResolver(t, dir)
 		mustNoError(t, setup.SetVault("reader", "token-id", "canary-locked-77c2",
 			func(string) (string, error) { return "hunter2", nil }))
 
-		// A fresh resolver over the same directory starts genuinely locked, the way a new 'qatlas tui' would.
+		// A fresh resolver over the same directory starts genuinely locked, the way a new 'qconnect tui' would.
 		locked, _ := newVaultResolver(t, dir)
 		m, err := buildModel(store, nil, locked, nil)
 		if err != nil {
@@ -158,7 +158,7 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 // screen, the status, or an error.
 func TestVaultEncryptTurnsEncryptionOn(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("reader", "token-id", "canary-encrypt-3f9a", nil))
@@ -249,7 +249,7 @@ func TestVaultChangePassphrase(t *testing.T) {
 		fresh   = "a whole new passphrase"
 	)
 	newLockedModel := func(t *testing.T) (*Model, string) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		setup, _ := newVaultResolver(t, dir)
 		mustNoError(t, setup.SetVault("reader", "token-id", "canary-change-a1b2",
@@ -340,7 +340,7 @@ func TestVaultChangePassphrase(t *testing.T) {
 func TestVaultDecrypt(t *testing.T) {
 	const passphrase = "hunter2"
 	newLockedModel := func(t *testing.T) (*Model, string) {
-		dir := filepath.Join(t.TempDir(), "qatlas")
+		dir := filepath.Join(t.TempDir(), "qconnect")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		setup, _ := newVaultResolver(t, dir)
 		mustNoError(t, setup.SetVault("reader", "token-id", "canary-decrypt-9c3d",
@@ -434,7 +434,7 @@ func TestVaultDecrypt(t *testing.T) {
 // The confirmation before turning encryption off warns, in words, that every secret ends up unencrypted on
 // disk, so nobody agrees to it without knowing what changes.
 func TestVaultDecryptConfirmationWarns(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	setup, _ := newVaultResolver(t, dir)
 	mustNoError(t, setup.SetVault("reader", "token-id", "canary-warn-1a2b",
@@ -460,7 +460,7 @@ func TestVaultDecryptConfirmationWarns(t *testing.T) {
 // already started, so F2 saves without asking for the passphrase.
 func unlockedSettingsModel(t *testing.T) (*Model, *config.Store) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 	m.startAdminSession()
@@ -601,7 +601,7 @@ func TestVaultSectionLeaveAsksBeforeLosingSettingChanges(t *testing.T) {
 
 // Without a proven admin session F2 asks for the passphrase first and writes nothing until it is right.
 func TestVaultSectionSettingsSaveNeedsTheAdminSession(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 	settings := filepath.Join(dir, vault.DirName, "settings.age")
@@ -666,7 +666,7 @@ func TestVaultSectionUntrustedSettingsShowSafeValues(t *testing.T) {
 // before it is done, the same guard the credential secret rows already use.
 func TestVaultActionIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	const passphrase = "correct horse battery staple"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("reader", "token-id", "canary-async-5e6f", nil))
@@ -713,7 +713,7 @@ func TestVaultActionIsAsyncAndNotDoubleTriggered(t *testing.T) {
 
 // The update behaviour row saves through the admin session into settings.age, never into config.yaml.
 func TestVaultSectionSavesUpdateBehaviourInTheVault(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 	configBefore, err := os.ReadFile(store.Path())
@@ -756,10 +756,10 @@ func TestVaultSectionSavesUpdateBehaviourInTheVault(t *testing.T) {
 
 // Without an unlocked, encrypted vault the row cannot be changed and names why.
 func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	locked, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
 
-	unencrypted := filepath.Join(t.TempDir(), "qatlas")
+	unencrypted := filepath.Join(t.TempDir(), "qconnect")
 	secrets, _ := newVaultResolver(t, unencrypted)
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return "", nil }))
 	plain, err := buildModel(newTestStore(t, filepath.Join(unencrypted, "config.yaml")), nil, secrets, nil)
@@ -789,9 +789,9 @@ func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
 }
 
 // Encrypting the vault approves the saved connections that read it; a configuration that cannot be read
-// approves nothing and says so, the same way 'qatlas vault encrypt' does, and a missing one stays silent.
+// approves nothing and says so, the same way 'qconnect vault encrypt' does, and a missing one stays silent.
 func TestApproveOnEncryptWarnsWhenTheConfigurationCannotBeRead(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	v := vault.New(dir)

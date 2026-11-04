@@ -126,9 +126,9 @@ const (
 	screenLeave
 	// screenHelp shows the help topics over the tab line or the list it was opened from.
 	screenHelp
-	// screenUpdate asks before a newer release of qatlas is installed.
+	// screenUpdate asks before a newer release of qconnect is installed.
 	screenUpdate
-	// screenVersions is the searchable list of the versions of qatlas that can be chosen.
+	// screenVersions is the searchable list of the versions of qconnect that can be chosen.
 	screenVersions
 	// screenRestart asks before the editor restarts into an installed release and drops unsaved input.
 	screenRestart
@@ -1365,7 +1365,7 @@ func (m *Model) updateList(key tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		// A bulk approval is offered whenever it would do something: approve what is open, remove a stale
-		// approval left over from a deleted or renamed connection, or both, the same way 'qatlas vault
+		// approval left over from a deleted or renamed connection, or both, the same way 'qconnect vault
 		// approve' with no --connection does.
 		if report, unavailable := m.approvalsReport(); unavailable == "" &&
 			(len(report.Open) > 0 || len(report.RevocableStale()) > 0) {
@@ -4440,7 +4440,7 @@ func (m *Model) listFrame() (string, string) {
 			}
 		}
 		// A connection that offers no tool is valid, so it is named rather than refused, with the same
-		// words 'qatlas config validate' uses.
+		// words 'qconnect config validate' uses.
 		var idle strings.Builder
 		for _, name := range m.list.all {
 			if isGroupRow(name) {
@@ -5201,7 +5201,7 @@ type Options struct {
 	Tester   Tester
 	Secrets  Secrets
 	Redactor *redact.Redactor
-	// Version is the running qatlas version; empty is read as dev.
+	// Version is the running qconnect version; empty is read as dev.
 	Version string
 	// Updater may be nil, in which case the editor does not look for a newer release.
 	Updater Updater

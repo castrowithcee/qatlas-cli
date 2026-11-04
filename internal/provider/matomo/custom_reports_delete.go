@@ -14,7 +14,7 @@ import (
 
 var customReportsDelete = capability.Descriptor{
 	ID: Provider + ".custom-reports.delete", Version: 1, Title: "Delete a Matomo custom report",
-	Description: "Delete the definition of a custom report of a website; Qatlas offers no way to restore it. Reports " +
+	Description: "Delete the definition of a custom report of a website; Qatlas Connect offers no way to restore it. Reports " +
 		"shared with all websites (idSite all in Matomo) are not reachable. The report is read first and must belong " +
 		"to the website, otherwise it is not found. Needs the premium plugin CustomReports and, expected, a write " +
 		"right on the website; idempotent in effect" + customReportSentOnceGet + "; offered only where a " +

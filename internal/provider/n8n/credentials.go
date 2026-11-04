@@ -46,7 +46,7 @@ const credentialDataSensitivity = "n8n-credentials-metadata"
 // credentialPermissionMessage is the one message of a 403 on a credentials endpoint. The body is never
 // read into a message.
 const credentialPermissionMessage = "n8n refused this credentials operation: license or role missing (the " +
-	"API key's credential scope, its owner's role, or the instance's plan); Qatlas cannot tell which"
+	"API key's credential scope, its owner's role, or the instance's plan); Qatlas Connect cannot tell which"
 
 var credentialReadRisk = capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 	Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: credentialDataSensitivity}

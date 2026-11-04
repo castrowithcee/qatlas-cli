@@ -49,7 +49,7 @@ func goalChangeRisk(effect capability.Effect, idempotency capability.Idempotency
 
 // sentOnceFor is the note on a change whose outcome is unclear: it names the read that settles it.
 func sentOnceFor(noun, tool string) string {
-	return "; sent once and never repeated by Qatlas: after an unclear result, read the " + noun + " with " +
+	return "; sent once and never repeated by Qatlas Connect: after an unclear result, read the " + noun + " with " +
 		tool + " before repeating it"
 }
 

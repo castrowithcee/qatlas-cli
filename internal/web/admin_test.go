@@ -263,7 +263,7 @@ func TestForeignSessionOrHostRefusedBeforeMutation(t *testing.T) {
 	}
 }
 
-// TestStoppingTheProcessDiscardsAdminApproval proves that close(), which every stop of 'qatlas web' goes
+// TestStoppingTheProcessDiscardsAdminApproval proves that close(), which every stop of 'qconnect web' goes
 // through, discards an active admin approval, not just the coupled session.
 func TestStoppingTheProcessDiscardsAdminApproval(t *testing.T) {
 	v := encryptedTestVault(t)

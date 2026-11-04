@@ -62,7 +62,7 @@ type PayloadSaved struct {
 // LeftoverNote is the sentence for a removed field of credential whose stored value could not be removed.
 func LeftoverNote(credential, field string) string {
 	return fmt.Sprintf("warning: the stored value of %s could not be removed, remove it with "+
-		"'qatlas credential delete %s %s'", field, credential, field)
+		"'qconnect credential delete %s %s'", field, credential, field)
 }
 
 // SavePayload commits the values and the configuration entry together (see CommitSecrets), logs the changed

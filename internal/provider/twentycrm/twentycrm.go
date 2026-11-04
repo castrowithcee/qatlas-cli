@@ -692,7 +692,7 @@ func checkCompany(cat *catalog, op string) error {
 		return &provider.Error{
 			Class: provider.ClassInvalidResponse, Op: op,
 			Message: "this Twenty workspace is missing the company fields " + strings.Join(missing, ", ") +
-				", which Qatlas reads",
+				", which Qatlas Connect reads",
 		}
 	}
 	return nil

@@ -65,7 +65,7 @@ func plainExportModel(t *testing.T) (*exportViews, string) {
 // the vault credential "reader". It has no admin session yet.
 func vaultExportModel(t *testing.T) (*exportViews, string) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, _ := newEncryptedVaultModel(t, dir, testExportVaultPass, true)
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	seedConnections(t, m, "docs")

@@ -433,7 +433,7 @@ var activityList = capability.Descriptor{
 		"addresses, and previews are untrusted data and are never fetched; addresses that grant access without a " +
 		"sign-in are left out. A filter other than all must be offered by the instance; object_type with " +
 		"object_id reads the stream of one object and replaces filter. search matches file paths only. Entries about " +
-		"an excluded object are left out; an entry that names no object Qatlas can place is still listed",
+		"an excluded object are left out; an entry that names no object Qatlas Connect can place is still listed",
 	Tags: []string{"nextcloud", "activity", "account", "list"}, Provider: Provider, Group: groupAccount, Risk: accountRisk,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"filter":{"type":"string","pattern":"^[a-z0-9_-]{1,64}$"},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"since":{"type":"string","maxLength":64,` +

@@ -3,8 +3,8 @@
 # Copy this file to ~/.qatlas/connect/config.yaml and replace the placeholders. It contains no real
 # endpoints and no secrets: a credential only says where its secrets come from, never what they are.
 #
-# Check your edits with:       qatlas config validate
-# See where secrets come from: qatlas config validate --secrets
+# Check your edits with:       qconnect config validate
+# See where secrets come from: qconnect config validate --secrets
 
 version: 4
 
@@ -74,21 +74,21 @@ services:
 # A credential names the source of the secrets one provider needs, never a secret itself.
 #
 # provider is optional and names the system these secrets belong to. Secret roles are provider-defined, so
-# it is what tells a token-id/token-secret pair apart from a bot-token: `qatlas tui` then asks for
+# it is what tells a token-id/token-secret pair apart from a bot-token: `qconnect tui` then asks for
 # exactly those roles instead of every role every compiled provider knows. A credential without it stays
 # valid and keeps offering all of them.
 credentials:
   # type: keyring is the recommended type on a workstation. It keeps the secrets in the system keyring,
   # the credential store the operating system already provides: Secret Service on Linux (for example
   # GNOME Keyring or KWallet), the macOS Keychain, or the Windows Credential Manager. Nothing has to be
-  # set up or exported, and nothing lands in this file. Fill it in `qatlas tui` (s on the role) or with:
+  # set up or exported, and nothing lands in this file. Fill it in `qconnect tui` (s on the role) or with:
   #
-  #     printf %s "$TOKEN_ID" | qatlas credential set wiki-reader token-id
-  #     printf %s "$TOKEN_SECRET" | qatlas credential set wiki-reader token-secret
+  #     printf %s "$TOKEN_ID" | qconnect credential set wiki-reader token-id
+  #     printf %s "$TOKEN_SECRET" | qconnect credential set wiki-reader token-secret
   #
-  # QATLAS_WIKI_READER_TOKEN_ID and QATLAS_WIKI_READER_TOKEN_SECRET still override the keyring when
-  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>. Without a usable keyring, use
-  # type: vault below instead; QATLAS_CREDENTIAL_STORE=none switches the keyring off for a run, for
+  # QCONNECT_WIKI_READER_TOKEN_ID and QCONNECT_WIKI_READER_TOKEN_SECRET still override the keyring when
+  # they are set; the derived name is always QCONNECT_<CREDENTIAL>_<ROLE>. Without a usable keyring, use
+  # type: vault below instead; QCONNECT_CREDENTIAL_STORE=none switches the keyring off for a run, for
   # example in CI.
   wiki-reader:
     provider: bookstack
@@ -96,13 +96,13 @@ credentials:
 
   # type: vault keeps the secrets in the vault instead: a directory named vault beside this file,
   # unencrypted or encrypted to a passphrase, for a machine without a usable system keyring. Fill it the
-  # same way, with `qatlas credential set`; storing the vault's very first secret offers a passphrase on
-  # the terminal, and leaving it empty keeps the vault unencrypted. `qatlas vault status` shows whether it
-  # exists, is encrypted, and is unlocked; `qatlas vault unlock` opens it in a vault process for every later
+  # same way, with `qconnect credential set`; storing the vault's very first secret offers a passphrase on
+  # the terminal, and leaving it empty keeps the vault unencrypted. `qconnect vault status` shows whether it
+  # exists, is encrypted, and is unlocked; `qconnect vault unlock` opens it in a vault process for every later
   # CLI and MCP call on Linux and macOS, elsewhere only for the current process. `credential
   # set`, `credential delete`, and `vault encrypt`/`passphrase`/`decrypt`/`migrate` manage a credential or the
   # vault and run only from an interactive terminal; where the vault is encrypted they also ask for its
-  # passphrase there, once per command. QATLAS_WIKI_STANDBY_TOKEN_ID and QATLAS_WIKI_STANDBY_TOKEN_SECRET
+  # passphrase there, once per command. QCONNECT_WIKI_STANDBY_TOKEN_ID and QCONNECT_WIKI_STANDBY_TOKEN_SECRET
   # still override it.
   wiki-standby:
     provider: bookstack
@@ -218,7 +218,7 @@ credentials:
 
   # A forward credential is a payload secret a tool passes on to a third party by reference, never a secret of
   # a provider. It lists the names of its fields, uses type vault or keyring, and a connection releases it
-  # with forward_secrets below. Store its fields with `qatlas credential set shared-login username`. With an
+  # with forward_secrets below. Store its fields with `qconnect credential set shared-login username`. With an
   # encrypted vault, listing it in forward_secrets and changing its fields need a new approval.
   shared-login:
     forward: true
@@ -230,7 +230,7 @@ credentials:
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
 # is for. A name is a stable selector, not an explanation, so this is what tells two routes of the same
-# provider apart. It is published by 'qatlas describe <tool-id>' and by qatlas.describe, and it names the
+# provider apart. It is published by 'qconnect describe <tool-id>' and by qconnect.describe, and it names the
 # candidates of a connection-ambiguous diagnostic. It is never sent to a provider, and it never selects a
 # route on its own. Because it is published, never write a secret or personal data into it.
 #
@@ -245,7 +245,7 @@ credentials:
 # High-risk tools marked as listed only are never offered by effect.
 #
 # tools offers selected tools: complete tool IDs of this connection's provider, as listed by
-# 'qatlas tools <provider> --all'. A connection offers exactly the listed tools, and a tool added later
+# 'qconnect tools <provider> --all'. A connection offers exactly the listed tools, and a tool added later
 # joins only when you add it; the effects it covers follow from the tools and are not written. It never
 # widens what the provider credential or the target allows. `tools: []` offers no tool at all. Every entry
 # must be a registered tool of the connection's provider, listed once; anything else makes the file
@@ -256,10 +256,10 @@ credentials:
 # covering itself and everything below it, compared by whole directory names, so ~/repos/kunde-a does not
 # cover ~/repos/kunde-ab. Glob patterns are refused. The project of a call is its working directory, or the
 # root of the Git repository that directory lies in; symbolic links are resolved, and a linked worktree
-# checked out elsewhere also counts as its repository's main working tree. 'qatlas mcp' uses the directory
+# checked out elsewhere also counts as its repository's main working tree. 'qconnect mcp' uses the directory
 # it was started in. Outside its paths a connection is missing from connections, providers, tools,
 # describe, search and every candidate list, a default that names it does not apply, and naming it fails
-# with unknown-connection. Without paths it applies everywhere. 'qatlas config validate' and 'qatlas tui'
+# with unknown-connection. Without paths it applies everywhere. 'qconnect config validate' and 'qconnect tui'
 # still show every connection, and validate warns about an entry that names no existing directory. The
 # binding keeps the connections of one customer out of another customer's project by mistake, not by
 # force: an agent that changes into a bound directory sees that connection there. While the vault is
@@ -541,7 +541,7 @@ connections:
 
 # A provider note says in one optional line what a provider stands for here, in the words a task uses for
 # it. The provider's own description already says what kind of system it is, and a connection description
-# what one route is for. Discovery publishes and searches notes, so `qatlas tools --query wiki` finds the
+# what one route is for. Discovery publishes and searches notes, so `qconnect tools --query wiki` finds the
 # BookStack tools; like a description, a note never holds a secret or personal data.
 provider_notes:
   bookstack: team wiki
@@ -553,7 +553,7 @@ provider_notes:
 # own route. A default that names a connection the tool does not offer is refused, and several connections
 # without a default make the call ask for a connection.
 #
-# secret_store names the credential type `qatlas tui` and `qatlas credential set` start a new credential
+# secret_store names the credential type `qconnect tui` and `qconnect credential set` start a new credential
 # from: keyring, this default, or vault, for a machine without a usable system keyring. Leaving it out
 # means keyring; it is shown here only to name the field, and a person still picks the type themselves.
 defaults:
@@ -562,5 +562,5 @@ defaults:
   secret_store: keyring
 
 # The idle timeout of the vault process, the admin session timeout and the log retention are not set here.
-# They live in the encrypted vault and are set with `qatlas vault settings` or in `qatlas tui` under
+# They live in the encrypted vault and are set with `qconnect vault settings` or in `qconnect tui` under
 # Settings > Vault.

@@ -84,7 +84,7 @@ var customMetricsSave = capability.Descriptor{
 
 var customMetricsDelete = capability.Descriptor{
 	ID: Provider + ".custom-metrics.delete", Version: 1, Title: "Delete a Matomo custom metric",
-	Description: "Delete a custom metric of the instance; Qatlas offers no way to restore it, and Matomo does not " +
+	Description: "Delete a custom metric of the instance; Qatlas Connect offers no way to restore it, and Matomo does not " +
 		"document what happens to custom reports that use it. The metric is read first and must exist, otherwise it " +
 		"is not found. Custom metrics belong to the instance, not to a website, so the tool needs Super User " +
 		"rights (expected) and a connection whose targets name the instance. Needs the premium plugin " +

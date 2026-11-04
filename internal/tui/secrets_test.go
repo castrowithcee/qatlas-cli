@@ -24,7 +24,7 @@ import (
 // the test's own directory, over exactly the environment the test names.
 func newStoreModel(t *testing.T) (*Model, *config.Store, string, *secret.Resolver, *secret.MemoryStore) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 
@@ -240,14 +240,14 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	}
 }
 
-// A credential of type vault, the normal state after 'qatlas vault migrate', keeps that type when its form
+// A credential of type vault, the normal state after 'qconnect vault migrate', keeps that type when its form
 // is opened and saved without any change, and s and x on its roles reach the vault directly, never the
 // system keyring. Before this, the storage row defaulted to system keyring for any type it did not know,
 // saving silently turned the credential into a keyring one, and s and x on a vault role only pointed at the
 // CLI instead of writing anything.
 func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	const canary = "canary-vault-role-7c2e"
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, mem := newVaultResolver(t, dir)
@@ -694,7 +694,7 @@ func (b blockingSecrets) SetVaultUndoable(string, string, string, string, vault.
 // A store that takes its time must not freeze the editor: it has thirty seconds to answer, and the event
 // loop keeps working meanwhile.
 func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	slow := newBlockingSecrets()
 	// Only the write is slow here; the question where a role resolves from is answered at once.
@@ -763,7 +763,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 // The same holds for the question where a secret resolves from: it is asked in a command, so a store that
 // does not answer leaves the editor usable instead of freezing the list it was opened from.
 func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	slow := newBlockingSecrets()
 
@@ -857,7 +857,7 @@ func TestLongMessagesStayReadable(t *testing.T) {
 // The editor works without a resolver: the configuration stays editable, and only what needs a store says
 // why it cannot.
 func TestWithoutAResolver(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	m, err := buildModel(store, nil, nil, nil)
 	if err != nil {
@@ -879,7 +879,7 @@ func storedCredential(t *testing.T, env map[string]string) (
 	string, *config.Store, string, *secret.Resolver, *secret.MemoryStore,
 ) {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 
@@ -929,7 +929,7 @@ func TestTypeChangeGuardAsksWhatIsStoredNotWhatDelivers(t *testing.T) {
 		{
 			name: "a switched-off store is not an empty store",
 			arrange: func(t *testing.T, dir string, _ *secret.Resolver, _ *secret.MemoryStore) Secrets {
-				// The same state QATLAS_CREDENTIAL_STORE=none produces.
+				// The same state QCONNECT_CREDENTIAL_STORE=none produces.
 				return secret.NewWith(nil, nil, secret.NewFile(filepath.Join(dir, secret.FileName)), nil)
 			},
 			wantIn: []string{"cannot tell", "switched off", string(secret.SourceStore)},
@@ -1062,7 +1062,7 @@ func TestEveryWriteOutcomeReachesTheUser(t *testing.T) {
 		err: map[string]error{"token-id": secret.ErrUnavailable},
 	}
 
-	store := newTestStore(t, filepath.Join(t.TempDir(), "qatlas", "config.yaml"))
+	store := newTestStore(t, filepath.Join(t.TempDir(), "qconnect", "config.yaml"))
 	m, err := buildModel(store, nil, scripted, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
@@ -1128,7 +1128,7 @@ func TestAWaitingTypeChangeSurvivesADisplayRefresh(t *testing.T) {
 	close(slow.probes) // only the guard is slow here
 	close(slow.writes)
 
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	cfg := newTestConfig(t)
@@ -1214,7 +1214,7 @@ func TestRowsAreAskedAgainAfterAFailedWrite(t *testing.T) {
 // chasing: a terminal that narrow shows nothing usable anyway.
 func TestWrappedTextUsesTheReportedWidth(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
-	const long = "a message whose actionable part sits at its very end: export QATLAS_READER_TOKEN_ID"
+	const long = "a message whose actionable part sits at its very end: export QCONNECT_READER_TOKEN_ID"
 
 	for _, width := range []int{1, 2, 3, 4, 5, 8, 20} {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
@@ -1299,7 +1299,7 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	close(slow.probes)
 	close(slow.writes)
 
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	cfg := newTestConfig(t)
@@ -1352,7 +1352,7 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 // An approval a vault write made is never silent: with a failure already on screen when the write is
 // answered, the note joins that failure instead of being dropped.
 func TestVaultWriteApprovalNoteJoinsAFailureOnScreen(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "qatlas")
+	dir := filepath.Join(t.TempDir(), "qconnect")
 	m, err := buildModel(newTestStore(t, filepath.Join(dir, "config.yaml")), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)

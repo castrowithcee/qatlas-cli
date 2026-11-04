@@ -373,7 +373,7 @@ func targetsText(conn config.Connection) string {
 }
 
 // outdatedTargetsText stands in the targets row of a connection marked as outdated.
-const outdatedTargetsText = "Outdated: the stored targets keep a former meaning and are not used. The connection offers no tools until its targets are chosen again in qatlas tui (Connections) and saved."
+const outdatedTargetsText = "Outdated: the stored targets keep a former meaning and are not used. The connection offers no tools until its targets are chosen again in qconnect tui (Connections) and saved."
 
 // excludeText reads the exclusions of conn with their labels as "value (label)".
 func excludeText(conn config.Connection) string {
@@ -730,7 +730,7 @@ func (s *Server) approvalNotice(cand *config.Config, connName string) string {
 	case res.CheckErr != nil:
 		return "approval failed: " + s.redact(res.CheckErr.Error())
 	case res.StayedOpen != "":
-		return fmt.Sprintf("stays open: %s; approve it with `qatlas vault approve` or in the TUI's Approvals section",
+		return fmt.Sprintf("stays open: %s; approve it with `qconnect vault approve` or in the TUI's Approvals section",
 			res.StayReason)
 	case res.ApproveErr != nil:
 		return "approval failed: " + s.redact(res.ApproveErr.Error())

@@ -64,7 +64,7 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	if _, ok := capabilities["tools"]; !ok {
 		t.Fatalf("capabilities = %s", capabilities)
 	}
-	// A client that only speaks MCP reads the short MCP guide as the server instructions, not 'qatlas agents'.
+	// A client that only speaks MCP reads the short MCP guide as the server instructions, not 'qconnect agents'.
 	var instructions struct {
 		Instructions string `json:"instructions"`
 	}
@@ -84,7 +84,7 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 		listed.TTL != mcpCacheTTLMillis || listed.CacheScope != "public" {
 		t.Fatalf("tools/list = %+v", listed)
 	}
-	want := []string{"qatlas.search", "qatlas.describe", "qatlas.invoke"}
+	want := []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"}
 	for i, tool := range listed.Tools {
 		if tool.Name != want[i] || len(tool.InputSchema) == 0 {
 			t.Errorf("tool %d = %+v, want %q with schema", i, tool, want[i])
@@ -95,23 +95,23 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	}
 	decodeRaw(t, listed.Tools[0].InputSchema, &searchSchema)
 	if _, ok := searchSchema.Properties["cursor"]; !ok {
-		t.Errorf("qatlas.search schema = %s, want a cursor property", listed.Tools[0].InputSchema)
+		t.Errorf("qconnect.search schema = %s, want a cursor property", listed.Tools[0].InputSchema)
 	}
 }
 
 func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, validConfig)
 	registry := fakeRegistry(t)
 	searchRequest := `{"query":"page"}`
 	describeRequest := `{"operation":"bookstack.pages.get","version":1}`
 	invokeRequest := `{"operation":"bookstack.pages.get","connection":"wiki","arguments":{}}`
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.search","arguments":` + searchRequest + `}}`,
-		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.describe","arguments":` + describeRequest + `}}`,
-		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":` + invokeRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.search","arguments":` + searchRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.describe","arguments":` + describeRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":` + invokeRequest + `}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
@@ -128,7 +128,7 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	if len(searchResult.Operations) != 2 {
 		t.Fatalf("search operations = %d, want 2", len(searchResult.Operations))
 	}
-	// qatlas.search pages the entries of the CLI index; the entries and the connections named once are the
+	// qconnect.search pages the entries of the CLI index; the entries and the connections named once are the
 	// same, entry by entry, in the same order.
 	indexed := toolIndex(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
 		"--output", "json")))
@@ -184,9 +184,9 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 // short MCP guide as instructions, and the same fixed tools; a request that declares a version is still
 // served per request.
 func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, validConfig)
 	registry := fakeRegistry(t)
 	initialize := func(id int, params string) string {
@@ -205,7 +205,7 @@ func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
 			`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
 			`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
 			`{"jsonrpc":"2.0","id":3,"method":"ping"}`,
-			`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"name":"qatlas.search","arguments":{"query":"page"}}}`,
+			`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"name":"qconnect.search","arguments":{"query":"page"}}}`,
 			`{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}`,
 		}, "\n") + "\n"
 		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
@@ -224,7 +224,7 @@ func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
 		}
 		decodeRaw(t, responses["1"].Result, &result)
 		if _, ok := result.Capabilities["tools"]; result.ProtocolVersion != tt.want || !ok ||
-			result.ServerInfo.Name != "qatlas" || result.Instructions != helptopics.MCP().Text {
+			result.ServerInfo.Name != "qconnect" || result.Instructions != helptopics.MCP().Text {
 			t.Errorf("%s: initialize = %s, want version %s", tt.requested, responses["1"].Result, tt.want)
 		}
 		var listed struct{ Tools []mcpTool }
@@ -279,10 +279,10 @@ func TestMCPMetadataErrorsNameTheKey(t *testing.T) {
 // instead of operation learns which name is wrong.
 func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
 	for _, tt := range []struct{ tool, arguments, want string }{
-		{"qatlas.describe", `{"tool":"bookstack.pages.get"}`, "invalid-request: $.tool is not allowed"},
-		{"qatlas.invoke", `{"operation":"bookstack.pages.get","version":"1"}`, "invalid-request: $.version must be integer"},
-		{"qatlas.invoke", `{"connection":"wiki"}`, "invalid-request: $.operation is required"},
-		{"qatlas.search", `{"effect":"write"}`, "invalid-request: $.effect is not an allowed value"},
+		{"qconnect.describe", `{"tool":"bookstack.pages.get"}`, "invalid-request: $.tool is not allowed"},
+		{"qconnect.invoke", `{"operation":"bookstack.pages.get","version":"1"}`, "invalid-request: $.version must be integer"},
+		{"qconnect.invoke", `{"connection":"wiki"}`, "invalid-request: $.operation is required"},
+		{"qconnect.search", `{"effect":"write"}`, "invalid-request: $.effect is not an allowed value"},
 	} {
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"` + tt.tool +
 			`","arguments":` + tt.arguments + `}}` + "\n"
@@ -296,9 +296,9 @@ func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
 // Several connections without a default are refused over the tool CLI and the MCP broker alike, and both
 // name the routes that offer the tool as the same detail.
 func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
 		t.Fatal(err)
@@ -344,12 +344,12 @@ defaults: {}
 	code := run(newRootCommand(options, registry), options,
 		[]string{"invoke", "fake.pages.get", "--config", path}, &stdout, &stderr)
 	lines := strings.Split(stderr.String(), "\n")
-	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-ambiguous: ") {
+	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qconnect: connection-ambiguous: ") {
 		t.Fatalf("exit=%d stderr=%q", code, stderr.String())
 	}
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
+		`,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	invoke := toolResultFrom(t, responses["1"])
 	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-ambiguous: ") {
@@ -361,7 +361,7 @@ defaults: {}
 	// A client that shows only the text still learns the candidates, and both routes say the same.
 	wantText := `connection-ambiguous: tool "fake.pages.get" has multiple matching connections: ` +
 		`primary (team pages), secondary`
-	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
+	if invoke.Content[0].Text != wantText || lines[0] != "qconnect: "+wantText {
 		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
 	}
 	var detail struct {
@@ -411,9 +411,9 @@ connections:
 // candidates with their descriptions as data: an empty description stays an empty string, a known secret is
 // redacted, and nothing else of a route leaves the core.
 func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, ambiguousConfig)
 	registry := fakeRegistry(t)
 	newRedactor := func() *redact.Redactor {
@@ -430,13 +430,13 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 		[]string{"invoke", "bookstack.pages.list", "--config", path}, &stdout, &stderr)
 	lines := strings.Split(stderr.String(), "\n")
 	if code != exitUsage || stdout.Len() != 0 || len(lines) < 2 ||
-		!strings.HasPrefix(lines[0], "qatlas: connection-ambiguous: ") {
+		!strings.HasPrefix(lines[0], "qconnect: connection-ambiguous: ") {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	cliDetail := []byte(lines[1])
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","arguments":{}}}}` + "\n"
+		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","arguments":{}}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: newRedactor()})
 	if mcpStderr != "" {
 		t.Fatalf("MCP stderr = %q", mcpStderr)
@@ -450,7 +450,7 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	}
 	wantText := `connection-ambiguous: tool "bookstack.pages.list" has multiple matching connections: ` +
 		`wiki (read-only account on the team wiki), wiki-2, wiki-staging (staging wiki ` + redact.Marker + `)`
-	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
+	if invoke.Content[0].Text != wantText || lines[0] != "qconnect: "+wantText {
 		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
 	}
 
@@ -488,7 +488,7 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	}
 }
 
-// list turns qatlas.search into the overview 'qatlas providers' and 'qatlas connections' print: the same
+// list turns qconnect.search into the overview 'qconnect providers' and 'qconnect connections' print: the same
 // data in the same order, answered from the configuration alone. It is a mode of its own, so a search
 // argument beside it is refused, and provider only filters the connections.
 func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
@@ -505,7 +505,7 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 	search := func(arguments string) mcpToolResult {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
 		responses, stderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		if stderr != "" {
@@ -524,7 +524,7 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 	} {
 		result := search(tt.arguments)
 		if result.IsError || !bytes.Equal(bytes.TrimSpace(cliJSON(tt.cli...)), result.Structured) {
-			t.Errorf("search %s = %s, want the JSON of 'qatlas %s'", tt.arguments, result.Structured,
+			t.Errorf("search %s = %s, want the JSON of 'qconnect %s'", tt.arguments, result.Structured,
 				strings.Join(tt.cli, " "))
 		}
 	}
@@ -552,13 +552,13 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 	}
 }
 
-// qatlas.search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
+// qconnect.search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
 // from the first page names every tool of the namespace once, in the order of the CLI index, and a cursor
 // that does not continue this search fails as an invalid request.
 func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, validConfig)
 	registry := fakeRegistry(t)
 	addSyntheticOperations(t, registry, 2*50+3)
@@ -575,7 +575,7 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	search := func(arguments string) mcpToolResult {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
 		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 		if stderr != "" {
 			t.Fatalf("stderr = %q", stderr)
@@ -630,21 +630,21 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	}
 }
 
-// A qatlas.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
+// A qconnect.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
 // fields it uses (requires, confirm, connections, reason); the connections are named once beside the
 // hits. Description, version, tags, and provider stay one describe away.
 func TestMCPSearchHitsAreCompact(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	path := writeConfig(t, strings.Replace(validConfig, "    description: read-only account on the team wiki\n",
 		"    description: read-only account on the team wiki\n    tools: [bookstack.pages.get]\n", 1))
 	registry := fakeRegistry(t)
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"offered","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"bookstack"}}}`,
+			`,"name":"qconnect.search","arguments":{"provider":"bookstack"}}}`,
 		`{"jsonrpc":"2.0","id":"all","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"bookstack","all":true}}}`,
+			`,"name":"qconnect.search","arguments":{"provider":"bookstack","all":true}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	if stderr != "" {
@@ -691,12 +691,12 @@ func addSyntheticOperations(t *testing.T, registry *capability.Registry, count i
 }
 
 func TestMCPAndJSONCLIErrorCodeParity(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	path := writeConfig(t, validConfig)
 	request := `{"operation":"absent.operation.get"}`
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.describe","arguments":` + request + `}}` + "\n"
+		`,"name":"qconnect.describe","arguments":` + request + `}}` + "\n"
 	responses, _ := runMCPWithOptions(t, fakeRegistry(t), input, &Options{Config: path})
 	mcpResult := toolResultFrom(t, responses["1"])
 	if !mcpResult.IsError {
@@ -709,7 +709,7 @@ func TestMCPAndJSONCLIErrorCodeParity(t *testing.T) {
 		t.Fatalf("JSON CLI exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	firstLine, _, _ := strings.Cut(stderr, "\n")
-	cliDiagnostic := strings.TrimPrefix(firstLine, "qatlas: ")
+	cliDiagnostic := strings.TrimPrefix(firstLine, "qconnect: ")
 	cliCode, _, _ := strings.Cut(cliDiagnostic, ":")
 	if mcpCode != cliCode || cliCode != "unknown-operation" {
 		t.Fatalf("MCP code=%q JSON CLI code=%q", mcpCode, cliCode)
@@ -718,7 +718,7 @@ func TestMCPAndJSONCLIErrorCodeParity(t *testing.T) {
 
 func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 	const canary = "secret-provider-detail-7294"
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
 		*redact.Redactor, json.RawMessage) (any, error) {
 		return nil, errors.New("provider failed with " + canary)
@@ -726,7 +726,7 @@ func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 	redactor := &redact.Redactor{}
 	redactor.Add(canary)
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.absent","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}`,
 	}, "\n") + "\n"
@@ -754,9 +754,9 @@ func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 // A resource the provider does not hold or does not show to the credential is the runtime failure not-found,
 // with the same code and message over the CLI, exit code 1, and MCP.
 func TestNotFoundIsTheSameRuntimeFailureInCLIAndMCP(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	const message = "GitHub does not hold repository octo-org/absent or does not show it to this token"
 	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
 		*redact.Redactor, json.RawMessage) (any, error) {
@@ -768,12 +768,12 @@ func TestNotFoundIsTheSameRuntimeFailureInCLIAndMCP(t *testing.T) {
 	code := run(newRootCommand(opts, registry), opts,
 		[]string{"invoke", "fake.pages.get", "--connection", "primary", "--config", path}, &stdout, &stderr)
 	want := "not-found: get page: " + message
-	if code != exitRuntime || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "qatlas: "+want {
+	if code != exitRuntime || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "qconnect: "+want {
 		t.Fatalf("CLI exit=%d stdout=%q stderr=%q, want exit %d and %q", code, stdout.String(), stderr.String(),
 			exitRuntime, want)
 	}
 
-	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
 		`"arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	result := toolResultFrom(t, responses["1"])
@@ -786,7 +786,7 @@ func TestMCPConfirmedMutationKeepsAuditOffProtocol(t *testing.T) {
 	const message = "private-message-canary-1842"
 	registry, path := mcpSendRegistry(t)
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
+		`,"name":"qconnect.invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
 		message + `"},"confirm":true}}}` + "\n"
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{
 		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
@@ -868,7 +868,7 @@ func TestMCPCancellationStopsCoreAndSuppressesResponse(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- server.serve(context.Background(), reader) }()
 
-	call := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+	call := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	if _, err := io.WriteString(writer, call); err != nil {
 		t.Fatal(err)
 	}
@@ -911,7 +911,7 @@ func TestMCPDeadlineReturnsTimeoutToolError(t *testing.T) {
 		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
 	}, registry, &stdout, &stderr)
 	server.timeout = 20 * time.Millisecond
-	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
 		t.Fatal(err)
 	}
@@ -942,7 +942,7 @@ func TestMCPInFlightLimitStopsBeforeCore(t *testing.T) {
 		server.pending[fmt.Sprintf("%d", i)] = &mcpPending{}
 	}
 	line := `{"jsonrpc":"2.0","id":"overflow","method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.search","arguments":{}}}`
+		`,"name":"qconnect.search","arguments":{}}}`
 	server.handle(context.Background(), []byte(line))
 	responses := decodeMCPResponses(t, stdout.String())
 	response := responses[`"overflow"`]
@@ -981,9 +981,9 @@ type mcpToolResult struct {
 // Every failed tool call carries structuredContent with at least the code and the message of its text, so a
 // caller branches on the object alone, including where no code adds a detail and on the deadline.
 func TestMCPToolErrorsCarryCodeAndMessage(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	failing := func(err error) func(t *testing.T) (*capability.Registry, string) {
 		return func(t *testing.T) (*capability.Registry, string) {
 			return mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
@@ -1007,18 +1007,18 @@ func TestMCPToolErrorsCarryCodeAndMessage(t *testing.T) {
 		arguments string
 		timeout   bool
 	}{
-		{output.CodeInvalidRequest, unused, "qatlas.search", `{"cursor":"bogus"}`, false},
-		{output.CodeUnknownOperation, unused, "qatlas.describe", `{"operation":"absent.operation.get"}`, false},
-		{output.CodeUnknownConnection, unused, "qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
-		{output.CodeConfirmationRequired, mcpSendRegistry, "qatlas.invoke",
+		{output.CodeInvalidRequest, unused, "qconnect.search", `{"cursor":"bogus"}`, false},
+		{output.CodeUnknownOperation, unused, "qconnect.describe", `{"operation":"absent.operation.get"}`, false},
+		{output.CodeUnknownConnection, unused, "qconnect.describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
+		{output.CodeConfirmationRequired, mcpSendRegistry, "qconnect.invoke",
 			`{"operation":"fake.messages.send","connection":"target","arguments":{"text":"hello"}}`, false},
 		{output.CodeAuth, failing(&provider.Error{Class: provider.ClassAuth, Op: "get page", Message: "rejected"}),
-			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeNotFound, failing(&provider.Error{Class: provider.ClassNotFound, Op: "get page", Message: "absent"}),
-			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeProviderError, failing(&provider.Error{Class: provider.ClassProviderError, Op: "get page", Message: "failed"}),
-			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
-		{output.CodeTimeout, waiting, "qatlas.invoke",
+			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+		{output.CodeTimeout, waiting, "qconnect.invoke",
 			`{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, true},
 	} {
 		t.Run(string(tt.code), func(t *testing.T) {
@@ -1222,9 +1222,9 @@ func (w mcpFailWriter) Write([]byte) (int, error) { return 0, w.err }
 // A transport failure reaches an agent through two doors, and both must publish the same thing: the same
 // code, the same message, and the same stable cause. Nothing of the request may travel with it.
 func TestMCPAndCLITransportDiagnosisParity(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
-	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	t.Setenv("QCONNECT_CREDENTIAL_STORE", "none")
 	const (
 		tokenCanary = "bot-token-canary-5517"
 		hostCanary  = "wiki.internal.example"
@@ -1252,10 +1252,10 @@ func TestMCPAndCLITransportDiagnosisParity(t *testing.T) {
 	if code != exitRuntime || stdout.Len() != 0 {
 		t.Fatalf("CLI exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr.String()), "qatlas: ")
+	cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr.String()), "qconnect: ")
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary"}}}` + "\n"
+		`,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary"}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, registry, input,
 		&Options{Config: path, Redactor: redactor})
 	result := toolResultFrom(t, responses["1"])
@@ -1281,8 +1281,8 @@ func TestMCPAndCLITransportDiagnosisParity(t *testing.T) {
 // A misspelled tool, connection, or provider is refused with the closest configured or registered name, in
 // the same words on the command line and over MCP. A name that resembles nothing gets no suggestion.
 func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
-	t.Setenv("QATLAS_CONFIG", "")
-	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
 	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
 		*redact.Redactor, json.RawMessage) (any, error) {
 		return map[string]any{}, nil
@@ -1314,58 +1314,58 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 
 	// The next step of an unknown connection points to discovery, which differs between the two routes.
 	for _, tt := range []struct{ cli, mcp, want, cliStep, mcpStep string }{
-		{cli("describe", "fake.page.get"), mcp("qatlas.describe", `{"operation":"fake.page.get"}`),
+		{cli("describe", "fake.page.get"), mcp("qconnect.describe", `{"operation":"fake.page.get"}`),
 			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`, "", ""},
 		{cli("invoke", "fake.pages.get", "--connection", "primry"),
-			mcp("qatlas.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
+			mcp("qconnect.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
 			`unknown-connection: unknown connection "primry" (did you mean "primary"?); a connection is named by its name or id`,
-			"; list the configured connections with 'qatlas connections fake'",
-			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
+			"; list the configured connections with 'qconnect connections fake'",
+			"; call qconnect.describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
 		{cli("describe", "fake.pages.get", "--connection", "absent"),
-			mcp("qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`),
+			mcp("qconnect.describe", `{"operation":"fake.pages.get","connection":"absent"}`),
 			`unknown-connection: unknown connection "absent"; a connection is named by its name or id`,
-			"; list the configured connections with 'qatlas connections fake'",
-			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
+			"; list the configured connections with 'qconnect connections fake'",
+			"; call qconnect.describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
-		{cli("describe", "zzz.unrelated.tool"), mcp("qatlas.describe", `{"operation":"zzz.unrelated.tool"}`),
+		{cli("describe", "zzz.unrelated.tool"), mcp("qconnect.describe", `{"operation":"zzz.unrelated.tool"}`),
 			`unknown-operation: unknown tool "zzz.unrelated.tool"`, "", ""},
 	} {
-		if tt.cli != "qatlas: "+tt.want+tt.cliStep || tt.mcp != tt.want+tt.mcpStep {
+		if tt.cli != "qconnect: "+tt.want+tt.cliStep || tt.mcp != tt.want+tt.mcpStep {
 			t.Errorf("CLI = %q, MCP = %q, want %q with %q and %q", tt.cli, tt.mcp, tt.want, tt.cliStep, tt.mcpStep)
 		}
 	}
 	// A search names no tool, so its step names the connection overview, of the provider where it names one.
-	if got, want := mcp("qatlas.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
-		`"absent"; a connection is named by its name or id; call qatlas.search with list connections for the configured connections`; got != want {
+	if got, want := mcp("qconnect.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
+		`"absent"; a connection is named by its name or id; call qconnect.search with list connections for the configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
-	if got, want := mcp("qatlas.search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
-		`unknown connection "absent"; a connection is named by its name or id; call qatlas.search with list connections and provider fake for the `+
+	if got, want := mcp("qconnect.search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
+		`unknown connection "absent"; a connection is named by its name or id; call qconnect.search with list connections and provider fake for the `+
 		`configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
-	if got, want := cli("tools", "fake", "--connection", "absent"), `qatlas: unknown-connection: unknown `+
-		`connection "absent"; a connection is named by its name or id; list the configured connections with 'qatlas connections fake'`; got != want {
+	if got, want := cli("tools", "fake", "--connection", "absent"), `qconnect: unknown-connection: unknown `+
+		`connection "absent"; a connection is named by its name or id; list the configured connections with 'qconnect connections fake'`; got != want {
 		t.Errorf("CLI tools = %q, want %q", got, want)
 	}
 
-	if got, want := cli("tools", "fak"), `qatlas: usage: unknown tool namespace "fak" (did you mean "fake"?); `+
-		`run 'qatlas providers' to list the namespaces`; got != want {
+	if got, want := cli("tools", "fak"), `qconnect: usage: unknown tool namespace "fak" (did you mean "fake"?); `+
+		`run 'qconnect providers' to list the namespaces`; got != want {
 		t.Errorf("CLI tools = %q, want %q", got, want)
 	}
-	if got, want := cli("connections", "fak"), `qatlas: usage: unknown provider "fak" (did you mean "fake"?); `+
-		`run 'qatlas providers' to list the providers`; got != want {
+	if got, want := cli("connections", "fak"), `qconnect: usage: unknown provider "fak" (did you mean "fake"?); `+
+		`run 'qconnect providers' to list the providers`; got != want {
 		t.Errorf("CLI connections = %q, want %q", got, want)
 	}
-	if got, want := mcp("qatlas.search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
+	if got, want := mcp("qconnect.search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
 		`(did you mean "fake"?); leave the provider out to search every provider`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
 }
 
 // The MCP guide is what server/discover and initialize hand a client as instructions instead of the much
-// longer 'qatlas agents'; it must fit inside the roughly 2,048 characters such a client keeps, name the
+// longer 'qconnect agents'; it must fit inside the roughly 2,048 characters such a client keeps, name the
 // three fixed tools and the fields a caller branches or confirms on, and only document argument names the
 // fixed tools' schemas actually have.
 func TestMCPGuideFitsAndMatchesTheSchemas(t *testing.T) {
@@ -1373,7 +1373,7 @@ func TestMCPGuideFitsAndMatchesTheSchemas(t *testing.T) {
 	if length := utf8.RuneCountInString(guide); length > 2000 {
 		t.Fatalf("MCP guide is %d characters, want at most 2000", length)
 	}
-	for _, tool := range []string{"qatlas.search", "qatlas.describe", "qatlas.invoke"} {
+	for _, tool := range []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"} {
 		if !strings.Contains(guide, tool) {
 			t.Errorf("MCP guide does not name %s", tool)
 		}

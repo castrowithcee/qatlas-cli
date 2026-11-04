@@ -54,33 +54,33 @@ func nextStep(err error, r route) string {
 		if r == routeMCP {
 			return "agents do not manage credentials or the vault; ask the user"
 		}
-		return "run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"
+		return "run the command in a terminal and enter the passphrase, or manage it in 'qconnect tui'"
 	case output.CodeVaultLocked:
 		// Where a vault process runs, 'vault unlock' keeps the vault open for every later call, the
 		// broker's included; elsewhere it only opens it for itself.
 		switch {
 		case vaultProcessPlatform && r == routeMCP:
-			return "agents cannot unlock the vault; ask the user to run 'qatlas vault unlock' in a terminal, " +
+			return "agents cannot unlock the vault; ask the user to run 'qconnect vault unlock' in a terminal, " +
 				"which keeps it unlocked for later calls, then try again"
 		case vaultProcessPlatform:
-			return "run 'qatlas vault unlock' in a terminal, which keeps it unlocked for later commands, " +
+			return "run 'qconnect vault unlock' in a terminal, which keeps it unlocked for later commands, " +
 				"then try again"
 		case r == routeMCP:
 			return "agents cannot unlock the vault; ask the user to unlock it"
 		}
-		return "run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"
+		return "run 'qconnect vault unlock' in a terminal, or press ctrl+l in 'qconnect tui'"
 	case output.CodeApprovalRequired:
 		// Approving hands a secret to a connection, so it is a person's decision, never an agent's.
 		if r == routeMCP || r == routeAgent {
 			return "the change to this connection is not approved; an agent cannot approve it, ask the user"
 		}
-		return "approve the connection as it is configured now: save it in 'qatlas tui' or run " +
-			"'qatlas vault approve'"
+		return "approve the connection as it is configured now: save it in 'qconnect tui' or run " +
+			"'qconnect vault approve'"
 	case output.CodeAuth:
 		// Some providers answer a credential that lacks access with auth as well, so the step does not
 		// claim which of the two happened.
 		return "check or renew the credential of this connection with " +
-			"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+			"'qconnect credential set <credential> <role>' or in 'qconnect tui'"
 	case output.CodeUnsupportedCapability:
 		// The step is the same whatever the reason: pick a route that offers the tool, or change this one.
 		// Without a refused connection no route offers the tool at all, and nothing is left to pick.
@@ -89,11 +89,11 @@ func nextStep(err error, r route) string {
 			return ""
 		}
 		if r == routeMCP {
-			return "call qatlas.describe with operation " + unsupported.Capability +
-				" and without connection for the connections that offer it, or change the connection in 'qatlas tui'"
+			return "call qconnect.describe with operation " + unsupported.Capability +
+				" and without connection for the connections that offer it, or change the connection in 'qconnect tui'"
 		}
-		return "'qatlas describe " + unsupported.Capability + "' names the connections that offer it, " +
-			"or change the connection in 'qatlas tui'"
+		return "'qconnect describe " + unsupported.Capability + "' names the connections that offer it, " +
+			"or change the connection in 'qconnect tui'"
 	case output.CodeUnknownConnection:
 		var (
 			unknown             *capability.UnknownConnectionError
@@ -104,19 +104,19 @@ func nextStep(err error, r route) string {
 		}
 		if r == routeMCP {
 			if operation != "" {
-				return "call qatlas.describe with operation " + operation +
+				return "call qconnect.describe with operation " + operation +
 					" and without connection for the connections that can run it"
 			}
 			if provider != "" {
-				return "call qatlas.search with list connections and provider " + provider +
+				return "call qconnect.search with list connections and provider " + provider +
 					" for the configured connections"
 			}
-			return "call qatlas.search with list connections for the configured connections"
+			return "call qconnect.search with list connections for the configured connections"
 		}
 		if provider != "" {
-			return "list the configured connections with 'qatlas connections " + provider + "'"
+			return "list the configured connections with 'qconnect connections " + provider + "'"
 		}
-		return "list the configured connections with 'qatlas connections'"
+		return "list the configured connections with 'qconnect connections'"
 	}
 	return ""
 }
@@ -155,7 +155,7 @@ type errorDetail struct {
 }
 
 // unsupportedDetail is the machine-readable form of unsupported-capability: the refused connection and the
-// stable reason the configuration rule gave, the same value 'qatlas tools --all' publishes. The reason is
+// stable reason the configuration rule gave, the same value 'qconnect tools --all' publishes. The reason is
 // empty when a provider refused the request for a reason of its own.
 type unsupportedDetail struct {
 	Code       output.Code    `json:"code"`
@@ -266,7 +266,7 @@ func classifyUserError(err error) error {
 // it shows is already redacted and bounded by the core.
 func providerBlock(detail *application.ProviderDetail) string {
 	var w strings.Builder
-	header := "provider answer (untrusted, not written by qatlas)"
+	header := "provider answer (untrusted, not written by qconnect)"
 	if detail.Status != 0 {
 		header += fmt.Sprintf(", HTTP %d", detail.Status)
 	}

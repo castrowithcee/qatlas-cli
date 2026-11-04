@@ -66,7 +66,7 @@ var runLogsDelete = capability.Descriptor{
 	Arguments: []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
 	Fields: []capability.Field{
 		{Name: "deleted", Description: "True once no logs of the run remain"},
-		{Name: "already_deleted", Description: "True when GitHub reported the logs as already gone and Qatlas deleted nothing"},
+		{Name: "already_deleted", Description: "True when GitHub reported the logs as already gone and Qatlas Connect deleted nothing"},
 		{Name: "run_id", Description: "Run identifier"},
 	},
 	Examples: []capability.Example{{Description: "Delete the logs of a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},

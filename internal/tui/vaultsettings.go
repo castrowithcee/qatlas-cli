@@ -200,7 +200,7 @@ func (m *Model) vaultStateMark() string {
 	return statusMark(statusDim, text)
 }
 
-// vaultStateWarning names the one state worth a person's attention, in the same words 'qatlas vault status'
+// vaultStateWarning names the one state worth a person's attention, in the same words 'qconnect vault status'
 // uses, so the two never drift apart.
 func (m *Model) vaultStateWarning() string {
 	v := m.secrets.Vault()
@@ -326,7 +326,7 @@ func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
 }
 
 // approveOnEncrypt approves every saved connection that reads a secret the vault just encrypted, the same
-// way 'qatlas vault encrypt' does: the passphrase was proven a moment ago. It returns what to add to the
+// way 'qconnect vault encrypt' does: the passphrase was proven a moment ago. It returns what to add to the
 // outcome; a configuration that cannot be read approves nothing and says so, and the encryption stands.
 func approveOnEncrypt(store *config.Store, v *vault.Vault) string {
 	if store == nil {
@@ -453,7 +453,7 @@ func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd 
 	unlockAgain := tr(tVaultUnlockAgain)
 	return func() tea.Msg {
 		// A passphrase is changed because the old one should no longer open the vault; a vault process
-		// unlocked with it would keep the vault open regardless, so it is locked first, the way 'qatlas
+		// unlocked with it would keep the vault open regardless, so it is locked first, the way 'qconnect
 		// vault passphrase' already does.
 		note := svc.LockVaultProcess(context.Background(), "", unlockAgain)
 		return vaultActionMsg{
@@ -493,7 +493,7 @@ func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {
 	return func() tea.Msg {
 		// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
 		// therefore asked to lock, any more; it would hold the secrets until its idle timeout. Locking first
-		// mirrors 'qatlas vault decrypt'.
+		// mirrors 'qconnect vault decrypt'.
 		note := svc.LockVaultProcess(context.Background(), "", noUnlock)
 		return vaultActionMsg{action: vaultActionDecrypt, err: v.Decrypt(passphrase), procNote: note}
 	}

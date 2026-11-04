@@ -216,7 +216,7 @@ func TestWidenedModeRefusesEveryOperation(t *testing.T) {
 	}
 }
 
-// All is how 'qatlas vault migrate' reads what to carry over: every entry on disk, regardless of the
+// All is how 'qconnect vault migrate' reads what to carry over: every entry on disk, regardless of the
 // switch, and nothing for a file that was never written.
 func TestFileAll(t *testing.T) {
 	t.Run("absent file", func(t *testing.T) {

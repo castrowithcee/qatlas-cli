@@ -148,7 +148,7 @@ var formActions = []formAction{
 		summary: "Archive a form of a website. Matomo does not document what archiving does to tracking or to the " +
 			"data, or whether it can be undone", done: "archived", effect: capability.EffectUpdate},
 	{action: "delete", method: "FormAnalytics.deleteForm", op: "delete form", title: "Delete a Matomo form",
-		summary: "Delete a form of a website; Qatlas offers no way to restore it. Matomo does not document what " +
+		summary: "Delete a form of a website; Qatlas Connect offers no way to restore it. Matomo does not document what " +
 			"happens to the recorded data", done: "deleted", effect: capability.EffectDelete, listedOnly: true},
 }
 
