@@ -239,7 +239,7 @@ func TestSelectedToolsAreSavedWithoutTheEffects(t *testing.T) {
 	}
 }
 
-// Sixty tools stay reachable in the smallest supported terminal: the picker scrolls, filters and ticks.
+// Sixty tools stay reachable in the smallest supported terminal: the picker scrolls, filters and ticks. They share one resource, so the list stays flat.
 func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := reg.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
@@ -249,7 +249,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		operations = append(operations, capability.Operation{
 			Descriptor: capability.Descriptor{
-				ID: fmt.Sprintf("fake.object%02d.list", i), Version: 1, Provider: "fake",
+				ID: fmt.Sprintf("fake.thing.object%02d", i), Version: 1, Provider: "fake",
 				Description: "List objects",
 				Risk: capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 					Confirmation: capability.ConfirmationNone, DataSensitivity: "test"},
@@ -284,18 +284,18 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 			t.Fatalf("%q is not on screen:\n%s", want, view)
 		}
 	}
-	check("fake.object00.list")
+	check("fake.thing.object00")
 	press(t, m, "end")
-	check("fake.object59.list")
+	check("fake.thing.object59")
 	press(t, m, " ")
-	check("[x] fake.object59.list")
+	check("[x] fake.thing.object59")
 	typeText(t, m, "object42")
 	check("1/1 (60 total)")
 	press(t, m, " ")
-	check("[x] fake.object42.list")
+	check("[x] fake.thing.object42")
 	press(t, m, "enter")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	if got := m.fieldValue(toolListLabel); got != "fake.object42.list, fake.object59.list" {
+	if got := m.fieldValue(toolListLabel); got != "fake.thing.object42, fake.thing.object59" {
 		t.Fatalf("tool list = %q", got)
 	}
 	pump(t, m, "f2")
@@ -303,7 +303,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 		t.Fatalf("save failed: %s", m.fail)
 	}
 	if got := savedTools(t, path, reg, "route"); !reflect.DeepEqual(got,
-		[]string{"fake.object42.list", "fake.object59.list"}) {
+		[]string{"fake.thing.object42", "fake.thing.object59"}) {
 		t.Fatalf("saved tools = %#v", got)
 	}
 }

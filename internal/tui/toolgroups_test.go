@@ -188,8 +188,8 @@ func TestTheGroupedPickerFitsNarrowTerminals(t *testing.T) {
 	}
 }
 
-// A provider without groups keeps the flat picker.
-func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
+// A provider without groups of its own is grouped by resource.
+func TestAProviderWithoutGroupsIsGroupedByResource(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := todoist.Register(reg); err != nil {
 		t.Fatal(err)
@@ -200,8 +200,8 @@ func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
 	selectChoice(t, m, accessTools)
 	focusField(t, m, toolListLabel)
 	press(t, m, "enter")
-	if m.screen != screenPicker || m.pickerGroups != nil || strings.Contains(screenOf(m), "all groups") {
-		t.Fatalf("a flat provider got a grouped picker:\n%s", screenOf(m))
+	if m.screen != screenPicker || m.pickerGroups == nil || !strings.Contains(screenOf(m), "tasks (") {
+		t.Fatalf("a provider without groups did not get a picker grouped by resource:\n%s", screenOf(m))
 	}
 }
 
@@ -210,5 +210,58 @@ func cursorTo(t *testing.T, m *Model, name string) {
 	t.Helper()
 	if !m.picker.selectName(name) {
 		t.Fatalf("%q is not shown in the picker", name)
+	}
+}
+
+func TestToolGroupsDeriveFromTheResourceSegment(t *testing.T) {
+	tools := func(ids ...string) []config.ToolMetadata {
+		var out []config.ToolMetadata
+		for _, id := range ids {
+			out = append(out, config.ToolMetadata{ID: id})
+		}
+		return out
+	}
+	titles := func(g *toolGroups) []string {
+		var out []string
+		for _, group := range g.groups {
+			out = append(out, group.Title)
+		}
+		return out
+	}
+	cases := []struct {
+		name     string
+		metadata config.ProviderMetadata
+		choices  []string
+		want     []string
+		members  map[string][]string
+	}{
+		{"plain", config.ProviderMetadata{ID: "todoist", Tools: tools("todoist.task.get", "todoist.project.list", "todoist.task.add")},
+			[]string{"todoist.task.get", "todoist.project.list", "todoist.task.add"}, []string{"project", "task"}, nil},
+		{"two-part id", config.ProviderMetadata{ID: "infomaniak.drive", Tools: tools("infomaniak.drive.files.get", "infomaniak.drive.search.list", "infomaniak.drive.files.list")},
+			[]string{"infomaniak.drive.files.get", "infomaniak.drive.search.list", "infomaniak.drive.files.list"}, []string{"files", "search"}, nil},
+		{"unregistered", config.ProviderMetadata{ID: "todoist", Tools: tools("todoist.task.get", "todoist.project.list")},
+			[]string{"todoist.task.get", "todoist.project.list", "todoist.gone.x"}, []string{"project", "task", "Not registered"},
+			map[string][]string{unlistedGroup: {"todoist.gone.x"}}},
+		{"explicit groups", config.ProviderMetadata{ID: "todoist", Groups: []config.ToolGroup{{ID: "z", Title: "Z"}, {ID: "a", Title: "A"}},
+			Tools: []config.ToolMetadata{{ID: "todoist.task.get", Group: "z"}, {ID: "todoist.project.list", Group: "a"}}},
+			[]string{"todoist.task.get", "todoist.project.list"}, []string{"Z", "A"}, nil},
+	}
+	for _, c := range cases {
+		g := newToolGroups(c.metadata, c.choices)
+		if g == nil || !reflect.DeepEqual(titles(g), c.want) {
+			t.Fatalf("%s: groups = %v", c.name, g)
+		}
+		for id, want := range c.members {
+			if !reflect.DeepEqual(g.members[id], want) {
+				t.Fatalf("%s: members of %s = %v", c.name, id, g.members[id])
+			}
+		}
+		if len(g.all()) != len(c.choices) {
+			t.Fatalf("%s: tools lost or doubled: %v", c.name, g.all())
+		}
+	}
+	one := config.ProviderMetadata{ID: "todoist", Tools: tools("todoist.task.get", "todoist.task.add")}
+	if g := newToolGroups(one, []string{"todoist.task.get", "todoist.task.add"}); g != nil {
+		t.Fatalf("a single resource must stay flat, got %v", g.groups)
 	}
 }
