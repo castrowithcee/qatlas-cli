@@ -14,7 +14,7 @@ func TestBareQatlasOpensTheEditorOnAPseudoTerminal(t *testing.T) {
 		t.Skip("the acceptance run starts the editor on a pseudo-terminal")
 	}
 	r := newUpdateRigArgs(t, "", "")
-	r.wait(0, "Update available v1.0.0 → v2.0.0")
+	r.wait(0, "Update available v3.0.0 → v3.1.0")
 	if got := altScreenOn; !strings.Contains(r.bytes(), got) {
 		t.Error("the editor did not enter the alternate screen")
 	}

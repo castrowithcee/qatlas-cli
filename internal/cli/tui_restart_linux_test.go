@@ -54,7 +54,7 @@ const (
 )
 
 // updateRig is an editor with an unlocked-able vault running on a pseudo-terminal, beside a release server
-// that offers v2.0.0 as the program it is given.
+// that offers v3.1.0 as the program it is given.
 type updateRig struct {
 	t       *testing.T
 	bin     string
@@ -85,7 +85,7 @@ func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *upda
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	bin := filepath.Join(dir, "prefix", "bin", "qatlas")
+	bin := filepath.Join(dir, "prefix", "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -98,15 +98,15 @@ func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *upda
 	}
 
 	// The release: a program that starts this test binary again, as the newer version.
-	const latest = "v2.0.0"
+	const latest = "v3.1.0"
 	if program == "" {
-		program = fmt.Sprintf("#!/bin/sh\nexport %s=v2.0.0\nexec %q \"$@\"\n", tuiVersionEnv, self)
+		program = fmt.Sprintf("#!/bin/sh\nexport %s=v3.1.0\nexec %q \"$@\"\n", tuiVersionEnv, self)
 	}
-	archiveName := fmt.Sprintf("qatlas_%s_linux_%s.tar.gz", latest, runtime.GOARCH)
+	archiveName := fmt.Sprintf("qconnect_%s_linux_%s.tar.gz", latest, runtime.GOARCH)
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
 	tw := tar.NewWriter(gz)
-	for name, content := range map[string]string{"bin/qatlas": program, "share/man/man1/qatlas.1": ".TH QATLAS 1\n"} {
+	for name, content := range map[string]string{"bin/qconnect": program, "share/man/man1/qconnect.1": ".TH QCONNECT 1\n"} {
 		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(content))}); err != nil {
 			t.Fatal(err)
 		}
@@ -124,11 +124,11 @@ func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *upda
 			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": latest, "assets": []map[string]string{
 				{"name": archiveName, "browser_download_url": server.URL + "/" + archiveName},
 				{"name": "checksums.txt", "browser_download_url": server.URL + "/checksums.txt"},
-				{"name": "checksums.txt.sig", "browser_download_url": server.URL + "/checksums.txt.sig"},
+				{"name": release.SignatureAsset, "browser_download_url": server.URL + "/" + release.SignatureAsset},
 			}})
 		case "/checksums.txt":
 			_, _ = fmt.Fprintf(w, "%s  %s\n", hex.EncodeToString(sum[:]), archiveName)
-		case "/checksums.txt.sig":
+		case "/" + release.SignatureAsset:
 			_, _ = w.Write(releasetest.Sign(t, signer, release.Namespace, "sha512",
 				[]byte(fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), archiveName))))
 		case "/" + archiveName:
@@ -166,7 +166,7 @@ func newUpdateRigArgs(t *testing.T, program, prefs string, args ...string) *upda
 	cmd := exec.Command(bin, args...)
 	cmd.Env = []string{"HOME=" + dir, "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color",
 		"QCONNECT_CONFIG=" + configPath, "XDG_RUNTIME_DIR=" + runtimeDir, secret.StoreSelector + "=none",
-		runAsTUIEnv + "=1", tuiVersionEnv + "=v1.0.0", tuiReleasesEnv + "=" + server.URL,
+		runAsTUIEnv + "=1", tuiVersionEnv + "=v3.0.0", tuiReleasesEnv + "=" + server.URL,
 		tuiKeyEnv + "=" + string(ssh.MarshalAuthorizedKey(signer.PublicKey()))}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
@@ -230,7 +230,7 @@ func (r *updateRig) typeKeys(s string) {
 func (r *updateRig) startUpdate() int {
 	t := r.t
 	t.Helper()
-	at := r.wait(0, "Update available v1.0.0 → v2.0.0")
+	at := r.wait(0, "Update available v3.0.0 → v3.1.0")
 	r.typeKeys("\x0c") // ctrl+l unlocks the vault
 	at = r.wait(at, "Unlock vault")
 	for deadline := time.Now().Add(10 * time.Second); !echoDisabled(r.master); time.Sleep(10 * time.Millisecond) {
@@ -255,7 +255,7 @@ func (r *updateRig) startUpdate() int {
 			if at > len(s) {
 				continue
 			}
-			asked, wait := strings.LastIndex(s[at:], "Update qconnect to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
+			asked, wait := strings.LastIndex(s[at:], "Update qconnect to v3.1.0?"), strings.LastIndex(s[at:], "Wait until")
 			question, refused = asked >= 0 && asked > wait, wait >= 0 && wait > asked
 			if question || refused {
 				at = len(s)
@@ -282,7 +282,7 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	}
 	r := newUpdateRig(t, "", "")
 	at := r.startUpdate()
-	r.wait(at, "qconnect updated from v1.0.0 to v2.0.0")
+	r.wait(at, "qconnect updated from v3.0.0 to v3.1.0")
 	at = r.wait(at, "Unlock vault")
 	if content, err := os.ReadFile(r.bin); err != nil || string(content) != r.program {
 		t.Errorf("the installed program is not the release: %v", err)
@@ -332,7 +332,7 @@ func TestTUITakesTheMouseOnlyWhenThePreferenceAllowsIt(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			r := newUpdateRig(t, "", c.prefs)
-			r.wait(0, "Update available v1.0.0 → v2.0.0")
+			r.wait(0, "Update available v3.0.0 → v3.1.0")
 			if got := strings.Contains(r.bytes(), mouseOn); got != c.want {
 				t.Errorf("mouse mode sequence present = %v, want %v", got, c.want)
 			}
@@ -364,7 +364,7 @@ func TestTUIKeepsTheMouseAfterAFailedRestart(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			// A program whose interpreter does not exist: it is a regular executable file, so the editor tries
 			// the replacement, and the replacement fails.
-			r := newUpdateRig(t, "#!/nonexistent/qatlas-interpreter\n", c.prefs)
+			r := newUpdateRig(t, "#!/nonexistent/qconnect-interpreter\n", c.prefs)
 			at := r.startUpdate()
 			r.wait(at, "restart failed")
 			// The failure is shown once the terminal is the editor's again; the mouse follows with it.

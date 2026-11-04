@@ -69,15 +69,36 @@ func removeLeftovers(ops fileOps, executable string) {
 	}
 }
 
-// CleanupLeftovers removes the qatlas.exe.old that a Windows update left beside the running program. It
-// does nothing elsewhere, is silent, and a failure is no error: the file is retried at the next start.
+// retire removes path, which on Windows may be a running executable: such a file cannot be removed but can
+// be renamed, so it is moved aside first, as replaceRunning does, and removed at the next start or update.
+// It is best effort and silent.
+func retire(ops fileOps, path string) {
+	old := path + ".old"
+	if err := ops.remove(old); err != nil && !errors.Is(err, os.ErrNotExist) {
+		old = path + ".old-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	if err := ops.renameRetrying(path, old); err != nil {
+		return
+	}
+	_ = ops.remove(old)
+}
+
+// CleanupLeftovers removes the qconnect.exe.old and qatlas.exe.old that a Windows update left beside the
+// running program. It does nothing elsewhere, is silent, and a failure is no error: the file is retried at
+// the next start.
 func CleanupLeftovers() {
 	if runtime.GOOS != "windows" {
 		return
 	}
 	executable, err := os.Executable()
-	if err != nil || !strings.EqualFold(filepath.Base(executable), "qatlas.exe") {
+	if err != nil {
 		return
 	}
-	removeLeftovers(osFileOps, executable)
+	base := filepath.Base(executable)
+	if !strings.EqualFold(base, currentName+".exe") && !strings.EqualFold(base, formerName+".exe") {
+		return
+	}
+	for _, name := range []string{currentName + ".exe", formerName + ".exe"} {
+		removeLeftovers(osFileOps, filepath.Join(filepath.Dir(executable), name))
+	}
 }

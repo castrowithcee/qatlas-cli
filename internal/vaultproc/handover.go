@@ -302,8 +302,9 @@ func (s *Server) snapshot() (vault.Snapshot, bool) {
 }
 
 // verifyRelease checks the release files the way 'qconnect update' does, by itself: the signature over
-// checksums.txt by one of keys, the archive's checksum listed there, and then the hash of the program in the
-// archive, which it returns. The error never reaches a client.
+// checksums.txt by one of keys, under the namespace of the version the archive name carries, the archive's
+// checksum listed there, and then the hash of the program in the archive, which it returns. The error never
+// reaches a client.
 func verifyRelease(files ReleaseFiles, keys []ssh.PublicKey) (string, error) {
 	name := files.ArchiveName
 	if name == "" || len(name) > 255 || name != filepath.Base(name) {
@@ -317,7 +318,7 @@ func verifyRelease(files ReleaseFiles, keys []ssh.PublicKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := release.VerifyChecksums(checksums, signature, keys); err != nil {
+	if err := release.VerifyRelease(checksums, signature, name, keys); err != nil {
 		return "", err
 	}
 	want, err := release.ChecksumFor(checksums, name)

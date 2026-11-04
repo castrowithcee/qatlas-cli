@@ -15,7 +15,6 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
 	"github.com/castrowithcee/qatlas-connect/internal/release/releasetest"
 )
 
@@ -29,7 +28,11 @@ type fixture struct {
 // multiReleaseServer serves the paginated release list, single releases by tag, and their assets.
 func multiReleaseServer(t *testing.T, signer ssh.Signer, fixtures []fixture, pageRequests *int) *httptest.Server {
 	t.Helper()
-	archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
+	archives := map[bool][]byte{
+		false: releaseArchive(t, []byte("new-binary"), []byte("new-manpage")),
+		true:  programArchive(t, "qatlas", []byte("new-binary"), []byte("new-manpage")),
+	}
+	archiveOf := func(tag string) []byte { return archives[layoutOf(t, tag).Legacy] }
 	byTag := map[string]fixture{}
 	for _, f := range fixtures {
 		byTag[f.tag] = f
@@ -41,7 +44,7 @@ func multiReleaseServer(t *testing.T, signer ssh.Signer, fixtures []fixture, pag
 			{"name": "checksums.txt", "url": server.URL + "/checksums/" + f.tag},
 		}
 		if !f.unsigned {
-			assets = append(assets, map[string]string{"name": "checksums.txt.sig", "url": server.URL + "/signature/" + f.tag})
+			assets = append(assets, map[string]string{"name": layoutOf(t, f.tag).SignatureAsset, "url": server.URL + "/signature/" + f.tag})
 		}
 		return map[string]any{"tag_name": f.tag, "prerelease": f.prerelease, "draft": f.draft, "assets": assets}
 	}
@@ -67,16 +70,17 @@ func multiReleaseServer(t *testing.T, signer ssh.Signer, fixtures []fixture, pag
 			}
 			_ = json.NewEncoder(w).Encode(describe(f))
 		case strings.HasPrefix(path, "/asset/"):
-			_, _ = w.Write(archive)
+			_, _ = w.Write(archiveOf(strings.TrimPrefix(path, "/asset/")))
 		case strings.HasPrefix(path, "/checksums/"):
-			_, _ = w.Write(checksumsOf(archive, strings.TrimPrefix(path, "/checksums/")))
+			tag := strings.TrimPrefix(path, "/checksums/")
+			_, _ = w.Write(checksumsOf(archiveOf(tag), tag))
 		case strings.HasPrefix(path, "/signature/"):
 			tag := strings.TrimPrefix(path, "/signature/")
-			sum := checksumsOf(archive, tag)
+			sum := checksumsOf(archiveOf(tag), tag)
 			if byTag[tag].badSignature {
 				sum = append([]byte("x"), sum...)
 			}
-			_, _ = w.Write(releasetest.Sign(t, signer, releaseverify.Namespace, "sha512", sum))
+			_, _ = w.Write(releasetest.Sign(t, signer, layoutOf(t, tag).Namespace, "sha512", sum))
 		default:
 			http.NotFound(w, r)
 		}
@@ -209,8 +213,8 @@ func TestListStopsAtThePageLimit(t *testing.T) {
 
 func newTargetClient(t *testing.T, server *httptest.Server, signer ssh.Signer, version string) (*Client, string) {
 	t.Helper()
-	prefix, executable := installedPrefix(t)
-	_ = prefix
+	// The versions here predate the rename, so the installation is still called qatlas.
+	_, executable := installedPrefixNamed(t, "qatlas")
 	return &Client{
 		BaseURL: server.URL, HTTPClient: server.Client(), Version: version,
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,

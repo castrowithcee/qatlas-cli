@@ -298,7 +298,9 @@ func EndVaultProcess(err error) string {
 		if errors.As(err, &peer) {
 			return fmt.Sprintf("end it with 'taskkill /F /PID %d'", peer.PID)
 		}
-		return "find it with 'tasklist /FI \"IMAGENAME eq qatlas.exe\"' and end it with 'taskkill /F /PID <pid>'"
+		// Until the next major release the program may also run as qatlas.exe.
+		return "find it with 'tasklist /FI \"IMAGENAME eq qconnect.exe\"' or 'tasklist /FI \"IMAGENAME eq qatlas.exe\"' " +
+			"and end it with 'taskkill /F /PID <pid>'"
 	}
 	if errors.As(err, &peer) {
 		return fmt.Sprintf("end it with 'kill %d'", peer.PID)

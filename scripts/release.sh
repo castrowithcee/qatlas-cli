@@ -34,28 +34,45 @@ darwin amd64
 darwin arm64
 windows amd64'
 
+# Each target is built once. The same binary goes into the qconnect archive and, until the next major release,
+# into an archive under the old name qatlas in the layout the previous updater expects (bin/qatlas,
+# share/man/man1/qatlas.1, share/doc/qatlas/).
+pack() {
+	# pack <stage> <archive> <windows|unix>
+	if [ "$3" = windows ]; then
+		(cd "$1" && zip -q -r "$output/$2" .)
+	else
+		tar -C "$1" -czf "$output/$2" .
+	fi
+}
+
 printf '%s\n' "$targets" | while read -r goos goarch; do
 	stage="$work/stage-$goos-$goarch"
-	mkdir -p "$stage/bin"
-	binary=qatlas
-	archive="qatlas_${version}_${goos}_${goarch}.tar.gz"
+	legacy="$work/legacy-$goos-$goarch"
+	mkdir -p "$stage/bin" "$legacy/bin"
+	binary=qconnect
+	legacy_binary=qatlas
+	ext=tar.gz
 	if [ "$goos" = windows ]; then
-		binary=qatlas.exe
-		archive="qatlas_${version}_${goos}_${goarch}.zip"
+		binary=qconnect.exe
+		legacy_binary=qatlas.exe
+		ext=zip
 	fi
 
 	CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath \
 		-ldflags "-s -w -X github.com/castrowithcee/qatlas-connect/internal/cli.version=$version" \
 		-o "$stage/bin/$binary" .
-	mkdir -p "$stage/share/doc/qatlas"
-	cp LICENSE "$stage/share/doc/qatlas/LICENSE"
+	cp "$stage/bin/$binary" "$legacy/bin/$legacy_binary"
+	mkdir -p "$stage/share/doc/qconnect" "$legacy/share/doc/qatlas"
+	cp LICENSE "$stage/share/doc/qconnect/LICENSE"
+	cp LICENSE "$legacy/share/doc/qatlas/LICENSE"
 	if [ "$goos" != windows ]; then
-		mkdir -p "$stage/share/man/man1"
+		mkdir -p "$stage/share/man/man1" "$legacy/share/man/man1"
 		cp "$man_dir"/*.1 "$stage/share/man/man1/"
-		tar -C "$stage" -czf "$output/$archive" .
-	else
-		(cd "$stage" && zip -q -r "$output/$archive" .)
+		cp "$man_dir/qconnect.1" "$legacy/share/man/man1/qatlas.1"
 	fi
+	pack "$stage" "qconnect_${version}_${goos}_${goarch}.$ext" "$goos"
+	pack "$legacy" "qatlas_${version}_${goos}_${goarch}.$ext" "$goos"
 done
 
 # The installers are release assets and are listed in checksums.txt, so the signature covers them. install.sh
@@ -67,7 +84,7 @@ if [ -f "$scripts_dir/install.ps1" ]; then
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
-	(cd "$output" && sha256sum qatlas_* install.*) > "$output/checksums.txt"
+	(cd "$output" && sha256sum qconnect_* qatlas_* install.*) > "$output/checksums.txt"
 else
-	(cd "$output" && shasum -a 256 qatlas_* install.*) > "$output/checksums.txt"
+	(cd "$output" && shasum -a 256 qconnect_* qatlas_* install.*) > "$output/checksums.txt"
 fi

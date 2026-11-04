@@ -58,7 +58,7 @@ func withChosenProgram(t *testing.T, program string) {
 	t.Cleanup(func() { chosenProgram = original })
 }
 
-// run runs 'qconnect update --to v0.31.0' with args against the fixture and returns the exit code, stderr, and the
+// run runs 'qconnect update --to v2.3.0' with args against the fixture and returns the exit code, stderr, and the
 // installed program.
 func (f *rollbackFixture) run(t *testing.T, tweak func(*selfupdate.Client), args ...string) (int, string, string) {
 	t.Helper()
@@ -67,7 +67,7 @@ func (f *rollbackFixture) run(t *testing.T, tweak func(*selfupdate.Client), args
 		tweak(updater)
 	}
 	code, _, stderr := runWithInput(t, &Options{Updater: updater}, "",
-		append([]string{"update", "--config", f.config, "--to", "v0.31.0"}, args...)...)
+		append([]string{"update", "--config", f.config, "--to", "v2.3.0"}, args...)...)
 	data, _ := os.ReadFile(f.executable)
 	return code, stderr, string(data)
 }
@@ -191,7 +191,7 @@ func TestRollbackWithoutTheFlagNamesTheBackupAndChangesNothing(t *testing.T) {
 	if code != exitUsage || program != "old-program" || f.replaced != 0 {
 		t.Fatalf("exit code = %d, stderr = %q, program %q, replaced %d", code, stderr, program, f.replaced)
 	}
-	for _, want := range []string{"v0.31.0", "does not read the current configuration", newestReadable,
+	for _, want := range []string{"v2.3.0", "does not read the current configuration", newestReadable,
 		"2026-03-01 10:00:00 UTC", "--restore-backup", "nothing was changed"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("stderr lacks %q: %q", want, stderr)
@@ -240,8 +240,8 @@ func TestRollbackAsksForTheProgramAndSeparatelyForTheRestore(t *testing.T) {
 				}
 			}
 			if len(asked) == 2 {
-				for _, want := range []string{"v0.31.0 does not read the current configuration", newestReadable,
-					"2026-03-01 10:00:00 UTC", "missing in v0.31.0 but kept in that backup"} {
+				for _, want := range []string{"v2.3.0 does not read the current configuration", newestReadable,
+					"2026-03-01 10:00:00 UTC", "missing in v2.3.0 but kept in that backup"} {
 					if !strings.Contains(asked[1], want) {
 						t.Errorf("restore question lacks %q: %q", want, asked[1])
 					}

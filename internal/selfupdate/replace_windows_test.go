@@ -23,8 +23,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// runningInstallation copies this test program to <prefix>\bin\qatlas.exe and starts it, so the file is a
-// running executable the way an installed qatlas is during an update.
+// runningInstallation copies this test program to <prefix>\bin\qconnect.exe and starts it, so the file is a
+// running executable the way an installed qconnect is during an update.
 func runningInstallation(t *testing.T) (executable string, stop func()) {
 	t.Helper()
 	self, err := os.Executable()
@@ -35,7 +35,7 @@ func runningInstallation(t *testing.T) (executable string, stop func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	executable = filepath.Join(t.TempDir(), "bin", "qatlas.exe")
+	executable = filepath.Join(t.TempDir(), "bin", "qconnect.exe")
 	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestInstallReplacesRunningExecutable(t *testing.T) {
 		t.Fatal("overwriting a running executable succeeded")
 	}
 	c := &Client{Executable: executable}
-	if err := c.install(context.Background(), payload{executable: []byte("new-binary")}, "windows", Release{}); err != nil {
+	if err := c.install(context.Background(), payload{executable: []byte("new-binary")}, "windows", layoutOf(t, "v3.0.0"), Release{}); err != nil {
 		t.Fatal(err)
 	}
 	assertFile(t, executable, "new-binary")
@@ -97,7 +97,7 @@ func TestInstallOnWindowsKeepsRunningExecutableWhenMoveFails(t *testing.T) {
 	if err := os.WriteFile(staged, []byte("new"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	r.failRename["staged>qatlas.exe"] = os.ErrPermission
+	r.failRename["staged>qconnect.exe"] = os.ErrPermission
 	if err := replaceRunning(r.ops(), staged, executable); err == nil {
 		t.Fatal("want error")
 	}
@@ -110,7 +110,7 @@ func TestInstallOnWindowsKeepsRunningExecutableWhenMoveFails(t *testing.T) {
 func TestLeftoverOfRunningProgramIsRemovedAfterItEnds(t *testing.T) {
 	executable, stop := runningInstallation(t)
 	c := &Client{Executable: executable}
-	if err := c.install(context.Background(), payload{executable: []byte("v2")}, "windows", Release{}); err != nil {
+	if err := c.install(context.Background(), payload{executable: []byte("v2")}, "windows", layoutOf(t, "v3.0.0"), Release{}); err != nil {
 		t.Fatal(err)
 	}
 	// While the old program runs, its file cannot be removed.
@@ -129,11 +129,11 @@ func TestLeftoverOfRunningProgramIsRemovedAfterItEnds(t *testing.T) {
 func TestNextUpdateRemovesLeftover(t *testing.T) {
 	executable, stop := runningInstallation(t)
 	c := &Client{Executable: executable}
-	if err := c.install(context.Background(), payload{executable: []byte("v2")}, "windows", Release{}); err != nil {
+	if err := c.install(context.Background(), payload{executable: []byte("v2")}, "windows", layoutOf(t, "v3.0.0"), Release{}); err != nil {
 		t.Fatal(err)
 	}
 	stop()
-	if err := c.install(context.Background(), payload{executable: []byte("v3")}, "windows", Release{}); err != nil {
+	if err := c.install(context.Background(), payload{executable: []byte("v3")}, "windows", layoutOf(t, "v3.0.0"), Release{}); err != nil {
 		t.Fatal(err)
 	}
 	assertFile(t, executable, "v3")

@@ -35,7 +35,7 @@ func TestUpdateToAnOlderVersionRestoresABackupItReads(t *testing.T) {
 		t.Skip("the acceptance run builds the binary twice")
 	}
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "prefix", "bin", "qatlas")
+	bin := filepath.Join(dir, "prefix", "bin", "qconnect")
 	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -43,15 +43,15 @@ func TestUpdateToAnOlderVersionRestoresABackupItReads(t *testing.T) {
 	signer := releasetest.NewSigner(t)
 	keyLine := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
 	var archive, checksums []byte
-	asset := fmt.Sprintf("qatlas_v1.0.0_linux_%s.tar.gz", runtime.GOARCH)
+	asset := fmt.Sprintf("qconnect_v3.0.0_linux_%s.tar.gz", runtime.GOARCH)
 	var releases *httptest.Server
 	releases = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/releases/tags/v1.0.0":
-			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.0.0", "assets": []map[string]string{
+		case "/releases/tags/v3.0.0":
+			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v3.0.0", "assets": []map[string]string{
 				{"name": asset, "url": releases.URL + "/asset"},
 				{"name": "checksums.txt", "url": releases.URL + "/checksums"},
-				{"name": "checksums.txt.sig", "url": releases.URL + "/signature"},
+				{"name": release.SignatureAsset, "url": releases.URL + "/signature"},
 			}})
 		case "/asset":
 			_, _ = w.Write(archive)
@@ -77,9 +77,9 @@ func TestUpdateToAnOlderVersionRestoresABackupItReads(t *testing.T) {
 			t.Fatalf("building the binary: %v", err)
 		}
 	}
-	build(bin, "v2.0.0")
+	build(bin, "v3.1.0")
 	older := filepath.Join(dir, "older")
-	build(older, "v1.0.0")
+	build(older, "v3.0.0")
 	program, err := os.ReadFile(older)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestUpdateToAnOlderVersionRestoresABackupItReads(t *testing.T) {
 	for _, entry := range []struct {
 		name string
 		body []byte
-	}{{"bin/qatlas", program}, {"share/man/man1/qatlas.1", []byte(".TH QATLAS 1\n")}} {
+	}{{"bin/qconnect", program}, {"share/man/man1/qconnect.1", []byte(".TH QCONNECT 1\n")}} {
 		if err := tw.WriteHeader(&tar.Header{Name: entry.name, Mode: 0o755, Size: int64(len(entry.body)), Typeflag: tar.TypeReg}); err != nil {
 			t.Fatal(err)
 		}
@@ -151,7 +151,7 @@ defaults:
 	original := installed()
 
 	// Without the flag the rollback offers the backup and changes nothing.
-	code, _, stderr := c.run(t, "update", "--to", "v1.0.0", "--yes")
+	code, _, stderr := c.run(t, "update", "--to", "v3.0.0", "--yes")
 	if code == 0 || !strings.Contains(stderr, "config-20260201T100000Z-000.yaml") ||
 		!strings.Contains(stderr, "--restore-backup") || !strings.Contains(stderr, "nothing was changed") {
 		t.Fatalf("update without the flag: exit %d, stderr %q", code, stderr)
@@ -166,8 +166,8 @@ defaults:
 		t.Fatalf("the backups changed: %d files", len(entries))
 	}
 
-	code, stdout, stderr := c.run(t, "update", "--to", "v1.0.0", "--yes", "--restore-backup", "--output", "json")
-	if code != 0 || !strings.Contains(stdout, `"updated":true`) || !strings.Contains(stdout, `"latest":"v1.0.0"`) {
+	code, stdout, stderr := c.run(t, "update", "--to", "v3.0.0", "--yes", "--restore-backup", "--output", "json")
+	if code != 0 || !strings.Contains(stdout, `"updated":true`) || !strings.Contains(stdout, `"latest":"v3.0.0"`) {
 		t.Fatalf("update with the flag: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	if !bytes.Equal(installed(), program) {

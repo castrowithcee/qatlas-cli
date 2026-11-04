@@ -305,7 +305,7 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 		"'qconnect tui' and 'qconnect web'"}
 	if runtime.GOOS == "windows" {
 		// Windows has no vault process; the question names the rename and the processes that keep running.
-		wants = []string{"Update qconnect to v0.5.0?", "renamed to qatlas.exe.old", "'qconnect tui' and 'qconnect web'"}
+		wants = []string{"Update qconnect to v0.5.0?", "renamed to qconnect.exe.old", "'qconnect tui' and 'qconnect web'"}
 	}
 	for _, want := range wants {
 		if !strings.Contains(view, want) {

@@ -1,5 +1,6 @@
-// Package release verifies the integrity data of a Qatlas CLI release without network access: the
-// signature over checksums.txt, the archive checksum it lists, and the hash of the program inside an archive.
+// Package release verifies the integrity data of a qconnect release without network access: the signature
+// over checksums.txt, the archive checksum it lists, and the hash of the program inside an archive. It also
+// names the files of a release by its version.
 package release
 
 import (
@@ -19,8 +20,28 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Namespace is the SSHSIG namespace every release signature is made for.
-const Namespace = "qatlas-release"
+const (
+	// Namespace is the SSHSIG namespace of the signature a release after LastLegacyVersion is verified with,
+	// published as SignatureAsset.
+	Namespace = "qatlas-connect-release"
+	// SignatureAsset is the release file that holds the signature under Namespace.
+	SignatureAsset = "checksums.txt.qconnect.sig"
+
+	// LegacyNamespace and LegacySignatureAsset are the signature of the releases up to LastLegacyVersion, the
+	// only one their updaters check. A rollback to such a release is verified with it. A later release
+	// carries it for those updaters as well, made with the same key, but is never verified with it here.
+	// Transition until the next major release.
+	LegacyNamespace      = "qatlas-release"
+	LegacySignatureAsset = "checksums.txt.sig"
+
+	// LastLegacyVersion is the newest release before the rename: the last one whose assets are named qatlas
+	// and that is signed under LegacyNamespace only. Every later version, prereleases included, ships
+	// qconnect assets and is verified under Namespace, whatever number the first of them gets. The version a
+	// release is checked for is the one asked for, never inferred from the files a release offers, which an
+	// attacker can leave out; the signed checksums.txt binds it, since it lists each archive by a name that
+	// carries the version.
+	LastLegacyVersion = "v2.2.0"
+)
 
 const (
 	sshsigMagic    = "SSHSIG"
@@ -60,9 +81,87 @@ func TrustedKeys() []ssh.PublicKey {
 	return keys
 }
 
-// VerifyChecksums checks that signature is a valid SSHSIG over checksums for the release namespace, made
-// by exactly one of keys. Only Ed25519 keys and the hashes sha256 and sha512 are accepted.
-func VerifyChecksums(checksums, signature []byte, keys []ssh.PublicKey) error {
+// Layout names the files of a release by its version: up to LastLegacyVersion the former names, after it
+// the current ones.
+type Layout struct {
+	// Legacy marks a release up to LastLegacyVersion. Transition until the next major release.
+	Legacy bool
+	// Program is the name of the program, which also names its archive and manual page.
+	Program string
+	// SignatureAsset is the release file that holds the signature, and Namespace its SSHSIG namespace.
+	SignatureAsset, Namespace string
+}
+
+// LayoutOf returns the layout of the release version.
+func LayoutOf(version string) (Layout, error) {
+	v, err := ParseVersion(version)
+	if err != nil {
+		return Layout{}, err
+	}
+	if v.Compare(lastLegacy()) <= 0 {
+		return Layout{Legacy: true, Program: "qatlas", SignatureAsset: LegacySignatureAsset, Namespace: LegacyNamespace}, nil
+	}
+	return Layout{Program: "qconnect", SignatureAsset: SignatureAsset, Namespace: Namespace}, nil
+}
+
+func lastLegacy() Version {
+	v, err := ParseVersion(LastLegacyVersion)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+// ArchiveName is the name of the archive of version for goos and goarch: a .zip for Windows, else a .tar.gz.
+func (l Layout) ArchiveName(version, goos, goarch string) string {
+	extension := ".tar.gz"
+	if goos == "windows" {
+		extension = ".zip"
+	}
+	return fmt.Sprintf("%s_%s_%s_%s%s", l.Program, version, goos, goarch, extension)
+}
+
+// ProgramFile is the program's path inside an archive for goos.
+func (l Layout) ProgramFile(goos string) string {
+	if goos == "windows" {
+		return "bin/" + l.Program + ".exe"
+	}
+	return "bin/" + l.Program
+}
+
+// ManpageFile is the manual page's path inside an archive.
+func (l Layout) ManpageFile() string { return "share/man/man1/" + l.Program + ".1" }
+
+// ParseArchiveName reads the layout, version, and platform an archive name stands for. A name is only
+// accepted in the exact form ArchiveName gives the layout of its version.
+func ParseArchiveName(name string) (layout Layout, version, goos string, err error) {
+	parts := strings.SplitN(name, "_", 4)
+	if len(parts) != 4 {
+		return Layout{}, "", "", fmt.Errorf("%q is not a release archive name", name)
+	}
+	version, goos = parts[1], parts[2]
+	goarch, _, _ := strings.Cut(parts[3], ".")
+	layout, err = LayoutOf(version)
+	if err != nil || layout.ArchiveName(version, goos, goarch) != name {
+		return Layout{}, "", "", fmt.Errorf("%q is not a release archive name", name)
+	}
+	return layout, version, goos, nil
+}
+
+// VerifyRelease checks that signature is a valid signature over checksums for the release archiveName
+// belongs to: under Namespace for a version after LastLegacyVersion, under LegacyNamespace up to it. See
+// VerifyChecksums.
+func VerifyRelease(checksums, signature []byte, archiveName string, keys []ssh.PublicKey) error {
+	layout, _, _, err := ParseArchiveName(archiveName)
+	if err != nil {
+		return err
+	}
+	return VerifyChecksums(checksums, signature, layout.Namespace, keys)
+}
+
+// VerifyChecksums checks that signature is a valid SSHSIG over checksums for namespace, made by exactly one
+// of keys. Only Ed25519 keys and the hashes sha256 and sha512 are accepted.
+func VerifyChecksums(checksums, signature []byte, namespace string, keys []ssh.PublicKey) error {
 	blob, err := decodeArmor(signature)
 	if err != nil {
 		return err
@@ -85,8 +184,8 @@ func VerifyChecksums(checksums, signature []byte, keys []ssh.PublicKey) error {
 	if head.Version != 1 {
 		return fmt.Errorf("unsupported signature version %d", head.Version)
 	}
-	if head.Namespace != Namespace {
-		return fmt.Errorf("signature namespace is %q, want %q", head.Namespace, Namespace)
+	if head.Namespace != namespace {
+		return fmt.Errorf("signature namespace is %q, want %q", head.Namespace, namespace)
 	}
 	var digest []byte
 	switch head.Hash {
@@ -169,15 +268,19 @@ func ChecksumFor(checksums []byte, archiveName string) (string, error) {
 	return "", fmt.Errorf("checksums.txt does not contain %s", archiveName)
 }
 
-// ProgramSHA256 returns the lowercase hex SHA-256 of the program inside a release archive: bin/qatlas of a
-// .tar.gz archive or bin/qatlas.exe of a .zip archive, chosen by the suffix of archiveName.
+// ProgramSHA256 returns the lowercase hex SHA-256 of the program inside a release archive, at the place
+// the layout of archiveName's version names for its platform (see ParseArchiveName).
 func ProgramSHA256(archiveName string, archive []byte) (string, error) {
+	layout, _, goos, err := ParseArchiveName(archiveName)
+	if err != nil {
+		return "", err
+	}
+	program := layout.ProgramFile(goos)
 	var sum [sha256.Size]byte
-	var err error
-	if strings.HasSuffix(archiveName, ".zip") {
-		sum, err = zipProgram(archive)
+	if goos == "windows" {
+		sum, err = zipProgram(archive, program)
 	} else {
-		sum, err = tarProgram(archive)
+		sum, err = tarProgram(archive, program)
 	}
 	if err != nil {
 		return "", err
@@ -185,7 +288,7 @@ func ProgramSHA256(archiveName string, archive []byte) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func tarProgram(archive []byte) ([sha256.Size]byte, error) {
+func tarProgram(archive []byte, program string) ([sha256.Size]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
 		return [sha256.Size]byte{}, fmt.Errorf("open release archive: %w", err)
@@ -195,24 +298,24 @@ func tarProgram(archive []byte) ([sha256.Size]byte, error) {
 	for {
 		header, err := reader.Next()
 		if errors.Is(err, io.EOF) {
-			return [sha256.Size]byte{}, errors.New("release archive does not contain bin/qatlas")
+			return [sha256.Size]byte{}, fmt.Errorf("release archive does not contain %s", program)
 		}
 		if err != nil {
 			return [sha256.Size]byte{}, fmt.Errorf("read release archive: %w", err)
 		}
-		if header.Typeflag == tar.TypeReg && strings.TrimPrefix(header.Name, "./") == "bin/qatlas" {
+		if header.Typeflag == tar.TypeReg && strings.TrimPrefix(header.Name, "./") == program {
 			return hashEntry(reader)
 		}
 	}
 }
 
-func zipProgram(archive []byte) ([sha256.Size]byte, error) {
+func zipProgram(archive []byte, program string) ([sha256.Size]byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return [sha256.Size]byte{}, fmt.Errorf("open release archive: %w", err)
 	}
 	for _, file := range reader.File {
-		if file.FileInfo().IsDir() || strings.TrimPrefix(file.Name, "./") != "bin/qatlas.exe" {
+		if file.FileInfo().IsDir() || strings.TrimPrefix(file.Name, "./") != program {
 			continue
 		}
 		entry, err := file.Open()
@@ -222,7 +325,7 @@ func zipProgram(archive []byte) ([sha256.Size]byte, error) {
 		defer entry.Close()
 		return hashEntry(entry)
 	}
-	return [sha256.Size]byte{}, errors.New("release archive does not contain bin/qatlas.exe")
+	return [sha256.Size]byte{}, fmt.Errorf("release archive does not contain %s", program)
 }
 
 func hashEntry(reader io.Reader) ([sha256.Size]byte, error) {

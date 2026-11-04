@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+
+	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
 )
 
 const (
@@ -16,7 +18,6 @@ const (
 	listedStable = 10
 	// maxReleasePages bounds the pagination so a misbehaving server cannot keep the reader looping.
 	maxReleasePages = 20
-	signatureAsset  = "checksums.txt.sig"
 )
 
 // releasePageSize is a variable so a test can paginate with few releases.
@@ -66,15 +67,21 @@ func eligible(r release) (semver, bool) {
 		return semver{}, false
 	}
 	v, err := parseSemver(r.TagName)
-	if err != nil || v.compare(minimum()) < 0 {
+	if err != nil || v.Compare(minimum()) < 0 {
 		return semver{}, false
 	}
 	return v, hasSignature(r)
 }
 
+// hasSignature reports whether r carries the signature its version is verified with: checksums.txt.qconnect.sig
+// from the rename on, checksums.txt.sig before (see release.LayoutOf).
 func hasSignature(r release) bool {
+	layout, err := releaseverify.LayoutOf(r.TagName)
+	if err != nil {
+		return false
+	}
 	for _, a := range r.Assets {
-		if a.Name == signatureAsset {
+		if a.Name == layout.SignatureAsset {
 			return true
 		}
 	}
@@ -103,10 +110,10 @@ func (c *Client) List(ctx context.Context) ([]Entry, error) {
 		if !ok {
 			continue
 		}
-		cmp := v.compare(current)
+		cmp := v.Compare(current)
 		items = append(items, item{Entry{Version: r.TagName, Prerelease: r.Prerelease, Current: cmp == 0, Older: cmp < 0}, v})
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].v.compare(items[j].v) > 0 })
+	sort.SliceStable(items, func(i, j int) bool { return items[i].v.Compare(items[j].v) > 0 })
 	var out []Entry
 	stable := 0
 	for _, it := range items {
@@ -162,8 +169,8 @@ func (c *Client) Target(ctx context.Context, tag string) (Target, error) {
 	if err != nil {
 		return Target{}, &TargetError{fmt.Sprintf("%q is not a release version: %v", tag, err)}
 	}
-	if v.compare(minimum()) < 0 {
-		return Target{}, &TargetError{fmt.Sprintf("%s is older than %s, the oldest version qatlas installs", tag, MinVersion)}
+	if v.Compare(minimum()) < 0 {
+		return Target{}, &TargetError{fmt.Sprintf("%s is older than %s, the oldest version qconnect installs", tag, MinVersion)}
 	}
 	body, err := c.request(ctx, c.baseURL()+"/releases/tags/"+url.PathEscape(tag), maxMetadataBytes, "application/vnd.github+json", nil)
 	if err != nil {
@@ -179,7 +186,7 @@ func (c *Client) Target(ctx context.Context, tag string) (Target, error) {
 	if !hasSignature(r) {
 		return Target{}, &TargetError{fmt.Sprintf("release %s is not signed and cannot be chosen", tag)}
 	}
-	cmp := v.compare(current)
+	cmp := v.Compare(current)
 	return Target{Version: tag, Prerelease: r.Prerelease, Current: cmp == 0, Older: cmp < 0, running: c.Version, rel: r}, nil
 }
 

@@ -44,7 +44,7 @@ func TestMCPServerRestartsAfterAnUpdate(t *testing.T) {
 	if err := os.MkdirAll(prefix, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(prefix, "qatlas")
+	bin := filepath.Join(prefix, "qconnect")
 	buildVersion := func(path, version string) {
 		build := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false",
 			"-ldflags", "-X github.com/castrowithcee/qatlas-connect/internal/cli.version="+version, "-o", path, ".")
@@ -207,7 +207,7 @@ defaults:
 	}
 
 	// The update replaces the program file; the vault process of the old program is replaced with it.
-	replacement := filepath.Join(prefix, "qatlas.new")
+	replacement := filepath.Join(prefix, "qconnect.new")
 	buildVersion(replacement, "2.0.0")
 	if err := os.Rename(replacement, bin); err != nil {
 		t.Fatal(err)

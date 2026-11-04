@@ -44,7 +44,7 @@ func TestMCPServerThatCannotRestartAsksForAReconnect(t *testing.T) {
 	if err := os.MkdirAll(prefix, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(prefix, "qatlas")
+	bin := filepath.Join(prefix, "qconnect")
 	buildVersion := func(path, version string) {
 		build := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false",
 			"-ldflags", "-X github.com/castrowithcee/qatlas-connect/internal/cli.version="+version, "-o", path, ".")
@@ -207,9 +207,9 @@ defaults:
 	}
 
 	// The update replaces the program file with one that cannot run: the server's restart finds no program.
-	replacement := filepath.Join(prefix, "qatlas.new")
+	replacement := filepath.Join(prefix, "qconnect.new")
 	buildVersion(replacement, "2.0.0")
-	runnable := filepath.Join(prefix, "qatlas.runnable")
+	runnable := filepath.Join(prefix, "qconnect.runnable")
 	buildVersion(runnable, "2.0.0")
 	if err := os.Chmod(replacement, 0o600); err != nil {
 		t.Fatal(err)

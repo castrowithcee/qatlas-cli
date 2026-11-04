@@ -66,13 +66,21 @@ jobs:
           (umask 077 && printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key")
           chmod 600 "$key"
           cd signing-input
+          # Two signatures with the same key: checksums.txt.sig under the old namespace for installations that
+          # predate the rename, checksums.txt.qconnect.sig under the current one.
+          ssh-keygen -Y sign -f "$key" -n qatlas-connect-release checksums.txt
+          mv checksums.txt.sig checksums.txt.qconnect.sig
           ssh-keygen -Y sign -f "$key" -n qatlas-release checksums.txt
+          ssh-keygen -Y verify -f allowed-signers -I qatlas-release -n qatlas-connect-release \
+            -s checksums.txt.qconnect.sig < checksums.txt
           ssh-keygen -Y verify -f allowed-signers -I qatlas-release -n qatlas-release \
             -s checksums.txt.sig < checksums.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-signature
-          path: signing-input/checksums.txt.sig
+          path: |
+            signing-input/checksums.txt.sig
+            signing-input/checksums.txt.qconnect.sig
           if-no-files-found: error
 
   publish:

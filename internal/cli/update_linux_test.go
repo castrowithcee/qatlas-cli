@@ -41,7 +41,7 @@ func TestUpdateAsksBeforeItReplaces(t *testing.T) {
 			if code != exitOK || len(asked) != 1 {
 				t.Fatalf("exit code = %d, questions = %d, stderr = %q", code, len(asked), stderr)
 			}
-			for _, want := range []string{"Update qconnect to v1.1.0?", "vault process is handed over to the new version", "locked first otherwise",
+			for _, want := range []string{"Update qconnect to v3.1.0?", "vault process is handed over to the new version", "locked first otherwise",
 				"'qconnect vault unlock'", "'qconnect mcp' servers restart themselves", "'qconnect tui' and 'qconnect web'"} {
 				if !strings.Contains(asked[0], want) {
 					t.Errorf("the question does not say %q: %q", want, asked[0])
@@ -152,7 +152,7 @@ func TestTUIUpdaterLocksFirst(t *testing.T) {
 			t.Error("the program was replaced before the vault process was locked")
 		}
 	})
-	updater := tuiUpdater(&Options{Updater: seam, Config: configIn(dir)}, "v1.0.0")
+	updater := tuiUpdater(&Options{Updater: seam, Config: configIn(dir)}, "v3.0.0")
 	result, err := updater.Update(context.Background())
 	if err != nil || !result.Updated {
 		t.Fatalf("Update() = %+v, %v", result, err)

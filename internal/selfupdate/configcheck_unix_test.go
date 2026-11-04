@@ -11,11 +11,28 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	releaseverify "github.com/castrowithcee/qatlas-connect/internal/release"
 )
 
 // scriptRelease is a prepared release whose program is a shell script.
 func scriptRelease(script string, timeout time.Duration) *Prepared {
-	return &Prepared{goos: "linux", payload: payload{executable: []byte("#!/bin/sh\n" + script)}, timeout: timeout}
+	return &Prepared{goos: "linux", layout: releaseverify.Layout{Program: "qconnect"}, payload: payload{executable: []byte("#!/bin/sh\n" + script)}, timeout: timeout}
+}
+
+// The checked program runs under the name of its release: qatlas for a release before the rename.
+func TestReadsConfigRunsTheProgramUnderItsReleaseName(t *testing.T) {
+	for version, name := range map[string]string{"v3.0.0": "qconnect", "v2.1.0": "qatlas"} {
+		layout, err := releaseverify.LayoutOf(version)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p := scriptRelease(`[ "$(basename "$0")" = "`+name+`" ]`, 0)
+		p.layout = layout
+		if ok, err := p.ReadsConfig(context.Background(), []byte("version: 4\n")); !ok || err != nil {
+			t.Errorf("%s: ReadsConfig() = %v, %v, want the program run as %s", version, ok, err, name)
+		}
+	}
 }
 
 func TestReadsConfigFollowsTheExitStatus(t *testing.T) {

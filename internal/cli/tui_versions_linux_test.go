@@ -21,7 +21,7 @@ import (
 func versionUpdaterFor(t *testing.T, dir string, client *selfupdate.Client) *lockingUpdater {
 	t.Helper()
 	opts := &Options{Updater: client, Config: configIn(dir)}
-	u, ok := tuiUpdater(opts, "v1.0.0").(*lockingUpdater)
+	u, ok := tuiUpdater(opts, "v3.0.0").(*lockingUpdater)
 	if !ok {
 		t.Fatal("the editor has no updater")
 	}
@@ -40,7 +40,7 @@ func TestTUIUpdaterListsTheChoosableVersions(t *testing.T) {
 	for _, e := range entries {
 		got = append(got, fmt.Sprintf("%s/%t/%t/%t", e.Version, e.Prerelease, e.Current, e.Older))
 	}
-	want := "v1.3.0-rc.1/true/false/false v1.2.0/false/false/false v1.0.0/false/true/false v0.31.0/false/false/true"
+	want := "v3.3.0-rc.1/true/false/false v3.2.0/false/false/false v3.0.0/false/true/false v2.3.0/false/false/true"
 	if strings.Join(got, " ") != want {
 		t.Errorf("list = %v, want %s", got, want)
 	}
@@ -52,15 +52,15 @@ func TestTUIUpdaterInstallsAChosenPrerelease(t *testing.T) {
 	var replaced int
 	u := versionUpdaterFor(t, t.TempDir(), chosenUpdater(t, executable, chosenReleases, &replaced))
 	var downloaded int
-	result, err := u.InstallVersion(context.Background(), "v1.3.0-rc.1", func(done, total int64) { downloaded++ })
-	if err != nil || !result.Updated || result.Latest != "v1.3.0-rc.1" || replaced != 1 {
+	result, err := u.InstallVersion(context.Background(), "v3.3.0-rc.1", func(done, total int64) { downloaded++ })
+	if err != nil || !result.Updated || result.Latest != "v3.3.0-rc.1" || replaced != 1 {
 		t.Fatalf("InstallVersion() = %+v, %v, replaced %d", result, err, replaced)
 	}
 	if data, _ := os.ReadFile(executable); string(data) != "chosen-program" || downloaded == 0 {
 		t.Errorf("program %q, progress reports %d", data, downloaded)
 	}
 	// An older version is not installed this way.
-	if _, err := u.InstallVersion(context.Background(), "v0.31.0", nil); err == nil || replaced != 1 {
+	if _, err := u.InstallVersion(context.Background(), "v2.3.0", nil); err == nil || replaced != 1 {
 		t.Errorf("an older version was installed as an update: %v", err)
 	}
 }
@@ -87,7 +87,7 @@ func TestTUIUpdaterRollbackLocksTheVaultProcessWhateverTheSettingSays(t *testing
 	}
 	u := versionUpdaterFor(t, dir, client)
 
-	plan, err := u.PrepareRollback(context.Background(), "v0.31.0", nil)
+	plan, err := u.PrepareRollback(context.Background(), "v2.3.0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestTUIUpdaterRollbackLocksTheVaultProcessWhateverTheSettingSays(t *testing
 	}
 
 	result, err := plan.Install(context.Background(), false)
-	if err != nil || !result.Updated || result.Latest != "v0.31.0" {
+	if err != nil || !result.Updated || result.Latest != "v2.3.0" {
 		t.Fatalf("Install() = %+v, %v", result, err)
 	}
 	if runningBefore || running(vaultClient) {
@@ -124,7 +124,7 @@ func TestTUIUpdaterRollbackRestoresABackupOnlyWhenConfirmed(t *testing.T) {
 	u := versionUpdaterFor(t, f.dir, chosenUpdater(t, f.executable, chosenReleases, &f.replaced))
 	before := f.snapshot(t)
 
-	plan, err := u.PrepareRollback(context.Background(), "v0.31.0", nil)
+	plan, err := u.PrepareRollback(context.Background(), "v2.3.0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestTUIUpdaterRollbackRestoresABackupOnlyWhenConfirmed(t *testing.T) {
 	// No backup it reads: the check says so and offers nothing.
 	g := newRollbackFixture(t, unreadableConfig, map[string]string{unreadableOne: "version: 99\n"})
 	plan, err = versionUpdaterFor(t, g.dir, chosenUpdater(t, g.executable, chosenReleases, &g.replaced)).
-		PrepareRollback(context.Background(), "v0.31.0", nil)
+		PrepareRollback(context.Background(), "v2.3.0", nil)
 	if _, _, ok := plan.Backup(); err != nil || plan.Reads() || ok {
 		t.Errorf("Reads %v, backup offered %v, err %v", plan.Reads(), ok, err)
 	}
