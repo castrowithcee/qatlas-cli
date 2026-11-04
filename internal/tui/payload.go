@@ -82,7 +82,7 @@ func (m *Model) payloadFields(edit, source string) []field {
 		withHint(tr(tPayloadStorageHint)).withDetail(tr(tPayloadStorageDetail))
 	// Moving the values to the other place is not offered: delete the secret and create it again.
 	storage.readOnly = edit != ""
-	fields := []field{key, storage,
+	fields := []field{key, m.idField(edit), storage,
 		textField("description", cred.Description, false).withHint(tr(tPayloadDescriptionHint)).withDetail(tr(tPayloadDescriptionDetail))}
 	for i, field := range cred.Fields {
 		fields = append(fields, m.payloadValueRow(field, edit != "", i == 0))

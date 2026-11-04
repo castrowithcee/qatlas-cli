@@ -61,7 +61,7 @@ func (m *Model) sectionOfRow(f field, step int) string {
 	case sectionConnections:
 		return connectionSection(f.label)
 	case sectionCredentials:
-		if f.label == "name" || f.kind == fieldProvider {
+		if f.label == "name" || f.label == "id" || f.kind == fieldProvider {
 			return secGeneral
 		}
 		return secCredential
