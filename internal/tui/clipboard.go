@@ -19,6 +19,12 @@ func (m *Model) copySource() func() string {
 	switch {
 	case m.infoOpen:
 		return func() string { return infoText(m.infoShown) }
+	case m.copyableFocused():
+		id := m.fields[m.focus].value()
+		if id == "" {
+			return nil
+		}
+		return func() string { return id }
 	case m.screen == screenLogDetail:
 		lv := m.logs
 		if lv.detail < 0 || lv.detail >= len(lv.rows) {
@@ -46,6 +52,12 @@ func (m *Model) copySource() func() string {
 		return func() string { return name }
 	}
 	return nil
+}
+
+// copyableFocused reports whether the focused form row is a read-only row that offers its value to the copy key.
+func (m *Model) copyableFocused() bool {
+	return m.screen == screenForm && !m.payloadRemoveAsk && m.focus >= 0 && m.focus < len(m.fields) &&
+		m.fields[m.focus].copyable
 }
 
 // copyKeyShown reports whether a footer names the copy key: where it copies and a screen lists it itself

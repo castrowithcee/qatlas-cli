@@ -219,6 +219,8 @@ type field struct {
 	// so an entry is changed in place or deleted and created again. A read-only field takes no editing
 	// focus and says that it is locked instead of describing a choice that is no longer there.
 	readOnly bool
+	// copyable lets a read-only row take focus so the copy key can reach it; it still takes no input.
+	copyable bool
 	// roleLead marks the first of the secret role rows. What those rows hold is the same for all of them,
 	// so it is said once, above them, rather than repeated under each one.
 	roleLead bool
@@ -1031,7 +1033,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Like the other letters, c is text wherever text is typed.
-		if keyIs(msg, actCopy) && m.helpReachable() {
+		if keyIs(msg, actCopy) && (m.helpReachable() || m.copyableFocused()) {
 			if cmd := m.copyCurrent(); cmd != nil {
 				return m, cmd
 			}
@@ -3175,7 +3177,40 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			choiceField("connection", m.entryNames(sectionConnections), m.cfg.Defaults.Connections[name]),
 		)
 	}
+	if m.section == sectionServices || m.section == sectionCredentials || m.section == sectionConnections {
+		// After the provider row where there is one: rows address it by position and tab order opens on it.
+		at := 1
+		if m.section != sectionConnections {
+			at = 2
+		}
+		fields = slices.Insert(fields, at, m.idField(edit))
+	}
 	return m.groupSections(fields, -1)
+}
+
+// idField is the read-only row that shows the stable id of the entry being edited. It is never read back
+// by apply, so a form cannot create, change or drop an id. A new entry, also one filled from another, has
+// none yet and must not show the source's id.
+func (m *Model) idField(edit string) field {
+	id := ""
+	if edit != "" {
+		switch m.section {
+		case sectionServices:
+			id = m.cfg.Services[edit].ID
+		case sectionCredentials:
+			id = m.cfg.Credentials[edit].ID
+		case sectionConnections:
+			id = m.cfg.Connections[edit].ID
+		}
+	}
+	f := textField("id", id, true).withDetail(tr(tFormIDDetail))
+	// Only a real id takes focus: there is nothing to copy from the notice, and a new form keeps its tab order.
+	f.copyable = id != ""
+	f.hint = tr(tFormIDHint)
+	if id == "" {
+		f.hint = tr(tFormIDPendingHint)
+	}
+	return f
 }
 
 // submit saves the form, unless the change first has to be checked against the places that keep secrets.
@@ -3450,7 +3485,7 @@ func (m *Model) field(label string) *field {
 // hasNextField reports whether a row that takes focus follows the focused one.
 func (m *Model) hasNextField() bool {
 	for i := m.focus + 1; i < len(m.fields); i++ {
-		if !m.fields[i].readOnly && !m.skipped(i) {
+		if (!m.fields[i].readOnly || m.fields[i].copyable) && !m.skipped(i) {
 			return true
 		}
 	}
@@ -3474,7 +3509,7 @@ func (m *Model) moveFocus(by int) {
 			next = m.focus
 			break
 		}
-		if !m.fields[next].readOnly && !m.skipped(next) {
+		if (!m.fields[next].readOnly || m.fields[next].copyable) && !m.skipped(next) {
 			break
 		}
 	}

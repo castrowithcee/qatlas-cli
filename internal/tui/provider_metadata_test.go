@@ -90,9 +90,9 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// A credential that names no provider cannot know which roles are its own, so it still offers every
 	// role the registry defines: name, provider, type, and one row per role.
 	credentialFields := m.buildFields("notifier")
-	if len(credentialFields) != 10 || credentialFields[3].label != "api-key" ||
-		credentialFields[4].label != "api-token" || credentialFields[5].label != "app-password" ||
-		credentialFields[6].label != "bot-token" || credentialFields[9].label != "user-id" {
+	if len(credentialFields) != 11 || credentialFields[4].label != "api-key" ||
+		credentialFields[5].label != "api-token" || credentialFields[6].label != "app-password" ||
+		credentialFields[7].label != "bot-token" || credentialFields[10].label != "user-id" {
 		t.Fatalf("credential fields = %+v, want the Lexware, SeaTable, Nextcloud and Telegram roles from "+
 			"the registry", credentialFields)
 	}
@@ -153,25 +153,25 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// description, state, active for), Service, Credential and Targets.
 	connectionFields := m.buildFields("alerts")
 	if connectionFields[0].label != providerLabel || connectionFields[1].label != "name" ||
-		connectionFields[7].label != targetsLabel {
-		t.Fatalf("connection fields = %v, want provider, name, description, state, active for, service, credential, targets",
+		connectionFields[8].label != targetsLabel {
+		t.Fatalf("connection fields = %v, want provider, name, id, description, state, active for, service, credential, targets",
 			labelsOf(connectionFields))
 	}
-	if connectionFields[7].value() != "-1001" || !strings.Contains(connectionFields[7].detail, "required for Telegram") ||
-		connectionFields[7].hint != "chat ID: required, several" {
-		t.Fatalf("target field = value %q, hint %q, detail %q", connectionFields[7].value(),
-			connectionFields[7].hint, connectionFields[7].detail)
+	if connectionFields[8].value() != "-1001" || !strings.Contains(connectionFields[8].detail, "required for Telegram") ||
+		connectionFields[8].hint != "chat ID: required, several" {
+		t.Fatalf("target field = value %q, hint %q, detail %q", connectionFields[8].value(),
+			connectionFields[8].hint, connectionFields[8].detail)
 	}
 	if got := m.describe("operations"); !strings.Contains(got, "-1002") {
 		t.Fatalf("list entry = %q, want distinct target", got)
 	}
 	lexwareFields := m.buildFields("books-primary")
-	if strings.Contains(lexwareFields[7].hint, "required") ||
-		lexwareFields[7].hint != "organization: optional, one" ||
-		strings.Contains(lexwareFields[7].detail, "required") ||
-		!strings.Contains(lexwareFields[7].detail, "optionally one organization") {
-		t.Fatalf("Lexware target hint = %q detail %q, want an optional target", lexwareFields[7].hint,
-			lexwareFields[7].detail)
+	if strings.Contains(lexwareFields[8].hint, "required") ||
+		lexwareFields[8].hint != "organization: optional, one" ||
+		strings.Contains(lexwareFields[8].detail, "required") ||
+		!strings.Contains(lexwareFields[8].detail, "optionally one organization") {
+		t.Fatalf("Lexware target hint = %q detail %q, want an optional target", lexwareFields[8].hint,
+			lexwareFields[8].detail)
 	}
 	for _, name := range []string{"books-primary", "books-audit"} {
 		if got := m.describe(name); !strings.HasPrefix(got, name+"  active  lexware-main  ") {
@@ -187,10 +187,10 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// Two Twenty workspaces stay two visibly separate connections, each with its own origin and key, and
 	// neither needs a target.
 	twentyFields := m.buildFields("crm")
-	if strings.Contains(twentyFields[7].hint, "required") ||
-		twentyFields[7].hint != "object: optional, several" ||
-		!strings.Contains(twentyFields[7].detail, "optional objects") {
-		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[7].hint)
+	if strings.Contains(twentyFields[8].hint, "required") ||
+		twentyFields[8].hint != "object: optional, several" ||
+		!strings.Contains(twentyFields[8].detail, "optional objects") {
+		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[8].hint)
 	}
 	for name, want := range map[string]string{
 		"crm":          "crm  active  crm-cloud  ",
@@ -205,11 +205,11 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// table is required, the view is the optional part after the slash, and two tokens of the same base
 	// stay two visibly separate connections.
 	seatableFields := m.buildFields("sales-rows")
-	if seatableFields[7].value() != "Kunden" ||
-		!strings.Contains(seatableFields[7].detail, "required for SeaTable") ||
-		!strings.Contains(seatableFields[7].detail, "TABLE/VIEW") {
+	if seatableFields[8].value() != "Kunden" ||
+		!strings.Contains(seatableFields[8].detail, "required for SeaTable") ||
+		!strings.Contains(seatableFields[8].detail, "TABLE/VIEW") {
 		t.Fatalf("SeaTable target field = value %q, detail %q",
-			seatableFields[7].value(), seatableFields[7].detail)
+			seatableFields[8].value(), seatableFields[8].detail)
 	}
 	for name, want := range map[string]string{
 		"sales-rows":       "sales-rows  active  tables-cloud  ",
@@ -228,11 +228,11 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// the Files of that identity. The root folder is required, and two identities of the same instance
 	// stay two visibly separate connections.
 	nextcloudFields := m.buildFields("files-reports")
-	if nextcloudFields[7].value() != "Reports" ||
-		!strings.Contains(nextcloudFields[7].detail, "required for Nextcloud") ||
-		!strings.Contains(nextcloudFields[7].detail, "whole Files root") {
+	if nextcloudFields[8].value() != "Reports" ||
+		!strings.Contains(nextcloudFields[8].detail, "required for Nextcloud") ||
+		!strings.Contains(nextcloudFields[8].detail, "whole Files root") {
 		t.Fatalf("Nextcloud target field = value %q, detail %q",
-			nextcloudFields[7].value(), nextcloudFields[7].hint)
+			nextcloudFields[8].value(), nextcloudFields[8].hint)
 	}
 	for name, want := range map[string]string{
 		"files-reports": "files-reports  active  cloud-main  ",
@@ -427,7 +427,7 @@ func TestAConnectionSettlesTheProviderOfACredential(t *testing.T) {
 		t.Errorf("the form starts at %q, want the derived provider", got)
 	}
 	if got := labelsOf(fields); !reflect.DeepEqual(got,
-		[]string{"name", providerLabel, storageLabel, "token-id", "token-secret"}) {
+		[]string{"name", providerLabel, "id", storageLabel, "token-id", "token-secret"}) {
 		t.Errorf("fields = %v, want only the BookStack roles", got)
 	}
 
