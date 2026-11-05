@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-05
 ---
 
 # GitHub
@@ -251,8 +251,8 @@ caller pages can move an older run onto the next batch, where it appears again; 
 GitHub answers at most 1000 runs of a run list filtered by `status`, `branch`, `event`, `actor`, or time;
 `has_more` turns false there, and a narrower filter reaches older runs.
 
-`github.pull-requests.list`, `github.pull-request-files.list`, and `github.pull-request-commits.list` page by
-number as well, but GitHub answers these plain array routes without a total count, so `has_more` follows
+`github.pull-requests.list`, `github.pull-request-files.list`, `github.pull-request-commits.list`, and the five
+[check reads](pull-requests.md#check-runs-annotations-and-check-suites) page by number as well, but GitHub answers these plain array routes without a total count, so `has_more` follows
 whether GitHub's `Link` response header names a following page instead. `github.pull-request-checks.list`
 answers no cursor at all: it reads up to 100 check runs and 100 legacy statuses at the head commit in one
 call and reports `truncated` when GitHub held more of either.

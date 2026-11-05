@@ -646,6 +646,12 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
 				pullChecksList.ID},
 		}, {
+			ID: "checks", Title: "Checks",
+			Description: "reads the check runs of a branch, tag, or commit, one check run, its annotations, the " +
+				"check suites of a commit, and the check runs of a check suite; changes nothing",
+			Tools: []string{checkRunsList.ID, checkRunsGet.ID, checkAnnotationsList.ID, checkSuitesList.ID,
+				checkSuiteRunsList.ID},
+		}, {
 			ID: "pull-requests-operator", Title: "Pull requests operator",
 			Description: "reads the pull requests of a repository and creates, updates, closes, and reopens " +
 				"them, and updates a pull request's head branch with its base while the head is still a given " +
@@ -774,7 +780,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
 	}, slices.Concat(itemOperations(), lifecycleOperations(), fieldOperations(), viewOperations(),
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
-		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
+		maintenanceOperations(), pullRequestOperations(), checkOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),

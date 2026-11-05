@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the GitHub pull request tools: pull request reads and changes, the listed-only merge and its conflicts, conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, the listed-only approve, pull request search, and Copilot reviews.
+  Describes the GitHub pull request tools: pull request reads and changes, the listed-only merge and its conflicts, conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, the listed-only approve, pull request search, Copilot reviews, and the check runs, annotations, and check suites of a commit.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-05
 ---
 
 # GitHub pull requests
@@ -85,6 +85,34 @@ The filters `check_name`, `status`, `filter`, and `app_id` act on the check runs
 request; the commit statuses have no filter and are always read whole. With a filter set, `overall` covers the
 filtered check runs and every status, so a filter that leaves out a failing check run also leaves out its
 failure.
+
+### Check runs, annotations, and check suites
+
+| Tool | Does |
+| --- | --- |
+| `github.check-runs.list` | lists the check runs of a branch, tag, or commit |
+| `github.check-runs.get` | reads one check run |
+| `github.check-annotations.list` | lists the annotations of one check run |
+| `github.check-suites.list` | lists the check suites of a branch, tag, or commit |
+| `github.check-suite-runs.list` | lists the check runs of one check suite |
+
+The not-recommended profile `checks` offers the five reads; the recommended profile `read` does not. Unlike
+`github.pull-request-checks.list`, they read the Checks API alone, name no pull request, and page with `limit` and
+`cursor`. `github.check-runs.list` and `github.check-suite-runs.list` return only the latest check run of each
+name unless `filter` is `all`. The output, app, pull requests, and deployment of a check run, and the app, head
+commit, and pull requests of a check suite, are reported as GitHub describes them; names, titles, output
+texts, annotations, and addresses are untrusted data, cut with a marker, and no address is fetched.
+
+GitHub scopes a check run or check suite identifier below the repository of the request, but its answer is the
+only place that names the repository. `github.check-runs.get` and `github.check-annotations.list` therefore
+require the REST address of the check run to name the chosen repository, and `github.check-suite-runs.list` the
+full name of the check suite; the annotations and the check runs are requested only after that read. An answer
+that names another repository, or none, ends as `invalid-provider-response` without any of its values.
+
+A refused read ends as `permission`, naming the rights of the [setup](setup.md#pull-requests); GitHub's 422 ends
+as `invalid-request`. Creating, changing, or rerequesting a check run, rerequesting a check suite, and a check
+suite's settings are open to a GitHub App only; GitHub refuses them to the token of a connection, so no tool
+offers them.
 
 ### Changes
 

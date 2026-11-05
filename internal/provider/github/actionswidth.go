@@ -425,15 +425,17 @@ var workflowWidthFields = []capability.Field{
 
 var runIdentitySchema = objectSchema(`"name":{"type":"string"},"email":{"type":"string"}`)
 
+var runHeadCommitSchema = objectSchema(`"id":{"type":"string"},"tree_id":{"type":"string"},` +
+	`"message":{"type":"string"},"message_truncated":{"type":"boolean"},"timestamp":{"type":"string"},` +
+	`"author":` + runIdentitySchema + `,"committer":` + runIdentitySchema)
+
 var runWidthProperties = `"node_id":{"type":"string"},"check_suite_id":{"type":"integer"},` +
 	`"check_suite_node_id":{"type":"string"},"path":{"type":"string"},` +
 	`"referenced_workflows":{"type":"array","items":` +
 	objectSchema(`"path":{"type":"string"},"sha":{"type":"string"},"ref":{"type":"string"}`) + `},` +
 	`"referenced_workflows_truncated":{"type":"boolean"},` +
 	detailProperty("actor", restAccountSchema, false) + `,"triggering_actor":` + restAccountSchema + `,` +
-	`"head_commit":` + objectSchema(`"id":{"type":"string"},"tree_id":{"type":"string"},`+
-	`"message":{"type":"string"},"message_truncated":{"type":"boolean"},"timestamp":{"type":"string"},`+
-	`"author":`+runIdentitySchema+`,"committer":`+runIdentitySchema) + `,` +
+	`"head_commit":` + runHeadCommitSchema + `,` +
 	`"head_repository":` + restRepositorySchema + `,"head_repository_id":{"type":"integer"},` +
 	`"pull_requests":{"type":"array","items":` + objectSchema(`"id":{"type":"integer"},"number":{"type":"integer"},`+
 	`"head":`+runPullRefSchema+`,"base":`+runPullRefSchema+`,"links":`+linksSchema(runPullLinkKeys)) + `},` +
