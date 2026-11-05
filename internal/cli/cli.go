@@ -248,6 +248,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newDescribeCommand(opts, reg, "describe", false),
 		newDescribeCommand(opts, reg, "tool", true),
 		newInvokeCommand(opts, reg),
+		newWaitCommand(opts, reg),
 		newMCPCommand(opts, reg),
 		newTUICommand(opts, reg, version),
 		newWebCommand(opts, reg),

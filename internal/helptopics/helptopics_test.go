@@ -113,3 +113,12 @@ func TestTermIDsAreUniqueAndStable(t *testing.T) {
 		t.Error("LookupTerm found an unknown ID")
 	}
 }
+
+// An agent with a shell learns where a tool that waits ends: the command, its limit, and its exit codes.
+func TestAgentsTopicNamesTheWaitCommand(t *testing.T) {
+	for _, want := range []string{"qconnect wait <tool-id>", "45 minutes", "0 pass, 3 fail, 4 timeout, 5 none, 6 head-changed"} {
+		if !strings.Contains(Agents().Text, want) {
+			t.Errorf("the agents topic does not mention %q", want)
+		}
+	}
+}

@@ -107,6 +107,9 @@ type Descriptor struct {
 	Risk                  Risk     `json:"risk"`
 	Provider              string   `json:"provider"`
 	RequiresToolAllowList bool     `json:"requires_tool_allow_list"`
+	// Waits marks a read operation that blocks until a condition holds and answers a result member naming
+	// how it ended; 'qconnect wait' runs it with a longer limit than an invoke has.
+	Waits bool `json:"waits,omitempty"`
 	// Group is the ID of the provider's config.ToolGroup this operation belongs to; empty for a provider
 	// without groups.
 	Group string `json:"-"`

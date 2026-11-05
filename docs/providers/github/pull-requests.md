@@ -19,7 +19,7 @@ GitHub's project items and its issue and comment tools still see a pull request 
 its number as an `invalid-request`; the tools of this section read, create, change, close, reopen, and merge
 the pull requests of a repository themselves. Reviewing a pull request, commenting on its conversation, and
 line comments are a separate group of tools, described under
-[Pull request reviews and comments](#pull-request-reviews-and-comments). The six reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
+[Pull request reviews and comments](#pull-request-reviews-and-comments). The seven reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
 profile `pull-requests-operator` adds the changes, described under [Changes](#changes) below, but never the
 merge, described under [Merge and conflicts](#merge-and-conflicts): it is offered only where a connection's
 `tools` list names `github.pull-requests.merge`, because a merge into the wrong repository's default branch is
@@ -34,6 +34,7 @@ below the chosen repository; no tool accepts an owner or a free REST path.
 | `github.pull-request-commits.list` | lists its commits with their git commit data |
 | `github.pull-request-diffs.get` | reads its unified diff, cut to at most 65536 bytes from its start |
 | `github.pull-request-checks.list` | reads the check runs and the combined commit status at its head commit |
+| `github.pull-request-checks.wait` | waits until those checks have finished |
 
 ```yaml
 connections:
@@ -85,6 +86,33 @@ The filters `check_name`, `status`, `filter`, and `app_id` act on the check runs
 request; the commit statuses have no filter and are always read whole. With a filter set, `overall` covers the
 filtered check runs and every status, so a filter that leaves out a failing check run also leaves out its
 failure.
+
+### Waiting for the checks
+
+`github.pull-request-checks.wait` reads what `github.pull-request-checks.list` reads, with its rights and risk and
+without its filters, until the checks at one head commit have finished. `result` says how it ended:
+
+| `result` | When |
+| --- | --- |
+| `pass` | every check finished and none failed; `success`, `neutral`, and `skipped` count as passed |
+| `fail` | a finished check did not succeed, whatever its other conclusion, or a status is `failure` or `error`; it ends the wait at once, while other checks still run |
+| `none` | three polls in a row found no check, since a check appears some seconds after a push |
+| `timeout` | the limit passed |
+| `pending` | only the broker: the 50 seconds of one call passed |
+| `head-changed` | the pull request moved to another head commit, reported as `current_head_sha`; no check of either run is reported |
+
+A check counts only once it reports its completion. The awaited commit is `head_sha`, a full SHA, otherwise the
+head at the start of the call; the answer names it, and an agent continues after `pending` with it, so a push
+between two calls ends as `head-changed` instead of with the old run. A poll that fails for a moment
+(connection, timeout, rate limit, server error) is repeated, up to five failures in a row, which end the call
+with the last error; a refused token or a missing pull request ends it at once. Names and links are untrusted
+data and never fetched. `truncated` says when GitHub held more than the 100 check runs or statuses read, and
+`pass` then covers only those.
+
+One loop serves two forms, polling every 20 seconds. Through MCP a call returns after at most 50 seconds, below
+the 60 seconds of an invoke, and an agent without a shell calls it again. With a shell, `qconnect wait
+github.pull-request-checks.wait --arg number=42` waits for the end in one command, up to its `--timeout`, and
+names the result in its exit code; the description of the tool names it as the preferred way.
 
 ### Check runs, annotations, and check suites
 

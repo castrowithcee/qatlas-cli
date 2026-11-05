@@ -642,9 +642,9 @@ func Register(reg *capability.Registry) error {
 			ID: "pull-requests", Title: "Pull requests",
 			Description: "reads the pull requests of a repository: their list, one pull request with its " +
 				"body and merge state, its changed files, its commits, its diff, and the checks at its head " +
-				"commit; changes nothing",
+				"commit, also waiting for them to finish; changes nothing",
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
-				pullChecksList.ID},
+				pullChecksList.ID, pullChecksWait.ID},
 		}, {
 			ID: "checks", Title: "Checks",
 			Description: "reads the check runs of a branch, tag, or commit, one check run, its annotations, the " +
@@ -658,7 +658,7 @@ func Register(reg *capability.Registry) error {
 				"commit; every change needs its own confirmation, and merging stays unticked, since it is " +
 				"offered only where a connection's tools list names github.pull-requests.merge",
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
-				pullChecksList.ID, pullsCreate.ID, pullsUpdate.ID, pullsClose.ID, pullsReopen.ID,
+				pullChecksList.ID, pullChecksWait.ID, pullsCreate.ID, pullsUpdate.ID, pullsClose.ID, pullsReopen.ID,
 				pullBranchesUpdate.ID},
 		}, {
 			ID: "releases", Title: "Releases",
