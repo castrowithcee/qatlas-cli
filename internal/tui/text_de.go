@@ -406,6 +406,7 @@ var textDE = map[textID]string{
 	tVaultNeedsPassphrase:                                      "braucht einen Tresor mit Passphrase",
 	tVaultLockedUnlockKey:                                      "Der Tresor ist gesperrt; {lock} entsperrt ihn",
 	tBusyVaultProcess:                                          "Tresor-Prozess wird gestartet",
+	tVaultEarlierEnded:                                         "Tresor-Prozess des Releases vor qatlas-connect (pid %d) beendet",
 	tVaultProcessEnded:                                         "Tresor-Prozess (pid %d) beendet, dessen Programm seit dem Start ersetzt wurde; der Tresor ist in einem neuen entsperrt",
 	tVaultProcessNotStarted:                                    "Der Tresor ist entsperrt, aber der Tresor-Prozess ließ sich nicht starten: %s; %s",
 	tVaultProcessNotLocked:                                     "Der Tresor-Prozess ließ sich nicht sperren: %s; %s",

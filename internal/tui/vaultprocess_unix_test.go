@@ -9,6 +9,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -544,5 +545,170 @@ func TestCtrlLLocksARealVaultProcessWhenOnlyTheProcessHoldsItUnlocked(t *testing
 	}
 	if _, err := client.Status(context.Background()); err == nil {
 		t.Error("the vault process still answers after ctrl+l locked it, want it ended")
+	}
+}
+
+// earlierRecorder replaces endEarlierFn and startVaultProcessFn (the latter wrapping the real in-process
+// server of withStartableVaultProcess) and records the order they are called in.
+type earlierRecorder struct {
+	events []string
+	pids   []int
+	err    error
+}
+
+func recordEarlier(t *testing.T, pids []int, err error) *earlierRecorder {
+	t.Helper()
+	r := &earlierRecorder{pids: pids, err: err}
+	originalEnd, originalStart := endEarlierFn, startVaultProcessFn
+	t.Cleanup(func() { endEarlierFn, startVaultProcessFn = originalEnd, originalStart })
+	endEarlierFn = func(context.Context, *manage.Service, *vault.Vault) ([]int, error) {
+		r.events = append(r.events, "end-earlier")
+		return r.pids, r.err
+	}
+	start := startVaultProcessFn
+	startVaultProcessFn = func(ctx context.Context, path string, snap vault.Snapshot,
+		client *vaultproc.Client) (vaultproc.Status, error) {
+		r.events = append(r.events, "start")
+		return start(ctx, path, snap, client)
+	}
+	return r
+}
+
+// earlierLockedModel is a model over an encrypted vault that is locked in its own process, with a runtime
+// directory of its own.
+func earlierLockedModel(t *testing.T, passphrase string, red *redact.Redactor) (*Model, string) {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "qconnect")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	setup, _ := newVaultResolver(t, dir)
+	mustNoError(t, setup.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	locked, _ := newVaultResolver(t, dir)
+	runtimeDir, err := os.MkdirTemp("", "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	m, err := buildModel(store, nil, locked, red)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	return m, dir
+}
+
+func unlockWithCtrlL(t *testing.T, m *Model, passphrase string) {
+	t.Helper()
+	openSectionByName(t, m, sectionServices)
+	pump(t, m, "ctrl+l")
+	typeText(t, m, passphrase)
+	pump(t, m, "enter")
+}
+
+// a: unlocking ends a vault process of the earlier release before the new one starts, names its pid, and
+// leaves exactly the new one serving.
+func TestCtrlLUnlockEndsAnEarlierProcessBeforeStarting(t *testing.T) {
+	const passphrase = "hunter2"
+	m, _ := earlierLockedModel(t, passphrase, nil)
+	withStartableVaultProcess(t)
+	r := recordEarlier(t, []int{4242}, nil)
+
+	unlockWithCtrlL(t, m, passphrase)
+	if m.fail != "" {
+		t.Fatalf("unlocking reported %q", m.fail)
+	}
+	if got := strings.Join(r.events, ","); got != "end-earlier,start" {
+		t.Errorf("calls = %q, want the earlier process ended before the new one starts", got)
+	}
+	if !strings.Contains(m.status, "4242") {
+		t.Errorf("status = %q, want the earlier process' pid", m.status)
+	}
+	client, err := vaultproc.ProcessClientOf(m.secrets.Vault())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Status(context.Background()); err != nil {
+		t.Errorf("the new vault process does not answer: %v", err)
+	}
+}
+
+// b: a failed end of the earlier process starts no vault process, reports the redacted warning, and leaves
+// the vault unlocked in this process.
+func TestCtrlLUnlockStartsNothingWhenEndingTheEarlierProcessFails(t *testing.T) {
+	const passphrase, marked = "hunter2", "canary-earlier-failure-3b9d"
+	red := &redact.Redactor{}
+	red.Add(marked)
+	m, _ := earlierLockedModel(t, passphrase, red)
+	withStartableVaultProcess(t)
+	r := recordEarlier(t, nil, errors.New("cannot end "+marked))
+
+	unlockWithCtrlL(t, m, passphrase)
+	if got := strings.Join(r.events, ","); got != "end-earlier" {
+		t.Errorf("calls = %q, want no vault process started", got)
+	}
+	if strings.Contains(m.status, marked) || !strings.Contains(m.status, redact.Marker) ||
+		!strings.Contains(m.status, "could not be started") {
+		t.Errorf("status = %q, want the redacted warning", m.status)
+	}
+	if state, err := m.secrets.Vault().State(); err != nil || state != vault.StateUnlocked {
+		t.Errorf("State() = %v, %v, want unlocked in this process", state, err)
+	}
+	client, _ := vaultproc.ProcessClientOf(m.secrets.Vault())
+	if _, err := client.Status(context.Background()); !errors.Is(err, vaultproc.ErrNotRunning) {
+		t.Errorf("Status() = %v, want no vault process", err)
+	}
+}
+
+// c: a vault process of this release that already answers is left alone: no earlier process is ended and
+// none is started.
+func TestCtrlLUnlockLeavesAnAnsweringProcessAlone(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qconnect")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	setup, _ := newVaultResolver(t, dir)
+	mustNoError(t, setup.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	serveVaultProcess(t, dir, passphrase)
+	locked, _ := newVaultResolver(t, dir)
+	m, err := buildModel(store, nil, locked, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	withStartableVaultProcess(t)
+	r := recordEarlier(t, []int{4242}, nil)
+
+	unlockWithCtrlL(t, m, passphrase)
+	if len(r.events) != 0 {
+		t.Errorf("calls = %v, want none while a vault process answers", r.events)
+	}
+}
+
+// d: locking ends an earlier process even though no vault process of this release ran.
+func TestCtrlLLockEndsAnEarlierProcessWithoutOwnProcess(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qconnect")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	secrets, _ := newVaultResolver(t, dir)
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	runtimeDir, err := os.MkdirTemp("", "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	r := recordEarlier(t, []int{4242}, nil)
+	m, err := buildModel(store, nil, secrets, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	openSectionByName(t, m, sectionServices)
+	pump(t, m, "ctrl+l")
+	pump(t, m, "y")
+	if m.fail != "" {
+		t.Fatalf("locking reported %q", m.fail)
+	}
+	if got := strings.Join(r.events, ","); got != "end-earlier" {
+		t.Errorf("calls = %q, want the earlier process ended", got)
+	}
+	if !strings.Contains(m.status, "4242") {
+		t.Errorf("status = %q, want the earlier process' pid", m.status)
 	}
 }

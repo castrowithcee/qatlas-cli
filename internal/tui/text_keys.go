@@ -288,6 +288,7 @@ const (
 	tVaultLockedUnlockKey                    textID = "VaultLockedUnlockKey"
 	tBusyVaultProcess                        textID = "BusyVaultProcess"
 	tVaultProcessEnded                       textID = "VaultProcessEnded"
+	tVaultEarlierEnded                       textID = "VaultEarlierEnded"
 	tVaultProcessNotStarted                  textID = "VaultProcessNotStarted"
 	tVaultProcessNotLocked                   textID = "VaultProcessNotLocked"
 	tVaultEncryptHint                        textID = "VaultEncryptHint"

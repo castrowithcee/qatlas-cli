@@ -388,6 +388,7 @@ var textEN = map[textID]string{
 	tVaultNeedsPassphrase:                                      "needs a vault with a passphrase",
 	tVaultLockedUnlockKey:                                      "the vault is locked; {lock} unlocks it",
 	tBusyVaultProcess:                                          "starting the vault process",
+	tVaultEarlierEnded:                                         "Ended the vault process of the release before qatlas-connect (pid %d)",
 	tVaultProcessEnded:                                         "Ended the vault process (pid %d), whose program was replaced since it started; the vault is unlocked in a new one",
 	tVaultProcessNotStarted:                                    "The vault is unlocked, but the vault process could not be started: %s; %s",
 	tVaultProcessNotLocked:                                     "the vault process could not be locked: %s; %s",

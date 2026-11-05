@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 	"github.com/castrowithcee/qatlas-connect/internal/secret"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
@@ -314,6 +315,24 @@ type vaultProcessStartedMsg struct {
 	err error
 	// ended is the id of a vault process with a replaced program that was ended first, 0 if none was.
 	ended int
+	// earlier are the ids of vault processes of the release before qatlas-connect that were ended first.
+	earlier []int
+}
+
+// endEarlierFn ends the vault processes of the release before qatlas-connect that hold the vault
+// unlocked: manage.Service.EndEarlierProcesses for a real run. A test replaces it, since only a helper
+// process of that release can stand in for one and no such helper exists in this package.
+var endEarlierFn = func(ctx context.Context, svc *manage.Service, v *vault.Vault) ([]int, error) {
+	return svc.EndEarlierProcesses(ctx, v)
+}
+
+// earlierEndedText is the status text for each vault process of the earlier release that was ended.
+func earlierEndedText(pids []int) []string {
+	var parts []string
+	for _, pid := range pids {
+		parts = append(parts, tr(tVaultEarlierEnded, pid))
+	}
+	return parts
 }
 
 // startVaultProcessFn is what startVaultProcess calls to actually hand the vault to a new vault process
@@ -364,12 +383,18 @@ func (m *Model) startVaultProcess() tea.Cmd {
 		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
 			return vaultProcessStartedMsg{err: err}
 		}
+		// This release cannot ask a vault process of the earlier one; it is ended before a new one starts,
+		// so the vault is never held by two processes.
+		earlier, err := endEarlierFn(context.Background(), m.svc, v)
+		if err != nil {
+			return vaultProcessStartedMsg{err: err, ended: ended, earlier: earlier}
+		}
 		snap, err := v.Snapshot()
 		if err != nil {
-			return vaultProcessStartedMsg{err: err}
+			return vaultProcessStartedMsg{err: err, ended: ended, earlier: earlier}
 		}
 		_, err = startVaultProcessFn(context.Background(), configPath, snap, client)
-		return vaultProcessStartedMsg{err: err, ended: ended}
+		return vaultProcessStartedMsg{err: err, ended: ended, earlier: earlier}
 	}
 }
 
@@ -377,13 +402,19 @@ func (m *Model) startVaultProcess() tea.Cmd {
 // itself already finished: the vault stays unlocked in this process either way.
 func (m *Model) handleVaultProcessStarted(msg vaultProcessStartedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
+	var ended []string
+	if msg.ended > 0 {
+		ended = append(ended, tr(tVaultProcessEnded, msg.ended))
+	}
+	ended = append(ended, earlierEndedText(msg.earlier)...)
 	if msg.err == nil {
-		if msg.ended > 0 {
-			m.status = tr(tVaultProcessEnded, msg.ended)
+		if len(ended) > 0 {
+			m.status = strings.Join(ended, "; ")
 		}
 		return nil
 	}
-	m.status = tr(tVaultProcessNotStarted, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
+	warning := tr(tVaultProcessNotStarted, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
+	m.status = strings.Join(append(ended, warning), "; ")
 	return nil
 }
 
@@ -405,7 +436,11 @@ func (m *Model) vaultLockConfirmView() string {
 }
 
 // vaultLockedMsg carries the outcome of locking the vault back into the event loop.
-type vaultLockedMsg struct{ err error }
+type vaultLockedMsg struct {
+	err error
+	// earlier are the ids of vault processes of the release before qatlas-connect that were ended.
+	earlier []int
+}
 
 // beginVaultLock runs the three things 'ctrl+l' answered "y" does: locks the vault process that
 // holds it unlocked outside this run, the same way 'qconnect vault lock' does (see vaultproc.LockProcess,
@@ -423,8 +458,11 @@ func (m *Model) beginVaultLock() tea.Cmd {
 	m.busy = tr(tBusyLocking)
 	return func() tea.Msg {
 		_, err := vaultproc.LockProcess(context.Background(), v)
+		// Locking only takes access away, so a vault process of the earlier release is ended whatever became
+		// of this release's own, as 'qconnect vault lock' does.
+		earlier, endErr := endEarlierFn(context.Background(), m.svc, v)
 		v.Forget()
-		return vaultLockedMsg{err: err}
+		return vaultLockedMsg{err: errors.Join(err, endErr), earlier: earlier}
 	}
 }
 
@@ -440,7 +478,7 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 		m.fail = tr(tVaultProcessNotLocked, m.redactor.Apply(msg.err.Error()), secret.VaultProcessRemedy(msg.err))
 		return nil
 	}
-	m.status = tr(tVaultNowLocked)
+	m.status = strings.Join(append([]string{tr(tVaultNowLocked)}, earlierEndedText(msg.earlier)...), "; ")
 	return nil
 }
 
