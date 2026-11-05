@@ -264,6 +264,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.pull-request-commits.list": readRisk,
 		"github.pull-request-diffs.get":    readRisk,
 		"github.pull-request-checks.list":  readRisk,
+		"github.pull-request-checks.wait":  readRisk,
 		"github.check-runs.list":           readRisk,
 		"github.check-runs.get":            readRisk,
 		"github.check-annotations.list":    readRisk,

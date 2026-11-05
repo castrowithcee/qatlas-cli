@@ -487,7 +487,7 @@ func TestHasNextPageParsesTheLinkHeader(t *testing.T) {
 	}
 }
 
-func TestPullRequestsProfileOffersExactlySixReadsAndIsNotRecommended(t *testing.T) {
+func TestPullRequestsProfileOffersExactlyTheReadsAndIsNotRecommended(t *testing.T) {
 	reg := registry(t)
 	metadata, _ := reg.ProviderMetadata(Provider)
 	var profile config.ToolProfile
@@ -500,7 +500,8 @@ func TestPullRequestsProfileOffersExactlySixReadsAndIsNotRecommended(t *testing.
 	if !found || profile.Recommended {
 		t.Fatalf("profile = %+v, found=%v, want an existing, not-recommended profile", profile, found)
 	}
-	want := []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID, pullChecksList.ID}
+	want := []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID, pullChecksList.ID,
+		pullChecksWait.ID}
 	if strings.Join(profile.Tools, ",") != strings.Join(want, ",") {
 		t.Errorf("tools = %v, want %v", profile.Tools, want)
 	}

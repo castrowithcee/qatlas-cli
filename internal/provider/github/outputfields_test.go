@@ -132,6 +132,7 @@ var outputSamples = map[string]any{
 	"github.projects.update":                       ProjectState{},
 	"github.pull-request-branches.update":          PullRequestBranchUpdate{},
 	"github.pull-request-checks.list":              PullRequestChecks{},
+	"github.pull-request-checks.wait":              PullRequestChecksWait{},
 	"github.pull-request-comments.create":          Comment{},
 	"github.pull-request-comments.list":            CommentList{},
 	"github.pull-request-commits.list":             PullRequestCommitList{},

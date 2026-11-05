@@ -20,9 +20,9 @@ import (
 )
 
 // Pull requests of a repository. GitHub's project items, issues, and comments still see a pull request only
-// as an item, or refuse its number; these six tools read the pull requests themselves: their list, one pull
+// as an item, or refuse its number; these tools read the pull requests themselves: their list, one pull
 // request with its merge state, its changed files with a bounded patch excerpt, its commits, its diff within
-// a hard size limit, and the check runs and combined commit status at its head commit. They offer no way to
+// a hard size limit, and the check runs and combined commit status at its head commit, also waited for. They offer no way to
 // create, change, close, merge, or review a pull request, or to comment on one; that stays later work. Every
 // route lies below the chosen repository, and they are offered only by the not-recommended setup profile
 // pull-requests.
@@ -470,6 +470,9 @@ func pullRequestOperations() []capability.Operation {
 		bind(pullChecksList, checkPullChecksArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
 			return c.pullRequestChecks(ctx, a)
 		}),
+		bind(pullChecksWait, checkPullChecksWaitArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.waitForChecks(ctx, a)
+		}),
 		bind(pullsCreate, checkPullCreateArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
 			return c.createPullRequest(ctx, a)
 		}),
@@ -506,6 +509,9 @@ type pullArguments struct {
 	// Sort and Direction are the list's own.
 	Sort      string `json:"sort"`
 	Direction string `json:"direction"`
+
+	// HeadSHA is the head commit the wait awaits.
+	HeadSHA string `json:"head_sha"`
 
 	// The filters of the check run read.
 	CheckName   string `json:"check_name"`
