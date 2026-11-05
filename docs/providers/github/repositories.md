@@ -170,9 +170,10 @@ the size of the whole request.
 | --- | --- |
 | `github.repository-settings.get` | reads the description, homepage, topics, feature switches, default branch, visibility, archived state, and merge settings of one repository |
 | `github.repository-settings.update` | changes the description, homepage, feature switches, template and forking flags, default branch, archived state, and merge settings of one repository |
+| `github.repository-topics.set` | replaces the topic list of one repository |
 
-Both belong to the Actions administrator group, so they are listed only, never part of a starting profile, and
-chosen with the profile `actions-admin` or by name in a `tools` list. Both act on one repository inside the
+All three belong to the Actions administrator group, so they are listed only, never part of a starting profile, and
+chosen with the profile `actions-admin` or by name in a `tools` list. All act on one repository inside the
 connection's targets; a repository outside them is refused before a secret is read or GitHub is contacted,
 without naming it.
 
@@ -190,6 +191,12 @@ invalid request that names no text from GitHub. Giving `allow_merge_commit`, `al
 `allow_rebase_merge` all as `false` is refused locally, before any request; the current state is not read for that check. The answer names
 the settings the call gave with the values GitHub reports, and carries no `before` value, since the change is
 the only request. A refusal for a missing right names the permission below, never text from GitHub.
+
+`github.repository-topics.set` replaces the whole topic list in one `PUT` request that is never retried, with the same
+uncertainty message as `update`. A list holds at most 20 distinct topics of lowercase letters, digits, and hyphens,
+each starting with a letter or digit and at most 50 characters; an empty list removes all topics. Anything else is
+refused before a secret is read. The answer lists the topics GitHub reports, untrusted text; a list that differs from
+the one sent is an error that says the state is unclear.
 
 The token rights are listed under [GitHub Actions](setup.md#github-actions), whose rule for a token of its own they follow.
 

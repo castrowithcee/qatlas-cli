@@ -167,7 +167,7 @@ your token holds. A repository or organization policy can forbid a run although 
 | Read Actions or workflow permissions | `repo`, as a repository administrator | Administration: read |
 | Change Actions or workflow permissions | `repo`, as a repository administrator | Administration: read and write |
 | Read repository settings | `repo` for private repositories | Metadata: read |
-| Change repository settings, including archiving and unarchiving | `repo`, as a repository administrator | Administration: write |
+| Change repository settings and topics, including archiving and unarchiving | `repo`, as a repository administrator | Administration: write |
 
 Workflow files, Actions permissions, and repository settings are high risk. Give those connections a token of their
 own that no other connection uses, ideally fine-grained and limited to the one repository, with only the

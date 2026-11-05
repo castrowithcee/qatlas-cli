@@ -376,7 +376,8 @@ var (
 	maintainerTools = []string{workflowFilesList.ID, workflowFilesGet.ID, workflowFilesCreate.ID,
 		workflowFilesUpdate.ID, workflowsEnable.ID, workflowsDisable.ID}
 	adminTools = []string{actionsPermissionsGet.ID, actionsPermissionsUpdate.ID, workflowPermissionsGet.ID,
-		workflowPermissionsUpdate.ID, repositorySettingsGet.ID, repositorySettingsUpdate.ID}
+		workflowPermissionsUpdate.ID, repositorySettingsGet.ID, repositorySettingsUpdate.ID,
+		repositoryTopicsSet.ID}
 )
 
 // maintenanceOperations binds every maintainer and administrator tool to its handler. They share the handler
@@ -423,6 +424,9 @@ func maintenanceOperations() []capability.Operation {
 		}),
 		bind(repositorySettingsUpdate, checkRepositorySettings, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
 			return c.updateRepositorySettings(ctx, a)
+		}),
+		bind(repositoryTopicsSet, checkRepositoryTopics, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
+			return c.setRepositoryTopics(ctx, a.Names)
 		}),
 	}
 }

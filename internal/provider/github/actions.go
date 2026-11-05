@@ -586,6 +586,9 @@ type actionsArguments struct {
 	DefaultBranch  string  `json:"default_branch"`
 	Archived       *bool   `json:"archived"`
 
+	// The topic list of github.repository-topics.set; nil when the argument is missing.
+	Names []string `json:"names"`
+
 	list          string
 	page, perPage int
 	binding       []byte
