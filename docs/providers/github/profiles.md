@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-11-05
 ---
 
 # GitHub setup profiles
@@ -26,7 +26,8 @@ and restoring stay unticked. The profile
 effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](actions.md#github-actions), the
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
-[Pull requests](pull-requests.md#pull-requests), the not-recommended profile `pull-request-reviews` under
+[Pull requests](pull-requests.md#pull-requests), the not-recommended profile `checks` under
+[Check runs, annotations, and check suites](pull-requests.md#check-runs-annotations-and-check-suites), the not-recommended profile `pull-request-reviews` under
 [Pull request reviews and comments](pull-requests.md#pull-request-reviews-and-comments), the not-recommended profile
 `releases` under [Releases](releases.md#releases), the not-recommended profiles `discovery` and `stars` under
 [accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars), and the

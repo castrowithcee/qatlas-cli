@@ -10,7 +10,7 @@ import (
 // toolGroups are the subject areas GitHub's tools are sorted into for display.
 var toolGroups = []config.ToolGroup{
 	{ID: "issues", Title: "Issues", Description: "Issues, comments, reactions, labels, milestones, types, fields, dependencies, sub-issues, and Copilot assignments"},
-	{ID: "pull-requests", Title: "Pull requests", Description: "Pull requests with their files, commits, checks, reviews, review threads, reviewers, and Copilot reviews"},
+	{ID: "pull-requests", Title: "Pull requests", Description: "Pull requests with their files, commits, checks, check runs and suites, reviews, review threads, reviewers, and Copilot reviews"},
 	{ID: "projects", Title: "Projects", Description: "Projects with their items, drafts, fields, views, status updates, iterations, templates, and access"},
 	{ID: "actions", Title: "Actions", Description: "Workflows, runs, jobs, logs, artifacts, and workflow and Actions permissions"},
 	{ID: "code", Title: "Code", Description: "Repository contents, files, trees, branches, tags, commits, and blame"},
@@ -29,8 +29,9 @@ var groupBySegment = map[string]string{
 	"issues": "issues", "comments": "issues", "reactions": "issues", "labels": "issues",
 	"milestones": "issues", "issue-types": "issues", "issue-fields": "issues", "issue-dependencies": "issues",
 	"sub-issues": "issues", "copilot-assignments": "issues",
-	"copilot-reviews": "pull-requests",
-	"workflows":       "actions", "workflow-runs": "actions", "workflow-jobs": "actions", "workflow-run-logs": "actions",
+	"copilot-reviews": "pull-requests", "check-runs": "pull-requests", "check-annotations": "pull-requests",
+	"check-suites": "pull-requests", "check-suite-runs": "pull-requests",
+	"workflows": "actions", "workflow-runs": "actions", "workflow-jobs": "actions", "workflow-run-logs": "actions",
 	"workflow-artifacts": "actions", "workflow-files": "actions", "workflow-permissions": "actions",
 	"actions-permissions": "actions",
 	"contents":            "code", "files": "code", "branches": "code", "commits": "code", "trees": "code",

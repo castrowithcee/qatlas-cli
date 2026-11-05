@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-25
-updated: 2026-10-25
+updated: 2026-11-05
 ---
 
 # Set up GitHub
@@ -143,6 +143,7 @@ assignment; `repo` is the scope of the issue and pull request routes it changes.
 | --- | --- | --- |
 | Read pull requests, files, commits, diffs, reviews, review comments, review threads | `repo`, or `public_repo` for public repositories | Pull requests: read |
 | Read checks | `repo` | Checks: read, and Commit statuses: read |
+| Read check runs, annotations, check suites | `repo` for private repositories, none for public | Checks: read |
 | Create, update, close, reopen, update the branch | `repo` | Pull requests: read and write |
 | Merge | `repo` | Pull requests: read and write, plus Contents: read and write |
 | Review, approve, reply, resolve or unresolve a thread, request or remove reviewers | `repo` | Pull requests: read and write |
