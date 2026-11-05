@@ -155,7 +155,7 @@ The token rights are listed under [GitHub Actions](setup.md#github-actions).
 Two more groups of repository tools change what runs in a repository and with which rights: the workflow
 maintainer writes workflow files, which decide what code runs with the repository's secrets, and the Actions
 administrator decides whether Actions run at all, which actions they may use, what the `GITHUB_TOKEN` of
-every run may do, and how the repository accepts merges (the [merge and branch settings](repositories.md#repository-merge-and-branch-settings)). They are high risk,
+every run may do, and how the repository accepts merges (the [repository settings](repositories.md#repository-settings)). They are high risk,
 and Qatlas keeps them behind a boundary of their own:
 
 - **Listed only.** A connection offers such a tool only when its `tools` list names it. A connection that

@@ -166,7 +166,7 @@ var outputSamples = map[string]any{
 	"github.repositories.search":                   RepositorySearchList{},
 	"github.repository-advisories.list":            RepositoryAdvisoryList{},
 	"github.repository-settings.get":               RepositorySettings{},
-	"github.repository-settings.update":            MergeSettings{},
+	"github.repository-settings.update":            RepositorySettingsChange{},
 	"github.repository-subscriptions.set":          RepositorySubscription{},
 	"github.rulesets.create":                       Ruleset{},
 	"github.rulesets.delete":                       RulesetDeleted{},
