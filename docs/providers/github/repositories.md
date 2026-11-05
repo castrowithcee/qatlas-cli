@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the GitHub repository tools: the repository list of an owner, repository create, fork, and delete, collaborators, rulesets, custom properties, repository merge and branch settings, starred repositories, and the repository search.
+  Describes the GitHub repository tools: the repository list of an owner, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository merge and branch settings, starred repositories, and the repository search.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-05
 ---
 
 # GitHub repositories
@@ -47,6 +47,7 @@ report only their count: a connection GitHub also serves as a list of its own is
 | --- | --- |
 | `github.repositories.create` | creates one repository under the token's own account or an organization |
 | `github.repositories.fork` | forks a repository into the token's own account or an organization |
+| `github.repositories.rename` | renames one repository under its owner; offered only where a connection's `tools` list names it |
 | `github.repositories.delete` | deletes one repository permanently; offered only where a connection's `tools` list names it |
 | `github.collaborators.list` | lists the collaborators of a repository |
 
@@ -69,6 +70,20 @@ Creating or forking under the token's own account, rather than an organization, 
 token as a whole and follows the [account-wide rule](accounts.md#account-wide-tools): it is refused when the
 connection's targets name a repository or a project, since the account behind the token may belong to a
 customer other than the one those targets name.
+
+`github.repositories.rename` gives one repository a new `name` (without the owner) under the same owner and is
+offered only where a connection's `tools` list names it; no profile selects it. Both the current repository and
+`owner/name` with the new name must lie inside the connection's targets and outside its exclusions, checked
+before any credential is resolved; a refusal names neither. The new name follows the rules of a repository
+name, a change of letter case alone is allowed, and the same name is refused. The tool sends one request, never
+repeated; after a timeout, a server error, or an answer that does not name the requested owner and name, it
+reports that the rename may have been applied, so read the repository before trying again. A name already taken
+under the owner answers `invalid-request`. `repository` in the result is the new name, `previous` the old one.
+
+GitHub forwards the old name on the web and for Git, but Qatlas never follows it: after a rename, the old name
+no longer addresses the repository in any tool. Targets and exclusions that name the repository without `*`
+stay as written and do not match the new name, so a user adjusts them. With such targets, add the new name
+before the rename, as the tool refuses a new name outside the targets.
 
 `github.repositories.delete` deletes one repository permanently and is offered only where a connection's
 `tools` list names it. `confirm_name` must repeat the repository as `owner/name` exactly, checked before any

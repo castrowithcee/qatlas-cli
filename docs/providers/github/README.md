@@ -81,7 +81,8 @@ requests from exclusions are left out. The profile tools (`github.accounts.me`,
 [project items](project-items.md#items-and-drafts) describe their own enforcement.
 
 Two limits hold: repository lookups ask GitHub not to follow renames, but a repository renamed outside Qatlas
-leaves a name-based exclusion no longer matching it; and organization rulesets and organization custom properties
+or with [`github.repositories.rename`](repositories.md#repository-lifecycle-and-collaborators) leaves a
+name-based exclusion no longer matching it; and organization rulesets and organization custom properties
 stay allowed, even for an excluded repository or owner.
 
 One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
