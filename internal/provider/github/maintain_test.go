@@ -201,6 +201,7 @@ func validArguments(id string) string {
 		workflowPermissionsUpdate.ID: `{"default_workflow_permissions":"read"}`,
 		repositorySettingsGet.ID:     `{}`,
 		repositorySettingsUpdate.ID:  `{"allow_squash_merge":true}`,
+		repositoryTopicsSet.ID:       `{"names":["go"]}`,
 	}[id]
 }
 
@@ -249,8 +250,8 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != len(guardedTools)+len(deletes)+8 || len(guardedTools) != 12 {
-		t.Errorf("marked tools = %d, want the twelve maintainer and administrator tools, the thirteen deletes and "+
+	if marked != len(guardedTools)+len(deletes)+8 || len(guardedTools) != 13 {
+		t.Errorf("marked tools = %d, want the thirteen maintainer and administrator tools, the thirteen deletes and "+
 			"the three access tools, files.push, and github.labels.delete, the merge, the approve, the ruleset "+
 			"create and update, the custom properties set, the notifications mark-all, the gist delete, and the repository rename", marked)
 	}
@@ -348,7 +349,7 @@ func TestGuardedToolsNeedTheirNameInTheToolsList(t *testing.T) {
 			}
 		}
 	}
-	for connection, want := range map[string]int{"maintainer": 8, "admin": 6} {
+	for connection, want := range map[string]int{"maintainer": 8, "admin": 7} {
 		searched, _ := core.Search(application.SearchRequest{Provider: Provider, Connection: connection})
 		if len(searched.Operations) != want {
 			t.Errorf("%s discovers %d tools, want %d", connection, len(searched.Operations), want)

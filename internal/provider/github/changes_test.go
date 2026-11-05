@@ -399,6 +399,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.repository-settings.update": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
 			repositorySettingSensitivity),
 		"github.repository-subscriptions.set": changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+		"github.repository-topics.set": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
+			repositorySettingSensitivity),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

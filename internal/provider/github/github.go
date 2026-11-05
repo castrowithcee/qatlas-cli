@@ -21,7 +21,7 @@
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
 // dispatch, re-run, or cancel one named workflow or run; they read the billable time of a run and, listed
 // only, delete the logs of one. Only a connection whose tools list names them
-// maintains workflow files below .github/workflows/ and Actions settings. The pull request tools, offered only
+// maintains workflow files below .github/workflows/, Actions settings, and repository settings and topics. The pull request tools, offered only
 // by the not-recommended setup profile pull-requests, read the pull requests of a repository: their list, one
 // pull request, its changed files, its commits, its diff, and the checks at its head commit; the project
 // items still see a pull request only as an item, and the issue and comment tools still refuse a pull request
