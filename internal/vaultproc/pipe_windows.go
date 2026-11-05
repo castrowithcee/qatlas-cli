@@ -39,13 +39,16 @@ func isPipePath(path string) bool {
 // pipePath returns the vault pipe of the vault at abs, an absolute path: named after this user's security
 // identifier, so the names of two users never collide, and a hash of the path, compared without regard to
 // case as the file system does, so two vaults of one user never share a pipe either.
-func pipePath(abs string) (string, bool, error) {
+func pipePath(abs string) (string, bool, error) { return pipePathNamed(abs, pipeName) }
+
+// pipePathNamed is pipePath with name as the start of the pipe's name.
+func pipePathNamed(abs, name string) (string, bool, error) {
 	sid, err := currentUserSID()
 	if err != nil {
 		return "", true, err
 	}
 	sum := sha256.Sum256([]byte(strings.ToLower(filepath.Clean(abs))))
-	return pipePrefix + pipeName + sid.String() + "-" + hex.EncodeToString(sum[:8]), true, nil
+	return pipePrefix + name + sid.String() + "-" + hex.EncodeToString(sum[:8]), true, nil
 }
 
 // pipeSecurity returns the security attributes every instance of a vault pipe is created with: a protected

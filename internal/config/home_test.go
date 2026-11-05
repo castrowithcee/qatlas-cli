@@ -281,6 +281,29 @@ func TestLegacyDefault(t *testing.T) {
 	})
 }
 
+// The default directory of the versions before the rename is named only while no explicit place is.
+func TestLegacyDefaultDir(t *testing.T) {
+	home := legacyHome(t)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("QCONNECT_CONFIG", "")
+	t.Setenv("QCONNECT_HOME", "")
+	if got, want := LegacyDefaultDir(""), filepath.Join(home, ".qatlas", "cli"); got != want {
+		t.Errorf("LegacyDefaultDir() = %q, want %q", got, want)
+	}
+	if got := LegacyDefaultDir(filepath.Join(home, "config.yaml")); got != "" {
+		t.Errorf("LegacyDefaultDir() with --config = %q, want none", got)
+	}
+	for _, name := range []string{"QCONNECT_CONFIG", "QCONNECT_HOME"} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, filepath.Join(home, "elsewhere"))
+			if got := LegacyDefaultDir(""); got != "" {
+				t.Errorf("LegacyDefaultDir() with %s = %q, want none", name, got)
+			}
+		})
+	}
+}
+
 // MigrateDefault migrates as MigrateHome does and returns the current default file, never the legacy one.
 func TestMigrateDefault(t *testing.T) {
 	home := legacyHome(t)

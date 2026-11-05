@@ -6,10 +6,12 @@ package vaultproc
 const legacyProofLabel = "qatlas vault process proof v2\x00"
 
 // legacyRuntimeDirName is the directory below the runtime directory that the release before qatlas-connect
-// keeps its socket in; a successor looks there only for a vault process of that release that hands the vault
-// over to it (see ListenSuccessor). Kept until the next major release.
+// keeps its socket in; a successor looks there for a vault process of that release that hands the vault over
+// to it (see ListenSuccessor), and this release for one it ends (see FindEarlier). Kept until the next major
+// release.
 const legacyRuntimeDirName = "qatlas"
 
 // legacyPipeName starts the pipe name of the release before qatlas-connect on Windows. Windows never hands
-// over, so only a build with the tag legacy_vault_names uses it. Kept until the next major release.
+// over, so this release looks there only for a vault process of that release it ends (see FindEarlier). Kept
+// until the next major release.
 const legacyPipeName = "qatlas-vault-"

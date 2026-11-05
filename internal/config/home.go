@@ -81,6 +81,20 @@ func LegacyDefault(path string) bool {
 	return err == nil && got == want
 }
 
+// LegacyDefaultDir returns the default configuration directory of the versions before the rename where the
+// configuration is resolved from the default location: neither explicit, the --config value, nor
+// QCONNECT_CONFIG or QCONNECT_HOME name a place. Otherwise, or without a home directory, it returns "".
+func LegacyDefaultDir(explicit string) string {
+	if explicit != "" || envvar.Set("QCONNECT_CONFIG") || envvar.Set("QCONNECT_HOME") {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ecosystemDirName, legacyHomeDirName)
+}
+
 // MigrateDefault migrates as a run from the default location does (see MigrateHome) and returns the
 // configuration file in the current default directory. Unlike Path it never falls back to the legacy
 // directory: when the current one does not exist afterwards, it fails.

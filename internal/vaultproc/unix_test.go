@@ -5,15 +5,18 @@ package vaultproc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -74,7 +77,36 @@ func platformHelper(mode, path string) {
 	switch mode {
 	case "successor", "successor-no-socket", "successor-renamed", "successor-earlier":
 		handoverHelper(mode, path)
+	case "serve-earlier":
+		serveEarlier(path)
 	}
+}
+
+// serveEarlier is what a helper process in mode serve-earlier runs: it stands in for a vault process of the
+// release before qatlas-connect at path, hardened and serving as one does, and locks itself on SIGTERM.
+func serveEarlier(path string) {
+	if err := Harden(); err != nil {
+		fmt.Println("error", err)
+		os.Exit(1)
+	}
+	l, err := Listen(path)
+	if err != nil {
+		fmt.Println("error", err)
+		os.Exit(1)
+	}
+	s := NewServer(testKey, testSecrets(), testBindings())
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	go func() {
+		<-signals
+		_ = s.Close()
+	}()
+	fmt.Println("listening")
+	if err := s.Serve(l); err != nil {
+		fmt.Println("error", err)
+		os.Exit(1)
+	}
+	fmt.Println("locked")
 }
 
 func TestListenReplacesADeadSocket(t *testing.T) {
