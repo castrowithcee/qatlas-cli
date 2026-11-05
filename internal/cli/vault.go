@@ -105,9 +105,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"way reading a secret does. The state is the effective one: unlocked while a vault process holds\n" +
 			"the vault open for every connection. For an encrypted vault it also reports that process\n" +
 			"(process running, with its pid, when it locks itself, and its update behaviour, which says\n" +
-			"whether 'qconnect update' hands the vault over to the new program or locks it, or none); for an\n" +
-			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
-			"passphrase and shows no secret value.",
+			"whether 'qconnect update' hands the vault over to the new program or locks it, or none), and warns\n" +
+			"of a vault process of the release before qatlas-connect that still holds the vault unlocked, with\n" +
+			"its pid; for an unencrypted one it warns that connections are not bound to approvals. It asks for\n" +
+			"no passphrase and shows no secret value.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultStatus(c, opts)
@@ -122,8 +123,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"vault process that holds the unlocked vault in memory, detached from the terminal, so it outlives\n" +
 			"the session that started it; it locks itself after the idle timeout of 'vault settings' without a\n" +
 			"read, on 'qconnect vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
-			"not started a second time, and nothing is asked. Where systemd-logind would end the process at\n" +
-			"logout or remove its socket, a warning names the setting, such as 'loginctl enable-linger'.\n\n" +
+			"not started a second time, and nothing is asked. A vault process of the release before\n" +
+			"qatlas-connect that still holds the vault unlocked is ended before the new one starts. Where\n" +
+			"systemd-logind would end the process at logout or remove its socket, a warning names the setting,\n" +
+			"such as 'loginctl enable-linger'.\n\n" +
 			"On Windows the process listens on a named pipe only this user can open, has no console, so closing\n" +
 			"the terminal, Windows Terminal or the console window alike, leaves it running, and ends at logout or\n" +
 			"restart at the latest. It keeps other processes of this user from reading its memory, but less\n" +
@@ -145,9 +148,11 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	lock := &cobra.Command{
 		Use:   "lock",
 		Short: "Lock the vault: end the vault process that holds it unlocked",
-		Long: "Asks the vault process to overwrite the secrets it holds and end. Without a vault process the\n" +
-			"vault is already locked, which is reported as success, so locking twice is no mistake. Locking\n" +
-			"only takes access away, so it needs neither a terminal nor the passphrase.",
+		Long: "Asks the vault process to overwrite the secrets it holds and end. A vault process of the release\n" +
+			"before qatlas-connect that still holds the vault unlocked cannot be asked; it is ended with a\n" +
+			"signal instead, on Windows terminated. Without a vault process the vault is already locked, which\n" +
+			"is reported as success, so locking twice is no mistake. Locking only takes access away, so it\n" +
+			"needs neither a terminal nor the passphrase.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultLock(c, opts)
@@ -697,6 +702,9 @@ func runVaultStatus(c *cobra.Command, opts *Options) error {
 			"credentials.yaml still holds plaintext secrets; run 'qconnect vault migrate' to move them into the vault")
 	}
 	process := vaultProcessOf(c.Context(), v, status.State, &status.Warning)
+	if process.State != "" && process.State != "unsupported" {
+		noteEarlier(opts, v, &status.Warning)
+	}
 	return emit(c, opts, vaultStatusObject(status, process))
 }
 
@@ -741,6 +749,51 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 	}
 	addWarning(warning, "the vault process cannot be asked: "+err.Error())
 	return vaultProcessState{State: "unknown"}
+}
+
+// earlierVaultDirs returns the vault directories a vault process of the release before qatlas-connect may
+// hold this vault unlocked for: v's own, and, where the configuration is resolved from the default location,
+// the vault in that release's default location, which this release migrated from.
+func earlierVaultDirs(opts *Options, v *vault.Vault) []string {
+	dirs := []string{v.Dir()}
+	if home := config.LegacyDefaultDir(opts.Config); home != "" {
+		if legacy := vault.New(home).Dir(); filepath.Clean(legacy) != filepath.Clean(v.Dir()) {
+			dirs = append(dirs, legacy)
+		}
+	}
+	return dirs
+}
+
+// noteEarlier adds to warning every vault process of the release before qatlas-connect that holds v
+// unlocked, which this release cannot ask, with its pid and how to end it, and anything at such a process's
+// socket that cannot be identified.
+func noteEarlier(opts *Options, v *vault.Vault, warning *string) {
+	for _, dir := range earlierVaultDirs(opts, v) {
+		pid, err := vaultproc.FindEarlier(dir)
+		switch {
+		case err != nil:
+			addWarning(warning, err.Error())
+		case pid > 0:
+			addWarning(warning, fmt.Sprintf("a vault process of the release before qatlas-connect (pid %d) still "+
+				"holds the vault unlocked, and this release cannot reach it; 'qconnect vault lock' ends it", pid))
+		}
+	}
+}
+
+// endEarlier ends every vault process of the release before qatlas-connect that holds v unlocked (see
+// vaultproc.EndEarlier) and returns the ids of those it ended.
+func endEarlier(ctx context.Context, opts *Options, v *vault.Vault) ([]int, error) {
+	var ended []int
+	var errs []error
+	for _, dir := range earlierVaultDirs(opts, v) {
+		pid, err := vaultproc.EndEarlier(ctx, dir)
+		if err != nil {
+			errs = append(errs, err)
+		} else if pid > 0 {
+			ended = append(ended, pid)
+		}
+	}
+	return ended, errors.Join(errs...)
 }
 
 // vaultAccessCheck returns how a listing learns why a connection that reads from the vault cannot use it
@@ -826,6 +879,16 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 					"replaced since it started\n", pid)
 			}
 		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
+			return err
+		}
+		// This release cannot ask a vault process of the earlier one; ended, it no longer holds the vault
+		// beside the process started here.
+		ended, err := endEarlier(ctx, opts, v)
+		for _, pid := range ended {
+			fmt.Fprintf(c.ErrOrStderr(), "qconnect: ended the vault process of the release before qatlas-connect "+
+				"(pid %d), which held the vault unlocked\n", pid)
+		}
+		if err != nil {
 			return err
 		}
 		if configPath, err = absConfigPath(opts); err != nil {
@@ -927,16 +990,29 @@ func runVaultLock(c *cobra.Command, opts *Options) error {
 		return classifyUserError(err)
 	}
 	ctx := contextOrBackground(c.Context())
-	err = client.Lock(ctx)
-	if errors.Is(err, vaultproc.ErrNotRunning) {
+	lockErr := client.Lock(ctx)
+	running := !errors.Is(lockErr, vaultproc.ErrNotRunning)
+	if lockErr == nil {
+		awaitLocked(ctx, client)
+		fmt.Fprintln(out, "the vault is locked: the vault process overwrote its secrets and ended")
+	}
+	// Locking only takes access away, so a vault process of the earlier release is ended whatever became of
+	// this release's own.
+	ended, endErr := endEarlier(ctx, opts, v)
+	for _, pid := range ended {
+		fmt.Fprintf(out, "the vault is locked: ended the vault process of the release before qatlas-connect "+
+			"(pid %d)\n", pid)
+	}
+	switch {
+	case running && lockErr != nil && endErr != nil:
+		return errors.Join(lockErr, endErr)
+	case running && lockErr != nil:
+		return lockErr
+	case endErr != nil:
+		return endErr
+	case !running && len(ended) == 0:
 		fmt.Fprintln(out, "the vault is already locked: no vault process is running")
-		return nil
 	}
-	if err != nil {
-		return err
-	}
-	awaitLocked(ctx, client)
-	fmt.Fprintln(out, "the vault is locked: the vault process overwrote its secrets and ended")
 	return nil
 }
 
