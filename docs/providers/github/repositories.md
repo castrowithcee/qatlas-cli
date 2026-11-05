@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub repository tools: the repository list of an owner, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository merge and branch settings, starred repositories, and the repository search.
+  Describes the GitHub repository tools: the repository list of an owner, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -164,27 +164,30 @@ answers the definitions GitHub created or replaced. Every field is checked befor
 the exclusive target and argument, the array bounds a JSON schema's `maxItems` cannot enforce by itself, and
 the size of the whole request.
 
-## Repository merge and branch settings
+## Repository settings
 
 | Tool | Does |
 | --- | --- |
-| `github.repository-settings.get` | reads the merge and branch settings of one repository |
-| `github.repository-settings.update` | changes the merge and branch settings of one repository |
+| `github.repository-settings.get` | reads the description, homepage, topics, feature switches, default branch, visibility, archived state, and merge settings of one repository |
+| `github.repository-settings.update` | changes the description, homepage, feature switches, template and forking flags, default branch, archived state, and merge settings of one repository |
 
 Both belong to the Actions administrator group, so they are listed only, never part of a starting profile, and
 chosen with the profile `actions-admin` or by name in a `tools` list. Both act on one repository inside the
 connection's targets; a repository outside them is refused before a secret is read or GitHub is contacted,
 without naming it.
 
-`get` answers exactly the merge and branch fields of its output schema and nothing else of the repository.
-GitHub leaves the merge fields out for a token without write access; they are absent then.
+`get` answers exactly the fields of its output schema and nothing else of the repository. GitHub leaves the merge
+fields out for a token without write access; they are absent then. Description, homepage, and topics are untrusted
+text of the repository owner; the homepage address is never fetched.
 
-`update` accepts only the merge and branch arguments of its input schema. At least one value is required, and
+`update` accepts only the arguments of its input schema. At least one value is required, and
 only the values given are sent in one `PATCH` request that is never retried; after a timeout, a server error,
-or an unreadable answer the refusal says the change may have been applied. Name, description, visibility,
-default branch, archiving, feature switches, security settings, transfer, deletion, rulesets, and the Actions
-settings are not reachable. Giving `allow_merge_commit`, `allow_squash_merge`, and `allow_rebase_merge` all as
-`false` is refused locally, before any request; the current state is not read for that check. The answer names
+or an unreadable answer the refusal says the change may have been applied. The name changes only through
+`github.repositories.rename`; visibility, security settings, transfer, deletion, rulesets, and the Actions
+settings are not reachable. Archiving makes the repository read-only, and unarchiving (`archived: false`) needs
+the same administrator role. GitHub refusing a value, such as a `default_branch` that is no existing branch, is an
+invalid request that names no text from GitHub. Giving `allow_merge_commit`, `allow_squash_merge`, and
+`allow_rebase_merge` all as `false` is refused locally, before any request; the current state is not read for that check. The answer names
 the settings the call gave with the values GitHub reports, and carries no `before` value, since the change is
 the only request. A refusal for a missing right names the permission below, never text from GitHub.
 

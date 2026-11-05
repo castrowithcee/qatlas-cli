@@ -573,6 +573,19 @@ type actionsArguments struct {
 	MergeCommitTitle         string `json:"merge_commit_title"`
 	MergeCommitMessage       string `json:"merge_commit_message"`
 
+	// The repository fields of github.repository-settings.update. A text is a pointer, so an empty value that
+	// clears the field stays apart from one left out.
+	Description    *string `json:"description"`
+	Homepage       *string `json:"homepage"`
+	HasIssues      *bool   `json:"has_issues"`
+	HasProjects    *bool   `json:"has_projects"`
+	HasWiki        *bool   `json:"has_wiki"`
+	HasDiscussions *bool   `json:"has_discussions"`
+	IsTemplate     *bool   `json:"is_template"`
+	AllowForking   *bool   `json:"allow_forking"`
+	DefaultBranch  string  `json:"default_branch"`
+	Archived       *bool   `json:"archived"`
+
 	list          string
 	page, perPage int
 	binding       []byte
