@@ -751,49 +751,20 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 	return vaultProcessState{State: "unknown"}
 }
 
-// earlierVaultDirs returns the vault directories a vault process of the release before qatlas-connect may
-// hold this vault unlocked for: v's own, and, where the configuration is resolved from the default location,
-// the vault in that release's default location, which this release migrated from.
-func earlierVaultDirs(opts *Options, v *vault.Vault) []string {
-	dirs := []string{v.Dir()}
-	if home := config.LegacyDefaultDir(opts.Config); home != "" {
-		if legacy := vault.New(home).Dir(); filepath.Clean(legacy) != filepath.Clean(v.Dir()) {
-			dirs = append(dirs, legacy)
-		}
-	}
-	return dirs
-}
-
 // noteEarlier adds to warning every vault process of the release before qatlas-connect that holds v
 // unlocked, which this release cannot ask, with its pid and how to end it, and anything at such a process's
 // socket that cannot be identified.
 func noteEarlier(opts *Options, v *vault.Vault, warning *string) {
-	for _, dir := range earlierVaultDirs(opts, v) {
-		pid, err := vaultproc.FindEarlier(dir)
+	for _, f := range manage.FindEarlierProcesses(opts.Config, v) {
+		pid := f.PID
 		switch {
-		case err != nil:
-			addWarning(warning, err.Error())
+		case f.Err != nil:
+			addWarning(warning, f.Err.Error())
 		case pid > 0:
 			addWarning(warning, fmt.Sprintf("a vault process of the release before qatlas-connect (pid %d) still "+
 				"holds the vault unlocked, and this release cannot reach it; 'qconnect vault lock' ends it", pid))
 		}
 	}
-}
-
-// endEarlier ends every vault process of the release before qatlas-connect that holds v unlocked (see
-// vaultproc.EndEarlier) and returns the ids of those it ended.
-func endEarlier(ctx context.Context, opts *Options, v *vault.Vault) ([]int, error) {
-	var ended []int
-	var errs []error
-	for _, dir := range earlierVaultDirs(opts, v) {
-		pid, err := vaultproc.EndEarlier(ctx, dir)
-		if err != nil {
-			errs = append(errs, err)
-		} else if pid > 0 {
-			ended = append(ended, pid)
-		}
-	}
-	return ended, errors.Join(errs...)
 }
 
 // vaultAccessCheck returns how a listing learns why a connection that reads from the vault cannot use it
@@ -883,7 +854,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		}
 		// This release cannot ask a vault process of the earlier one; ended, it no longer holds the vault
 		// beside the process started here.
-		ended, err := endEarlier(ctx, opts, v)
+		ended, err := manage.EndEarlier(ctx, opts.Config, v)
 		for _, pid := range ended {
 			fmt.Fprintf(c.ErrOrStderr(), "qconnect: ended the vault process of the release before qatlas-connect "+
 				"(pid %d), which held the vault unlocked\n", pid)
@@ -998,7 +969,7 @@ func runVaultLock(c *cobra.Command, opts *Options) error {
 	}
 	// Locking only takes access away, so a vault process of the earlier release is ended whatever became of
 	// this release's own.
-	ended, endErr := endEarlier(ctx, opts, v)
+	ended, endErr := manage.EndEarlier(ctx, opts.Config, v)
 	for _, pid := range ended {
 		fmt.Fprintf(out, "the vault is locked: ended the vault process of the release before qatlas-connect "+
 			"(pid %d)\n", pid)
