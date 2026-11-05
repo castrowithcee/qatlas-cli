@@ -51,7 +51,7 @@ alike; a change is never sent. A fine-grained token without access to pull reque
 such a number; only then Qatlas looks the number up once, and a refusal that names no pull request stays
 `permission`. A pull request's own conversation comments are read and written by
 `github.pull-request-comments.list` and `.create`
-([Pull request reviews and comments](pull-requests.md#pull-request-reviews-and-comments)); an issue number
+([Pull request reviews and comments](pull-request-reviews.md#pull-request-reviews-and-comments)); an issue number
 given to either is refused as `invalid-request`.
 
 ```text
