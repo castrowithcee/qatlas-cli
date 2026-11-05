@@ -15,6 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/castrowithcee/qatlas-connect/internal/manage"
 	"github.com/castrowithcee/qatlas-connect/internal/vault"
 	"github.com/castrowithcee/qatlas-connect/internal/vaultproc"
 )
@@ -36,6 +37,7 @@ func TestMain(m *testing.M) {
 	startVaultProcessFn = func(context.Context, string, vault.Snapshot, *vaultproc.Client) (vaultproc.Status, error) {
 		return vaultproc.Status{}, vaultproc.ErrUnsupported
 	}
+	endEarlierFn = func(context.Context, *manage.Service, *vault.Vault) ([]int, error) { return nil, nil }
 	vaultTickInterval = time.Millisecond
 	// The screens are tested with their UTF-8 glyphs, whatever locale the machine has; a test that needs a
 	// terminal without UTF-8 sets its own environment.

@@ -48,6 +48,9 @@ type Service struct {
 	redactor  *redact.Redactor
 	processOK bool
 	targets   TargetSource
+	// explicitConfig is the --config value, empty where the configuration is resolved from the default
+	// location; it decides which vault directories EndEarlierProcesses covers.
+	explicitConfig string
 }
 
 // New returns the service for surface (one of the connlog.Surface constants). secrets may be nil for a

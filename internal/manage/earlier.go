@@ -41,6 +41,19 @@ func FindEarlierProcesses(explicitConfig string, v *vault.Vault) []EarlierFound 
 	return found
 }
 
+// WithExplicitConfig returns a copy of s that knows the --config value its surface was started with, empty
+// where the configuration is resolved from the default location.
+func (s *Service) WithExplicitConfig(explicitConfig string) *Service {
+	c := *s
+	c.explicitConfig = explicitConfig
+	return &c
+}
+
+// EndEarlierProcesses is EndEarlier for the configuration s was told about (see WithExplicitConfig).
+func (s *Service) EndEarlierProcesses(ctx context.Context, v *vault.Vault) ([]int, error) {
+	return EndEarlier(ctx, s.explicitConfig, v)
+}
+
 // EndEarlier ends every vault process of the release before qatlas-connect that holds v unlocked (see
 // vaultproc.EndEarlier) and returns the ids of those it ended.
 func EndEarlier(ctx context.Context, explicitConfig string, v *vault.Vault) ([]int, error) {
