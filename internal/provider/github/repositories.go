@@ -27,7 +27,9 @@ import (
 // belong to a customer other than the one the connection's targets name. github.repositories.delete deletes
 // one repository permanently and is offered only where a connection's tools list names it; confirm_name must
 // repeat the repository's owner/name exactly, checked before any credential is resolved, since this cannot be
-// undone. github.collaborators.list reads the collaborators of a repository, filtered by affiliation and
+// undone. github.repositories.rename renames one repository, likewise only where a tools list names it; both
+// the current and the new name must lie inside the connection's targets, checked before any credential is
+// resolved. github.collaborators.list reads the collaborators of a repository, filtered by affiliation and
 // permission, paged, with every member of GitHub's collaborator object, including a name or email address
 // GitHub reports for a person.
 
@@ -218,6 +220,7 @@ func repositoriesOperations() []capability.Operation {
 		{Descriptor: repositoriesCreate, Handler: capability.Handler(invokeRepositoriesCreate)},
 		{Descriptor: repositoriesFork, Handler: capability.Handler(invokeRepositoriesFork)},
 		{Descriptor: repositoriesDelete, Handler: capability.Handler(invokeRepositoriesDelete)},
+		{Descriptor: repositoriesRename, Handler: capability.Handler(invokeRepositoriesRename)},
 		{Descriptor: collaboratorsList, Handler: capability.Handler(invokeCollaboratorsList)},
 	}
 }

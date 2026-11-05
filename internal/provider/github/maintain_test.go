@@ -236,7 +236,8 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		want := guarded[descriptor.ID] || deletes[descriptor.ID] || descriptor.ID == pullsMerge.ID ||
 			descriptor.ID == pullRequestReviewsApprove.ID || descriptor.ID == rulesetsCreate.ID ||
 			descriptor.ID == rulesetsUpdate.ID || descriptor.ID == customPropertiesSet.ID ||
-			descriptor.ID == notificationsMarkAll.ID || descriptor.ID == gistsDelete.ID
+			descriptor.ID == notificationsMarkAll.ID || descriptor.ID == gistsDelete.ID ||
+			descriptor.ID == repositoriesRename.ID
 		if descriptor.RequiresToolAllowList != want {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
 		}
@@ -248,10 +249,10 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != len(guardedTools)+len(deletes)+7 || len(guardedTools) != 12 {
+	if marked != len(guardedTools)+len(deletes)+8 || len(guardedTools) != 12 {
 		t.Errorf("marked tools = %d, want the twelve maintainer and administrator tools, the thirteen deletes and "+
 			"the three access tools, files.push, and github.labels.delete, the merge, the approve, the ruleset "+
-			"create and update, the custom properties set, the notifications mark-all, and the gist delete", marked)
+			"create and update, the custom properties set, the notifications mark-all, the gist delete, and the repository rename", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {

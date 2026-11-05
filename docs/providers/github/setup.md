@@ -189,6 +189,7 @@ Files below `.github/workflows/` are changed only with the workflow file tools; 
 | --- | --- | --- |
 | List the repositories of an owner | none for public, `repo` for private | Access to the repositories |
 | Create or fork a repository | `repo` | Administration: read and write |
+| Rename a repository | `repo`, with the Admin role on the repository | Administration: read and write |
 | Delete a repository | `repo` and `delete_repo` | Administration: read and write |
 | List collaborators | `repo` | Metadata: read |
 | Read rulesets of a repository | `repo` | Administration: read |

@@ -52,7 +52,8 @@
 // create makes one new repository, under the token's own account or an organization the connection names as
 // an owner target; github.repositories.fork forks a repository a connection allows the same way,
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
-// one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
+// one repository permanently, once confirm_name repeats its owner/name exactly, and github.repositories.rename
+// renames one, once the current and the new name both lie inside the connection's targets. github.collaborators.list
 // reads the collaborators of a repository. github.rulesets.list and github.rulesets.get read the rulesets
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.

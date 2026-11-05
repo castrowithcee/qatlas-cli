@@ -162,6 +162,7 @@ var outputSamples = map[string]any{
 	"github.repositories.delete":                   RepositoryDeleted{},
 	"github.repositories.fork":                     RepositoryForked{},
 	"github.repositories.list":                     RepositoryList{},
+	"github.repositories.rename":                   RepositoryRenamed{},
 	"github.repositories.search":                   RepositorySearchList{},
 	"github.repository-advisories.list":            RepositoryAdvisoryList{},
 	"github.repository-settings.get":               RepositorySettings{},

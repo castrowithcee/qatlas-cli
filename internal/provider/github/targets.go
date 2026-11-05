@@ -58,7 +58,8 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// tools take an optional repository of their own, or a thread id whose repository is read and checked. The
 	// gist tools belong to a user account and take a gist id or none, checked against the user targets. The
 	// global advisory tools are GitHub-wide and name no target; the organization advisory list takes the owner
-	// of an organization like the team lists.
+	// of an organization like the team lists. github.repositories.rename declares its repository argument
+	// itself, since its result field of that name holds the new name, not the one it acted on.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
 		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
@@ -66,7 +67,7 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID,
 		notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID, notificationsMarkAll.ID,
 		threadSubscriptionsSet.ID, gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID,
-		globalAdvisoriesList.ID, globalAdvisoriesGet.ID:
+		globalAdvisoriesList.ID, globalAdvisoriesGet.ID, repositoriesRename.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
