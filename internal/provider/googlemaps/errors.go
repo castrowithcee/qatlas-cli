@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/googleapi"
 )
 
 // itoa keeps messages free of fmt for a single number.
@@ -22,40 +22,6 @@ func badRequest(message string) error {
 	return &provider.InvalidRequestError{Message: message}
 }
 
-// googleFields maps the Google error object, {"error":{"code","message","status","details":[...]}}, to an
-// Original: the status and message of the error and the type and reason of each detail. The domain and the
-// metadata of a detail may echo request values and are dropped.
-var googleFields = provider.OriginalFields{
-	Code: "error.status", Message: "error.message", List: "error.details",
-	Item: &provider.OriginalFields{Type: "@type", Code: "reason"},
-}
-
-// errorInfoSuffix ends the @type of the detail that carries the machine-readable reason.
-const errorInfoSuffix = "google.rpc.ErrorInfo"
-
-// googleStatusOf reads the status string and the reason of the first ErrorInfo detail of a Google error
-// object. Anything that is not that object yields empty strings.
-func googleStatusOf(body []byte) (status, reason string) {
-	var answer struct {
-		Error struct {
-			Status  string `json:"status"`
-			Details []struct {
-				Type   string `json:"@type"`
-				Reason string `json:"reason"`
-			} `json:"details"`
-		} `json:"error"`
-	}
-	if json.Unmarshal(body, &answer) != nil {
-		return "", ""
-	}
-	for _, detail := range answer.Error.Details {
-		if strings.HasSuffix(detail.Type, errorInfoSuffix) && detail.Reason != "" {
-			return answer.Error.Status, detail.Reason
-		}
-	}
-	return answer.Error.Status, ""
-}
-
 // googleError maps a failed Google answer to a provider error. Only values Google documents decide beyond the
 // HTTP status: 401 with CREDENTIALS_MISSING or UNAUTHENTICATED is auth, 403 with PERMISSION_DENIED is
 // permission, and 429 with RATE_LIMIT_EXCEEDED or RESOURCE_EXHAUSTED is rate-limited. Any other value, such
@@ -65,9 +31,9 @@ func googleStatusOf(body []byte) (status, reason string) {
 func googleError(op string, status int, body []byte) *provider.Error {
 	failed := func(class provider.Class, message string) *provider.Error {
 		return &provider.Error{Class: class, Op: op, Message: message,
-			Original: provider.ErrorOriginal(status, body, googleFields)}
+			Original: provider.ErrorOriginal(status, body, googleapi.Fields)}
 	}
-	state, reason := googleStatusOf(body)
+	state, reason := googleapi.StatusOf(body)
 	switch {
 	case status == http.StatusUnauthorized && (reason == "CREDENTIALS_MISSING" || state == "UNAUTHENTICATED"):
 		return failed(provider.ClassAuth, "Google reported the credential as missing or not accepted; check the API key")
@@ -86,7 +52,7 @@ func googleError(op string, status int, body []byte) *provider.Error {
 		Permission: "Google refused the key for the Places API (New); check that the API is enabled in the key's project, that the project has a billing account, and the key's restrictions",
 		NotFound:   "Google did not find the place; the place ID may be wrong or obsolete",
 	})
-	mapped.Original = provider.ErrorOriginal(status, body, googleFields)
+	mapped.Original = provider.ErrorOriginal(status, body, googleapi.Fields)
 	return mapped
 }
 
