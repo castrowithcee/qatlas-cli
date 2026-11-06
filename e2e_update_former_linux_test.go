@@ -311,6 +311,8 @@ func TestUpdateInTheFormerFormGetsTheCurrentName(t *testing.T) {
 			t.Fatal(err)
 		}
 		prefix := filepath.Join(home, "prefix")
+		// The installation of v2.2.0 had every page installed, the subpages included.
+		seedManpages(t, prefix)
 		installFormerly(t, prefix, rel, signer.PublicKey())
 		bin := filepath.Join(prefix, "bin")
 		env := []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), secret.StoreSelector + "=none"}
@@ -357,6 +359,7 @@ func TestUpdateInTheFormerFormGetsTheCurrentName(t *testing.T) {
 			t.Fatalf("%d starts said they adopted the name, want exactly one", notes)
 		}
 		assertAdopted(t, bin, program)
+		assertManpagesAdopted(t, filepath.Join(prefix, "share", "man", "man1"))
 		if _, err := os.Stat(filepath.Join(home, ".qatlas", "connect", "config.yaml")); err != nil {
 			t.Errorf("the configuration was not migrated: %v", err)
 		}
@@ -380,6 +383,7 @@ func TestUpdateInTheFormerFormGetsTheCurrentName(t *testing.T) {
 			t.Fatal(err)
 		}
 		prefix := filepath.Join(home, "prefix")
+		seedManpages(t, prefix)
 		installFormerly(t, prefix, rel, signer.PublicKey())
 		bin := filepath.Join(prefix, "bin")
 		foreign := filepath.Join(bin, "qconnect")
@@ -399,7 +403,47 @@ func TestUpdateInTheFormerFormGetsTheCurrentName(t *testing.T) {
 		if info, err := os.Lstat(former.bin); err != nil || !info.Mode().IsRegular() {
 			t.Errorf("qatlas is %v, %v, want the program as it was", info, err)
 		}
+		for _, name := range []string{"qatlas.1", "qatlas-vault-status.1", "other.1"} {
+			if info, err := os.Lstat(filepath.Join(prefix, "share", "man", "man1", name)); err != nil || !info.Mode().IsRegular() {
+				t.Errorf("%s is %v, %v, want it as it was", name, info, err)
+			}
+		}
 	})
+}
+
+// seedManpages puts the pages of an installation of v2.2.0 under prefix that the update of the former
+// updater does not touch: subpages of qatlas and a page of another program.
+func seedManpages(t *testing.T, prefix string) {
+	t.Helper()
+	dir := filepath.Join(prefix, "share", "man", "man1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"qatlas-vault-status.1": "old\n", "qatlas-providers.1": "old\n", "other.1": "foreign\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// assertManpagesAdopted checks that dir holds the main page, as the former updater installed it as qatlas.1,
+// under qconnect.1 with qatlas.1 as a link to it, and no subpage qatlas-*.1, and still the foreign page.
+func assertManpagesAdopted(t *testing.T, dir string) {
+	t.Helper()
+	if got, err := os.ReadFile(filepath.Join(dir, "qconnect.1")); err != nil || string(got) != ".TH QATLAS 1\n" {
+		t.Errorf("qconnect.1 = %q, %v, want the page the former updater installed", got, err)
+	}
+	if target, err := os.Readlink(filepath.Join(dir, "qatlas.1")); err != nil || target != "qconnect.1" {
+		t.Errorf("qatlas.1 links to %q (%v), want qconnect.1", target, err)
+	}
+	for _, name := range []string{"qatlas-vault-status.1", "qatlas-providers.1"} {
+		if _, err := os.Lstat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s remains: %v", name, err)
+		}
+	}
+	if got, _ := os.ReadFile(filepath.Join(dir, "other.1")); string(got) != "foreign\n" {
+		t.Errorf("other.1 = %q, want it untouched", got)
+	}
 }
 
 // dialogStep answers one prompt of a dialog: once marker appears after the last answer, answer is typed;

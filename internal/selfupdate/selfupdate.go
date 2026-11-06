@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -33,6 +34,8 @@ const (
 	maxArchiveBytes   = 128 << 20
 	maxExecutableSize = 64 << 20
 	maxManpageSize    = 2 << 20
+	maxSubpages       = 200
+	maxSubpagesSize   = 16 << 20
 	// requestTimeout only bounds a request that keeps trickling; a slow download that moves goes on.
 	requestTimeout = 30 * time.Minute
 	// stallTimeout ends a request that receives no byte for this long, waiting for the answer included.
@@ -500,6 +503,11 @@ func releaseURLs(r release, archiveName, signatureName string) (string, string, 
 type payload struct {
 	executable []byte
 	manpage    []byte
+	// subpages are the other manual pages of the archive, by file name; manSkipped says an entry that
+	// looked like one was left out, so the installed pages that the archive lacks may not be stale.
+	subpages    map[string][]byte
+	manSkipped  bool
+	subpagesLen int64
 }
 
 func extractPayload(filename string, body []byte, goos string, layout releaseverify.Layout) (payload, error) {
@@ -571,8 +579,36 @@ func capturePayload(out *payload, name string, reader io.Reader, goos string, la
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 		out.manpage = body
+	default:
+		captureSubpage(out, name, reader, goos, layout)
 	}
 	return nil
+}
+
+// captureSubpage takes a manual page qconnect-<name>.1 directly under share/man/man1/ of a current
+// archive. An archive is foreign data and the pages are secondary: whatever does not fit the name, count,
+// or size limits is left out and never fails the update.
+func captureSubpage(out *payload, name string, reader io.Reader, goos string, layout releaseverify.Layout) {
+	dir, base := path.Split(name)
+	if goos == "windows" || layout.Legacy || dir != "share/man/man1/" || !strings.HasPrefix(base, currentName+"-") ||
+		!strings.HasSuffix(base, ".1") {
+		return
+	}
+	_, replaces := out.subpages[base]
+	if !subpageName.MatchString(base) || (!replaces && len(out.subpages) >= maxSubpages) {
+		out.manSkipped = true
+		return
+	}
+	body, err := readEntry(reader, maxManpageSize)
+	if err != nil || out.subpagesLen+int64(len(body)) > maxSubpagesSize {
+		out.manSkipped = true
+		return
+	}
+	if out.subpages == nil {
+		out.subpages = map[string][]byte{}
+	}
+	out.subpagesLen += int64(len(body)) - int64(len(out.subpages[base]))
+	out.subpages[base] = body
 }
 
 func readEntry(reader io.Reader, limit int64) ([]byte, error) {
@@ -650,6 +686,20 @@ func (c *Client) install(ctx context.Context, files payload, goos string, layout
 		}
 		defer os.Remove(stagedMan)
 	}
+	// The other pages are best effort: one that cannot be staged is left out, and the installed pages stay.
+	stagedPages, complete := map[string]string{}, !files.manSkipped
+	for name, body := range files.subpages {
+		if stagedMan == "" {
+			break
+		}
+		staged, err := stageFile(manDir, ".qconnect-man-*", body, 0o644)
+		if err != nil {
+			complete = false
+			continue
+		}
+		defer os.Remove(staged)
+		stagedPages[name] = staged
+	}
 	mode := info.Mode().Perm() | 0o500
 	stagedBinary, err := stageFile(binDir, ".qconnect-bin-*", files.executable, mode)
 	if err != nil {
@@ -680,9 +730,10 @@ func (c *Client) install(ctx context.Context, files payload, goos string, layout
 		return err
 	}
 	if layout.Legacy {
-		dropCurrentName(goos, other, filepath.Join(manDir, currentName+".1"))
+		dropCurrentName(goos, other, manDir)
 		return nil
 	}
+	installSubpages(manDir, stagedPages, complete)
 	if goos == "windows" {
 		if stagedCopy == "" {
 			return nil
@@ -693,6 +744,20 @@ func (c *Client) install(ctx context.Context, files payload, goos string, layout
 		return nil
 	}
 	return aliasFormerName(other)
+}
+
+// installSubpages puts the staged manual pages, by file name, in place and, when they are all of the
+// archive's, removes the qconnect-*.1 files that the archive no longer has. An archive without any such page
+// removes none. Best effort: the program is replaced already.
+func installSubpages(manDir string, staged map[string]string, complete bool) {
+	for name, path := range staged {
+		if err := os.Rename(path, filepath.Join(manDir, name)); err != nil {
+			complete = false
+		}
+	}
+	if complete && len(staged) > 0 {
+		removeRegular(manDir, currentName+"-*.1", staged)
+	}
 }
 
 // replaceProgram puts staged in place of target, which on Windows may be running or not exist yet.
