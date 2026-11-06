@@ -107,7 +107,7 @@ var funnelsGet = capability.Descriptor{
 		"the website",
 	Tags: []string{"matomo", "funnels", "conversions", "get"}, Risk: readRisk(funnelsSensitive), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + idSiteSchema + `,` + idFunnelSchema + `,` +
-		idGoalFunnel + `},"oneOf":[{"required":["idFunnel"]},{"required":["idGoal"]}],"additionalProperties":false}`),
+		idGoalFunnel + `},"anyOf":[{"required":["idFunnel"]},{"required":["idGoal"]}],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + funnelProperties + `},` +
 		`"required":["idFunnel","idSite","steps"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{funnelSiteArgument(),

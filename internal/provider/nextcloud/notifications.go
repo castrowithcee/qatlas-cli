@@ -281,7 +281,7 @@ func (c *Client) DismissAllNotifications(ctx context.Context) (any, error) {
 // richObjectsSchema describes the objects behind a rich string; it is the shape of talk.messages.list objects.
 const richObjectsSchema = `{"type":"array","maxItems":50,"items":{"type":"object","properties":{"key":{"type":"string"},` +
 	`"type":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"},"details":{"type":"object","maxProperties":20,` +
-	`"additionalProperties":{"type":["string","integer"]}},"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
+	`"additionalProperties":{"anyOf":[{"type":"string"},{"type":"integer"}]}},"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
 	`"required":["key","type"],"additionalProperties":false}}`
 
 const notificationSchema = `{"type":"object","properties":{"id":{"type":"string"},"app":{"type":"string"},"user":{"type":"string"},` +
