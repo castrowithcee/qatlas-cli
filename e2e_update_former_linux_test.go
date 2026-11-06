@@ -276,7 +276,7 @@ func assertMCPAnswersAsQconnect(t *testing.T, r *runner) {
 			t.Errorf("mcp: the protocol stream carries %q", line)
 		}
 	}
-	for _, want := range []string{`"name":"qconnect"`, `"qconnect.search"`, `"qconnect.describe"`, `"qconnect.invoke"`} {
+	for _, want := range []string{`"name":"qconnect"`, `"name":"search"`, `"name":"describe"`, `"name":"invoke"`} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("mcp: stdout lacks %s:\n%s", want, stdout)
 		}

@@ -82,11 +82,11 @@ defaults:
 	const queryCanary = "searchcanary774422"
 	mcpInput := `{"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{` + mcpMeta + `}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qconnect.search","arguments":{"query":"` + queryCanary + `","connection":"primary"}}}` + "\n" +
+		`,"name":"search","arguments":{"query":"` + queryCanary + `","connection":"primary"}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qconnect.describe","arguments":{"operation":"bookstack.pages.list"}}}` + "\n" +
+		`,"name":"describe","arguments":{"operation":"bookstack.pages.list"}}}` + "\n" +
 		`{"jsonrpc":"2.0","id":"list","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"primary"}}}` + "\n"
+		`,"name":"invoke","arguments":{"operation":"bookstack.pages.list","connection":"primary"}}}` + "\n"
 	code, stdout, stderr := c.runInput(t, mcpInput, "mcp")
 	if code != 0 || stderr != "" {
 		t.Fatalf("mcp exit=%d stderr=%q", code, stderr)

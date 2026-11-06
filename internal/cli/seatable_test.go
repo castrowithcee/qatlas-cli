@@ -254,14 +254,14 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"seatable.base","all":true}}}`,
+			`,"name":"search","arguments":{"provider":"seatable.base","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.describe","arguments":{"operation":"seatable.base.rows.list","version":1}}}`,
+			`,"name":"describe","arguments":{"operation":"seatable.base.rows.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"seatable.base.rows.get",` +
+			`,"name":"invoke","arguments":{"operation":"seatable.base.rows.get",` +
 			`"connection":"sales-rows","arguments":{"row_id":"too-short"}}}}`,
 		`{"jsonrpc":"2.0","id":"ambiguous","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"seatable.base.rows.list","arguments":{}}}}`,
+			`,"name":"invoke","arguments":{"operation":"seatable.base.rows.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)

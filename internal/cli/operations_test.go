@@ -577,7 +577,7 @@ func TestKeyringThatNeverAnswersTimesOutWithTheWayOut(t *testing.T) {
 		server := newMCPServer(&Options{Config: path, Redactor: &redact.Redactor{}, Secrets: stuck()},
 			registry, &stdout, &stderr)
 		server.timeout = 50 * time.Millisecond
-		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 		if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
 			t.Fatal(err)
 		}

@@ -255,14 +255,14 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"nextcloud","query":"nextcloud","all":true}}}`,
+			`,"name":"search","arguments":{"provider":"nextcloud","query":"nextcloud","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.describe","arguments":{"operation":"nextcloud.files.files.list","version":1}}}`,
+			`,"name":"describe","arguments":{"operation":"nextcloud.files.files.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"nextcloud.files.files.stat",` +
+			`,"name":"invoke","arguments":{"operation":"nextcloud.files.files.stat",` +
 			`"connection":"files-reports","arguments":{"path":"../Audit"}}}}`,
 		`{"jsonrpc":"2.0","id":"ambiguous","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"nextcloud.files.files.list","arguments":{}}}}`,
+			`,"name":"invoke","arguments":{"operation":"nextcloud.files.files.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)

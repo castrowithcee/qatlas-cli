@@ -182,7 +182,7 @@ defaults:
 	if code, _, stderr := c.runInput(t, `{"id":1}`, "invoke", "bookstack.pages.get"); code != 0 || stderr != "" {
 		t.Fatalf("invoke pages.get: exit %d, stderr %q", code, stderr)
 	}
-	if invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke"); invoke.Result.IsError {
+	if invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "invoke"); invoke.Result.IsError {
 		t.Fatalf("MCP invoke = %s", invoke.Result.Structured)
 	}
 
@@ -203,7 +203,7 @@ defaults:
 	}
 	awaitEntries(t, 4)
 
-	if search := broker.call(t, `{"query":"pages"}`, "qconnect.search"); search.Result.IsError {
+	if search := broker.call(t, `{"query":"pages"}`, "search"); search.Result.IsError {
 		t.Fatalf("MCP search = %s", search.Result.Structured)
 	}
 	file, entries := awaitEntries(t, 5)

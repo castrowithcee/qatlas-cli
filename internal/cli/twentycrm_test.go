@@ -223,14 +223,14 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"twenty-crm","all":true,"limit":50}}}`,
+			`,"name":"search","arguments":{"provider":"twenty-crm","all":true,"limit":50}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.describe","arguments":{"operation":"twenty-crm.companies.list","version":1}}}`,
+			`,"name":"describe","arguments":{"operation":"twenty-crm.companies.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"twenty-crm.companies.get",` +
+			`,"name":"invoke","arguments":{"operation":"twenty-crm.companies.get",` +
 			`"connection":"crm","arguments":{"id":"not-a-uuid"}}}}`,
 		`{"jsonrpc":"2.0","id":"ambiguous","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"twenty-crm.companies.list","arguments":{}}}}`,
+			`,"name":"invoke","arguments":{"operation":"twenty-crm.companies.list","arguments":{}}}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -103,15 +104,15 @@ func TestMCPSessionLogRecordsBaselineNavigationAndInvokes(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"list","method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":"cursor","method":"tools/list","params":{"cursor":"x"}}`,
 		`{"jsonrpc":"2.0","id":"discover","method":"server/discover","params":{"bogus":1}}`,
-		mcpLogCall("search", "qconnect.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
-		mcpLogCall("overview", "qconnect.search", `{"list":"connections","provider":"fake"}`),
-		mcpLogCall("describe", "qconnect.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
-		mcpLogCall("describe-bad", "qconnect.describe", `{"operation":"fake.nothing.`+logMarkerArg+`"}`),
-		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
-		mcpLogCall("invoke-bad", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
-		mcpLogCall("invoke-schema", "qconnect.invoke", `{"operation":"fake.pages.get","arguments":"`+logMarkerArg+`"}`),
-		mcpLogCall("forged", "qconnect.invoke", `{"operation":"qconnect.search","connection":"primary"}`),
-		mcpLogCall("forged-base", "qconnect.invoke", `{"operation":"mcp/initialize"}`),
+		mcpLogCall("search", "search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
+		mcpLogCall("overview", "search", `{"list":"connections","provider":"fake"}`),
+		mcpLogCall("describe", "describe", `{"operation":"fake.pages.get","connection":"primary"}`),
+		mcpLogCall("describe-bad", "describe", `{"operation":"fake.nothing.`+logMarkerArg+`"}`),
+		mcpLogCall("invoke", "invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("invoke-bad", "invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
+		mcpLogCall("invoke-schema", "invoke", `{"operation":"fake.pages.get","arguments":"`+logMarkerArg+`"}`),
+		mcpLogCall("forged", "invoke", `{"operation":"qconnect.search","connection":"primary"}`),
+		mcpLogCall("forged-base", "invoke", `{"operation":"mcp/initialize"}`),
 		`{"jsonrpc":"2.0","id":"unknown","method":"tools/call","params":{"name":"qatlas.other","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":"nomethod","method":"resources/list"}`,
 	}
@@ -210,10 +211,10 @@ func TestMCPSessionLogRecordsBaselineNavigationAndInvokes(t *testing.T) {
 func TestMCPSessionLogHoldsNoContent(t *testing.T) {
 	registry, path := mcpLogRegistry(t)
 	_, stderr := runMCPLines(t, registry, mcpLogOptions(path), []string{
-		mcpLogCall("search", "qconnect.search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
-		mcpLogCall("describe", "qconnect.describe", `{"operation":"fake.pages.get","connection":"primary"}`),
-		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
-		mcpLogCall("invoke-bad", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
+		mcpLogCall("search", "search", `{"query":"`+logMarkerQuery+`","provider":"fake","connection":"primary"}`),
+		mcpLogCall("describe", "describe", `{"operation":"fake.pages.get","connection":"primary"}`),
+		mcpLogCall("invoke", "invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("invoke-bad", "invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{"`+logMarkerArg+`":1}}`),
 	})
 	if stderr != "" {
 		t.Fatalf("stderr = %q", stderr)
@@ -238,8 +239,8 @@ func TestMCPSessionLogHoldsNoContent(t *testing.T) {
 func TestMCPSessionLogFailureLeavesResponsesAsTheyAre(t *testing.T) {
 	lines := []string{
 		`{"jsonrpc":"2.0","id":"list","method":"tools/list"}`,
-		mcpLogCall("search", "qconnect.search", `{"provider":"fake"}`),
-		mcpLogCall("invoke", "qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
+		mcpLogCall("search", "search", `{"provider":"fake"}`),
+		mcpLogCall("invoke", "invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`),
 	}
 	registry, path := mcpLogRegistry(t)
 	healthy, stderr := runMCPLines(t, registry, mcpLogOptions(path), lines)
@@ -310,5 +311,57 @@ func TestMCPHandoffKeepsTheSession(t *testing.T) {
 	bad, _ := json.Marshal(mcpHandoff{Version: mcpHandoffVersion, From: "1", Session: "not a session"})
 	if decodeMCPHandoff(string(bad)) != nil {
 		t.Error("a handoff with a malformed session was accepted")
+	}
+}
+
+// Transition: the former tool names stay accepted until the next major release. A call under one of them
+// answers and logs exactly as the current name does, except for the byte length of the request.
+func TestMCPFormerToolNamesBehaveLikeTheCurrentOnes(t *testing.T) {
+	arguments := map[string]string{
+		"search":   `{"query":"pages","provider":"fake","connection":"primary"}`,
+		"describe": `{"operation":"fake.pages.get","connection":"primary"}`,
+		"invoke":   `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`,
+	}
+	type outcome struct {
+		response string
+		entries  []string
+	}
+	run := func(name, tool string) outcome {
+		registry, path := mcpLogRegistry(t)
+		byID, stderr := runMCPLines(t, registry, mcpLogOptions(path), []string{mcpLogCall("1", name, arguments[tool])})
+		if stderr != "" {
+			t.Fatalf("%s: stderr = %q", name, stderr)
+		}
+		var got outcome
+		got.response = byID["1"]
+		entries, _ := readMCPLog(t, path)
+		for _, e := range entries {
+			got.entries = append(got.entries, fmt.Sprintf("%s|%s|%s|%s|%s",
+				e.Path, e.Operation, e.Connection, e.Effect, e.Result))
+		}
+		return got
+	}
+	for _, tool := range []string{"search", "describe", "invoke"} {
+		want := run(tool, tool)
+		if len(want.entries) != 1 {
+			t.Fatalf("%s: log entries = %v, want one", tool, want.entries)
+		}
+		for _, name := range []string{"qconnect." + tool, "qatlas." + tool} {
+			if got := run(name, tool); !reflect.DeepEqual(got, want) {
+				t.Errorf("%s = %+v, want the outcome of %s: %+v", name, got, tool, want)
+			}
+		}
+	}
+}
+
+// A name that is neither current nor a former one keeps the error of an unknown tool.
+func TestMCPUnknownToolNamesKeepTheirError(t *testing.T) {
+	registry, path := mcpLogRegistry(t)
+	for _, name := range []string{"qconnect.other", "qatlas.tools", "qconnect.", "qconnect.qconnect.search", "Search", "mcp__qconnect__search"} {
+		byID, _ := runMCPLines(t, registry, mcpLogOptions(path), []string{mcpLogCall("1", name, `{}`)})
+		want := `"error":{"code":-32602,"message":"Unknown tool: ` + name + `"}`
+		if !strings.Contains(byID["1"], want) {
+			t.Errorf("%s: response = %s, want %s", name, byID["1"], want)
+		}
 	}
 }

@@ -1202,7 +1202,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	}
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.delete","connection":"wiki",` +
+		`,"name":"invoke","arguments":{"operation":"bookstack.pages.delete","connection":"wiki",` +
 		`"arguments":{"id":1},"confirm":true}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 		&Options{Config: cfg, Redactor: &redact.Redactor{}})
@@ -1211,7 +1211,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	decodeRaw(t, result.Structured, &detail)
 	// Over MCP the step names the broker tool instead of the command, and the person's editor as before.
 	wantText := `unsupported-capability: connection "wiki" does not offer tool "bookstack.pages.delete" ` +
-		`(effect-not-permitted); call qconnect.describe with operation bookstack.pages.delete and without ` +
+		`(effect-not-permitted); call describe with operation bookstack.pages.delete and without ` +
 		`connection for the connections that offer it, or change the connection in 'qconnect tui'`
 	if mcpStderr != "" || !result.IsError || result.Content[0].Text != wantText ||
 		detail["reason"] != "effect-not-permitted" || detail["connection"] != "wiki" {
@@ -1219,7 +1219,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	}
 }
 
-// qconnect.search follows the catalog rule of 'qconnect tools': the offered tools by default, and with all the
+// search follows the catalog rule of 'qconnect tools': the offered tools by default, and with all the
 // others as well, each with the reason the CLI names.
 func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
@@ -1237,7 +1237,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 		indexed := toolIndex(t, stdout)
 
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"search","arguments":` + arguments + `}}` + "\n"
 		responses, mcpStderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		var page application.SearchResponse

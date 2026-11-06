@@ -274,7 +274,7 @@ defaults:
 
 	broker := startBroker(t, c)
 	pages := `{"operation":"bookstack.pages.list","connection":"wiki"}`
-	if call := broker.call(t, pages, "qconnect.invoke"); call.Result.IsError ||
+	if call := broker.call(t, pages, "invoke"); call.Result.IsError ||
 		!strings.Contains(string(call.Result.Structured), "Handover Runbook") {
 		t.Fatalf("call before the update = %+v", call.Result)
 	}
@@ -294,7 +294,7 @@ defaults:
 		t.Fatal("the installed program is not the release's")
 	}
 
-	call := broker.call(t, pages, "qconnect.invoke")
+	call := broker.call(t, pages, "invoke")
 	if exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", mcpPID)); err != nil || exe != bin {
 		t.Errorf("MCP server %d runs %q (%v), want the new program at %s", mcpPID, exe, err, bin)
 	}

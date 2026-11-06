@@ -89,7 +89,7 @@ func nextStep(err error, r route) string {
 			return ""
 		}
 		if r == routeMCP {
-			return "call qconnect.describe with operation " + unsupported.Capability +
+			return "call describe with operation " + unsupported.Capability +
 				" and without connection for the connections that offer it, or change the connection in 'qconnect tui'"
 		}
 		return "'qconnect describe " + unsupported.Capability + "' names the connections that offer it, " +
@@ -104,14 +104,14 @@ func nextStep(err error, r route) string {
 		}
 		if r == routeMCP {
 			if operation != "" {
-				return "call qconnect.describe with operation " + operation +
+				return "call describe with operation " + operation +
 					" and without connection for the connections that can run it"
 			}
 			if provider != "" {
-				return "call qconnect.search with list connections and provider " + provider +
+				return "call search with list connections and provider " + provider +
 					" for the configured connections"
 			}
-			return "call qconnect.search with list connections for the configured connections"
+			return "call search with list connections for the configured connections"
 		}
 		if provider != "" {
 			return "list the configured connections with 'qconnect connections " + provider + "'"

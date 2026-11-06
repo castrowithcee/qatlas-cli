@@ -527,7 +527,7 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			opts.Config = cfg
 			var out, errOut bytes.Buffer
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-				`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+				`,"name":"invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
 			if err := newMCPServer(opts, sharedRegistry(), &out, &errOut).serve(context.Background(),
 				strings.NewReader(input)); err != nil {
 				t.Fatal(err)

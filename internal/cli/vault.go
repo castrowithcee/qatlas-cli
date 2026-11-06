@@ -350,10 +350,10 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"successful result (resp_bytes), absent where not recorded. Over mcp, an entry also carries the\n" +
 			"random session ID of its 'qconnect mcp' process, and the sizes are those of the whole JSON-RPC\n" +
 			"request and response messages, an error response included. The initialize, server/discover, and\n" +
-			"tools/list exchanges and the qconnect.search and qconnect.describe calls get entries of their own,\n" +
-			"without a connection; a qconnect.invoke that failed before it named a known tool has no tool ID.\n" +
-			"An entry is written after the response, so a request that never got one is not logged, except a\n" +
-			"qconnect.invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
+			"tools/list exchanges and the search and describe calls get entries of their own,\n" +
+			"without a connection; an invoke that failed before it named a known tool has no tool ID.\n" +
+			"An entry is written after the response, so a request that never got one is not logged, except an\n" +
+			"invoke that was cancelled after it started, which has no resp_bytes. No argument, search\n" +
 			"term, result, secret, target, or URL query ever reaches the log, and an entry is written even\n" +
 			"where the vault does not exist yet, is locked, or is unencrypted; a logging failure, such as an\n" +
 			"unwritable directory, is a warning beside the invoke's own result, never a reason to change it.\n\n" +
@@ -435,8 +435,8 @@ func newVaultLogsStatsCommand(opts *Options) *cobra.Command {
 			"groups come largest resp_bytes_total first, then most calls, then by operation and connection.\n\n" +
 			"sessions sums up what each MCP session (one 'qconnect mcp' process, in the order of its first entry)\n" +
 			"put into the agent's context, in three areas: baseline (the initialize response with the server\n" +
-			"instructions and the tools/list response with the tool descriptions), navigation (qconnect.search\n" +
-			"and qconnect.describe), and invoke (qconnect.invoke, failed calls included). Per area and per\n" +
+			"instructions and the tools/list response with the tool descriptions), navigation (search\n" +
+			"and describe), and invoke (failed calls included). Per area and per\n" +
 			"operation it has calls, req_bytes and resp_bytes (the byte lengths of the whole JSON-RPC request\n" +
 			"and response messages, an error response included; a missing counter adds 0), total_bytes, and\n" +
 			"est_tokens_total (total_bytes at 3.5 bytes per token, the figure the editor's Logs screen shows\n" +
