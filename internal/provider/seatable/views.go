@@ -40,18 +40,18 @@ const (
 
 	viewFiltersSchema = `{"type":"array","maxItems":10,"items":{"type":"object","properties":{` +
 		`"column":` + viewColSchema + `,"predicate":{"type":"string","pattern":"^[a-z_]{1,40}$"},` +
-		`"term":{"type":["string","number","boolean"]}},"required":["column","predicate"],"additionalProperties":false}}`
+		`"term":{"anyOf":[{"type":"string"},{"type":"number"},{"type":"boolean"}]}},"required":["column","predicate"],"additionalProperties":false}}`
 	viewSortsSchema = `{"type":"array","maxItems":3,"items":{"type":"object","properties":{` +
 		`"column":` + viewColSchema + `,"direction":{"type":"string","enum":["asc","desc"]}},` +
 		`"required":["column"],"additionalProperties":false}}`
 	viewHiddenSchema = `{"type":"array","maxItems":100,"items":` + viewColSchema + `}`
 
 	// viewFreeMembers are the members that pass through as provider data, a list or an object each.
-	viewFreeMembers = `"rows":{"type":["array","object"]},"formula_rows":{"type":["array","object"]},` +
-		`"link_rows":{"type":["array","object"]},"summaries":{"type":["array","object"]},` +
-		`"groupbys":{"type":["array","object"]},"group_rows":{"type":["array","object"]},` +
-		`"groups":{"type":["array","object"]},"colorbys":{"type":["array","object"]},` +
-		`"colors":{"type":["array","object"]},`
+	viewFreeMembers = `"rows":{"anyOf":[{"type":"array"},{"type":"object"}]},"formula_rows":{"anyOf":[{"type":"array"},{"type":"object"}]},` +
+		`"link_rows":{"anyOf":[{"type":"array"},{"type":"object"}]},"summaries":{"anyOf":[{"type":"array"},{"type":"object"}]},` +
+		`"groupbys":{"anyOf":[{"type":"array"},{"type":"object"}]},"group_rows":{"anyOf":[{"type":"array"},{"type":"object"}]},` +
+		`"groups":{"anyOf":[{"type":"array"},{"type":"object"}]},"colorbys":{"anyOf":[{"type":"array"},{"type":"object"}]},` +
+		`"colors":{"anyOf":[{"type":"array"},{"type":"object"}]},`
 
 	viewObjectSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
 		`"type":{"type":"string"},"filter_conjunction":{"type":"string"},` +

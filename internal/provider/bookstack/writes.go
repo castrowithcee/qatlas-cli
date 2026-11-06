@@ -64,7 +64,7 @@ var (
 			"remove_cover true removes the cover image",
 		Tags: []string{"knowledge", "books", "bookstack", "update"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"default_template_id":{"type":["integer","null"],"minimum":1},"remove_cover":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"default_template_id":{"anyOf":[{"type":"integer","minimum":1},{"type":"null"}]},"remove_cover":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(bookWriteOutput),
 		Arguments: []capability.Argument{
 			{Name: "id", Description: "Book identifier", Required: true},
@@ -133,7 +133,7 @@ var (
 			"chapter in BookStack in addition to the update permission",
 		Tags: []string{"knowledge", "chapters", "bookstack", "update"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"book_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"priority":{"type":"integer","minimum":0},"default_template_id":{"type":["integer","null"],"minimum":1}},"required":["id"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"book_id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"priority":{"type":"integer","minimum":0},"default_template_id":{"anyOf":[{"type":"integer","minimum":1},{"type":"null"}]}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(chapterWriteOutput),
 		Arguments: []capability.Argument{
 			{Name: "id", Description: "Chapter identifier", Required: true},
