@@ -87,6 +87,7 @@ var providerAllowed = map[string]bool{
 	"internal/provider":           true,
 	"internal/provider/ratelimit": true,
 	"internal/provider/dav":       true,
+	"internal/provider/googleapi": true,
 	"internal/capability":         true,
 	"internal/config":             true,
 	"internal/redact":             true,
