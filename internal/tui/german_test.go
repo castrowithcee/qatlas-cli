@@ -273,19 +273,29 @@ func accessGermanScreens() []germanScreen {
 	}
 }
 
+// parallelGermanScreen lets a screen run beside the others unless opening it changes the environment, which
+// a parallel test must not: the selftest screens set TMPDIR.
+func parallelGermanScreen(t *testing.T, screen germanScreen) {
+	if !strings.HasPrefix(screen.name, "selftest") {
+		t.Parallel()
+	}
+}
+
 // Every screen of germanScreens fits the terminal in both languages.
 func TestGermanScreensFit(t *testing.T) {
-	for _, screen := range germanScreens() {
-		t.Run(screen.name, func(t *testing.T) {
-			eachLanguage(t, func(t *testing.T) {
+	// The language is global, so it is the outer loop; the screens of one language run side by side.
+	eachLanguage(t, func(t *testing.T) {
+		for _, screen := range germanScreens() {
+			t.Run(screen.name, func(t *testing.T) {
+				parallelGermanScreen(t, screen)
 				m := screen.open(t)
 				for _, size := range germanScreenSizes {
 					sizedModel(m, size.w, size.h)
 					assertViewFits(t, m.render(), size.w, size.h)
 				}
 			})
-		})
-	}
+		}
+	})
 }
 
 var germanVerb = regexp.MustCompile(`%[-+# 0-9.*]*[a-zA-Z]`)
@@ -335,9 +345,11 @@ func TestGermanScreensHoldNoEnglishSentence(t *testing.T) {
 		ids = append(ids, string(id))
 	}
 	sort.Strings(ids)
+	// The language is global: it is set once here and the screens run side by side in it.
+	useLanguage(t, i18n.German)
 	for _, screen := range germanScreens() {
 		t.Run(screen.name, func(t *testing.T) {
-			useLanguage(t, i18n.German)
+			parallelGermanScreen(t, screen)
 			m := screen.open(t)
 			if hide, ok := germanCoreText[screen.name]; ok {
 				hide(m)

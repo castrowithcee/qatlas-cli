@@ -30,7 +30,8 @@ func tick(t *testing.T, m *Model, label, value string) {
 	focusField(t, m, label)
 	press(t, m, "/")
 	if !m.picker.selectName(value) {
-		typeText(t, m, value)
+		// One paste instead of a key per rune: the filter ends up the same and the screen is drawn once.
+		m.Update(tea.PasteMsg{Content: value})
 		if !m.picker.selectName(value) {
 			t.Fatalf("the %s picker does not show %q", label, value)
 		}
