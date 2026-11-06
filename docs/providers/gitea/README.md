@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-06
 ---
 
 # Gitea
@@ -223,6 +223,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Organizations](organizations.md): listing, reading, creating, changing, renaming, and deleting organizations, their
   avatars, activity feeds, a user's permissions, members, public members, and blocked users
 - [Teams](teams.md): the teams of an organization, their members, their repositories, and their activity feeds
+- [Collaborators](collaborators.md): the users with direct access to a repository, their permission, adding, and
+  removing
 - [Users](users.md): searching and reading users, their activity feeds and heatmaps, followers, following, follows,
   and the settings, avatar, email addresses, and blocked users of the account
 - [Stars and watching](stars-and-watching.md): starring and watching repositories, the starred and watched
@@ -251,8 +253,8 @@ repositories of an organization, creating or changing tokens, keys, deploy token
 applications, showing key texts, listing or revoking Gitea deploy tokens, listing the tokens of Gitea or revoking a
 listed token of Forgejo (both need Basic Auth), reading the tokens of other people, changing or testing a webhook
 (including pausing it), creating or changing system webhooks, creating push mirrors, changing Git hook scripts,
-creating users, adding email addresses, registering runners (including registration tokens), or acting as another
-user (Sudo).
+creating users, inviting a collaborator by email address, adding email addresses, registering runners (including
+registration tokens), or acting as another user (Sudo).
 
 ## Setup profile
 
