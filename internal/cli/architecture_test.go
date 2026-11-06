@@ -335,7 +335,9 @@ func architectureFindings(fsys fs.FS, providers []config.ProviderMetadata) ([]ar
 			if surface && (surfaceForbidden[rel] || strings.HasPrefix(rel, providerRoot)) {
 				findings = append(findings, archFinding{ruleSurfaceAccess, p, rel})
 			}
-			if providerDir != "" && !providerAllowed[rel] && !(isTest && rel == "internal/application") {
+			// A provider may split into packages below its own directory; they stay inside the provider.
+			if providerDir != "" && !providerAllowed[rel] && !underOwn(rel, providerDir) &&
+				!(isTest && rel == "internal/application") {
 				findings = append(findings, archFinding{ruleProviderDeps, p, rel})
 			}
 		}
@@ -436,6 +438,8 @@ func compactFindings(findings []archFinding) []archFinding {
 func skipDir(name string) bool {
 	return name == "testdata" || name == "vendor" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
+
+func underOwn(rel, providerDir string) bool { return underDir(rel+"/", providerDir) }
 
 func underDir(p, dir string) bool { return strings.HasPrefix(p, dir+"/") }
 
@@ -617,6 +621,12 @@ func TestArchitectureChecksDetectViolations(t *testing.T) {
 		{"a provider test that imports another provider", map[string]string{
 			"internal/provider/alpha/x_test.go": "package alpha\n\nimport _ \"example.com/m/internal/provider/beta\"\n",
 		}, archFinding{ruleProviderDeps, "internal/provider/alpha/x_test.go", "internal/provider/beta"}},
+		{"a provider that imports a package below another provider", map[string]string{
+			"internal/provider/alpha/x.go": "package alpha\n\nimport _ \"example.com/m/internal/provider/beta/leaf\"\n",
+		}, archFinding{ruleProviderDeps, "internal/provider/alpha/x.go", "internal/provider/beta/leaf"}},
+		{"a package below a provider that imports another provider", map[string]string{
+			"internal/provider/alpha/leaf/x.go": "package leaf\n\nimport _ \"example.com/m/internal/provider/beta\"\n",
+		}, archFinding{ruleProviderDeps, "internal/provider/alpha/leaf/x.go", "internal/provider/beta"}},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -645,6 +655,8 @@ func TestArchitectureChecksDetectViolations(t *testing.T) {
 		"internal/core/testdata/data.go":     "package data\n\nconst A = \"Alpha\"\n",
 		"internal/provider/alpha/ok.go":      "package alpha\n\nconst A = \"Alpha alpha.items.list\"\n",
 		"internal/provider/alpha/ok_test.go": "package alpha\n\nimport _ \"example.com/m/internal/application\"\n",
+		"internal/provider/alpha/leaf/ok.go": "package leaf\n\nimport _ \"example.com/m/internal/provider\"\n",
+		"internal/provider/alpha/use.go":     "package alpha\n\nimport _ \"example.com/m/internal/provider/alpha/leaf\"\n",
 		"internal/web/free.go":               "package web\n\nimport \"example.com/m/internal/config\"\n\nvar _ config.Config\n",
 		"internal/web/ok_test.go":            "package web\n\nimport _ \"example.com/m/internal/vault\"\n",
 	}
