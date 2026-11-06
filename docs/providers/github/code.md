@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the GitHub code tools: reading repository contents, Git trees, blame, commits, branches, and tags, the repository writes of branches and file contents including multi-file commits, and the code and commit search.
+  Describes the GitHub code tools: reading repository contents, Git trees, blame, commits, comparisons of two refs, branches, tags, and commit comments, the repository writes of branches and file contents including multi-file commits, and the code and commit search.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-06
 ---
 
 # GitHub code
@@ -22,11 +22,17 @@ The code tools of the [GitHub provider](README.md). Every tool takes `repository
 | `github.blame.get` | reads the commit behind each line of one file over a bounded line range |
 | `github.commits.list` | lists the commits of a repository, filtered by ref, path, author, committer, and a commit date range |
 | `github.commits.get` | reads one commit by branch, tag, or commit SHA, with its stats and its changed files |
+| `github.compare.get` | compares two refs, base first, with the status, the ahead and behind counts, the merge base, a batch of the commits, and the changed files with bounded patches |
 | `github.branches.list` | lists the branches of a repository with their protection status and their latest commit SHA, optionally only protected or only unprotected ones |
+| `github.branches.get` | reads one branch with its latest commit and its protection |
+| `github.commit-branches.list` | lists the branches whose latest commit is a given commit |
+| `github.commit-pulls.list` | lists the pull requests that contain a given commit |
+| `github.commit-comments.list` | lists the comments on commits, of the whole repository or of one commit |
+| `github.commit-comments.get` | reads one commit comment by its id |
 | `github.tags.list` | lists the tags of a repository with the commit SHA each points at |
 | `github.tags.get` | reads one tag, lightweight or annotated, resolved through the Git refs and Git tags APIs |
 
-None of them writes, diffs two arbitrary refs, or downloads an archive.
+None of them writes or downloads an archive. Only `github.compare.get` diffs two refs.
 
 `path` is a repository-relative path with no leading or trailing `/` and no empty, `.`, or `..` segment, in
 valid UTF-8 without a control character; every segment is escaped on its own before it reaches GitHub, so it
@@ -98,9 +104,51 @@ annotated tag's `message` is untrusted data, cut to at most 4096 characters with
 object's own members, its tagger and its verification, exist only for an annotated tag; a lightweight tag
 reports its Git ref.
 
+`github.compare.get` takes `base` and `head`, each a branch, a tag, or a commit SHA, or `OWNER:ref` for a ref of
+a fork. Qatlas builds the `base...head` the route needs itself and escapes each side, so a slash of a branch name
+never becomes a path segment. An `OWNER:ref` is accepted only when the connection's targets allow that owner as a
+fork of the bound repository under the repository's own name: the owner is a target next to the repository, the
+repository's owner itself, or any owner when the connection has no targets, and an excluded owner is never
+allowed. A fork that was renamed away from the repository's name is refused rather than guessed. The refusal
+comes before a credential is read and never quotes the owner. `status` is `diverged`, `ahead`, `behind`, or
+`identical`, as seen from `head`, with `ahead_by`, `behind_by`, `total_commits`, the compact `base_commit` and
+`merge_base_commit`, and the `url` and `links` of the comparison. GitHub pages the commits and the files of one
+comparison by the same page and size, so `limit` and `cursor` move both: `commits` holds one batch, oldest first,
+and `has_more` is true while GitHub announces a following page or `total_commits` exceeds what the batches so far
+returned. A commit of the comparison is compact, with the members `github.commits.list` reports and no stats and
+no files, since `files` holds the diff. Each file's `patch` is untrusted data, cut to at most 4096 bytes with
+`patch_truncated`, and a file GitHub sends no patch for, such as a binary one, carries none; no file content is
+ever returned. GitHub returns at most 300 files per request, so a batch that reaches that bound sets
+`files_truncated`, since more may exist. A missing ref answers `not-found`, naming the comparison.
+
+`github.branches.get` takes `branch`, the branch name, escaped as one path segment. It reports the latest commit
+with the members of GitHub's commit, the `protection` where GitHub sends it, `pattern`, and
+`required_approving_review_count`, `link_relations` for the `html` and `self` addresses, and `links` for the
+`protection_url`. A missing branch answers `not-found`.
+
+`github.commit-branches.list` takes `commit_sha`, a hexadecimal commit SHA in lower case, and reads the branches
+of this repository whose latest commit it is, in one batch, since GitHub offers no paging for this route; past
+100 branches the list is cut with `branches_truncated`. A commit that heads no branch gives an empty list.
+
+`github.commit-pulls.list` takes `commit_sha` and pages by GitHub's Link header with a cursor bound to the
+repository and the commit. It lists the pull requests with the members of GitHub's pull request as the
+[pull request tools](pull-requests.md) report them, the title and body untrusted data. A pull request whose base
+repository the connection's targets do not admit is shown by its identifiers only, and the repository of a head
+or base outside the targets, such as a fork, keeps only `id`, `node_id`, and `full_name`, as under
+[result objects](README.md#result-objects). The tool is part of the code group, with the other tools that start
+from a commit.
+
+`github.commit-comments.list` lists the comments on commits of the whole repository, or only those of one commit
+when `commit_sha` is given. Both are the same list of the same comments with one optional filter, so it is one
+tool. It pages by GitHub's Link header with a cursor bound to the repository and the `commit_sha`, so a cursor of
+one list is refused on the other. A comment carries `id`, `node_id`, `body`, `path`, `position`, `line`,
+`commit_id`, `user`, the times, `author_association`, `reactions`, `url`, and `links`; `body` and `path` are
+untrusted data, `body` cut at 4000 characters with `body_truncated`. `github.commit-comments.get` takes
+`comment_id` and reads one such comment; a missing one answers `not-found`.
+
 The token rights are listed under [Repository contents](setup.md#repository-contents-branches-tags-and-commits).
 
-The terminal editor's setup profile `repository-reader` selects the eight; it is not the recommended profile,
+The terminal editor's setup profile `repository-reader` selects the fourteen; it is not the recommended profile,
 which stays `read`, unchanged.
 
 ## Repository writes: branches and file contents
@@ -164,7 +212,7 @@ ref update ever moves it, though the object it was creating may still exist as a
 effect until referenced. The answer names `parent_sha`, the commit the branch was at before the push, and the
 paths written in the order given, never any file's content.
 
-The terminal editor's setup profile `repository-writer` (not recommended) selects the read eight plus
+The terminal editor's setup profile `repository-writer` (not recommended) selects the read fourteen plus
 `github.branches.create` and `github.contents.put`. `github.branches.delete`, `github.contents.delete`, and
 `github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
 [`github.releases.delete`](releases.md#releases).
