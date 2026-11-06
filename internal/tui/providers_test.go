@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -24,19 +26,32 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
 )
 
+var shippedRegistry struct {
+	once sync.Once
+	reg  *capability.Registry
+	err  error
+}
+
 // providerRegistry registers the eight providers this build ships for n == 8, and otherwise n providers
 // whose names and IDs differ, so a search can tell the two columns apart.
 func providerRegistry(t *testing.T, n int) *capability.Registry {
 	t.Helper()
-	reg := capability.NewRegistry()
 	if n == 8 {
-		for _, register := range []func(*capability.Registry) error{bookstack.Register, github.Register,
-			lexware.Register, nextcloud.Register, seatable.Register, telegram.Register, todoist.Register,
-			twentycrm.Register} {
-			mustNoError(t, register(reg))
-		}
-		return reg
+		// Registering the shipped providers validates every schema, which costs more than most tests that use
+		// them; no test changes the registry, so all of them read the one.
+		shippedRegistry.once.Do(func() {
+			reg := capability.NewRegistry()
+			for _, register := range []func(*capability.Registry) error{bookstack.Register, github.Register,
+				lexware.Register, nextcloud.Register, seatable.Register, telegram.Register, todoist.Register,
+				twentycrm.Register} {
+				shippedRegistry.err = errors.Join(shippedRegistry.err, register(reg))
+			}
+			shippedRegistry.reg = reg
+		})
+		mustNoError(t, shippedRegistry.err)
+		return shippedRegistry.reg
 	}
+	reg := capability.NewRegistry()
 	for i := 0; i < n; i++ {
 		id := fmt.Sprintf("p%03d", i)
 		mustNoError(t, reg.RegisterProvider(config.ProviderMetadata{

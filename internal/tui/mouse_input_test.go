@@ -143,6 +143,14 @@ func passphrasePrompt(t *testing.T) *Model {
 	return m
 }
 
+// parallelUnlessWheel lets a test run beside the others unless its input can hold a wheel report: the wheel
+// handler sets the package variable wheelClamp, so two programs in one process must not both turn the wheel.
+func parallelUnlessWheel(t *testing.T, input string) {
+	if !strings.Contains(input, "<64;") && !strings.Contains(input, "<65;") {
+		t.Parallel()
+	}
+}
+
 // A report split between two reads, with a pause after which the input reader gives up waiting for its rest,
 // makes no text at any point of the split.
 func TestSplitMouseReportsMakeNoTextInAField(t *testing.T) {
@@ -151,6 +159,7 @@ func TestSplitMouseReportsMakeNoTextInAField(t *testing.T) {
 			stream := strings.Repeat(report, 3)
 			for i := 0; i <= len(stream); i++ {
 				t.Run(fmt.Sprintf("%s/%q/%d", name, report, i), func(t *testing.T) {
+					parallelUnlessWheel(t, report)
 					m := open(t)
 					before := m.formState()
 					if m.screen == screenVaultUnlock {
@@ -241,6 +250,7 @@ func TestTypedCharactersOfAReportReachTheField(t *testing.T) {
 		{"text after a pause", []string{"\x1b[", "<65;1", pause, "2;5M"}, "abc2;5M"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			parallelUnlessWheel(t, strings.Join(c.chunks, ""))
 			m := formWithTextField(t)
 			runInput(t, m, append(c.chunks, pause)...)
 			if got := fieldValue(m); got != c.want {

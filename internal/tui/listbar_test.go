@@ -174,7 +174,9 @@ func TestDetailPaneShowsTheLastTest(t *testing.T) {
 func TestFilterBarFitsEveryWidth(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections} {
 		for _, state := range []string{"idle", "focus", "query", "editing"} {
-			for w := 20; w <= 160; w++ {
+			t.Run(fmt.Sprintf("%v/%s", s, state), func(t *testing.T) {
+				t.Parallel()
+				// barLine only reads the model, so one editor serves every width.
 				m := newTableModel(t, 100)
 				openSectionByName(t, m, s)
 				switch state {
@@ -186,10 +188,12 @@ func TestFilterBarFitsEveryWidth(t *testing.T) {
 				case "editing":
 					press(t, m, "/")
 				}
-				if got := lipgloss.Width(m.barLine(w)); got > w {
-					t.Fatalf("section %v %s width %d: bar has %d cells", s, state, w, got)
+				for w := 20; w <= 160; w++ {
+					if got := lipgloss.Width(m.barLine(w)); got > w {
+						t.Fatalf("section %v %s width %d: bar has %d cells", s, state, w, got)
+					}
 				}
-			}
+			})
 		}
 	}
 }

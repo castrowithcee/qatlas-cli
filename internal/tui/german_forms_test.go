@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -370,23 +371,49 @@ func closeAdd(t *testing.T, m *Model) {
 	}
 }
 
-// run draws every screen of the forms at the size.
-func (v *viewSet) run() {
-	v.lists()
-	v.forms()
-	v.template()
-	v.setup()
-	v.pickers()
-	v.targetsAndPaths()
+type termSize struct{ w, h int }
+
+// viewsAt draws every screen of the forms at each size and returns the views of each size. The parts walk
+// models of their own, so every part of every size runs side by side; the caller has the views once all are
+// done. It leaves the language as it is.
+func viewsAt(t *testing.T, sizes ...termSize) [][]string {
+	t.Helper()
+	parts := []struct {
+		name string
+		run  func(*viewSet)
+	}{
+		{"lists", (*viewSet).lists}, {"forms", (*viewSet).forms}, {"template", (*viewSet).template},
+		{"setup", (*viewSet).setup}, {"pickers", (*viewSet).pickers}, {"targets", (*viewSet).targetsAndPaths},
+	}
+	seen := make([][][]string, len(sizes))
+	for i := range seen {
+		seen[i] = make([][]string, len(parts))
+	}
+	t.Run("draw", func(t *testing.T) {
+		for i, size := range sizes {
+			for j, part := range parts {
+				t.Run(fmt.Sprintf("%dx%d/%s", size.w, size.h, part.name), func(t *testing.T) {
+					t.Parallel()
+					v := &viewSet{t: t, w: size.w, h: size.h}
+					part.run(v)
+					seen[i][j] = v.views
+				})
+			}
+		}
+	})
+	out := make([][]string, len(sizes))
+	for i := range seen {
+		for _, views := range seen[i] {
+			out[i] = append(out[i], views...)
+		}
+	}
+	return out
 }
 
 // The screens of the forms fit the terminal in both languages.
 func TestFormsFitInBothLanguages(t *testing.T) {
-	sizes := []struct{ w, h int }{{minimumWidth, minimumHeight}, {80, 24}, {helpPaneMinWidth, 40}, {140, 40}}
 	eachLanguage(t, func(t *testing.T) {
-		for _, size := range sizes {
-			(&viewSet{t: t, w: size.w, h: size.h}).run()
-		}
+		viewsAt(t, termSize{minimumWidth, minimumHeight}, termSize{80, 24}, termSize{helpPaneMinWidth, 40}, termSize{140, 40})
 	})
 }
 
@@ -415,6 +442,10 @@ func englishFragments(text string) []string {
 
 // wholeWords reports whether fragment occurs in text with no letter directly before or after it.
 func wholeWords(text, fragment string) bool {
+	// Most fragments are nowhere in the text; a plain search spares compiling a pattern for each of them.
+	if !strings.Contains(text, fragment) {
+		return false
+	}
 	return regexp.MustCompile(`(^|\PL)` + regexp.QuoteMeta(fragment) + `(\PL|$)`).MatchString(text)
 }
 
@@ -423,10 +454,8 @@ func wholeWords(text, fragment string) bool {
 func TestGermanFormsShowNoEnglishCatalogText(t *testing.T) {
 	useLanguage(t, i18n.German)
 	var seen strings.Builder
-	for _, size := range []struct{ w, h int }{{80, 24}, {140, 40}} {
-		v := &viewSet{t: t, w: size.w, h: size.h}
-		v.run()
-		for _, view := range v.views {
+	for _, views := range viewsAt(t, termSize{80, 24}, termSize{140, 40}) {
+		for _, view := range views {
 			seen.WriteString(strings.Join(strings.Fields(view), " ") + "\n")
 		}
 	}

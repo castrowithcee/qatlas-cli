@@ -179,6 +179,7 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 					name += "/paste"
 				}
 				t.Run(name, func(t *testing.T) {
+					t.Parallel()
 					m, confirm := c.open(t, long)
 					sizedModel(m, size.w, size.h)
 					if paste {
