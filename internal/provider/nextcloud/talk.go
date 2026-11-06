@@ -892,7 +892,7 @@ const (
 		`"kind":{"type":"string"},"system_message":{"type":"string"},"text":{"type":"string"},` +
 		`"objects":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string"},` +
 		`"type":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"},` +
-		`"details":{"type":"object","maxProperties":20,"additionalProperties":{"type":["string","integer"]}},` +
+		`"details":{"type":"object","maxProperties":20,"additionalProperties":{"anyOf":[{"type":"string"},{"type":"integer"}]}},` +
 		`"omitted_fields":{"type":"array","items":{"type":"string"}}},` +
 		`"required":["key","type"],"additionalProperties":false}},` +
 		`"parent_id":{"type":"string"},"reference_id":{"type":"string"},"truncated":{"type":"boolean"},` +

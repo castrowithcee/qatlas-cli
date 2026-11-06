@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-connect/internal/application"
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
@@ -460,5 +461,21 @@ func TestViewsKeepFormerOutputWithoutNewFields(t *testing.T) {
 		`"hidden_columns":["c3d4"]},{"id":"Zz99","name":"Archiv","type":"table"}],"truncated":false}`
 	if got := encoded(list); got != want {
 		t.Errorf("list = %s\nwant %s", got, want)
+	}
+}
+
+// The output of views.get names the members it passes through as provider data, each a list or an object;
+// the published schema must accept them.
+func TestViewsGetOutputSchemaAcceptsFreeMembers(t *testing.T) {
+	d := descriptorOf(t, "seatable.base.views.get")
+	for _, rows := range []string{`["r1","r2"]`, `{"c":1}`} {
+		out := `{"table":"Kunden","view":{"id":"0000","name":"Aktive","rows":` + rows + `,"formula_rows":` + rows + `}}`
+		if err := application.ValidateJSON(d.OutputSchema, json.RawMessage(out)); err != nil {
+			t.Errorf("output with rows %s refused: %v", rows, err)
+		}
+	}
+	bad := `{"table":"Kunden","view":{"id":"0000","name":"Aktive","rows":"x"}}`
+	if err := application.ValidateJSON(d.OutputSchema, json.RawMessage(bad)); err == nil {
+		t.Error("output with a string rows accepted")
 	}
 }
