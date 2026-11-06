@@ -122,7 +122,11 @@
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
 // github.comments.delete removes one permanently; both refuse a comment of another repository and a pull
-// request conversation comment the same way the issue tools refuse a pull request number. The search
+// request conversation comment the same way the issue tools refuse a pull request number.
+// github.comments.hide hides one issue comment, pull request review, or pull request line comment with a
+// reason, and github.comments.unhide shows it again; both read the object below the chosen repository first
+// and only then send one GraphQL mutation with the node identifier of that answer, and a review is
+// addressed together with its pull_number. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -716,12 +720,12 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "issue-maintainer", Title: "Issue maintainer",
 			Description: "not recommended: lists and reads the labels of a repository, lists its " +
-				"milestones, creates and updates labels and issue comments, and reacts to issues, comments, " +
+				"milestones, creates and updates labels and issue comments, hides and shows comments and reviews, and reacts to issues, comments, " +
 				"and pull request line comments; every change needs its own confirmation, and deleting a " +
 				"label or a comment stays unticked, since each is offered only where a connection's tools " +
 				"list names it",
 			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
-				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
+				commentsUpdate.ID, commentsHide.ID, commentsUnhide.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
 				subIssuesRemove.ID, subIssuesReprioritize.ID, issueDependenciesList.ID, issueDependenciesAdd.ID,
 				issueDependenciesRemove.ID, issueTypesList.ID, issueFieldsList.ID, issueFieldsSet.ID},
 		}, {
@@ -785,7 +789,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
-		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
+		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), commentVisibilityOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
 		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
 		copilotOperations())...)

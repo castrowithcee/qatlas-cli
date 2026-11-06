@@ -356,6 +356,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.comments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			commentSensitivity),
+		"github.comments.hide":              changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.comments.unhide":            changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.reactions.add":              changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
 		"github.reactions.remove":           changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 		"github.sub-issues.list":            readRisk,

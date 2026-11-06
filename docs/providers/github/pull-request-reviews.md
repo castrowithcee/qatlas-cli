@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-11-05
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # GitHub pull request reviews
@@ -92,6 +92,11 @@ either changes anything, Qatlas reads the thread node itself and confirms it is 
 bound repository; a `thread_id` of another pull request or another repository is refused not found, naming
 "this review thread", and nothing is sent. Resolving an already-resolved thread, or unresolving an
 already-open one, is left as it is and reported in its current state.
+
+A conversation comment, a review, or a line comment is hidden and shown again with `github.comments.hide` and
+`github.comments.unhide` (kind `pull-request-comment` or `review`, each with its `pull_number`, or
+`review-comment`), described under
+[Changes](issues.md#changes).
 
 `github.pull-request-reviewers.request` and `.remove` take users, teams of the repository's organization, or both,
 at least one and at most 15 together, and answer with the pull request itself, the same shape
