@@ -42,7 +42,11 @@
 // read the contents of a file or a directory, the Git tree of a ref, through GraphQL the blame of a file
 // over a bounded line range, the commits of a repository or one commit with its stats and changed files, and
 // the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs; none
-// of them writes, diffs two refs, or downloads an archive. github.branches.create makes one new branch from a
+// of them writes or downloads an archive. github.compare.get diffs two refs of one repository, or a fork's ref
+// written OWNER:ref for an owner the connection's targets allow, with bounded commits and files; github.
+// branches.get reads one branch with its protection, github.commit-branches.list the branches a commit heads,
+// github.commit-pulls.list the pull requests a commit belongs to, and github.commit-comments.list and github.
+// commit-comments.get the comments on commits. github.branches.create makes one new branch from a
 // branch, a tag, or a commit SHA; github.contents.put creates or updates one file, and, only on a connection
 // whose tools list names it, github.contents.delete deletes one; only on a connection whose tools list names
 // it, github.files.push writes several files as one commit through the Git Data API, fast-forward only, so a
@@ -492,9 +496,10 @@ func Register(reg *capability.Registry) error {
 				"Contents: read, and for issue and pull request search also Issues: read or Pull requests: " +
 				"read, on a fine-grained token, for private ones; code search also needs Contents: read for " +
 				"private repositories; user and organization search need no scope beyond the token's own " +
-				"identity; reading repository contents, a Git tree, a file's blame, commits, branches, or tags " +
-				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
-				"fine-grained token, for a private one; creating a branch, creating, updating, or deleting a " +
+				"identity; reading repository contents, a Git tree, a file's blame, commits, a comparison of two " +
+				"refs, branches, tags, or commit comments needs no scope for a public repository, or repo on a " +
+				"classic token, or Contents: read on a fine-grained token, for a private one, and reading the " +
+				"pull requests of a commit needs Pull requests: read as well on a fine-grained token; creating a branch, creating, updating, or deleting a " +
 				"file below the repository root, and pushing several files as one commit, listed-only, need " +
 				"repo on a classic token, or Contents: read and write on a fine-grained token; creating or " +
 				"forking a repository need repo on a classic token, or Administration: read and write on a " +
@@ -695,18 +700,21 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "repository-reader", Title: "Repository reader",
 			Description: "reads the contents of a file or a directory, the Git tree of a ref, the blame of a " +
-				"file over a bounded line range, the commits of a repository or one commit, and the branches " +
-				"and the tags of a repository or one tag; changes nothing",
+				"file over a bounded line range, the commits of a repository or one commit, the comparison of " +
+				"two refs, the branches and the tags of a repository or one branch or tag, the branches and " +
+				"the pull requests of a commit, and the comments on commits; changes nothing",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
-				branchesList.ID, tagsList.ID, tagsGet.ID},
+				branchesList.ID, tagsList.ID, tagsGet.ID, compareGet.ID, branchesGet.ID, commitBranchesList.ID,
+				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID},
 		}, {
 			ID: "repository-writer", Title: "Repository writer",
-			Description: "not recommended: reads the contents, tree, blame, commits, branches, and tags of a " +
-				"repository, creates a branch from a branch, a tag, or a commit SHA, and creates or updates a " +
+			Description: "not recommended: reads the contents, tree, blame, commits, comparisons, branches, tags, and " +
+				"commit comments of a repository, creates a branch from a branch, a tag, or a commit SHA, and creates or updates a " +
 				"file; every change needs its own confirmation, and deleting a file stays unticked, since it " +
 				"is offered only where a connection's tools list names github.contents.delete",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
-				branchesList.ID, tagsList.ID, tagsGet.ID, branchesCreate.ID, contentsPut.ID},
+				branchesList.ID, tagsList.ID, tagsGet.ID, compareGet.ID, branchesGet.ID, commitBranchesList.ID,
+				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID, branchesCreate.ID, contentsPut.ID},
 		}, {
 			ID: "repository-admin-reader", Title: "Repository administration reader",
 			Description: "not recommended: reads the collaborators of a repository, the rulesets of a " +
@@ -783,7 +791,7 @@ func Register(reg *capability.Registry) error {
 		maintenanceOperations(), pullRequestOperations(), checkOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
-		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
+		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(), compareOperations(), commitRelationOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
@@ -1599,6 +1607,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := refsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := commitRelationSubject(parts[2]); what != "" {
 			s.what = what
 		}
 		if what := repositoryAdminSubject(parts[2]); what != "" {

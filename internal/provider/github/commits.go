@@ -19,7 +19,7 @@ import (
 // bounded, filtered batch of compact commits, newest first, without a patch; github.commits.get reads one
 // commit by branch, tag, or commit SHA with its stats and its changed files, each with a patch excerpt hard
 // bounded, the cut visible, and the file count itself hard bounded, the cut visible as well. Neither tool
-// diffs two arbitrary refs; that stays out of scope, exactly as for the contents and tree tools.
+// diffs two refs; github.compare.get does.
 //
 // github.commits.search already searches GitHub's commit index across repositories with terms and
 // qualifiers; these two tools instead read the commits of one bound repository directly, through the REST
