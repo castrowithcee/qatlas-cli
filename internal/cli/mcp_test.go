@@ -84,7 +84,7 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 		listed.TTL != mcpCacheTTLMillis || listed.CacheScope != "public" {
 		t.Fatalf("tools/list = %+v", listed)
 	}
-	want := []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"}
+	want := []string{"search", "describe", "invoke"}
 	for i, tool := range listed.Tools {
 		if tool.Name != want[i] || len(tool.InputSchema) == 0 {
 			t.Errorf("tool %d = %+v, want %q with schema", i, tool, want[i])
@@ -95,7 +95,7 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	}
 	decodeRaw(t, listed.Tools[0].InputSchema, &searchSchema)
 	if _, ok := searchSchema.Properties["cursor"]; !ok {
-		t.Errorf("qconnect.search schema = %s, want a cursor property", listed.Tools[0].InputSchema)
+		t.Errorf("search schema = %s, want a cursor property", listed.Tools[0].InputSchema)
 	}
 }
 
@@ -109,9 +109,9 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	describeRequest := `{"operation":"bookstack.pages.get","version":1}`
 	invokeRequest := `{"operation":"bookstack.pages.get","connection":"wiki","arguments":{}}`
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.search","arguments":` + searchRequest + `}}`,
-		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.describe","arguments":` + describeRequest + `}}`,
-		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":` + invokeRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta + `,"name":"search","arguments":` + searchRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta + `,"name":"describe","arguments":` + describeRequest + `}}`,
+		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke","arguments":` + invokeRequest + `}}`,
 	}, "\n") + "\n"
 
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
@@ -128,7 +128,7 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	if len(searchResult.Operations) != 2 {
 		t.Fatalf("search operations = %d, want 2", len(searchResult.Operations))
 	}
-	// qconnect.search pages the entries of the CLI index; the entries and the connections named once are the
+	// search pages the entries of the CLI index; the entries and the connections named once are the
 	// same, entry by entry, in the same order.
 	indexed := toolIndex(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
 		"--output", "json")))
@@ -205,7 +205,7 @@ func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
 			`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
 			`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
 			`{"jsonrpc":"2.0","id":3,"method":"ping"}`,
-			`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"name":"qconnect.search","arguments":{"query":"page"}}}`,
+			`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"name":"search","arguments":{"query":"page"}}}`,
 			`{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}`,
 		}, "\n") + "\n"
 		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
@@ -279,10 +279,10 @@ func TestMCPMetadataErrorsNameTheKey(t *testing.T) {
 // instead of operation learns which name is wrong.
 func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
 	for _, tt := range []struct{ tool, arguments, want string }{
-		{"qconnect.describe", `{"tool":"bookstack.pages.get"}`, "invalid-request: $.tool is not allowed"},
-		{"qconnect.invoke", `{"operation":"bookstack.pages.get","version":"1"}`, "invalid-request: $.version must be integer"},
-		{"qconnect.invoke", `{"connection":"wiki"}`, "invalid-request: $.operation is required"},
-		{"qconnect.search", `{"effect":"write"}`, "invalid-request: $.effect is not an allowed value"},
+		{"describe", `{"tool":"bookstack.pages.get"}`, "invalid-request: $.tool is not allowed"},
+		{"invoke", `{"operation":"bookstack.pages.get","version":"1"}`, "invalid-request: $.version must be integer"},
+		{"invoke", `{"connection":"wiki"}`, "invalid-request: $.operation is required"},
+		{"search", `{"effect":"write"}`, "invalid-request: $.effect is not an allowed value"},
 	} {
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"` + tt.tool +
 			`","arguments":` + tt.arguments + `}}` + "\n"
@@ -349,7 +349,7 @@ defaults: {}
 	}
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
+		`,"name":"invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	invoke := toolResultFrom(t, responses["1"])
 	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-ambiguous: ") {
@@ -436,7 +436,7 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	cliDetail := []byte(lines[1])
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","arguments":{}}}}` + "\n"
+		`,"name":"invoke","arguments":{"operation":"bookstack.pages.list","arguments":{}}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: newRedactor()})
 	if mcpStderr != "" {
 		t.Fatalf("MCP stderr = %q", mcpStderr)
@@ -488,7 +488,7 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	}
 }
 
-// list turns qconnect.search into the overview 'qconnect providers' and 'qconnect connections' print: the same
+// list turns search into the overview 'qconnect providers' and 'qconnect connections' print: the same
 // data in the same order, answered from the configuration alone. It is a mode of its own, so a search
 // argument beside it is refused, and provider only filters the connections.
 func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
@@ -505,7 +505,7 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 	search := func(arguments string) mcpToolResult {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"search","arguments":` + arguments + `}}` + "\n"
 		responses, stderr := runMCPWithOptions(t, sharedRegistry(), input,
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		if stderr != "" {
@@ -552,7 +552,7 @@ func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
 	}
 }
 
-// qconnect.search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
+// search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
 // from the first page names every tool of the namespace once, in the order of the CLI index, and a cursor
 // that does not continue this search fails as an invalid request.
 func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
@@ -575,7 +575,7 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	search := func(arguments string) mcpToolResult {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"search","arguments":` + arguments + `}}` + "\n"
 		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 		if stderr != "" {
 			t.Fatalf("stderr = %q", stderr)
@@ -630,7 +630,7 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	}
 }
 
-// A qconnect.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
+// A search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
 // fields it uses (requires, confirm, connections, reason); the connections are named once beside the
 // hits. Description, version, tags, and provider stay one describe away.
 func TestMCPSearchHitsAreCompact(t *testing.T) {
@@ -642,9 +642,9 @@ func TestMCPSearchHitsAreCompact(t *testing.T) {
 	registry := fakeRegistry(t)
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"offered","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"bookstack"}}}`,
+			`,"name":"search","arguments":{"provider":"bookstack"}}}`,
 		`{"jsonrpc":"2.0","id":"all","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"bookstack","all":true}}}`,
+			`,"name":"search","arguments":{"provider":"bookstack","all":true}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	if stderr != "" {
@@ -696,7 +696,7 @@ func TestMCPAndJSONCLIErrorCodeParity(t *testing.T) {
 	path := writeConfig(t, validConfig)
 	request := `{"operation":"absent.operation.get"}`
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.describe","arguments":` + request + `}}` + "\n"
+		`,"name":"describe","arguments":` + request + `}}` + "\n"
 	responses, _ := runMCPWithOptions(t, fakeRegistry(t), input, &Options{Config: path})
 	mcpResult := toolResultFrom(t, responses["1"])
 	if !mcpResult.IsError {
@@ -726,7 +726,7 @@ func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 	redactor := &redact.Redactor{}
 	redactor.Add(canary)
 	input := strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.absent","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}`,
 	}, "\n") + "\n"
@@ -773,7 +773,7 @@ func TestNotFoundIsTheSameRuntimeFailureInCLIAndMCP(t *testing.T) {
 			exitRuntime, want)
 	}
 
-	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke",` +
 		`"arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	result := toolResultFrom(t, responses["1"])
@@ -786,7 +786,7 @@ func TestMCPConfirmedMutationKeepsAuditOffProtocol(t *testing.T) {
 	const message = "private-message-canary-1842"
 	registry, path := mcpSendRegistry(t)
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
+		`,"name":"invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
 		message + `"},"confirm":true}}}` + "\n"
 	responses, stderr := runMCPWithOptions(t, registry, input, &Options{
 		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
@@ -868,7 +868,7 @@ func TestMCPCancellationStopsCoreAndSuppressesResponse(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- server.serve(context.Background(), reader) }()
 
-	call := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+	call := `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	if _, err := io.WriteString(writer, call); err != nil {
 		t.Fatal(err)
 	}
@@ -911,7 +911,7 @@ func TestMCPDeadlineReturnsTimeoutToolError(t *testing.T) {
 		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
 	}, registry, &stdout, &stderr)
 	server.timeout = 20 * time.Millisecond
-	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
 	if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
 		t.Fatal(err)
 	}
@@ -942,7 +942,7 @@ func TestMCPInFlightLimitStopsBeforeCore(t *testing.T) {
 		server.pending[fmt.Sprintf("%d", i)] = &mcpPending{}
 	}
 	line := `{"jsonrpc":"2.0","id":"overflow","method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.search","arguments":{}}}`
+		`,"name":"search","arguments":{}}}`
 	server.handle(context.Background(), []byte(line))
 	responses := decodeMCPResponses(t, stdout.String())
 	response := responses[`"overflow"`]
@@ -1007,18 +1007,18 @@ func TestMCPToolErrorsCarryCodeAndMessage(t *testing.T) {
 		arguments string
 		timeout   bool
 	}{
-		{output.CodeInvalidRequest, unused, "qconnect.search", `{"cursor":"bogus"}`, false},
-		{output.CodeUnknownOperation, unused, "qconnect.describe", `{"operation":"absent.operation.get"}`, false},
-		{output.CodeUnknownConnection, unused, "qconnect.describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
-		{output.CodeConfirmationRequired, mcpSendRegistry, "qconnect.invoke",
+		{output.CodeInvalidRequest, unused, "search", `{"cursor":"bogus"}`, false},
+		{output.CodeUnknownOperation, unused, "describe", `{"operation":"absent.operation.get"}`, false},
+		{output.CodeUnknownConnection, unused, "describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
+		{output.CodeConfirmationRequired, mcpSendRegistry, "invoke",
 			`{"operation":"fake.messages.send","connection":"target","arguments":{"text":"hello"}}`, false},
 		{output.CodeAuth, failing(&provider.Error{Class: provider.ClassAuth, Op: "get page", Message: "rejected"}),
-			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+			"invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeNotFound, failing(&provider.Error{Class: provider.ClassNotFound, Op: "get page", Message: "absent"}),
-			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+			"invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeProviderError, failing(&provider.Error{Class: provider.ClassProviderError, Op: "get page", Message: "failed"}),
-			"qconnect.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
-		{output.CodeTimeout, waiting, "qconnect.invoke",
+			"invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+		{output.CodeTimeout, waiting, "invoke",
 			`{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, true},
 	} {
 		t.Run(string(tt.code), func(t *testing.T) {
@@ -1255,7 +1255,7 @@ func TestMCPAndCLITransportDiagnosisParity(t *testing.T) {
 	cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr.String()), "qconnect: ")
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"fake.pages.get","connection":"primary"}}}` + "\n"
+		`,"name":"invoke","arguments":{"operation":"fake.pages.get","connection":"primary"}}}` + "\n"
 	responses, mcpStderr := runMCPWithOptions(t, registry, input,
 		&Options{Config: path, Redactor: redactor})
 	result := toolResultFrom(t, responses["1"])
@@ -1314,21 +1314,21 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 
 	// The next step of an unknown connection points to discovery, which differs between the two routes.
 	for _, tt := range []struct{ cli, mcp, want, cliStep, mcpStep string }{
-		{cli("describe", "fake.page.get"), mcp("qconnect.describe", `{"operation":"fake.page.get"}`),
+		{cli("describe", "fake.page.get"), mcp("describe", `{"operation":"fake.page.get"}`),
 			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`, "", ""},
 		{cli("invoke", "fake.pages.get", "--connection", "primry"),
-			mcp("qconnect.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
+			mcp("invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
 			`unknown-connection: unknown connection "primry" (did you mean "primary"?); a connection is named by its name or id`,
 			"; list the configured connections with 'qconnect connections fake'",
-			"; call qconnect.describe with operation fake.pages.get and without connection for the connections " +
+			"; call describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
 		{cli("describe", "fake.pages.get", "--connection", "absent"),
-			mcp("qconnect.describe", `{"operation":"fake.pages.get","connection":"absent"}`),
+			mcp("describe", `{"operation":"fake.pages.get","connection":"absent"}`),
 			`unknown-connection: unknown connection "absent"; a connection is named by its name or id`,
 			"; list the configured connections with 'qconnect connections fake'",
-			"; call qconnect.describe with operation fake.pages.get and without connection for the connections " +
+			"; call describe with operation fake.pages.get and without connection for the connections " +
 				"that can run it"},
-		{cli("describe", "zzz.unrelated.tool"), mcp("qconnect.describe", `{"operation":"zzz.unrelated.tool"}`),
+		{cli("describe", "zzz.unrelated.tool"), mcp("describe", `{"operation":"zzz.unrelated.tool"}`),
 			`unknown-operation: unknown tool "zzz.unrelated.tool"`, "", ""},
 	} {
 		if tt.cli != "qconnect: "+tt.want+tt.cliStep || tt.mcp != tt.want+tt.mcpStep {
@@ -1336,12 +1336,12 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 		}
 	}
 	// A search names no tool, so its step names the connection overview, of the provider where it names one.
-	if got, want := mcp("qconnect.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
-		`"absent"; a connection is named by its name or id; call qconnect.search with list connections for the configured connections`; got != want {
+	if got, want := mcp("search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
+		`"absent"; a connection is named by its name or id; call search with list connections for the configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
-	if got, want := mcp("qconnect.search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
-		`unknown connection "absent"; a connection is named by its name or id; call qconnect.search with list connections and provider fake for the `+
+	if got, want := mcp("search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
+		`unknown connection "absent"; a connection is named by its name or id; call search with list connections and provider fake for the `+
 		`configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
@@ -1358,7 +1358,7 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 		`run 'qconnect providers' to list the providers`; got != want {
 		t.Errorf("CLI connections = %q, want %q", got, want)
 	}
-	if got, want := mcp("qconnect.search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
+	if got, want := mcp("search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
 		`(did you mean "fake"?); leave the provider out to search every provider`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
@@ -1373,7 +1373,7 @@ func TestMCPGuideFitsAndMatchesTheSchemas(t *testing.T) {
 	if length := utf8.RuneCountInString(guide); length > 2000 {
 		t.Fatalf("MCP guide is %d characters, want at most 2000", length)
 	}
-	for _, tool := range []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"} {
+	for _, tool := range []string{"search", "describe", "invoke"} {
 		if !strings.Contains(guide, tool) {
 			t.Errorf("MCP guide does not name %s", tool)
 		}

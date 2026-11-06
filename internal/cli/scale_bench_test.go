@@ -402,11 +402,11 @@ func BenchmarkScaleCLI(b *testing.B) {
 func BenchmarkScaleMCP(b *testing.B) {
 	reg := scaleRegistry(b)
 	calls := map[string]string{
-		"search":          `"name":"qconnect.search","arguments":{"query":"list pages"}`,
-		"search-provider": `"name":"qconnect.search","arguments":{"query":"list","provider":"bookstack"}`,
-		"providers":       `"name":"qconnect.search","arguments":{"list":"providers"}`,
-		"connections":     `"name":"qconnect.search","arguments":{"list":"connections","provider":"bookstack"}`,
-		"describe":        `"name":"qconnect.describe","arguments":{"operation":"bookstack.pages.list"}`,
+		"search":          `"name":"search","arguments":{"query":"list pages"}`,
+		"search-provider": `"name":"search","arguments":{"query":"list","provider":"bookstack"}`,
+		"providers":       `"name":"search","arguments":{"list":"providers"}`,
+		"connections":     `"name":"search","arguments":{"list":"connections","provider":"bookstack"}`,
+		"describe":        `"name":"describe","arguments":{"operation":"bookstack.pages.list"}`,
 	}
 	forEachProfile(b, func(b *testing.B, _ scaleShape, path string) {
 		for name, call := range calls {

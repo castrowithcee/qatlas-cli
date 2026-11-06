@@ -112,7 +112,7 @@ func (s *mcpSession) describe(meta string) output.Code {
 	s.t.Helper()
 	s.calls++
 	id := fmt.Sprintf(`"call-%d"`, s.calls)
-	params := `"name":"qconnect.describe","arguments":{"operation":"fake.pages.get","connection":"customer"}`
+	params := `"name":"describe","arguments":{"operation":"fake.pages.get","connection":"customer"}`
 	if meta != "" {
 		params = meta + "," + params
 	}

@@ -211,11 +211,11 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"lexware","all":true}}}`,
+			`,"name":"search","arguments":{"provider":"lexware","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.describe","arguments":{"operation":"lexware.invoices.list","version":1}}}`,
+			`,"name":"describe","arguments":{"operation":"lexware.invoices.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"lexware.invoices.get",` +
+			`,"name":"invoke","arguments":{"operation":"lexware.invoices.get",` +
 			`"connection":"accounting","arguments":{"id":"not-a-uuid"}}}}`,
 	}, "\n") + "\n"
 

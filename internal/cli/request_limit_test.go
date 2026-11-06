@@ -125,7 +125,7 @@ func TestInlineContentAtSchemaLimitReachesTheHandlerOverStdinAndMCP(t *testing.T
 
 	call := func(id, arguments string) string {
 		return `{"jsonrpc":"2.0","id":` + id + `,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"fake.files.create","connection":"primary","arguments":` +
+			`,"name":"invoke","arguments":{"operation":"fake.files.create","connection":"primary","arguments":` +
 			arguments + `}}}` + "\n"
 	}
 	responses, _ := runMCPWithOptions(t, registry, call("1", atLimit)+call("2", over), &Options{

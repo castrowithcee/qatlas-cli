@@ -89,12 +89,12 @@ func TestFormerProgramNameWorksAndNotesOnStderrOnly(t *testing.T) {
 		if (name == "qatlas") != strings.Contains(stderr, legacyNote) {
 			t.Errorf("%s mcp: stderr = %q, want the note exactly for the former name", name, stderr)
 		}
-		for _, want := range []string{`"name":"qconnect"`, `"qconnect.search"`, `"qconnect.describe"`, `"qconnect.invoke"`} {
+		for _, want := range []string{`"name":"qconnect"`, `"name":"search"`, `"name":"describe"`, `"name":"invoke"`} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("%s mcp: stdout lacks %s:\n%s", name, want, stdout)
 			}
 		}
-		for _, old := range []string{`"qatlas.search"`, `"qatlas.describe"`, `"qatlas.invoke"`, `"name":"qatlas"`} {
+		for _, old := range []string{`"qconnect.search"`, `"qconnect.describe"`, `"qconnect.invoke"`, `"qatlas.search"`, `"qatlas.describe"`, `"qatlas.invoke"`, `"name":"qatlas"`} {
 			if strings.Contains(stdout, old) {
 				t.Errorf("%s mcp: stdout still offers %s", name, old)
 			}

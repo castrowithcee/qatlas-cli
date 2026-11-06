@@ -131,11 +131,11 @@ defaults:
 		if code != 0 || !strings.Contains(stdout, `"unusable":"vault-locked"`) {
 			t.Errorf("connections: exit %d, stdout %q, stderr %q; want the connection unusable", code, stdout, stderr)
 		}
-		list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
+		list := broker.call(t, `{"list":"connections"}`, "search")
 		if list.Result.IsError || !strings.Contains(string(list.Result.Structured), `"unusable":"vault-locked"`) {
 			t.Errorf("MCP list = %+v, want the connection unusable", list.Result)
 		}
-		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
+		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "invoke")
 		if !invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), `"code":"vault-locked"`) ||
 			!strings.Contains(string(invoke.Result.Structured), "qconnect vault unlock") {
 			t.Errorf("MCP invoke = %s, want vault-locked naming 'qconnect vault unlock'", invoke.Result.Structured)
@@ -166,11 +166,11 @@ defaults:
 			t.Errorf("connections: exit %d, stdout %q, stderr %q; want no unusable column", code, stdout, stderr)
 		}
 		// The broker was started while the vault was locked, and uses the vault process all the same.
-		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
+		invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "invoke")
 		if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 			t.Errorf("MCP invoke = %s, want the page", invoke.Result.Structured)
 		}
-		list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
+		list := broker.call(t, `{"list":"connections"}`, "search")
 		if list.Result.IsError || strings.Contains(string(list.Result.Structured), "unusable") {
 			t.Errorf("MCP list = %s, want no unusable column", list.Result.Structured)
 		}
@@ -236,12 +236,12 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, `"unusable":"approval-required"`) {
 				t.Errorf("connections: exit %d, stdout %q, stderr %q; want the connection unusable", code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "invoke")
 			if !invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), `"code":"approval-required"`) ||
 				!strings.Contains(string(invoke.Result.Structured), "an agent cannot approve it") {
 				t.Errorf("MCP invoke = %s, want approval-required for an agent", invoke.Result.Structured)
 			}
-			list := broker.call(t, `{"list":"connections"}`, "qconnect.search")
+			list := broker.call(t, `{"list":"connections"}`, "search")
 			if list.Result.IsError || !strings.Contains(string(list.Result.Structured), `"unusable":"approval-required"`) {
 				t.Errorf("MCP list = %s, want the connection unusable", list.Result.Structured)
 			}
@@ -309,7 +309,7 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
 				t.Fatalf("invoke after renaming to %s: exit %d, stdout %q, stderr %q", step.name, code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"`+step.name+`"}`, "qconnect.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"`+step.name+`"}`, "invoke")
 			if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 				t.Errorf("MCP invoke through %s = %s, want the page", step.name, invoke.Result.Structured)
 			}
@@ -334,7 +334,7 @@ defaults:
 			if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
 				t.Fatalf("invoke after renaming to %s: exit %d, stdout %q, stderr %q", step.name, code, stdout, stderr)
 			}
-			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qconnect.invoke")
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "invoke")
 			if invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), "Vault Runbook") {
 				t.Errorf("MCP invoke after renaming to %s = %s, want the page", step.name, invoke.Result.Structured)
 			}

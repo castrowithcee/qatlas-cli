@@ -110,7 +110,7 @@ func TestLocalFileOverwriteConfirmationOverMCP(t *testing.T) {
 	call := func(id, confirm string) mcpToolResult {
 		request := `{"operation":"bookstack.files.download","connection":"wiki","arguments":{"local_path":` + strconv.Quote(target) + `}` + confirm + `}`
 		input := `{"jsonrpc":"2.0","id":"` + id + `","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":` + request + `}}` + "\n"
+			`,"name":"invoke","arguments":` + request + `}}` + "\n"
 		responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: cfg, Redactor: &redact.Redactor{}})
 		return toolResultFrom(t, responses[`"`+id+`"`])
 	}

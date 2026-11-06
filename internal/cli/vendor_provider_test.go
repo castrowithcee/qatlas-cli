@@ -103,7 +103,7 @@ func TestVendorProviderIsUsableEverywhere(t *testing.T) {
 	search := func(arguments string) mcpToolResult {
 		t.Helper()
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":` + arguments + `}}` + "\n"
+			`,"name":"search","arguments":` + arguments + `}}` + "\n"
 		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 		if stderr != "" {
 			t.Fatalf("stderr = %q", stderr)

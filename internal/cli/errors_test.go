@@ -144,19 +144,19 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 		want string
 	}{
 		{"CLI with provider", named, routeCLI, "list the configured connections with 'qconnect connections github'"},
-		{"MCP with tool", named, routeMCP, "call qconnect.describe with operation github.issues.list and without " +
+		{"MCP with tool", named, routeMCP, "call describe with operation github.issues.list and without " +
 			"connection for the connections that can run it"},
 		{"CLI without provider", &capability.UnknownConnectionError{Name: "absent"}, routeCLI,
 			"list the configured connections with 'qconnect connections'"},
 		{"MCP without tool", &capability.UnknownConnectionError{Name: "absent", Provider: "github"}, routeMCP,
-			"call qconnect.search with list connections and provider github for the configured connections"},
+			"call search with list connections and provider github for the configured connections"},
 		{"MCP without provider", &capability.UnknownConnectionError{Name: "absent"}, routeMCP,
-			"call qconnect.search with list connections for the configured connections"},
+			"call search with list connections for the configured connections"},
 		{"CLI unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
 			routeCLI, "'qconnect describe github.issues.list' names the connections that offer it, or change the " +
 				"connection in 'qconnect tui'"},
 		{"MCP unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
-			routeMCP, "call qconnect.describe with operation github.issues.list and without connection for the " +
+			routeMCP, "call describe with operation github.issues.list and without connection for the " +
 				"connections that offer it, or change the connection in 'qconnect tui'"},
 		{"unsupported without connection", &capability.UnsupportedError{Capability: "github.issues.list"},
 			routeMCP, ""},

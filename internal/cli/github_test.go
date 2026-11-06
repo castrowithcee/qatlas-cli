@@ -307,11 +307,11 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.search","arguments":{"provider":"github","limit":50}}}`,
+			`,"name":"search","arguments":{"provider":"github","limit":50}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.describe","arguments":{"operation":"github.project-items.list","version":2}}}`,
+			`,"name":"describe","arguments":{"operation":"github.project-items.list","version":2}}}`,
 		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qconnect.invoke","arguments":{"operation":"github.project-items.list","version":1,` +
+			`,"name":"invoke","arguments":{"operation":"github.project-items.list","version":1,` +
 			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, sharedRegistry(), input, options)
@@ -397,7 +397,7 @@ defaults: {}
 			reads.Add(1)
 			return ""
 		}, nil, nil, redactor)}
-		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qconnect.invoke",` +
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"invoke",` +
 			`"arguments":{"operation":"github.issues.get","connection":"` + connection + `","arguments":{"number":42}}}}` +
 			"\n"
 		responses, _ := runMCPWithOptions(t, sharedRegistry(), input, options)

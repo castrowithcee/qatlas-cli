@@ -230,7 +230,7 @@ credentials:
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
 # is for. A name is a stable selector, not an explanation, so this is what tells two routes of the same
-# provider apart. It is published by 'qconnect describe <tool-id>' and by qconnect.describe, and it names the
+# provider apart. It is published by 'qconnect describe <tool-id>' and by the MCP tool describe, and it names the
 # candidates of a connection-ambiguous diagnostic. It is never sent to a provider, and it never selects a
 # route on its own. Because it is published, never write a secret or personal data into it.
 #

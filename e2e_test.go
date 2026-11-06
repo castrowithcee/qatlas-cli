@@ -917,9 +917,9 @@ defaults: {}
 			"invoke":   `{"operation":"bookstack.pages.list","connection":"wiki-primary"}`,
 		}
 		input := strings.Join([]string{
-			`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.search","arguments":` + requests["search"] + `}}`,
-			`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.describe","arguments":` + requests["describe"] + `}}`,
-			`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta + `,"name":"qconnect.invoke","arguments":` + requests["invoke"] + `}}`,
+			`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpMeta + `,"name":"search","arguments":` + requests["search"] + `}}`,
+			`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpMeta + `,"name":"describe","arguments":` + requests["describe"] + `}}`,
+			`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta + `,"name":"invoke","arguments":` + requests["invoke"] + `}}`,
 		}, "\n") + "\n"
 		code, stdout, stderr := c.runInput(t, input, "mcp")
 		if code != 0 || stderr != "" {
@@ -938,7 +938,7 @@ defaults: {}
 			}
 		}
 
-		// qconnect.search pages the entries of the public listing. Both publish the same entries for the same
+		// search pages the entries of the public listing. Both publish the same entries for the same
 		// tools in the same order, and name the connections that offer them once.
 		listing := jsonCLIDocument(t, c, "", "tools", "bookstack", "--query", "pages", "--output", "json")
 		index, searched := member(t, listing, "tools"), member(t, mcpData(t, responses["search"]), "operations")
@@ -992,7 +992,7 @@ defaults: {}
 		assertAudit(t, stderr, "telegram-alerts", "success", canaries)
 
 		input := `{"jsonrpc":"2.0","id":"send","method":"tools/call","params":{` + mcpMeta +
-			`,"name":"qconnect.invoke","arguments":` + arguments + `}}` + "\n"
+			`,"name":"invoke","arguments":` + arguments + `}}` + "\n"
 		before = probe.count(telegramSuccessText)
 		code, stdout, stderr = c.runInput(t, input, "mcp")
 		if code != 0 || probe.count(telegramSuccessText) != before+1 {
@@ -1643,7 +1643,7 @@ defaults:
 		"DEBUG_WIKI_SECRET=" + canaryPrimarySecret,
 	}
 	mcpInput := `{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta +
-		`,"name":"qconnect.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+		`,"name":"invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
 	// The header line proves that the debug log ran at all; without it the check below would pass on a run
 	// that never logged anything.
 	const redactedHeader = `http2: Transport encoding header "authorization" = "Token ` + redact.Marker + `"`

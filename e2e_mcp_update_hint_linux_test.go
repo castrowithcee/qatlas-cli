@@ -178,7 +178,7 @@ defaults:
 	invoke := func() string {
 		t.Helper()
 		callID++
-		send(fmt.Sprintf(`{"jsonrpc":"2.0","id":"call-%d","method":"tools/call","params":{"name":"qconnect.invoke",`+
+		send(fmt.Sprintf(`{"jsonrpc":"2.0","id":"call-%d","method":"tools/call","params":{"name":"invoke",`+
 			`"arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}`, callID))
 		for {
 			message := next()

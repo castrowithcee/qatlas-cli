@@ -137,8 +137,8 @@ func TestFormerToolIDEndsAsUnknownOperationNamingTheNewOne(t *testing.T) {
 		}
 	}
 	for tool, arguments := range map[string]string{
-		"qconnect.describe": `{"operation":"acmechat.messages.fetch"}`,
-		"qconnect.invoke":   `{"operation":"acmechat.messages.fetch","confirm":true}`,
+		"describe": `{"operation":"acmechat.messages.fetch"}`,
+		"invoke":   `{"operation":"acmechat.messages.fetch","confirm":true}`,
 	} {
 		if got := runRenameMCP(t, path, tool, arguments); got != want {
 			t.Errorf("%s = %q, want %q", tool, got, want)
@@ -162,7 +162,7 @@ func TestFormerProviderNameIsUnknownAndNamesTheNewOne(t *testing.T) {
 		}
 	}
 	for _, arguments := range []string{`{"provider":"acmechat"}`, `{"list":"connections","provider":"acmechat"}`} {
-		got := runRenameMCP(t, path, "qconnect.search", arguments)
+		got := runRenameMCP(t, path, "search", arguments)
 		if !strings.HasPrefix(got, "invalid-request: unknown provider \"acmechat\" (renamed to \"acme.chat\")") {
 			t.Errorf("search %s = %q", arguments, got)
 		}

@@ -115,7 +115,7 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 		}
 		last = at
 	}
-	for _, tool := range []string{"qconnect.search", "qconnect.describe", "qconnect.invoke"} {
+	for _, tool := range []string{"search", "describe", "invoke"} {
 		if !strings.Contains(agents, tool) || !knownMCPTool(tool) {
 			t.Errorf("the agents topic and the broker disagree on %s", tool)
 		}
