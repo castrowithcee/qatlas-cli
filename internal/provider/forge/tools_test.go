@@ -218,6 +218,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".package-versions.list", p.id+".package-versions.get-latest",
 				p.id+".packages.delete")
 		}
+		want = append(want, p.id+".collaborators.list", p.id+".collaborators.check",
+			p.id+".collaborators.get-permission", p.id+".collaborators.add", p.id+".collaborators.remove")
 		want = append(want, accessToolIDs(p)...)
 		if p == forgejo {
 			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",
