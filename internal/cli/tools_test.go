@@ -266,7 +266,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	}
 	// The first step names namespaces, not tools: no ID, no title, and no connection name reaches it.
 	// The dot of a vendor family namespace name is not a tool ID separator.
-	bare := strings.NewReplacer("infomaniak.", "", "seatable.", "").Replace(stdout)
+	bare := strings.NewReplacer("infomaniak.", "", "seatable.", "", "google.", "").Replace(stdout)
 	for _, absent := range []string{".", "title", "effect", "wiki", "alerts"} {
 		if strings.Contains(bare, absent) {
 			t.Errorf("the namespace index published %q:\n%s", absent, stdout)
