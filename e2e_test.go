@@ -305,12 +305,12 @@ defaults:
 		// is, the note the configuration keeps on it, how many tools it offers, how many configured
 		// connections can run them, and how many are configured. A provider without a route is visible
 		// as exactly that.
-		if !strings.HasPrefix(stdout, "providers[23]{provider,description,note,tools,connections,configured}:\n") {
+		if !strings.HasPrefix(stdout, "providers[24]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		lines := strings.Split(strings.TrimSpace(stdout), "\n")[1:]
-		if len(lines) != 23 {
-			t.Errorf("%d provider rows, want 23:\n%s", len(lines), stdout)
+		if len(lines) != 24 {
+			t.Errorf("%d provider rows, want 24:\n%s", len(lines), stdout)
 		}
 		rows := map[string][3]string{}
 		for _, line := range lines {
@@ -330,7 +330,7 @@ defaults:
 		}
 		// The first step names namespaces only: no tool ID and no route name reaches it.
 		// The dot of a vendor family namespace name is not a tool ID separator.
-		bare := strings.NewReplacer("infomaniak.", "", "seatable.", "").Replace(stdout)
+		bare := strings.NewReplacer("infomaniak.", "", "seatable.", "", "google.", "").Replace(stdout)
 		for _, absent := range []string{".", "title", "effect", "archive", "primary"} {
 			if strings.Contains(bare, absent) {
 				t.Errorf("stdout = %q, want the namespace index without %q", stdout, absent)
