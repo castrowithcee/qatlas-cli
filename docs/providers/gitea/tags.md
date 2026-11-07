@@ -5,14 +5,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-11-07
 ---
 
 # Tags
 
 The tag tools list, read, create, and delete the Git tags of a repository. Gitea and Forgejo share them; a line
-below names a difference. Tags are lightweight unless `tags.create` gets a message. Annotated tag objects, tag
-protections, and releases are other tool groups.
+below names a difference. Tags are lightweight unless `tags.create` gets a message. Annotated tag objects,
+[tag protections](tag-protections.md), and releases are other tool groups.
 
 ## Target binding
 

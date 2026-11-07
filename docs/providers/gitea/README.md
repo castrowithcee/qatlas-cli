@@ -220,6 +220,8 @@ Tool IDs carry the provider as prefix, such as `gitea.repositories.get`. The oth
 - [Branches](branches.md): the branches of a repository
 - [Branch protections](branch-protections.md): the branch protection rules of a repository, reading, creating,
   changing, reordering, and deleting
+- [Tag protections](tag-protections.md): the tag protection rules of a repository, reading, creating, changing, and
+  deleting
 - [Repository lifecycle](repositories.md): creating, changing, forking, generating, syncing, transferring, and deleting
   repositories, pull mirror syncs, and repository avatars
 - [Organizations](organizations.md): listing, reading, creating, changing, renaming, and deleting organizations, their

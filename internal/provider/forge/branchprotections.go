@@ -164,9 +164,9 @@ func protectionOutputMembers() []member {
 	return append([]member{protectionRepositoryMember}, protectionMembers...)
 }
 
-func protectionProperties(p *product) string {
+func protectionProperties(p *product, fields []protectionField) string {
 	var properties []string
-	for _, f := range protectionFields {
+	for _, f := range fields {
 		if f.offered(p) {
 			properties = append(properties, `"`+f.name+`":`+f.schema())
 		}
@@ -174,9 +174,9 @@ func protectionProperties(p *product) string {
 	return strings.Join(properties, ",")
 }
 
-func protectionArguments(p *product) []capability.Argument {
+func protectionArguments(p *product, fields []protectionField) []capability.Argument {
 	var arguments []capability.Argument
-	for _, f := range protectionFields {
+	for _, f := range fields {
 		if f.offered(p) {
 			arguments = append(arguments, capability.Argument{Name: f.name, Description: f.note})
 		}
@@ -471,16 +471,16 @@ func protectionWrite(action string) *tool {
 				"repository."
 			required := []string{"rule_name"}
 			return capability.Descriptor{
-				Title:        strings.ReplaceAll(title, "%s", p.name),
+				Title:        titleFor(title, p),
 				Description:  description,
 				Tags:         []string{p.id, "branch-protections", action},
 				Risk:         changeRisk(effect, idempotency, p.id+protectionSensitivity),
-				InputSchema:  inputSchema(protectionNameProperties+","+protectionProperties(p), required...),
+				InputSchema:  inputSchema(protectionNameProperties+","+protectionProperties(p, protectionFields), required...),
 				OutputSchema: protectionObjectOutput(p),
 				Arguments: append([]capability.Argument{repositoryArgument, ruleNameArgument},
-					protectionArguments(p)...),
+					protectionArguments(p, protectionFields)...),
 				Fields: fieldsOf(p, protectionOutputMembers()),
-				Examples: []capability.Example{{Description: strings.ReplaceAll(title, "%s", p.name),
+				Examples: []capability.Example{{Description: titleFor(title, p),
 					Arguments: json.RawMessage(example)}},
 			}
 		},
@@ -633,3 +633,6 @@ var branchProtectionsDelete = &tool{
 		}, nil
 	},
 }
+
+// titleFor fills the product name into a title template with one %s.
+func titleFor(title string, p *product) string { return strings.ReplaceAll(title, "%s", p.name) }
