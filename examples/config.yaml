@@ -244,13 +244,20 @@ credentials:
 # `effects: []` offers no tool; the TUI spells this value `none` and uses an empty field for the default.
 # High-risk tools marked as listed only are never offered by effect.
 #
-# tools offers selected tools: complete tool IDs of this connection's provider, as listed by
-# 'qconnect tools <provider> --all'. A connection offers exactly the listed tools, and a tool added later
-# joins only when you add it; the effects it covers follow from the tools and are not written. It never
-# widens what the provider credential or the target allows. `tools: []` offers no tool at all. Every entry
-# must be a registered tool of the connection's provider, listed once; anything else makes the file
-# invalid. Each connection keeps its own selection, even when it shares the provider, the service, or the
-# credential with another one.
+# tools offers selected tools. An entry is a complete tool ID of this connection's provider, as listed by
+# 'qconnect tools <provider> --all', or a prefix: a tool ID whose last segment is replaced by one *, such as
+# <provider>.<group>.*, which selects every tool of the provider whose ID begins with the whole segments
+# before the *. There is no other pattern: no * inside a segment, no <provider>.* alone, no exclusion. An
+# exact ID offers exactly that tool, and a tool added later joins only when you add it. A prefix also
+# offers the tools a later version registers under it; that is intended, so it releases more than the tools
+# it covers today. A tool a later version adds with an effect the connection was not yet approved for needs
+# a new approval, one with an effect it already has does not. A tool marked as listed only is never
+# selected by a prefix, only by its exact ID. The effects follow from the selected tools and are not
+# written. The list never widens what the provider credential or the target allows. `tools: []` offers no
+# tool at all. Every entry must be a registered tool of the connection's provider or a prefix that selects
+# at least one registered tool that needs no exact ID, listed once; a prefix and an exact ID it covers are
+# no duplicate. Anything else makes the file invalid. Each connection keeps its own selection, even when
+# it shares the provider, the service, or the credential with another one.
 #
 # paths optionally binds a connection to projects: a list of directories, absolute or starting with ~/, each
 # covering itself and everything below it, compared by whole directory names, so ~/repos/kunde-a does not

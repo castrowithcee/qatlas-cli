@@ -1357,6 +1357,97 @@ func TestToolsRequiringAnAllowListAreOfferedOnlyWhereListed(t *testing.T) {
 	}
 }
 
+// A prefix in a connection's tools list is judged by the one central rule: search, the tool index, describe,
+// the route and invoke agree on what it covers, a tool that requires the allow-list stays out of it unless its
+// exact ID is listed too, and a tool of another segment is not covered.
+func TestToolPrefixesAreOfferedAlikeByEverySurface(t *testing.T) {
+	var handlerCalls int
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		handlerCalls++
+		return map[string]any{"ok": true}, nil
+	})
+	get := testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	remove := testDescriptor("fake.pages.delete", capability.EffectDelete, capability.ConfirmationRequired)
+	guarded := testDescriptor("fake.pages.settings", capability.EffectUpdate, capability.ConfirmationRequired)
+	guarded.RequiresToolAllowList = true
+	sibling := testDescriptor("fake.pagesx.get", capability.EffectRead, capability.ConfirmationNone)
+	registry := capability.NewRegistry()
+	for _, descriptor := range []capability.Descriptor{get, remove, guarded, sibling} {
+		if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	cfg.Connections["prefixed"] = config.Connection{Service: "service", Credential: "shared",
+		Tools: []string{"fake.pages.*"}}
+	cfg.Connections["with-exact"] = config.Connection{Service: "service", Credential: "shared",
+		Tools: []string{"fake.pages.*", guarded.ID}}
+	cfg.Connections["empty"] = config.Connection{Service: "service", Credential: "shared", Tools: []string{}}
+	resolver := secret.NewWith(func(string) string { return "test-token" }, nil, nil, nil)
+	core := New(registry, cfg, resolver, nil)
+
+	for connection, want := range map[string][]string{
+		"prefixed":   {get.ID, remove.ID},
+		"with-exact": {get.ID, remove.ID, guarded.ID},
+		"empty":      nil,
+	} {
+		searched, err := core.Search(SearchRequest{Connection: connection})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tools, err := core.Tools(SearchRequest{Connection: connection})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found, indexed []string
+		for _, hit := range searched.Operations {
+			found = append(found, hit.ID)
+		}
+		for _, tool := range tools.Tools {
+			indexed = append(indexed, tool.ID)
+		}
+		sort.Strings(found)
+		sort.Strings(indexed)
+		sort.Strings(want)
+		if !reflect.DeepEqual(found, want) || !reflect.DeepEqual(indexed, want) {
+			t.Errorf("%s: search = %v, tools = %v, want %v", connection, found, indexed, want)
+		}
+	}
+
+	var unsupported *capability.UnsupportedError
+	for _, id := range []string{guarded.ID, sibling.ID} {
+		if _, err := core.Describe(DescribeRequest{Operation: id, Connection: "prefixed"}); !errors.As(err, &unsupported) {
+			t.Errorf("Describe(%s, prefixed) = %v, want *capability.UnsupportedError", id, err)
+		}
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: id, Connection: "prefixed",
+			Confirmed: true, Arguments: json.RawMessage(`{"id":"1"}`)})
+		if !errors.As(err, &unsupported) {
+			t.Errorf("Invoke(%s, prefixed) = %v, want *capability.UnsupportedError", id, err)
+		}
+	}
+	if handlerCalls != 0 {
+		t.Fatalf("a refused request reached the provider %d times", handlerCalls)
+	}
+	if _, err := core.Describe(DescribeRequest{Operation: remove.ID, Connection: "prefixed"}); err != nil {
+		t.Errorf("Describe(covered, prefixed) = %v", err)
+	}
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: remove.ID, Connection: "prefixed",
+		Confirmed: true, Arguments: json.RawMessage(`{"id":"1"}`)}); err != nil || handlerCalls != 1 {
+		t.Errorf("Invoke(covered, prefixed) = %v, handler calls=%d", err, handlerCalls)
+	}
+	// Without a connection, the only one that covers the listed-only tool is its route.
+	response, err := core.Invoke(context.Background(), InvokeRequest{Operation: guarded.ID, Confirmed: true,
+		Arguments: json.RawMessage(`{"id":"1"}`)})
+	if err != nil || response.Connection != "with-exact" {
+		t.Errorf("Invoke(guarded) = %+v, %v, want the route with-exact", response, err)
+	}
+}
+
 // The catalog keeps only offered tools by default, and a request for all of them names why each of the
 // others is not offered: the same refusal an explicit route receives from describe and invoke.
 func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {

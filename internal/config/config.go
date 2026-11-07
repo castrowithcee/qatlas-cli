@@ -975,9 +975,10 @@ func validateForward(name string, cred Credential, report func(Problem)) {
 }
 
 // validateTools checks the tools allow-list of one connection against the tools its provider registered.
-// Every entry must be a registered tool of that provider, listed once. A file that still carries the former
-// permissions next to the tools keeps its former bound: a tool whose effect they exclude was never offered,
-// so it is refused rather than offered now. An ID the provider lists as removed is skipped, and ToolWarnings
+// Every entry must be a registered tool of that provider or a valid prefix of it (validateToolPrefix), listed
+// once. A prefix and the exact ID of a tool it covers are different entries, not a duplicate. A file that
+// still carries the former permissions next to the tools keeps its former bound: a tool whose effect they
+// exclude was never offered, so it is refused rather than offered now. An ID the provider lists as removed is skipped, and ToolWarnings
 // names it. Only registered IDs are quoted; an unknown entry is named by its position, because free text in
 // a configuration file is where a pasted secret ends up.
 func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(Problem)) {
@@ -994,6 +995,11 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 	legacy := c.Connections[name].legacyEffects
 	seen := map[string]bool{}
 	for i, tool := range c.Connections[name].Tools {
+		if IsToolPrefix(tool) {
+			c.validateToolPrefix(name, provider, i, tool, metadata, seen[tool], report)
+			seen[tool] = true
+			continue
+		}
 		effect, registered := effects[tool]
 		switch {
 		case contains(metadata.RemovedTools, tool):
@@ -1017,6 +1023,73 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 		}
 		seen[tool] = true
 	}
+}
+
+// validateToolPrefix checks one prefix entry of a tools list. A prefix is valid only if it covers at least one
+// registered tool of the provider that can be released without naming it, so a prefix that a listed-only
+// tool alone would match is as empty as a misspelled one. Like an unknown entry, an entry that is no valid
+// prefix or covers nothing is named by position and never quoted; only a prefix of another provider, which
+// is built from that provider's registered IDs, is.
+func (c *Config) validateToolPrefix(name, provider string, index int, entry string, metadata ProviderMetadata,
+	duplicate bool, report func(Problem)) {
+	stem, ok := ToolPrefixStem(provider, entry)
+	if !ok {
+		if shape, shaped := toolPrefixShape(entry); shaped {
+			if owner := c.stemOwner(provider, shape); owner != "" {
+				report(problem(SectionConnections, name, "tools", CodeToolOfOtherProvider,
+					"tool prefix %q belongs to provider %q, not to %q", entry, owner, provider).
+					with("tool", entry).with("owner", owner).with("provider", provider))
+				return
+			}
+		}
+		report(problem(SectionConnections, name, "tools", CodeInvalidToolPrefix,
+			"entry %d is not a valid tool prefix of provider %q", index+1, provider).
+			refined("tools").at(index+1).with("provider", provider))
+		return
+	}
+	covered := 0
+	for _, tool := range metadata.Tools {
+		if !ToolPrefixCovers(provider, entry, tool) {
+			continue
+		}
+		covered++
+		if legacy := c.Connections[name].legacyEffects; legacy != nil && !slices.Contains(legacy, tool.Effect) {
+			report(problem(SectionConnections, name, "tools", CodeToolEffectNotPermitted,
+				"tool prefix %q covers tool %q with effect %s, which the former permissions of the connection do not allow",
+				entry, tool.ID, tool.Effect).with("tool", tool.ID).with("effect", string(tool.Effect)))
+			return
+		}
+	}
+	switch {
+	case duplicate:
+		report(problem(SectionConnections, name, "tools", CodeDuplicateTool,
+			"tool prefix %q is listed more than once", entry).with("tool", entry))
+	case covered == 0:
+		if owner := c.stemOwner(provider, stem); owner != "" {
+			report(problem(SectionConnections, name, "tools", CodeToolOfOtherProvider,
+				"tool prefix %q belongs to provider %q, not to %q", entry, owner, provider).
+				with("tool", entry).with("owner", owner).with("provider", provider))
+			return
+		}
+		report(problem(SectionConnections, name, "tools", CodeToolPrefixNoMatch,
+			"entry %d covers no registered tool of provider %q that a prefix may release", index+1, provider).
+			refined("tools").at(index+1).with("provider", provider))
+	}
+}
+
+// stemOwner returns the provider other than provider that registers a tool below stem, "" for none.
+func (c *Config) stemOwner(provider, stem string) string {
+	for _, other := range c.providerCatalog().ProviderMetadataAll() {
+		if other.ID == provider {
+			continue
+		}
+		for _, tool := range other.Tools {
+			if strings.HasPrefix(tool.ID, stem) {
+				return other.ID
+			}
+		}
+	}
+	return ""
 }
 
 // TargetValues returns the configured target boundary in declaration order. Existing single-target
@@ -1267,12 +1340,12 @@ func (c *Config) ConnectionEffects(name string) []Effect {
 	return []Effect{EffectRead}
 }
 
-// EffectsOfTools returns the effects of the tools of metadata that tools names, in the order of Effects and
-// never nil. A name the provider registers no tool for adds none.
+// EffectsOfTools returns the effects of the tools of metadata that tools selects, by exact ID or by prefix,
+// in the order of Effects and never nil. An entry the provider registers no tool for adds none.
 func EffectsOfTools(metadata ProviderMetadata, tools []string) []Effect {
 	derived := map[Effect]bool{}
 	for _, tool := range metadata.Tools {
-		if slices.Contains(tools, tool.ID) {
+		if ToolListCovers(metadata.ID, tools, tool) {
 			derived[tool.Effect] = true
 		}
 	}
@@ -1385,7 +1458,8 @@ const (
 	RefusalEffect Refusal = "effect-not-permitted"
 	// RefusalToolAllowList: the tool requires an allow-list, and the connection offers by effect.
 	RefusalToolAllowList Refusal = "requires-tool-allow-list"
-	// RefusalToolsList: the connection offers selected tools, and its list does not name the tool.
+	// RefusalToolsList: the connection offers selected tools, and its list neither names the tool nor covers
+	// it by a prefix. A tool that requires the allow-list is covered only by its exact ID.
 	RefusalToolsList Refusal = "not-in-tools-list"
 	// RefusalNoLocalFiles: the tool reads or writes local files, and the connection releases no directory
 	// for that direction.
@@ -1447,7 +1521,7 @@ func (c *Config) reachRefusal(conn Connection, tool ToolMetadata) Refusal {
 // listRefusal is the refusal by effects, tools list, allow-list and local files, before the targets.
 func (c *Config) listRefusal(conn Connection, name string, tool ToolMetadata) Refusal {
 	if conn.Tools != nil {
-		if !contains(conn.Tools, tool.ID) {
+		if !ToolListCovers(c.Services[conn.Service].Provider, conn.Tools, tool) {
 			return RefusalToolsList
 		}
 	} else if !slices.Contains(c.ConnectionEffects(name), tool.Effect) {
