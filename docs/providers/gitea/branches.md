@@ -5,13 +5,14 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-23
-updated: 2026-10-26
+updated: 2026-11-07
 ---
 
 # Branches
 
 The branch tools list, read, create, rename, and delete the branches of a repository, and on Gitea point a branch at
-another commit. [Forgejo](../forgejo/README.md) names the differences. Branch protection rules are another tool group.
+another commit. [Forgejo](../forgejo/README.md) names the differences.
+[Branch protection rules](branch-protections.md) are another tool group.
 
 ## Target binding
 

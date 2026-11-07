@@ -211,6 +211,9 @@ func testConfig(p *product) *config.Config {
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".releases.delete", p.id + ".releases.delete-by-tag"}}
 	cfg.Connections["times-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".issue-times.delete", p.id + ".issue-times.reset"}}
+	cfg.Connections["protection-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".branch-protections.delete",
+			p.id + ".branch-protections.get"}}
 	notifyTools := []string{p.id + ".notifications.mark-all-read", p.id + ".repository-notifications.mark-read",
 		p.id + ".notifications.list", p.id + ".notifications.get", p.id + ".notifications.mark-thread",
 		p.id + ".notifications.check-new"}

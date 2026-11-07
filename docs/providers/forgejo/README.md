@@ -6,7 +6,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-07
 ---
 
 # Forgejo
@@ -75,6 +75,9 @@ repository-bound token is an additional depth of defense: the targets of the con
   `*-attachments.download`. See [Attachments](../gitea/attachments.md).
 - Branches: there is no `branches.update-ref` and `branches.list` has no `q` filter; Gitea has both. See
   [Branches](../gitea/branches.md).
+- Branch protections: rules carry `apply_to_admins`. Forgejo has no `priority`, force push members, bypass allowlist,
+  `block_admin_merge_override`, `block_on_codeowner_reviews`, or `branch-protections.reorder`; they are refused or not
+  offered. See [Branch protections](../gitea/branch-protections.md).
 - Repository lifecycle: `repositories.get-sync-state` and `repositories.convert` (listed-only) exist on Forgejo only.
   `repositories.sync-fork` calls `sync_fork` where Gitea calls `merge-upstream` and has no `ff_only`.
   `repositories.update` takes `wiki_branch` and `globally_editable_wiki`, which Gitea does not, and offers the merge
