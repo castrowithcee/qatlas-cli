@@ -49,7 +49,8 @@ var groupBySegment = map[string]string{
 	"gists":         "gists",
 	"notifications": "notifications", "thread-subscriptions": "notifications",
 	"accounts": "accounts", "users": "accounts", "organizations": "accounts", "teams": "accounts",
-	"team-members": "accounts",
+	"team-members": "accounts", "traffic-views": "repositories", "traffic-clones": "repositories",
+	"traffic-paths": "repositories", "traffic-referrers": "repositories",
 }
 
 // groupOf returns the group of a GitHub tool ID, or "" for an ID outside every group.

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub repository tools: the repository list of an owner, the details, languages, contributors, and community profile of one repository, its statistics and activity feed, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
+  Describes the GitHub repository tools: the repository list of an owner, the details, languages, contributors, and community profile of one repository, its statistics and activity feed, repository create, fork, rename, and delete, collaborators, repository traffic, rulesets, custom properties, repository settings, starred repositories, and the repository search.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -294,6 +294,28 @@ refused before a secret is read. The answer lists the topics GitHub reports, unt
 the one sent is an error that says the state is unclear.
 
 The token rights are listed under [GitHub Actions](setup.md#github-actions), whose rule for a token of its own they follow.
+
+## Repository traffic
+
+| Tool | Does |
+| --- | --- |
+| `github.traffic-views.get` | reads the page views of a repository over the last 14 days |
+| `github.traffic-clones.get` | reads the clones of a repository over the last 14 days |
+| `github.traffic-paths.list` | lists the ten most visited paths of the last 14 days |
+| `github.traffic-referrers.list` | lists the ten referrers with the most visits of the last 14 days |
+
+All four read one fixed GitHub route for the repository the call names, and change nothing. The views and the
+clones answer the totals `count` and `uniques` and one entry per span with `timestamp`, `count`, and `uniques`;
+`per` is `day` (the default) or `week`, and any other value is refused before a request is sent. The paths
+carry `path`, `title`, `count`, and `uniques`, the referrers `referrer`, `count`, and `uniques`. GitHub keeps
+traffic for 14 days only and lists no more than the top 10 paths and referrers, so no older figure and no
+longer list exists. The tools report aggregate numbers only, never an individual visitor.
+
+Paths, titles, and referrers come from visitors: they are untrusted data, are cut (a path at 4096 characters,
+a title and a referrer at 200), and are never fetched. GitHub shows traffic only to a token with push access to
+the repository, so a refusal says that. The token rights are listed under
+[Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties). No setup profile ticks
+these tools; list them in a connection's `tools`.
 
 ## Repository subscriptions
 

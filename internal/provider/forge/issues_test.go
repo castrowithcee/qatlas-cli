@@ -321,6 +321,7 @@ func TestIssueDeleteIsListedOnlyAndInNoProfile(t *testing.T) {
 				other.ID != p.toolID(reviewsApprove) && other.ID != p.toolID(actionsSecretsSet) &&
 				other.ID != p.toolID(orgsRename) && other.ID != p.toolID(adminUsersRename) && other.ID != p.toolID(notificationsMarkAllRead) &&
 				other.ID != p.toolID(repositoryNotificationsMarkRead) &&
+				other.ID != p.id+".repository-flags.replace" && other.ID != p.id+".repository-flags.clear" &&
 				!slices.Contains(lifecycleListedOnly(p), other.ID) {
 				t.Errorf("%s is listed-only too", other.ID)
 			}

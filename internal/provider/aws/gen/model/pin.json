@@ -3,7 +3,7 @@
   "commit": "1b9ff13fe6c28ea9774a527e53cda6a3b91369dc",
   "retrieved_on": "2026-11-07",
   "license": "Apache-2.0; LICENSE and NOTICE of the upstream repository at the pinned commit lie beside this file",
-  "modification": "sts.json and iam.json are derived from the upstream files named here, not copies: the traits smithy.api#documentation and smithy.api#examples were removed wherever they occur, and the JSON was re-encoded with the member order kept and two-space indentation. Nothing else was changed.",
+  "modification": "sts.json, iam.json, account.json and sesv2.json are derived from the upstream files named here, not copies: the traits smithy.api#documentation and smithy.api#examples were removed wherever they occur, and the JSON was re-encoded with the member order kept and two-space indentation. Nothing else was changed.",
   "files": [
     {
       "service": "sts",
@@ -18,6 +18,20 @@
       "upstream_sha256": "c1f74d3eda269e4fa2f00b57d57ed19c0e0a6d7fc7c70d4e351e319d178430f9",
       "extract": "iam.json",
       "extract_sha256": "684ebc1a3eb326fa8096412964d1587917a3175b2a9a3fb2f251c9cd0aac4e04"
+    },
+    {
+      "service": "account",
+      "upstream_path": "models/account/service/2021-02-01/account-2021-02-01.json",
+      "upstream_sha256": "c4ce6a205189e3ae2223da18bf426a0eda6aadb347598e787b1cfc1e4bd4b509",
+      "extract": "account.json",
+      "extract_sha256": "e04b690fdfa456eaaf02bec5b789ad5687f901234baa005099b4f46aa85f18ac"
+    },
+    {
+      "service": "sesv2",
+      "upstream_path": "models/sesv2/service/2019-09-27/sesv2-2019-09-27.json",
+      "upstream_sha256": "8866fe8e17fe960ab5b7fb3615326fff0a8af73bbebeb5ba87ba6ee1f694e467",
+      "extract": "sesv2.json",
+      "extract_sha256": "2b00b64d666ec800d16d190bb365c1448ccf4a21a20fe5ead2962cf326bc22c4"
     }
   ]
 }

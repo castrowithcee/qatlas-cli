@@ -102,6 +102,10 @@ func Render(modelDir string, tables []Table) (map[string][]byte, error) {
 		if err := Complete(*t, m); err != nil {
 			return nil, err
 		}
+		if m.Protocol != ProtocolQuery && len(t.Operations) > 0 {
+			return nil, fmt.Errorf("table %s: %s operation %s cannot become a tool yet: tools are rendered for awsQuery only",
+				t.Service, m.Protocol, t.Operations[0].Operation)
+		}
 		for _, op := range t.Operations {
 			built, err := build(m, t, op)
 			if err != nil {
