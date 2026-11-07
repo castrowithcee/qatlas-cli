@@ -127,7 +127,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	adminUserKeysDelete, adminAccessTokensList, adminAccessTokensDelete,
 	adminUserBadgesList, adminUserBadgesAdd, adminUserBadgesDelete,
 	adminWebhooksList, adminWebhooksGet, adminWebhooksDelete,
-	collaboratorsList, collaboratorsCheck, collaboratorsGetPermission, collaboratorsAdd, collaboratorsRemove}
+	collaboratorsList, collaboratorsCheck, collaboratorsGetPermission, collaboratorsAdd, collaboratorsRemove,
+	branchProtectionsList, branchProtectionsGet, branchProtectionsCreate, branchProtectionsUpdate,
+	branchProtectionsReorder, branchProtectionsDelete}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 

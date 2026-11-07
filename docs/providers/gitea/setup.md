@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # Set up Gitea
@@ -146,6 +146,7 @@ webhooks, keys, and OAuth2 applications of the account.
 | Teams without an organization (the own teams of the account) | `read:user` |
 | Teams of a repository | `read:repository`; `write:repository` to change |
 | [Collaborators](collaborators.md) of a repository | `read:repository`; `write:repository` to change |
+| [Branch protections](branch-protections.md) of a repository | `read:repository`; `write:repository` to change; the account must be an administrator of the repository |
 
 A token limited to public resources sees only public organizations.
 
