@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,6 +15,9 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsquery"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/endpoints"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/httpbind"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/restjson"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/sigv4"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
 	"github.com/castrowithcee/qatlas-connect/internal/secret"
 )
@@ -40,17 +44,22 @@ var regionField = capability.Field{Name: "region", Description: regionFieldHelp}
 type toolSpec struct {
 	descriptor capability.Descriptor
 	service    endpoints.Service
-	// action and version are sent as Action and Version; op names the operation in errors.
+	// action and version are sent as Action and Version; op names the operation in errors. A restJson1 tool
+	// sends neither.
 	action, version, op string
-	// input and output bind the arguments and the answer. Argument keys are the input field keys; output
-	// field keys that start with "~" belong to the pager and never reach a result.
+	// input and output bind the arguments and the answer of an awsQuery tool. Argument keys are the input
+	// field keys; output field keys that start with "~" belong to the pager and never reach a result.
 	input, output *awsquery.Shape
-	pager         *awsquery.Pager
-	rules         []outputRule
-	targetCheck   string
-	targetArgs    []string
-	policyCheck   string
-	policyArgs    []string
+	// rest, when set, makes the tool a restJson1 tool: the protocol switch. It carries the method, the URI
+	// and both shapes, so input, output, action, version and accountCheck stay empty. The pager keeps the
+	// same meaning; its members are the "~" fields of rest.Input and rest.Output.
+	rest        *httpbind.Operation
+	pager       *awsquery.Pager
+	rules       []outputRule
+	targetCheck string
+	targetArgs  []string
+	policyCheck string
+	policyArgs  []string
 	// accountCheck marks GetCallerIdentity, whose answer is the account check itself.
 	accountCheck bool
 	// truncated adds the truncated field: true when a string of the answer was cut at its cap.
@@ -95,11 +104,21 @@ func generatedTools() ([]capability.Operation, error) {
 }
 
 func (s toolSpec) check() error {
-	if err := s.input.Validate(); err != nil {
-		return err
-	}
-	if err := s.output.Validate(); err != nil {
-		return err
+	if s.rest != nil {
+		// A restJson1 tool has no awsQuery parts, and nothing but a described operation may be sent.
+		if s.input != nil || s.output != nil || s.action != "" || s.version != "" || s.accountCheck {
+			return errors.New("a restJson1 tool carries no awsQuery description")
+		}
+		if err := s.rest.Validate(); err != nil {
+			return err
+		}
+	} else {
+		if err := s.input.Validate(); err != nil {
+			return err
+		}
+		if err := s.output.Validate(); err != nil {
+			return err
+		}
 	}
 	if _, err := endpoints.IsGlobal(s.service); err != nil {
 		return err
@@ -162,17 +181,9 @@ func (s toolSpec) handler() capability.Handler {
 		if err != nil {
 			return nil, err
 		}
-		req, err := awsquery.Encode(s.input, args, nil)
+		token, send, err := s.encode(args, page)
 		if err != nil {
-			return nil, &provider.InvalidRequestError{Message: strings.TrimPrefix(err.Error(), "awsquery: ")}
-		}
-		if s.pager != nil {
-			for k, v := range page.Params() {
-				if _, dup := req.Params[k]; dup {
-					return nil, provider.Fail(op, "the paging parameters collide with an argument")
-				}
-				req.Params[k] = v
-			}
+			return nil, err
 		}
 
 		ctx, cancel := context.WithTimeout(ctx, invokeBudget)
@@ -182,7 +193,7 @@ func (s toolSpec) handler() capability.Handler {
 			return nil, err
 		}
 		var out map[string]any
-		var meta awsquery.Meta
+		truncated := false
 		if s.accountCheck {
 			creds, err := client.effective(ctx, region)
 			if err != nil {
@@ -200,14 +211,64 @@ func (s toolSpec) handler() capability.Handler {
 				return nil, err
 			}
 			var failure *provider.Error
-			meta, failure = client.sendMeta(ctx, op, s.service, region, creds, s.descriptor.Risk.Idempotency,
-				awsquery.Call{Action: s.action, Version: s.version, Params: req.Params, Output: s.output}, &out)
-			if failure != nil {
+			if truncated, failure = send(ctx, client, creds, region, &out); failure != nil {
 				return nil, failure
 			}
 		}
-		return s.result(op, out, page, region, global, meta, req)
+		return s.result(op, out, page, region, global, truncated, token)
 	}
+}
+
+// sender makes the one call of a tool with the credentials that passed the account check, and decodes the
+// answer into out. It reports whether a string of the answer was cut.
+type sender func(ctx context.Context, c *Client, creds sigv4.Credentials, region string, out *map[string]any) (bool, *provider.Error)
+
+// encode binds the arguments (and the paging members) to the request of the tool's protocol, before any
+// secret is read. It returns the idempotency token the request carries and the call that sends it.
+func (s toolSpec) encode(args map[string]any, page awsquery.Page) (string, sender, error) {
+	if s.rest != nil {
+		if s.pager != nil {
+			var err error
+			if args, err = httpbind.ApplyPage(s.rest.Input, args, page); err != nil {
+				return "", nil, encodeRefusal(s.op, err, "httpbind: ")
+			}
+		}
+		req, err := s.rest.Encode(restjson.Codec{}, args, nil)
+		if err != nil {
+			return "", nil, encodeRefusal(s.op, err, "httpbind: ")
+		}
+		return req.Token, func(ctx context.Context, c *Client, creds sigv4.Credentials, region string, out *map[string]any) (bool, *provider.Error) {
+			meta, failure := c.sendRest(ctx, s.op, s.service, region, creds, s.descriptor.Risk.Idempotency,
+				restjson.Codec{}, s.rest, req, out)
+			return meta.Truncated, failure
+		}, nil
+	}
+	req, err := awsquery.Encode(s.input, args, nil)
+	if err != nil {
+		return "", nil, &provider.InvalidRequestError{Message: strings.TrimPrefix(err.Error(), "awsquery: ")}
+	}
+	if s.pager != nil {
+		for k, v := range page.Params() {
+			if _, dup := req.Params[k]; dup {
+				return "", nil, provider.Fail(s.op, "the paging parameters collide with an argument")
+			}
+			req.Params[k] = v
+		}
+	}
+	return req.Token, func(ctx context.Context, c *Client, creds sigv4.Credentials, region string, out *map[string]any) (bool, *provider.Error) {
+		meta, failure := c.sendMeta(ctx, s.op, s.service, region, creds, s.descriptor.Risk.Idempotency,
+			awsquery.Call{Action: s.action, Version: s.version, Params: req.Params, Output: s.output}, out)
+		return meta.Truncated, failure
+	}, nil
+}
+
+// encodeRefusal turns an encoding error into the refusal of the call. A defect of the description is not
+// the caller's fault and says only that; a value error names the member, never the value.
+func encodeRefusal(op string, err error, prefix string) error {
+	if errors.Is(err, httpbind.ErrShape) {
+		return provider.Fail(op, "the tool description is invalid")
+	}
+	return &provider.InvalidRequestError{Message: strings.TrimPrefix(err.Error(), prefix)}
 }
 
 // Names the generator adds to tools.
@@ -299,7 +360,7 @@ func (s toolSpec) identityAnswer(who callerIdentity) map[string]any {
 
 // result checks the answer by the rules of the table and adds what the tool itself reports.
 func (s toolSpec) result(op string, out map[string]any, page awsquery.Page, region string, global bool,
-	meta awsquery.Meta, req awsquery.Request) (any, error) {
+	truncated bool, token string) (any, error) {
 	result := map[string]any{}
 	for k, v := range out {
 		if !strings.HasPrefix(k, "~") {
@@ -327,10 +388,10 @@ func (s toolSpec) result(op string, out map[string]any, page awsquery.Page, regi
 		result[argRegion] = region
 	}
 	if s.truncated {
-		result["truncated"] = meta.Truncated
+		result["truncated"] = truncated
 	}
-	if req.Token != "" {
-		result[argClientToken] = req.Token
+	if token != "" {
+		result[argClientToken] = token
 	}
 	return result, nil
 }
