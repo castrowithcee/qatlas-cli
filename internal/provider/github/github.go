@@ -58,7 +58,9 @@
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
 // one repository permanently, once confirm_name repeats its owner/name exactly, and github.repositories.rename
 // renames one, once the current and the new name both lie inside the connection's targets. github.collaborators.list
-// reads the collaborators of a repository. github.rulesets.list and github.rulesets.get read the rulesets
+// reads the collaborators of a repository. github.repositories.get reads one repository with every detail GitHub
+// reports, github.languages.get its languages, github.contributors.list its contributors, and github.
+// community-profile.get its community profile. github.rulesets.list and github.rulesets.get read the rulesets
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
 // create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
@@ -509,7 +511,9 @@ func Register(reg *capability.Registry) error {
 				"forking a repository need repo on a classic token, or Administration: read and write on a " +
 				"fine-grained token; deleting a repository, listed-only, needs delete_repo as well on a classic " +
 				"token; listing collaborators needs repo on a classic token, or Metadata: read on a fine-grained " +
-				"token; reading the rulesets of a repository needs repo on a classic token, or Administration: " +
+				"token; reading a repository, its languages, its contributors, or its community profile needs no scope for " +
+				"a public repository, or repo on a classic token, or Metadata: read on a fine-grained token, for a " +
+				"private one; reading the rulesets of a repository needs repo on a classic token, or Administration: " +
 				"read on a fine-grained token; changing them, listed-only, needs Administration: read and write " +
 				"on a fine-grained token instead; reading or changing the rulesets of an organization needs " +
 				"admin:org on a classic token, or, as far as GitHub documents it, Administration read, or read " +
@@ -706,19 +710,22 @@ func Register(reg *capability.Registry) error {
 			Description: "reads the contents of a file or a directory, the Git tree of a ref, the blame of a " +
 				"file over a bounded line range, the commits of a repository or one commit, the comparison of " +
 				"two refs, the branches and the tags of a repository or one branch or tag, the branches and " +
-				"the pull requests of a commit, and the comments on commits; changes nothing",
+				"the pull requests of a commit, the comments on commits, and the details, languages, contributors, and " +
+				"community profile of a repository; changes nothing",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
 				branchesList.ID, tagsList.ID, tagsGet.ID, compareGet.ID, branchesGet.ID, commitBranchesList.ID,
-				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID},
+				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID, repositoriesGet.ID,
+				languagesGet.ID, contributorsList.ID, communityProfileGet.ID},
 		}, {
 			ID: "repository-writer", Title: "Repository writer",
 			Description: "not recommended: reads the contents, tree, blame, commits, comparisons, branches, tags, and " +
-				"commit comments of a repository, creates a branch from a branch, a tag, or a commit SHA, and creates or updates a " +
-				"file; every change needs its own confirmation, and deleting a file stays unticked, since it " +
+				"commit comments of a repository and its details, languages, contributors, and community profile, creates a " +
+				"branch from a branch, a tag, or a commit SHA, and creates or updates a file; every change needs its own confirmation, and deleting a file stays unticked, since it " +
 				"is offered only where a connection's tools list names github.contents.delete",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
 				branchesList.ID, tagsList.ID, tagsGet.ID, compareGet.ID, branchesGet.ID, commitBranchesList.ID,
-				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID, branchesCreate.ID, contentsPut.ID},
+				commitPullsList.ID, commitCommentsList.ID, commitCommentsGet.ID, repositoriesGet.ID, languagesGet.ID,
+				contributorsList.ID, communityProfileGet.ID, branchesCreate.ID, contentsPut.ID},
 		}, {
 			ID: "repository-admin-reader", Title: "Repository administration reader",
 			Description: "not recommended: reads the collaborators of a repository, the rulesets of a " +
@@ -796,7 +803,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(), compareOperations(), commitRelationOperations(),
-		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
+		contentsWriteOperations(), repositoriesOperations(), repositoryDetailOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), commentVisibilityOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
 		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
@@ -1952,6 +1959,11 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	}
 	// A change GitHub answers without a body, such as a workflow dispatch, asks for no answer.
 	if out == nil {
+		return nil
+	}
+	// A read GitHub answers 202 or 204 sends no body; the caller tells the two apart by status.
+	if status != nil && len(bytes.TrimSpace(data)) == 0 &&
+		(*status == http.StatusAccepted || *status == http.StatusNoContent) {
 		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
