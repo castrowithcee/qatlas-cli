@@ -64,7 +64,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[91]{id,title,effect,requires,target,confirm,connections}:\n",
+		"tools[97]{id,title,effect,requires,target,confirm,connections}:\n",
 		"  github.issues.get,Get a GitHub issue,read,number,\"\",false,code\n",
 		"  github.labels.list,List GitHub labels,read,\"\",\"\",false,code\n",
 		"  github.labels.get,Get a GitHub label,read,name,\"\",false,code\n",
@@ -78,6 +78,9 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"  github.branches.list,List GitHub branches,read,\"\",\"\",false,code\n",
 		"  github.tags.list,List GitHub tags,read,\"\",\"\",false,code\n",
 		"  github.tags.get,Get a GitHub tag,read,tag,\"\",false,code\n",
+		"  github.compare.get,Compare two GitHub refs,read,base; head,\"\",false,code\n",
+		"  github.branches.get,Get a GitHub branch,read,branch,\"\",false,code\n",
+		"  github.commit-pulls.list,List the GitHub pull requests of a commit,read,commit_sha,\"\",false,code\n",
 		"  github.project-items.list,List GitHub project items,read,\"\",\"project:users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER\",false,\"\"\n",
 		"  github.project-items.update,Update GitHub project item fields,update,item_id; fields,\"\",true,roadmap\n",
 		"  github.accounts.me,Get the GitHub account behind this connection,read,\"\",\"\",false,code\n",
@@ -130,7 +133,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[203]{id,title,effect,requires,target,confirm,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[209]{id,title,effect,requires,target,confirm,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.branches.delete,Delete a GitHub branch,delete,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
@@ -148,6 +151,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",
 		"github.branches.list,List GitHub branches,read,", "github.tags.list,List GitHub tags,read,",
 		"github.tags.get,Get a GitHub tag,read,",
+		"github.compare.get,Compare two GitHub refs,read,", "github.commit-comments.list,List GitHub commit comments,read,",
 		"github.accounts.me,Get the GitHub account behind this connection,read,",
 		"github.teams.list,List the teams of a GitHub organization,read,",
 		"github.team-members.list,List the members of a GitHub team,read,",
