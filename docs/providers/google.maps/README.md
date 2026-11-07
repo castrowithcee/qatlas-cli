@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Google Maps provider: the API key and its fixed origin, the read profile, the mandatory field mask and the billing group it selects, cost, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
+  Describes the Google Maps provider: the API key and its fixed origin, the read profile, the mandatory field mask, with and without the places. prefix, and the billing group it selects, cost, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
 type: knowledge
 edit: shared
 created: 2026-11-06
@@ -9,11 +9,11 @@ updated: 2026-11-06
 
 # Google Maps
 
-Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place from
-Places API (New). It changes nothing: every tool is a read, and the connection takes no target, because a key
+Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place and
+searches places by text or around a point in Places API (New). It changes nothing: every tool is a read, and the connection takes no target, because a key
 reaches what its Cloud project and the key's restrictions allow, not a part of an account.
 
-[Set up Google Maps](setup.md) leads through creating the key. The tool is described in [places](places.md).
+[Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md).
 
 ## Configuration
 
@@ -24,7 +24,8 @@ connection with a target is refused.
 The credential provides `api_key`. Qatlas sends it only in the `X-Goog-Api-Key` header, never in a URL or as
 a tool argument, and masks it in every output.
 
-The profile `read` is the recommended one and holds `google.maps.places.get`.
+The profile `read` is the recommended one and holds `google.maps.places.get`, `google.maps.places.search-text`,
+and `google.maps.places.search-nearby`.
 
 ## Field mask and billing group
 
@@ -43,10 +44,26 @@ The highest group among the fields decides the billed SKU:
 | Enterprise | `currentOpeningHours`, `currentSecondaryOpeningHours`, `internationalPhoneNumber`, `nationalPhoneNumber`, `priceLevel`, `priceRange`, `rating`, `regularOpeningHours`, `regularSecondaryOpeningHours`, `transitStation`, `userRatingCount`, `websiteUri` |
 | Enterprise + Atmosphere | `allowsDogs`, `curbsidePickup`, `delivery`, `dineIn`, `editorialSummary`, `evChargeAmenitySummary`, `evChargeOptions`, `fuelOptions`, `generativeSummary`, `goodForChildren`, `goodForGroups`, `goodForWatchingSports`, `liveMusic`, `menuForChildren`, `neighborhoodSummary`, `outdoorSeating`, `parkingOptions`, `paymentOptions`, `reservable`, `restroom`, `reviewSummary`, `reviews`, `servesBeer`, `servesBreakfast`, `servesBrunch`, `servesCocktails`, `servesCoffee`, `servesDessert`, `servesDinner`, `servesLunch`, `servesVegetarianFood`, `servesWine`, `takeout` |
 
-The mask checker is shared by the Maps tools of this provider, so later tools take their masks through the same
+The mask checker is shared by the Maps tools of this provider, so every tool takes its mask through the same
 table.
 
+### Field mask of the searches
+
+The two searches take the same names without a prefix, such as `displayName`, and the additional name
+`routingSummaries`. Qatlas sends them as Google expects: `places.displayName` for a place field,
+`routingSummaries` as it is, and, for the text search, `nextPageToken`, which paging needs and which Google
+bills in no group. A caller's `places.` prefix, `nextPageToken`, any wildcard, and nested paths are refused
+before the key is read. `places.get` still refuses `routingSummaries`.
+
+The searches group the fields differently from Place Details: Text Search bills only `attributions`,
+`consumerAlert`, `id`, `movedPlace`, `movedPlaceId`, and `name` as IDs Only and everything else of the first
+two groups as Pro, and Nearby Search has no group below Pro. The SKUs are listed in
+[places](places.md#billing-group-of-the-searches).
+
 ## Cost
+
+Every tool call can be billed above the free usage of its SKU, and a search is billed once per request, so
+each page of the text search is one request. The sources used do not state the free usage of the search SKUs.
 
 Google documents a free monthly usage cap per SKU and billing account for Place Details: IDs Only is unlimited,
 Essentials 10,000, Pro 5,000, Enterprise 1,000, and Enterprise + Atmosphere 1,000. Requests beyond a cap are
@@ -113,6 +130,9 @@ query, or body.
 
 Not verified:
 
+- The 60 places over all pages are Google's current limit, which it may change; Qatlas does not count them.
+- The SKU of each field group of the searches follows the field lists of Google's search pages, and the free
+  usage of the search SKUs is not stated there.
 - Whether the connection test costs nothing can only be checked against a live billing account. It is based on
   Google's documentation that IDs Only requests are free.
 - The error reasons `API_KEY_INVALID`, the reasons of API key restrictions, and the reasons of quota errors are
@@ -125,4 +145,7 @@ Left out on purpose:
 - A query key, a `$fields` parameter, and any target.
 - Fields that the discovery document of Places API (New) does not list for a place. `routingSummaries` belongs
   to the search endpoints only.
+- The deprecated `maxResultCount` of the text search, the experimental `contextualContents`, the
+  `searchAlongRouteParameters` that need a polyline of the Routes API, and the `routeModifiers` of the routing
+  parameters.
 - Photo media, which would need a further request with the key.

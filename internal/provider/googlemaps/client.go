@@ -1,7 +1,9 @@
 package googlemaps
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"mime"
 	"net/http"
@@ -113,6 +115,28 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, mas
 	if err != nil {
 		return nil, failure(op, "the request could not be built")
 	}
+	return c.send(ctx, op, req, mask)
+}
+
+// post sends one POST request, once, with a JSON object body and decodes a JSON object answer. path is a fixed
+// path below the API root. The body is built by the tool from checked arguments and never from caller text;
+// like the URL it never holds the key.
+func (c *Client) post(ctx context.Context, op, path string, body map[string]any, mask string) (map[string]any, error) {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, failure(op, "the request could not be built")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiRoot+path, bytes.NewReader(payload))
+	if err != nil {
+		return nil, failure(op, "the request could not be built")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return c.send(ctx, op, req, mask)
+}
+
+// send adds the key and the field mask as headers, waits for the rate slot, sends the request once, and
+// decodes a JSON object answer.
+func (c *Client) send(ctx context.Context, op string, req *http.Request, mask string) (map[string]any, error) {
 	req.Header.Set("X-Goog-Api-Key", c.key)
 	req.Header.Set("X-Goog-FieldMask", mask)
 	req.Header.Set("Accept", "application/json")
