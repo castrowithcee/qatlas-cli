@@ -94,10 +94,10 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read", Recommended: true,
 			Description: "reads place details, searches places by text or around a point, predicts places from typed input, and resolves place photos to short-lived addresses from Google Places, " +
-				"and geocodes addresses and coordinates; the field mask of each Places request decides what Google " +
-				"bills, and nothing is changed",
+				"geocodes addresses and coordinates, and validates postal addresses; the field mask of each Places " +
+				"request decides what Google bills, and nothing is changed",
 			Tools: []string{placesGet.ID, textSearch.ID, nearbySearch.ID, autocomplete.ID, photosGet.ID,
-				geocodingGeocode.ID, geocodingReverse.ID},
+				geocodingGeocode.ID, geocodingReverse.ID, addressValidate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -109,5 +109,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: autocomplete, Handler: handleAutocomplete},
 		capability.Operation{Descriptor: photosGet, Handler: handlePhotosGet},
 		capability.Operation{Descriptor: geocodingGeocode, Handler: handleGeocode},
-		capability.Operation{Descriptor: geocodingReverse, Handler: handleReverse})
+		capability.Operation{Descriptor: geocodingReverse, Handler: handleReverse},
+		capability.Operation{Descriptor: addressValidate, Handler: handleAddressValidate},
+		capability.Operation{Descriptor: addressFeedback, Handler: handleAddressFeedback})
 }

@@ -191,11 +191,12 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 	var ids []string
 	for _, tool := range metadata.Tools {
 		ids = append(ids, tool.ID)
-		if tool.Effect != config.EffectRead {
+		if tool.Effect != config.EffectRead && tool.ID != addressFeedbackID {
 			t.Errorf("%s effect = %v", tool.ID, tool.Effect)
 		}
 	}
-	wantTools := []string{"google.maps.geocoding.geocode", "google.maps.geocoding.reverse", "google.maps.photos.get",
+	wantTools := []string{"google.maps.addressvalidation.feedback", "google.maps.addressvalidation.validate",
+		"google.maps.geocoding.geocode", "google.maps.geocoding.reverse", "google.maps.photos.get",
 		"google.maps.places.autocomplete", "google.maps.places.get", "google.maps.places.search-nearby",
 		"google.maps.places.search-text"}
 	if !reflect.DeepEqual(ids, wantTools) {
@@ -204,13 +205,17 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "read" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"google.maps.places.get",
 			"google.maps.places.search-text", "google.maps.places.search-nearby", "google.maps.places.autocomplete",
-			"google.maps.photos.get", "google.maps.geocoding.geocode", "google.maps.geocoding.reverse"}) {
+			"google.maps.photos.get", "google.maps.geocoding.geocode", "google.maps.geocoding.reverse",
+			"google.maps.addressvalidation.validate"}) {
 		t.Errorf("profiles = %+v", metadata.Profiles)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
+		if strings.HasPrefix(descriptor.ID, Provider+".addressvalidation.") {
+			continue // addressvalidation_test.go checks the address tools
+		}
 		sensitivity := dataSensitivity
 		if strings.HasPrefix(descriptor.ID, "google.maps.geocoding.") {
-			sensitivity = geocodingSensitivity
+			sensitivity = addressDataSensitivity
 		}
 		if descriptor.Risk != (capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: sensitivity}) {

@@ -11,26 +11,30 @@ updated: 2026-11-07
 
 Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place,
 searches places by text or around a point, predicts places from typed input, and resolves place photos to
-short-lived addresses in Places API (New), and geocodes addresses and coordinates with the Geocoding API. It changes nothing: every tool is a read, and the connection takes no target, because a key
+short-lived addresses in Places API (New), geocodes addresses and coordinates with the Geocoding API, and
+validates postal addresses with Address Validation API. Every tool is a read except
+`addressvalidation.feedback`, which reports to Google and needs confirmation. The connection takes no target, because a key
 reaches what its Cloud project and the key's restrictions allow, not a part of an account.
 
 [Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md),
-[photos](photos.md), and [geocoding](geocoding.md).
+[photos](photos.md), [geocoding](geocoding.md), and [addressvalidation](addressvalidation.md).
 
 ## Configuration
 
 A service is always the official origin `https://places.googleapis.com`, which applies when `base_url` is
-left out. Qatlas refuses any other URL before the key is read, because the key belongs to that one service. A
+left out. Qatlas refuses any other URL before the key is read, because the key belongs to that one service.
+The Address Validation tools use the second fixed origin `https://addressvalidation.googleapis.com`; it cannot be configured either. A
 connection with a target is refused.
 
-The credential provides `api_key`. The Places tools send it only in the `X-Goog-Api-Key` header. The geocoding
+The credential provides `api_key`. The Places and Address Validation tools send it only in the `X-Goog-Api-Key` header. The geocoding
 tools call the legacy Geocoding service, which takes no header, and send it as the `key` query parameter of
 a fixed URL; they are the only requests that do so, see [geocoding](geocoding.md#endpoint-and-key). The key is
 never a tool argument, never part of a message or result, and masked in every output.
 
 The profile `read` is the recommended one and holds `google.maps.places.get`, `google.maps.places.search-text`,
 `google.maps.places.search-nearby`, `google.maps.places.autocomplete`, `google.maps.photos.get`,
-`google.maps.geocoding.geocode`, and `google.maps.geocoding.reverse`.
+`google.maps.geocoding.geocode`, `google.maps.geocoding.reverse`, and `google.maps.addressvalidation.validate`.
+`google.maps.addressvalidation.feedback` is in no profile; see [addressvalidation](addressvalidation.md#profiles-and-effects).
 
 ## Field mask and billing group
 
@@ -175,4 +179,3 @@ Left out on purpose:
   parameters.
 - Photo media: the image is never loaded, its address is never fetched, and a redirect is never followed.
 - A tool that creates session tokens: the token is the caller's string and is only passed on.
-- `Address Validation`, which can also end an Autocomplete session, and every Geocoding endpoint.

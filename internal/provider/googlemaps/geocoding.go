@@ -29,13 +29,14 @@ const (
 	geocodingPath = "/maps/api/geocode/json"
 )
 
-// geocodingSensitivity classifies results as address data: addresses of people and places that a lookup can
-// tie to a person. The shared class of the other tools describes search results and does not say that.
-const geocodingSensitivity = "google-maps-address-data"
+// addressDataSensitivity classifies address data that the geocoding and address validation tools send and
+// return: addresses of people and places that a lookup can tie to a person. The shared class of the other
+// tools describes search results and does not say that.
+const addressDataSensitivity = "google-maps-address-data"
 
 var geocodingRisk = capability.Risk{
 	Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe, Confirmation: capability.ConfirmationNone,
-	OpenWorld: true, DataSensitivity: geocodingSensitivity,
+	OpenWorld: true, DataSensitivity: addressDataSensitivity,
 }
 
 // geocode sends one GET request, once, to the fixed legacy endpoint and returns the answer object of an HTTP
