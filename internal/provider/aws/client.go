@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsquery"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsretry"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/endpoints"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/httpbind"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/sigv4"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
@@ -115,19 +116,57 @@ func (c *Client) sendMeta(ctx context.Context, op string, service endpoints.Serv
 		HTTP: c.http, URL: endpoint.URL(), UserAgent: userAgent,
 		Signer: &sigv4.Signer{Credentials: creds, Region: endpoint.SigningRegion, Service: endpoint.SigningName, Clock: clock},
 	}
+	var meta awsquery.Meta
+	failure := c.attempts(ctx, op, service, idem, func() (time.Duration, *provider.Error) {
+		var failure *provider.Error
+		meta, failure = client.Do(ctx, op, call, out)
+		return meta.RetryAfter, failure
+	})
+	return meta, failure
+}
+
+// sendRest is sendMeta for a REST protocol: one signed call of an httpbind operation, with the same limiter,
+// retry and endpoint rules. req is the encoded input (Operation.Encode), codec the body format of the
+// protocol (restjson.Codec). The signature covers the body hash and no x-amz-content-sha256 header, which
+// only S3 sends.
+func (c *Client) sendRest(ctx context.Context, op string, service endpoints.Service, region string,
+	creds sigv4.Credentials, idem capability.Idempotency, codec httpbind.Codec, o *httpbind.Operation,
+	req httpbind.Request, out *map[string]any) (httpbind.Meta, *provider.Error) {
+	endpoint, err := endpoints.Resolve(service, region)
+	if err != nil {
+		return httpbind.Meta{}, provider.Fail(op, "the AWS endpoint is not available for this region")
+	}
+	client := &httpbind.Client{
+		HTTP: c.http, Codec: codec, URL: endpoint.URL(), UserAgent: userAgent,
+		Signer: &sigv4.Signer{Credentials: creds, Region: endpoint.SigningRegion, Service: endpoint.SigningName, Clock: clock},
+	}
+	var meta httpbind.Meta
+	failure := c.attempts(ctx, op, service, idem, func() (time.Duration, *provider.Error) {
+		var failure *provider.Error
+		meta, failure = client.Do(ctx, op, o, req, out)
+		return meta.RetryAfter, failure
+	})
+	return meta, failure
+}
+
+// attempts runs one call through the limiter of the connection and service, one slot per attempt. do makes
+// one attempt and returns the Retry-After of its answer. The loop repeats the call only when the policy
+// allows it, which it does for an IdempotencySafe operation only.
+func (c *Client) attempts(ctx context.Context, op string, service endpoints.Service, idem capability.Idempotency,
+	do func() (time.Duration, *provider.Error)) *provider.Error {
 	limiter := limiters.For(limiterKey(c.name, service))
 	for attempt := 0; ; attempt++ {
 		if err := limiter.Wait(ctx); err != nil {
-			return awsquery.Meta{}, provider.Waited(op, "AWS", err)
+			return provider.Waited(op, "AWS", err)
 		}
-		meta, failure := client.Do(ctx, op, call, out)
+		retryAfter, failure := do()
 		if failure == nil {
-			return meta, nil
+			return nil
 		}
-		decision := retryPolicy.Decide(idem, attempt, failure, meta.RetryAfter)
+		decision := retryPolicy.Decide(idem, attempt, failure, retryAfter)
 		limiter.HoldFor(decision.Hold)
 		if !decision.Again {
-			return meta, failure
+			return failure
 		}
 	}
 }

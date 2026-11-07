@@ -1,6 +1,6 @@
 // Package awserr maps AWS error codes and HTTP statuses to provider error classes. It serves every AWS
-// protocol (awsQuery now, the JSON and REST protocols later): the caller extracts the code, this package
-// decides the class and the message. The provider's own Message text never reaches a message or a log.
+// protocol (awsQuery and restJson1 today, restXml next): the caller extracts the code, this package decides
+// the class and the message. The provider's own Message text never reaches a message or a log.
 package awserr
 
 import (
@@ -29,6 +29,8 @@ var (
 	conflict    = rule{provider.ClassProviderError, Subject + " reports a conflict: the entity already exists or is being changed; read it again before retrying"}
 	denied      = rule{provider.ClassPermission, Subject + " denied the operation; the identity lacks the required permission"}
 	expired     = rule{provider.ClassAuth, "the " + Subject + " session token has expired"}
+	invalid     = rule{provider.ClassProviderError, Subject + " rejected the request as invalid; check the arguments"}
+	quota       = rule{provider.ClassProviderError, Subject + " refused the operation because a limit or quota is exceeded"}
 	// unmapped is for a code the protocol that delivered it does not define.
 	unmapped = rule{provider.ClassInvalidResponse, Subject + " returned an error code this protocol does not define"}
 
@@ -47,6 +49,7 @@ var (
 		"RequestThrottledException":              rateLimited,
 		"ProvisionedThroughputExceededException": rateLimited,
 		"RequestLimitExceeded":                   rateLimited,
+		"TooManyRequestsException":               rateLimited,
 		"SlowDown":                               unmapped,
 
 		"AccessDenied":                denied,
@@ -62,6 +65,14 @@ var (
 		"NoSuchEntity":                  notFound,
 		"ReportNotPresent":              notFound,
 		"OrganizationNotFoundException": notFound,
+
+		// The restJson1 codes of the Account and SES v2 models. A service package adds the rows of its own
+		// errors here; until it does, ClassifyStrict reports such a client error as an unknown code.
+		"ResourceNotFoundException":     notFound,
+		"ValidationException":           invalid,
+		"ConflictException":             conflict,
+		"LimitExceededException":        quota,
+		"ServiceQuotaExceededException": quota,
 
 		"EntityAlreadyExists":           conflict,
 		"DeleteConflict":                conflict,
@@ -96,6 +107,20 @@ func Classify(op string, status int, header http.Header, code, errType string) (
 	failure, hold := classify(op, status, header, code)
 	failure.Original = original(status, code, errType)
 	return failure, hold
+}
+
+// ClassifyStrict is Classify for the protocols whose models define every error code of an operation, the
+// REST ones. A client error with a code that is not in the table is not guessed from its status: it is an
+// invalid-provider-response, with the code kept in Original. The status still decides where it means
+// something by itself: 401, 403, 429, a server-side status, and an answer without any code.
+func ClassifyStrict(op string, status int, header http.Header, code, errType string) (*provider.Error, time.Duration) {
+	if _, known := codeRules[code]; code != "" && !known &&
+		status >= 400 && status < 500 && status != http.StatusUnauthorized && status != http.StatusForbidden && status != http.StatusTooManyRequests {
+		failure := &provider.Error{Class: unmapped.class, Op: op, Message: unmapped.message}
+		failure.Original = original(status, code, errType)
+		return failure, 0
+	}
+	return Classify(op, status, header, code, errType)
 }
 
 func classify(op string, status int, header http.Header, code string) (*provider.Error, time.Duration) {
