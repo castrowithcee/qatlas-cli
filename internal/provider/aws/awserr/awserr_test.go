@@ -32,6 +32,16 @@ func TestClassify(t *testing.T) {
 		{"forbidden without code", 403, "", "", provider.ClassPermission, 0},
 		{"unauthorized without code", 401, "", "", provider.ClassAuth, 0},
 		{"other 4xx", 400, "ValidationError", "", provider.ClassProviderError, 0},
+		{"throughput exceeded", 400, "ProvisionedThroughputExceededException", "5", provider.ClassRateLimited, 5 * time.Second},
+		{"throttled exception", 400, "ThrottledException", "", provider.ClassRateLimited, 0},
+		{"request throttled exception", 400, "RequestThrottledException", "2", provider.ClassRateLimited, 2 * time.Second},
+		{"slow down is not an awsQuery code", 503, "SlowDown", "9", provider.ClassInvalidResponse, 0},
+		{"no such entity", 404, "NoSuchEntity", "", provider.ClassNotFound, 0},
+		{"report not present", 410, "ReportNotPresent", "", provider.ClassNotFound, 0},
+		{"entity already exists", 409, "EntityAlreadyExists", "", provider.ClassProviderError, 0},
+		{"delete conflict", 409, "DeleteConflict", "", provider.ClassProviderError, 0},
+		{"access denied exception", 400, "AccessDeniedException", "", provider.ClassPermission, 0},
+		{"expired token exception", 400, "ExpiredTokenException", "", provider.ClassAuth, 0},
 		{"retry-after ignored when not limited", 400, "AccessDenied", "9", provider.ClassPermission, 0},
 	}
 	for _, test := range tests {
@@ -89,6 +99,24 @@ func TestNormalizeCode(t *testing.T) {
 	} {
 		if got := NormalizeCode(in); got != want {
 			t.Errorf("NormalizeCode(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestConflictIsAProviderErrorThatSaysSo(t *testing.T) {
+	got, _ := Classify("op", 409, http.Header{}, "EntityAlreadyExists", "Sender")
+	if got.Class != provider.ClassProviderError || !strings.Contains(got.Message, "conflict") ||
+		got.Original == nil || got.Original.Entries[0].Code != "EntityAlreadyExists" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestEveryRuleUsesAKnownClass(t *testing.T) {
+	known := map[provider.Class]bool{provider.ClassRateLimited: true, provider.ClassPermission: true, provider.ClassAuth: true,
+		provider.ClassNotFound: true, provider.ClassProviderError: true, provider.ClassInvalidResponse: true}
+	for code, r := range codeRules {
+		if !known[r.class] || r.message == "" || strings.Contains(r.message, code) {
+			t.Errorf("rule %s = %+v", code, r)
 		}
 	}
 }
