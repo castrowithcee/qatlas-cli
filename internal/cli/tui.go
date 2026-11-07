@@ -326,7 +326,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"A connection's access row decides between by effect and selected tools, and only the row of the\n" +
 			"chosen mode is shown and saved. By effect offers every tool of the ticked effects, and also a tool\n" +
 			"a later version adds; a tool marked listed only, such as a high-risk administration tool, is never\n" +
-			"offered this way. Selected tools offers exactly the tools ticked in the tools row, which opens\n" +
+			"offered this way. Selected tools offers exactly the tools ticked in the tools row, plus the tools\n" +
+			"under a prefix entry of the configuration file (such as <provider>.<group>.*), which the row keeps,\n" +
+			"ticked, with the number of tools it covers today; the row opens\n" +
 			"the tools the chosen provider registers, with their effect; the effects follow from the ticked\n" +
 			"tools and are not stored. Nothing ticked stores an explicit empty list, which offers no tool at\n" +
 			"all. A change of provider clears the ticks, because tool IDs belong to their provider.\n\n" +
@@ -339,7 +341,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"changed by hand or belong to a saved connection. A saved connection opens and saves as it is; a\n" +
 			"profile is never applied to it on its own. A profile is a starting selection, not a role: the\n" +
 			"configuration keeps only the concrete tool IDs, so a tool a later version adds joins no saved\n" +
-			"connection, and no local tick narrows what the credential itself may do at the provider.\n\n" +
+			"connection unless the configuration file selects it by a prefix, and no local tick narrows what the credential itself may do at the provider.\n\n" +
 			"? shows the help topics start, agents, and configuration, the same text as 'qconnect help start'\n" +
 			"and the others, on every screen that takes no typed text: the tab line, the lists, every question,\n" +
 			"the target and path lists, the setup summary, and the details of an approval, a token, and a log\n" +

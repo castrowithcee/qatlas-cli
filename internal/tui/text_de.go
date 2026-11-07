@@ -1165,6 +1165,8 @@ var textDE = map[textID]string{
 	tFormListedOnly:                                                "(nur gelistet)",
 	tFormOutsideTargets:                                            "(außerhalb der Targets",
 	tFormNotRegistered:                                             "(nicht registriert)",
+	tToolPrefixCovers:                                              "(Präfix, Tools heute: %d)",
+	tFormListedPrefix:                                              "%d Tools gelistet",
 	tFormPreselectsAChange:                                         "(wählt eine Änderung vor)",
 	tFormItPreselectsAChangeBecause:                                "; wählt eine Änderung vor, weil %s",
 	tFormSelectsToolsEffects:                                       "; wählt die Tools %s (Effects %s)",

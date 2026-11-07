@@ -944,6 +944,8 @@ const (
 	tFormListedOnly                          textID = "FormListedOnly"
 	tFormOutsideTargets                      textID = "FormOutsideTargets"
 	tFormNotRegistered                       textID = "FormNotRegistered"
+	tToolPrefixCovers                        textID = "ToolPrefixCovers"
+	tFormListedPrefix                        textID = "FormListedPrefix"
 	tFormPreselectsAChange                   textID = "FormPreselectsAChange"
 	tFormItPreselectsAChangeBecause          textID = "FormItPreselectsAChangeBecause"
 	tFormSelectsToolsEffects                 textID = "FormSelectsToolsEffects"

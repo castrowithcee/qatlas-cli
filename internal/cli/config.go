@@ -37,9 +37,14 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"'configuration is valid: <path>'; --output json, compact, or toon, and --agent, print the same as\n" +
 			"one object with the fields valid and path.\n\n" +
 			"A connection's optional tools list names complete tool IDs of its provider, as 'qconnect tools\n" +
-			"<provider> --all' lists them. Every entry must be a tool this build registers for that provider,\n" +
-			"listed once. A connection gives either effects or tools, not both. An unknown entry is reported\n" +
-			"by its position, never quoted.\n\n" +
+			"<provider> --all' lists them, or prefixes: a tool ID whose last segment is replaced by one '*',\n" +
+			"such as <provider>.<group>.*. A prefix selects every tool of the provider that begins with the\n" +
+			"segments before the '*', also one a later version registers, but never a tool marked listed only;\n" +
+			"that one needs its exact ID. '<provider>.*' alone, a '*' inside a segment, and any other pattern\n" +
+			"are refused (invalid-tool-prefix), and so is a prefix that selects no tool without an exact ID\n" +
+			"(tool-prefix-no-match). Every other entry must be a tool this build registers for that provider,\n" +
+			"listed once; a prefix and an exact ID it covers are no duplicate. A connection gives either\n" +
+			"effects or tools, not both. An unknown entry is reported by its position, never quoted.\n\n" +
 			"A connection that offers no tool, because its effects or its tools list are empty or allow\n" +
 			"none of its provider's tools, is valid but useless to an agent. Validate names each one in a\n" +
 			"warning on stderr and still succeeds.\n\n" +
