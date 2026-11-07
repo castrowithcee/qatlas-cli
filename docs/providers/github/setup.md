@@ -198,6 +198,7 @@ Files below `.github/workflows/` are changed only with the workflow file tools; 
 | List collaborators | `repo` | Metadata: read |
 | Read a repository, its languages, its contributors, or its community profile | none for public, `repo` for private | Metadata: read |
 | Read repository traffic (views, clones, popular paths and referrers) | `repo`, with push access to the repository | Administration: read, with push access to the repository |
+| Read the statistics or the activity feed of a repository | none for public, `repo` for private | read access to the repository; GitHub names no specific permission |
 | Read rulesets of a repository | `repo` | Administration: read |
 | Change rulesets of a repository | `repo` | Administration: read and write |
 | Read or change rulesets of an organization | `admin:org` | Administration: read, or read and write (organization); as far as GitHub documents it |
