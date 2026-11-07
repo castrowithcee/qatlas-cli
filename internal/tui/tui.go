@@ -2360,6 +2360,9 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 // offered once the targets reach it.
 func (m *Model) toolText(id string) string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	if config.IsToolPrefix(id) {
+		return m.toolEntryLabel(m.formProvider(), id)
+	}
 	for _, tool := range metadata.Tools {
 		if tool.ID != id {
 			continue
@@ -5147,6 +5150,9 @@ func (m *Model) cells(name string) []string {
 		tools := tr(tLogAll)
 		if conn.Tools != nil {
 			tools = tr(tFormListed, len(conn.Tools))
+			if covered := m.toolsSelectedCount(m.cfg.Services[conn.Service].Provider, conn.Tools); covered != len(conn.Tools) {
+				tools = tr(tFormListedPrefix, covered)
+			}
 			if len(conn.Tools) == 0 {
 				tools = tr(tFormNone)
 			}

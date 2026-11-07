@@ -585,7 +585,7 @@ const (
 	// ToolsAllPermitted: no tools list; every tool of the connection's effects, except a tool that
 	// requires an allow-list.
 	ToolsAllPermitted = "all-permitted"
-	// ToolsListed: a tools list; only the tools it names.
+	// ToolsListed: a tools list; only the tools it names by ID or covers by prefix.
 	ToolsListed = "listed"
 	// ToolsNone: an explicitly empty tools list; no tool at all.
 	ToolsNone = "none"
