@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-11-05
+updated: 2026-11-07
 ---
 
 # GitHub setup profiles
@@ -32,7 +32,8 @@ not-recommended profiles `pull-requests` and `pull-requests-operator` under
 `releases` under [Releases](releases.md#releases), the not-recommended profiles `discovery` and `stars` under
 [accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars), and the
 not-recommended profile `repository-reader` under
-[repository contents, tree, blame, commits, branches, and tags](code.md#repository-contents-tree-blame-commits-branches-and-tags),
+[repository contents, tree, blame, commits, branches, and tags](code.md#repository-contents-tree-blame-commits-branches-and-tags)
+and [repository details](repositories.md#repository-details-languages-contributors-and-community-profile),
 and the not-recommended profile `repository-admin-reader` under
 [repository lifecycle and collaborators](repositories.md#repository-lifecycle-and-collaborators), which also lists the
 rulesets under [Rulesets](repositories.md#rulesets-repository-and-organization-governance) and the custom property values or
