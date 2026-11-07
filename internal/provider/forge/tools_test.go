@@ -225,6 +225,8 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 		if p == gitea {
 			want = append(want, p.id+".branch-protections.reorder")
 		}
+		want = append(want, p.id+".tag-protections.list", p.id+".tag-protections.get",
+			p.id+".tag-protections.create", p.id+".tag-protections.update", p.id+".tag-protections.delete")
 		want = append(want, accessToolIDs(p)...)
 		if p == forgejo {
 			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",
