@@ -51,6 +51,9 @@ type Client struct {
 	key     string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	// redirectInvalid makes a 3xx answer an invalid response instead of a provider error. A media request
+	// asks for JSON only, so a redirect there means Google ignored that and the answer cannot be used.
+	redirectInvalid bool
 }
 
 // checkConnection refuses what no request may start from: no connection, a base URL other than the official
@@ -134,11 +137,14 @@ func (c *Client) post(ctx context.Context, op, path string, body map[string]any,
 	return c.send(ctx, op, req, mask)
 }
 
-// send adds the key and the field mask as headers, waits for the rate slot, sends the request once, and
+// send adds the key and, when the request has one, the field mask as headers, waits for the rate slot, sends the request once, and
 // decodes a JSON object answer.
 func (c *Client) send(ctx context.Context, op string, req *http.Request, mask string) (map[string]any, error) {
 	req.Header.Set("X-Goog-Api-Key", c.key)
-	req.Header.Set("X-Goog-FieldMask", mask)
+	if mask != "" {
+		// Autocomplete and photo media take no field mask.
+		req.Header.Set("X-Goog-FieldMask", mask)
+	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
 
@@ -150,6 +156,11 @@ func (c *Client) send(ctx context.Context, op string, req *http.Request, mask st
 		return nil, provider.Transport(op, "Google", err)
 	}
 	defer response.Body.Close()
+	if c.redirectInvalid && response.StatusCode >= 300 && response.StatusCode < 400 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<10))
+		return nil, provider.InvalidResponse(op, "Google answered with a redirect although the request asked "+
+			"for JSON; Qatlas Connect does not follow it")
+	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		body := provider.ReadErrorBody(response.Body)
 		if response.StatusCode == http.StatusTooManyRequests {

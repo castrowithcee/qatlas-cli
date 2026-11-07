@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsquery"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/endpoints"
@@ -133,7 +134,7 @@ func (c *Client) assume(ctx context.Context, region string) (*assumedSession, *p
 		params["ExternalId"] = c.creds.externalID
 	}
 	var out assumeRoleResult
-	if failure := c.send(ctx, op, endpoints.STS, region, c.creds.key,
+	if failure := c.send(ctx, op, endpoints.STS, region, c.creds.key, capability.IdempotencyIdempotent,
 		awsquery.Call{Action: "AssumeRole", Version: stsVersion, Params: params}, &out); failure != nil {
 		if failure.Class == provider.ClassPermission {
 			failure.Message = denied
