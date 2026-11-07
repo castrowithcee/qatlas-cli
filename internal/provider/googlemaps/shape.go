@@ -17,6 +17,7 @@ const (
 	kShort kind = iota // text cut at maxShortRunes: identifiers, enumerations, dates
 	kTitle             // text cut at maxTitleRunes: names
 	kText              // text cut at maxTextRunes: reviews, summaries, descriptions
+	kName              // text kept whole up to max bytes and dropped when longer: an identifier that is useless cut
 	kAddr              // an address: bounded text that is never fetched, dropped unless safe to show
 	kInt               // a whole number
 	kNum               // any number
@@ -55,6 +56,9 @@ var (
 	decimal = &shape{kind: kNum}
 	boolean = &shape{kind: kBool}
 )
+
+// keepWhole is an identifier of at most limit bytes that is shown whole or not at all.
+func keepWhole(limit int) *shape { return &shape{kind: kName, max: limit} }
 
 func p(name string, s *shape) prop { return prop{name: name, shape: s} }
 
@@ -97,6 +101,12 @@ func (s *shape) clean(value any) (any, bool) {
 			return nil, false
 		}
 		return clip(str, s.limit()), true
+	case kName:
+		str, ok := value.(string)
+		if !ok || str == "" || len(str) > s.max {
+			return nil, false
+		}
+		return str, true
 	case kAddr:
 		str, ok := value.(string)
 		if !ok || address(str) == "" {
@@ -164,7 +174,7 @@ func (s *shape) limit() int {
 // schema renders the shape as the JSON schema of the cleaned value.
 func (s *shape) schema() string {
 	switch s.kind {
-	case kShort, kTitle, kText, kAddr:
+	case kShort, kTitle, kText, kName, kAddr:
 		return `{"type":"string"}`
 	case kInt:
 		return `{"type":"integer"}`
