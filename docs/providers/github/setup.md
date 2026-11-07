@@ -114,6 +114,8 @@ Find your tool group, then add the scope or permission to the token. Each row is
 | Issue types and issue fields of an organization: read | `read:org` | Issue types: read, or Administration: read (organization); as far as GitHub documents it |
 | Set an issue's type or an issue field value | `repo` | Issues: read and write |
 | React to an issue or an issue comment | `repo` | Issues: read and write |
+| Hide or show an issue comment | `repo` | Issues: read and write |
+| Hide or show a pull request conversation comment, a review, or a pull request line comment | `repo` | Pull requests: read and write |
 | React to a pull request line comment | `repo` | Pull requests: read and write |
 | Assign Copilot to an issue | `repo` | Metadata: read; Actions, Contents, Issues, and Pull requests: read and write |
 | Show the projects of an issue (`project_details`) | `read:project` | Projects: read |

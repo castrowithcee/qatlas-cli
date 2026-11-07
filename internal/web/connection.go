@@ -159,6 +159,10 @@ func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraf
 		d.ToolsSelected = true
 		metadata, _ := cfg.ProviderMetadata(f.Provider)
 		for _, id := range f.Tools {
+			// The page offers no prefix, so one in the request is not saved.
+			if config.IsToolPrefix(id) {
+				continue
+			}
 			// A tool the targets do not reach is not saved, whatever the request carried.
 			if reached, _ := metadata.Target.Reach(id, d.Targets); reached {
 				d.Tools = append(d.Tools, id)
@@ -543,7 +547,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 	case len(conn.Tools) == 0:
 		tools = "none: no tool is offered"
 	default:
-		tools = strings.Join(conn.Tools, ", ")
+		tools = toolEntriesText(metadata, conn.Tools)
 	}
 	targets := targetsText(conn)
 	if targets == "" {
@@ -811,13 +815,14 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 		// are chosen again in the terminal editor; this page only reads a connection.
 		targets, exclude = outdatedTargetsText, ""
 	}
+	metadata, _ := cfg.ProviderMetadata(cfg.Services[conn.Service].Provider)
 	tools := "every tool of its effects"
 	switch {
 	case conn.Tools == nil:
 	case len(conn.Tools) == 0:
 		tools = "none"
 	default:
-		tools = strings.Join(conn.Tools, ", ")
+		tools = toolEntriesText(metadata, conn.Tools)
 	}
 	provider := cfg.Services[conn.Service].Provider
 	data := connectionResultData{
@@ -872,7 +877,7 @@ func (s *Server) connectionRows() ([]ConnectionRow, error) {
 		rows = append(rows, ConnectionRow{
 			Name: name, Provider: cfg.Services[conn.Service].Provider, Description: conn.Description,
 			Effects: config.FormatEffects(cfg.ConnectionEffects(name)),
-			Tools:   toolsSummary(conn.Tools), State: stateText(conn.Off(now)),
+			Tools:   toolsSummary(cfg, conn), State: stateText(conn.Off(now)),
 			ActiveUntil: conn.ActiveUntilCanonical(),
 		})
 	}
@@ -888,14 +893,33 @@ func stateText(disabled bool) string {
 }
 
 // toolsSummary is this page's own short reading of a connection's tools list: not a policy decision, only
-// how a nil, empty, or populated list reads as one word or a list of IDs.
-func toolsSummary(tools []string) string {
+// how a nil, empty, or populated list reads as one word or a list of entries.
+func toolsSummary(cfg *config.Config, conn config.Connection) string {
 	switch {
-	case tools == nil:
+	case conn.Tools == nil:
 		return "by effect"
-	case len(tools) == 0:
+	case len(conn.Tools) == 0:
 		return "none"
 	default:
-		return strings.Join(tools, ", ")
+		metadata, _ := cfg.ProviderMetadata(cfg.Services[conn.Service].Provider)
+		return toolEntriesText(metadata, conn.Tools)
 	}
+}
+
+// toolEntryText shows an exact ID as it is and a prefix with the number of tools it covers today, the way
+// the terminal screens do. The rule for what a prefix covers stays in config.
+func toolEntryText(metadata config.ProviderMetadata, entry string) string {
+	if !config.IsToolPrefix(entry) {
+		return entry
+	}
+	return fmt.Sprintf("%s (prefix, tools today: %d)", entry, config.ToolPrefixMatches(metadata, entry))
+}
+
+// toolEntriesText joins the entries of a tools list as toolEntryText shows them.
+func toolEntriesText(metadata config.ProviderMetadata, entries []string) string {
+	texts := make([]string, len(entries))
+	for i, entry := range entries {
+		texts[i] = toolEntryText(metadata, entry)
+	}
+	return strings.Join(texts, ", ")
 }

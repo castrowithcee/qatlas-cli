@@ -253,8 +253,12 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldToolList && len(f.marked()) == 0:
 		value = emptyValue(wordNone) + tr(tRenderNoToolIsOffered)
 	case f.kind == fieldToolList && f.label == toolListLabel:
-		value = tr(tRenderOf, len(f.marked()), len(f.choices))
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+		value = tr(tRenderOf, len(f.marked()), len(f.choices))
+		if covered := m.toolsSelectedCount(m.formProvider(), f.marked()); covered != len(f.marked()) {
+			// A prefix is ticked: the entries say little, the tools they cover today are what is selected.
+			value = tr(tFormListedPrefix, covered)
+		}
 		if effects := config.EffectsOfTools(metadata, f.marked()); len(effects) > 0 {
 			names := make([]string, len(effects))
 			for i, effect := range effects {

@@ -39,7 +39,7 @@ and the not-recommended profile `repository-admin-reader` under
 rulesets under [Rulesets](repositories.md#rulesets-repository-and-organization-governance) and the custom property values or
 schema under [Custom properties](repositories.md#custom-properties). The not-recommended profile `issue-maintainer` lists and
 reads the labels of a repository, creates and updates them, under [Labels](issues.md#labels), lists the milestones
-under [Milestones](issues.md#milestones), updates issue comments under [Changes](issues.md#changes), reacts to issues,
+under [Milestones](issues.md#milestones), updates issue comments and hides and shows comments and reviews under [Changes](issues.md#changes), reacts to issues,
 comments, and pull request line comments under [Reactions](issues.md#reactions), lists, adds, removes, and
 reprioritizes sub-issues under [Sub-issues](issues.md#sub-issues), lists, adds, and removes issue dependencies
 under [Issue dependencies](issues.md#issue-dependencies), and lists issue types, lists issue fields, and sets issue

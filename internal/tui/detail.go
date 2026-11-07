@@ -486,7 +486,7 @@ func (m *Model) detailFacts(name string, tab detailTab) []detailFact {
 		facts = append(facts, listFacts("Excluded", m.excludeTexts(conn), 8)...)
 		add("Effects", cells[3])
 		if conn.Tools != nil {
-			facts = append(facts, listFacts("Tools", conn.Tools, 8)...)
+			facts = append(facts, listFacts("Tools", m.toolEntryLabels(m.cfg.Services[conn.Service].Provider, conn.Tools), 8)...)
 			if len(conn.Tools) == 0 {
 				add("Tools", cells[4])
 			}
