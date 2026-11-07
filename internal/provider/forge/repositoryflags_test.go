@@ -46,10 +46,13 @@ func TestRepositoryFlagsListAndCheck(t *testing.T) {
 		!reflect.DeepEqual(result["flags"], []any{"archived", "sponsored"}) {
 		t.Fatalf("%v, %v", result, err)
 	}
-	for flag, want := range map[string]bool{"archived": true, "other": false} {
-		result, err := e.invoke(t, repositoryFlagsCheck, "repo", `{"flag":"`+flag+`"}`)
-		if err != nil || result["has_flag"] != want || result["flag"] != flag {
-			t.Errorf("%s: %v, %v", flag, result, err)
+	for _, c := range []struct {
+		flag string
+		want bool
+	}{{"archived", true}, {"other", false}} {
+		result, err := e.invoke(t, repositoryFlagsCheck, "repo", `{"flag":"`+c.flag+`"}`)
+		if err != nil || result["has_flag"] != c.want || result["flag"] != c.flag {
+			t.Errorf("%s: %v, %v", c.flag, result, err)
 		}
 	}
 	if got := methods(e); !reflect.DeepEqual(got, []string{"GET " + flagsAPI, "GET " + flagsAPI + "/archived",
