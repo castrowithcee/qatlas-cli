@@ -61,7 +61,7 @@ var legacyFields = provider.OriginalFields{Code: "status", Message: "error_messa
 
 // legacyStatus reads the legacy web service form, an HTTP 200 answer whose body carries "status". It returns
 // that status and a nil error for OK and ZERO_RESULTS, which the caller handles as a result or an empty one.
-// OVER_QUERY_LIMIT is rate-limited, REQUEST_DENIED is auth (a key Google does not accept for the API, which
+// OVER_QUERY_LIMIT is rate-limited, OVER_DAILY_LIMIT is permission, REQUEST_DENIED is auth (a key Google does not accept for the API, which
 // Google does not tell apart from a missing grant), INVALID_REQUEST is invalid-provider-response, and
 // UNKNOWN_ERROR is a provider error the caller does not repeat. A missing or unknown status is an invalid
 // response. error_message is provider text: it is kept as the Original and never put in the message.
@@ -81,6 +81,12 @@ func legacyStatus(op string, body []byte) (string, *provider.Error) {
 		return answer.Status, nil
 	case "OVER_QUERY_LIMIT":
 		return failed(provider.ClassRateLimited, "Google rate-limited the key or its quota is used up")
+	case "OVER_DAILY_LIMIT":
+		// Google lists a missing or invalid key, disabled billing, a self-imposed cap, and an invalid payment
+		// method under one value. None of them clears by waiting, so it is not rate-limited, and Google does
+		// not say which one applies; permission is the class that points at the key and its project.
+		return failed(provider.ClassPermission, "Google refused the key; check the key, that its project has "+
+			"billing enabled with a valid payment method, and any daily cap set in the project")
 	case "REQUEST_DENIED":
 		return failed(provider.ClassAuth, "Google denied the request; the key is not accepted for this API, "+
 			"or the API is not enabled or has no billing account")

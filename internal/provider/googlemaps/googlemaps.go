@@ -82,7 +82,8 @@ func Register(reg *capability.Registry) error {
 		},
 		SecretRoles: []config.SecretRole{{
 			Name: roleKey,
-			Description: "API key of a Google Cloud project with Places API (New) enabled and a billing account; " +
+			Description: "API key of a Google Cloud project with Places API (New), for geocoding also Geocoding API, " +
+				"enabled and a billing account; " +
 				"requests are billed to that project",
 		}},
 		Target: config.TargetMetadata{
@@ -92,9 +93,11 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read", Recommended: true,
-			Description: "reads place details, searches places by text or around a point, predicts places from typed input, and resolves place photos to short-lived addresses from Google Places; " +
-				"the field mask of each request decides what Google bills, and nothing is changed",
-			Tools: []string{placesGet.ID, textSearch.ID, nearbySearch.ID, autocomplete.ID, photosGet.ID},
+			Description: "reads place details, searches places by text or around a point, predicts places from typed input, and resolves place photos to short-lived addresses from Google Places, " +
+				"and geocodes addresses and coordinates; the field mask of each Places request decides what Google " +
+				"bills, and nothing is changed",
+			Tools: []string{placesGet.ID, textSearch.ID, nearbySearch.ID, autocomplete.ID, photosGet.ID,
+				geocodingGeocode.ID, geocodingReverse.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -104,5 +107,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: textSearch, Handler: handleTextSearch},
 		capability.Operation{Descriptor: nearbySearch, Handler: handleNearbySearch},
 		capability.Operation{Descriptor: autocomplete, Handler: handleAutocomplete},
-		capability.Operation{Descriptor: photosGet, Handler: handlePhotosGet})
+		capability.Operation{Descriptor: photosGet, Handler: handlePhotosGet},
+		capability.Operation{Descriptor: geocodingGeocode, Handler: handleGeocode},
+		capability.Operation{Descriptor: geocodingReverse, Handler: handleReverse})
 }

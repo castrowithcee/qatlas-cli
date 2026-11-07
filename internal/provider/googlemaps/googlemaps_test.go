@@ -89,10 +89,11 @@ type rewrite struct {
 }
 
 func (r rewrite) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Host != "places.googleapis.com" {
+	if req.URL.Host != "places.googleapis.com" && req.URL.Host != "maps.googleapis.com" {
 		return nil, errors.New("unexpected host")
 	}
 	clone := req.Clone(req.Context())
+	clone.Header.Set("X-Test-Original-Host", req.URL.Host)
 	clone.URL.Scheme, clone.URL.Host, clone.Host = r.target.Scheme, r.target.Host, ""
 	return r.base.RoundTrip(clone)
 }
@@ -194,20 +195,25 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 			t.Errorf("%s effect = %v", tool.ID, tool.Effect)
 		}
 	}
-	wantTools := []string{"google.maps.photos.get", "google.maps.places.autocomplete", "google.maps.places.get",
-		"google.maps.places.search-nearby", "google.maps.places.search-text"}
+	wantTools := []string{"google.maps.geocoding.geocode", "google.maps.geocoding.reverse", "google.maps.photos.get",
+		"google.maps.places.autocomplete", "google.maps.places.get", "google.maps.places.search-nearby",
+		"google.maps.places.search-text"}
 	if !reflect.DeepEqual(ids, wantTools) {
 		t.Errorf("tools = %v", ids)
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "read" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"google.maps.places.get",
 			"google.maps.places.search-text", "google.maps.places.search-nearby", "google.maps.places.autocomplete",
-			"google.maps.photos.get"}) {
+			"google.maps.photos.get", "google.maps.geocoding.geocode", "google.maps.geocoding.reverse"}) {
 		t.Errorf("profiles = %+v", metadata.Profiles)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
+		sensitivity := dataSensitivity
+		if strings.HasPrefix(descriptor.ID, "google.maps.geocoding.") {
+			sensitivity = geocodingSensitivity
+		}
 		if descriptor.Risk != (capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
-			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: dataSensitivity}) {
+			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: sensitivity}) {
 			t.Errorf("%s risk = %+v", descriptor.ID, descriptor.Risk)
 		}
 		for _, want := range []string{"SKU", "attribution", "untrusted", "Place IDs may be stored"} {

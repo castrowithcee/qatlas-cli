@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Google Maps provider: the API key and its fixed origin, the read profile, the mandatory field mask, with and without the places. prefix, and the billing group it selects, the cost of autocomplete and photos, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
+  Describes the Google Maps provider: the API key, its header and query paths, and its fixed origin, the read profile, the mandatory field mask, with and without the places. prefix, and the billing group it selects, the cost of autocomplete and photos, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
 type: knowledge
 edit: shared
 created: 2026-11-06
@@ -11,11 +11,11 @@ updated: 2026-11-07
 
 Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place,
 searches places by text or around a point, predicts places from typed input, and resolves place photos to
-short-lived addresses in Places API (New). It changes nothing: every tool is a read, and the connection takes no target, because a key
+short-lived addresses in Places API (New), and geocodes addresses and coordinates with the Geocoding API. It changes nothing: every tool is a read, and the connection takes no target, because a key
 reaches what its Cloud project and the key's restrictions allow, not a part of an account.
 
-[Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md) and
-[photos](photos.md).
+[Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md),
+[photos](photos.md), and [geocoding](geocoding.md).
 
 ## Configuration
 
@@ -23,11 +23,14 @@ A service is always the official origin `https://places.googleapis.com`, which a
 left out. Qatlas refuses any other URL before the key is read, because the key belongs to that one service. A
 connection with a target is refused.
 
-The credential provides `api_key`. Qatlas sends it only in the `X-Goog-Api-Key` header, never in a URL or as
-a tool argument, and masks it in every output.
+The credential provides `api_key`. The Places tools send it only in the `X-Goog-Api-Key` header. The geocoding
+tools call the legacy Geocoding service, which takes no header, and send it as the `key` query parameter of
+a fixed URL; they are the only requests that do so, see [geocoding](geocoding.md#endpoint-and-key). The key is
+never a tool argument, never part of a message or result, and masked in every output.
 
 The profile `read` is the recommended one and holds `google.maps.places.get`, `google.maps.places.search-text`,
-`google.maps.places.search-nearby`, `google.maps.places.autocomplete`, and `google.maps.photos.get`.
+`google.maps.places.search-nearby`, `google.maps.places.autocomplete`, `google.maps.photos.get`,
+`google.maps.geocoding.geocode`, and `google.maps.geocoding.reverse`.
 
 ## Field mask and billing group
 
@@ -118,7 +121,7 @@ redacted, and bounded): the `status`, the `message`, and the type and reason of 
 
 Google uses two error forms. Places API (New) answers a failure with an HTTP status and an object
 `{"error":{"code","message","status","details":[...]}}`. The older web services answer with HTTP 200 and a
-`status` in the body: `OK`, `ZERO_RESULTS`, `OVER_QUERY_LIMIT`, `REQUEST_DENIED`, `INVALID_REQUEST`, or
+`status` in the body: `OK`, `ZERO_RESULTS`, `OVER_QUERY_LIMIT`, `OVER_DAILY_LIMIT`, `REQUEST_DENIED`, `INVALID_REQUEST`, or
 `UNKNOWN_ERROR`. The provider reads both through one helper.
 
 | Form | Value | Class |
@@ -130,6 +133,7 @@ Google uses two error forms. Places API (New) answers a failure with an HTTP sta
 | Error object | 404 | `not-found` |
 | Error object | any other status or reason | by HTTP status: 401 `auth`, 403 `permission`, 429 `rate-limited`, 503 `unreachable`, 504 `timeout`, other `provider-error` |
 | Legacy status | `OVER_QUERY_LIMIT` | `rate-limited` |
+| Legacy status | `OVER_DAILY_LIMIT` | `permission` |
 | Legacy status | `REQUEST_DENIED` | `auth` |
 | Legacy status | `INVALID_REQUEST`, an unknown or missing status | `invalid-provider-response` |
 | Legacy status | `UNKNOWN_ERROR` | `provider-error` |
@@ -163,7 +167,7 @@ Not verified:
 
 Left out on purpose:
 
-- A query key, a `$fields` parameter, and any target.
+- A query key outside geocoding, a `$fields` parameter, and any target.
 - Fields that the discovery document of Places API (New) does not list for a place. `routingSummaries` belongs
   to the search endpoints only.
 - The deprecated `maxResultCount` of the text search, the experimental `contextualContents`, the
