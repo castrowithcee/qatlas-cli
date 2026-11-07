@@ -1,5 +1,5 @@
 // Package googlemaps implements read-only access to Google Maps Platform with one API key. It starts with
-// Places API (New): the details of one place.
+// Places API (New): the details of one place and the text and nearby searches.
 //
 // A connection binds one API key, sent only in the X-Goog-Api-Key header, and takes no target: the key
 // reaches what its Cloud project and its restrictions allow. The base URL is fixed to the official origin;
@@ -7,7 +7,9 @@
 //
 // Google bills a Places request by the fields it asks for, so a field mask is mandatory: it is checked
 // against a table of known field paths, with no default and no wildcard, before the key is read. A request
-// is sent once and never repeated, and the requests of one key are spaced.
+// is sent once and never repeated, and the requests of one key are spaced. A search takes the same names
+// without a prefix, adds the places. prefix itself, and carries Google's page token only inside a cursor that
+// is bound to the rest of the request.
 //
 // Everything Google returns is untrusted third-party content: strings and lists are bounded, and addresses
 // are text that is never fetched. The error helpers of this package serve the two error forms of the Maps
@@ -90,12 +92,15 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read", Recommended: true,
-			Description: "reads place details from Google Places; the field mask of each request decides what " +
-				"Google bills, and nothing is changed",
-			Tools: []string{placesGet.ID},
+			Description: "reads place details and searches places by text or around a point from Google Places; " +
+				"the field mask of each request decides what Google bills, and nothing is changed",
+			Tools: []string{placesGet.ID, textSearch.ID, nearbySearch.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider, capability.Operation{Descriptor: placesGet, Handler: handlePlacesGet})
+	return reg.Register(Provider,
+		capability.Operation{Descriptor: placesGet, Handler: handlePlacesGet},
+		capability.Operation{Descriptor: textSearch, Handler: handleTextSearch},
+		capability.Operation{Descriptor: nearbySearch, Handler: handleNearbySearch})
 }

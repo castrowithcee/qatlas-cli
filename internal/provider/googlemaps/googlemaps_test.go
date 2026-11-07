@@ -1,10 +1,12 @@
 package googlemaps
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -33,8 +35,8 @@ const (
 )
 
 type recorded struct {
-	method, path, rawQuery string
-	header                 http.Header
+	method, path, rawQuery, body string
+	header                       http.Header
 }
 
 type fakeGoogle struct {
@@ -44,9 +46,11 @@ type fakeGoogle struct {
 }
 
 func (f *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	payload, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(payload))
 	f.mu.Lock()
 	f.requests = append(f.requests, recorded{method: r.Method, path: r.URL.EscapedPath(), rawQuery: r.URL.RawQuery,
-		header: r.Header.Clone()})
+		body: string(payload), header: r.Header.Clone()})
 	f.mu.Unlock()
 	if f.answer != nil {
 		f.answer(w, r)
@@ -159,8 +163,12 @@ func newEnvironment(t *testing.T, f *fakeGoogle) *environment {
 }
 
 func (e *environment) invoke(connection, arguments string) (string, error) {
+	return e.invokeTool(placesGetID, connection, arguments)
+}
+
+func (e *environment) invokeTool(operation, connection, arguments string) (string, error) {
 	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: placesGetID, Connection: connection, Arguments: json.RawMessage(arguments)})
+		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments)})
 	return string(response.Result), err
 }
 
@@ -179,12 +187,20 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 		metadata.SecretRoles[0].Name != "api_key" || metadata.DocPath() != "google.maps/setup.md" {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 1 || metadata.Tools[0].ID != "google.maps.places.get" ||
-		metadata.Tools[0].Effect != config.EffectRead {
-		t.Errorf("tools = %+v", metadata.Tools)
+	var ids []string
+	for _, tool := range metadata.Tools {
+		ids = append(ids, tool.ID)
+		if tool.Effect != config.EffectRead {
+			t.Errorf("%s effect = %v", tool.ID, tool.Effect)
+		}
+	}
+	wantTools := []string{"google.maps.places.get", "google.maps.places.search-nearby", "google.maps.places.search-text"}
+	if !reflect.DeepEqual(ids, wantTools) {
+		t.Errorf("tools = %v", ids)
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "read" || !metadata.Profiles[0].Recommended ||
-		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"google.maps.places.get"}) {
+		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"google.maps.places.get",
+			"google.maps.places.search-text", "google.maps.places.search-nearby"}) {
 		t.Errorf("profiles = %+v", metadata.Profiles)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
@@ -192,10 +208,19 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: dataSensitivity}) {
 			t.Errorf("%s risk = %+v", descriptor.ID, descriptor.Risk)
 		}
-		for _, want := range []string{"SKU", "10000", "5000", "1000", "attribution", "untrusted", "Place IDs may be stored"} {
+		for _, want := range []string{"SKU", "attribution", "untrusted", "Place IDs may be stored"} {
 			if !strings.Contains(descriptor.Description, want) {
-				t.Errorf("description lacks %q", want)
+				t.Errorf("%s description lacks %q", descriptor.ID, want)
 			}
+		}
+		if descriptor.ID == placesGetID {
+			for _, want := range []string{"10000", "5000", "1000"} {
+				if !strings.Contains(descriptor.Description, want) {
+					t.Errorf("description lacks %q", want)
+				}
+			}
+		} else if !strings.Contains(descriptor.Description, "charges above the free usage") {
+			t.Errorf("%s description lacks the cost note", descriptor.ID)
 		}
 	}
 	if err := metadata.Target.Validate("x"); err == nil {
