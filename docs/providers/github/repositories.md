@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the GitHub repository tools: the repository list of an owner, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
+  Describes the GitHub repository tools: the repository list of an owner, the details, languages, contributors, and community profile of one repository, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-11-05
+updated: 2026-11-07
 ---
 
 # GitHub repositories
@@ -40,6 +40,53 @@ report only their count: a connection GitHub also serves as a list of its own is
   entry and named in `unreadable`; a refusal of the list itself still fails it.
 - **Left out:** deprecated members, rendered variants that repeat a text in another format, and members that
   need a lookup argument.
+
+## Repository details, languages, contributors, and community profile
+
+| Tool | Does |
+| --- | --- |
+| `github.repositories.get` | reads one repository with every detail GitHub reports |
+| `github.languages.get` | reads the languages of a repository with their bytes of code |
+| `github.contributors.list` | lists the contributors of a repository with their number of commits |
+| `github.community-profile.get` | reads the community profile of a repository |
+
+All four read one repository of the connection through a fixed GitHub route, take `repository` like every other
+repository tool, and check it against the targets and exclusions before a secret is read or GitHub is contacted,
+without naming it. They write nothing, and names, descriptions, and addresses GitHub reports are untrusted data
+that is never fetched. The token rights are listed under
+[Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties). The setup profiles
+`repository-reader` and `repository-writer` select them; the recommended profile stays `read`.
+
+`github.repositories.get` reads GitHub's full repository over REST rather than the GraphQL projection of the
+owner list, since REST carries the whole documented object in one request, including the settings, merge
+options, `network_count`, `subscribers_count`, custom properties, and the security and analysis status that the
+list reads in part. The answer has the members of the [repository object](README.md#result-objects) of the
+other tools plus `organization` as an account. `parent`, `source`, and `template_repository` are repositories
+the details link to; one outside the connection's targets, or covered by an exclusion, keeps only `id`,
+`node_id`, and `full_name`. `description` is cut, `homepage` and every address are never fetched, and `links`
+holds the REST and clone addresses by their GitHub names. Left out are `temp_clone_token`, which grants clone
+access without a sign-in, and the deprecated `has_downloads` and `use_squash_pr_title_as_default`. GitHub leaves
+the merge settings and `security_and_analysis` out for a token without the rights for them; they are absent then.
+
+`github.languages.get` answers `languages`, each with `name` and `bytes`, largest first and by name among equals,
+at most 100 with `languages_truncated`. GitHub answers 202 while it still computes the languages: the tool reports
+`state` as `computing` with no languages and neither waits nor repeats the request, so call it again later;
+otherwise `state` is `ready`.
+
+`github.contributors.list` lists contributors, most commits first as GitHub orders them, with the members of an
+account and `contributions`. `anon` adds anonymous contributors, who have no account and carry only `name` and
+`email` with `type` `Anonymous`; both are untrusted data. GitHub lists at most 500 contributors and leaves out
+the ones beyond. The list pages by GitHub's Link header with a cursor bound to the repository and `anon`, so a
+cursor of other filters is refused. `state` is `ready`, `computing` when GitHub answered 202 while it computes the
+list, or `empty` when GitHub answered an empty repository with no content; neither state is retried or waited
+for, and neither carries contributors or a cursor.
+
+`github.community-profile.get` answers `health_percentage`, `description`, `documentation`, `updated_at`, and
+`content_reports_enabled` (which GitHub sends only for a repository of an organization), and `files` with the
+community files by role: `code_of_conduct` (`key`, `name`, `url`, `links`), `code_of_conduct_file`, `license`
+(`key`, `name`, `spdx_id`, `node_id`, `url`, `links`), `contributing`, `readme`, `issue_template`, and
+`pull_request_template`. A file has `url`, the web address, and `links.url`, the REST address; a role without a
+file is absent.
 
 ## Repository lifecycle and collaborators
 
