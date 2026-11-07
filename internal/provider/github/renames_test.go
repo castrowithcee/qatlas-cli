@@ -198,6 +198,10 @@ var currentToolIDs = []string{
 	"github.team-members.list",
 	"github.teams.list",
 	"github.thread-subscriptions.set",
+	"github.traffic-clones.get",
+	"github.traffic-paths.list",
+	"github.traffic-referrers.list",
+	"github.traffic-views.get",
 	"github.trees.get",
 	"github.users.search",
 	"github.workflow-artifacts.list",
@@ -236,7 +240,7 @@ func TestRegistryHoldsExactlyTheCurrentToolIDs(t *testing.T) {
 	sort.Strings(got)
 	want := append([]string(nil), currentToolIDs...)
 	sort.Strings(want)
-	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 211 {
+	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 215 {
 		t.Errorf("registry holds %d tools, differing from the expected %d IDs", len(got), len(want))
 	}
 	if err := reg.ValidateRenames(); err != nil {
@@ -270,7 +274,9 @@ func TestRenamedToolsCoverEveryChangedID(t *testing.T) {
 		"github.check-runs.get": true, "github.check-runs.list": true, "github.check-suite-runs.list": true,
 		"github.check-suites.list":        true,
 		"github.pull-request-checks.wait": true, "github.commit-branches.list": true,
-		"github.commit-comments.get": true, "github.commit-comments.list": true, "github.commit-pulls.list": true}
+		"github.commit-comments.get": true, "github.commit-comments.list": true, "github.commit-pulls.list": true,
+		"github.traffic-views.get": true, "github.traffic-clones.get": true, "github.traffic-paths.list": true,
+		"github.traffic-referrers.list": true}
 	for id := range current {
 		if strings.Contains(id, "-") && !targets[id] && !bornHyphenated[id] {
 			t.Errorf("hyphenated tool %s has no former ID", id)
