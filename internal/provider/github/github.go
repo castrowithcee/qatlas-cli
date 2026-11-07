@@ -60,7 +60,10 @@
 // renames one, once the current and the new name both lie inside the connection's targets. github.collaborators.list
 // reads the collaborators of a repository. github.repositories.get reads one repository with every detail GitHub
 // reports, github.languages.get its languages, github.contributors.list its contributors, and github.
-// community-profile.get its community profile. github.rulesets.list and github.rulesets.get read the rulesets
+// community-profile.get its community profile. github.traffic-views.get and github.traffic-clones.get read the
+// views and the clones of a repository over the last 14 days, per day or per week, and github.traffic-paths.
+// list and github.traffic-referrers.list its ten most visited paths and referrers, as aggregate counts only;
+// GitHub shows them only to a token with push access, and no setup profile lists them. github.rulesets.list and github.rulesets.get read the rulesets
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
 // create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
@@ -803,7 +806,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(), compareOperations(), commitRelationOperations(),
-		contentsWriteOperations(), repositoriesOperations(), repositoryDetailOperations(), rulesetsOperations(), customPropertiesOperations(),
+		contentsWriteOperations(), repositoriesOperations(), repositoryDetailOperations(), trafficOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), commentVisibilityOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
 		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
@@ -1624,6 +1627,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := repositoryAdminSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := trafficSubject(parts[2]); what != "" {
 			s.what = what
 		}
 		if what := rulesetsSubject(parts[2]); what != "" {
