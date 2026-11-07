@@ -1,7 +1,8 @@
 // Package aws implements controlled access to one Amazon Web Services account through the AWS REST APIs,
 // signed with Signature Version 4 and the standard library alone. This package holds the provider: its
 // metadata, the credential and the role assumption, the account and region binding, the connection test,
-// and the Security Token Service tools. The signature, the endpoint and segment tables, the error mapping,
+// and the runtime of the tools that gen/awsgen generates from the pinned service models and the curation
+// tables in gen. The signature, the endpoint and segment tables, the error mapping,
 // and the awsQuery protocol are packages of their own below it, shared by every service that follows.
 //
 // A connection binds one access key to exactly one account and a non-empty allowlist of regions. Before
@@ -30,9 +31,6 @@ import (
 // Provider is the provider name used in the configuration and as the operation namespace.
 const Provider = "aws"
 
-// dataSensitivity classifies results as account and identity data of the configured AWS account.
-const dataSensitivity = "aws-account-identity"
-
 // consoleOrigin is the only base URL of an AWS service. It is documentary: the endpoints come from a fixed
 // table and no request is ever sent to it.
 const consoleOrigin = "https://aws.amazon.com"
@@ -48,7 +46,7 @@ func validBaseURL(raw string) error {
 }
 
 var toolGroups = []config.ToolGroup{{
-	ID: groupSTS, Title: "Security Token Service",
+	ID: "sts", Title: "Security Token Service",
 	Description: "Identity of the calling credential, the account of an access key, and decoded authorization failures",
 }}
 
@@ -144,10 +142,14 @@ func Register(reg *capability.Registry, version string) error {
 			ID: "read", Title: "Identity (STS)", Recommended: true,
 			Description: "reads the identity of the credential, the account of an access key, and decoded " +
 				"authorization failures; changes nothing",
-			Tools: []string{callerIdentityGet.ID, accessKeyGetInfo.ID, authorizationMessageDecode.ID},
+			Tools: []string{"aws.sts.caller-identity.get", "aws.sts.access-key.get-info", "aws.sts.authorization-message.decode"},
 		}},
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider, stsTools()...)
+	tools, err := generatedTools()
+	if err != nil {
+		return err
+	}
+	return reg.Register(Provider, tools...)
 }

@@ -1,0 +1,23 @@
+{
+  "source": "https://github.com/aws/api-models-aws",
+  "commit": "1b9ff13fe6c28ea9774a527e53cda6a3b91369dc",
+  "retrieved_on": "2026-11-07",
+  "license": "Apache-2.0; LICENSE and NOTICE of the upstream repository at the pinned commit lie beside this file",
+  "modification": "sts.json and iam.json are derived from the upstream files named here, not copies: the traits smithy.api#documentation and smithy.api#examples were removed wherever they occur, and the JSON was re-encoded with the member order kept and two-space indentation. Nothing else was changed.",
+  "files": [
+    {
+      "service": "sts",
+      "upstream_path": "models/sts/service/2011-06-15/sts-2011-06-15.json",
+      "upstream_sha256": "794c8b2142e3a65bc6cc7922005eb85d6b71b02353fef03c0f395e8f902ee2d0",
+      "extract": "sts.json",
+      "extract_sha256": "18733c83146266646f3d8959ed95f24d8ae4fc3a471be013121d043432f33e00"
+    },
+    {
+      "service": "iam",
+      "upstream_path": "models/iam/service/2010-05-08/iam-2010-05-08.json",
+      "upstream_sha256": "c1f74d3eda269e4fa2f00b57d57ed19c0e0a6d7fc7c70d4e351e319d178430f9",
+      "extract": "iam.json",
+      "extract_sha256": "684ebc1a3eb326fa8096412964d1587917a3175b2a9a3fb2f251c9cd0aac4e04"
+    }
+  ]
+}
