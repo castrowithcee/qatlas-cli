@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-11-07
 ---
 
 # Set up Forgejo
@@ -74,6 +74,16 @@ serves each tool, so treat them as likely, not certain.
 
 The `admin-quota-*` tools need a **site administrator** and a connection without targets. Use a token of its own
 for them that no other connection uses.
+
+### Repository flags
+
+| Tools | Scope |
+| --- | --- |
+| `repository-flags.list`, `repository-flags.check` | `read:repository` |
+| `repository-flags.add`, `.remove`, `.replace`, `.clear` | `write:repository` |
+
+Setting and removing flags needs an **instance administrator**; any other token gets a 403 (reported as
+`not-found`).
 
 ### Tokens of the account
 

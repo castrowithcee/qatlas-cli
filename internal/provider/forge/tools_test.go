@@ -232,6 +232,9 @@ func TestRegisterPublishesBothProviders(t *testing.T) {
 			want = append(want, p.id+".quota.get", p.id+".quota.list-artifacts", p.id+".quota.list-attachments",
 				p.id+".quota.list-packages", p.id+".quota.check")
 			want = append(want, quotaAdminToolIDs...)
+			want = append(want, p.id+".repository-flags.list", p.id+".repository-flags.check",
+				p.id+".repository-flags.add", p.id+".repository-flags.remove", p.id+".repository-flags.replace",
+				p.id+".repository-flags.clear")
 		}
 		slices.Sort(want)
 		if !slices.Equal(ids, want) {
@@ -286,6 +289,14 @@ func TestProductSpecificToolsRegisterOnlyForTheirProduct(t *testing.T) {
 		}
 		if _, _, ok := reg.Lookup("gitea.quota." + action); ok {
 			t.Errorf("gitea.quota.%s is registered", action)
+		}
+	}
+	for _, action := range []string{"list", "check", "add", "remove", "replace", "clear"} {
+		if _, _, ok := reg.Lookup("forgejo.repository-flags." + action); !ok {
+			t.Errorf("forgejo.repository-flags.%s is missing", action)
+		}
+		if _, _, ok := reg.Lookup("gitea.repository-flags." + action); ok {
+			t.Errorf("gitea.repository-flags.%s is registered", action)
 		}
 	}
 	for _, id := range quotaAdminToolIDs {
