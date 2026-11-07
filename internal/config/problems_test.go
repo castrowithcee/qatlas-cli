@@ -232,6 +232,14 @@ func TestProblemsAreStructured(t *testing.T) {
 			conn(c, "gh", func(v *Connection) { v.Tools = []string{"github.issues.get", "nope"} })
 		},
 			"connections.gh.tools[2]", CodeUnknownToolEntry, "connections.gh.tools: entry 2 is not a registered tool", "tools", 2},
+		{"invalid tool prefix", func(c *Config) {
+			conn(c, "gh", func(v *Connection) { v.Tools = []string{"github.issues.get", "github.is*"} })
+		},
+			"connections.gh.tools[2]", CodeInvalidToolPrefix, "connections.gh.tools: entry 2 is not a valid tool prefix", "tools", 2},
+		{"tool prefix without a tool", func(c *Config) {
+			conn(c, "gh", func(v *Connection) { v.Tools = []string{"github.nothing.*"} })
+		},
+			"connections.gh.tools[1]", CodeToolPrefixNoMatch, "connections.gh.tools: entry 1 covers no registered tool", "tools", 1},
 		{"files empty", func(c *Config) { conn(c, "docs", func(v *Connection) { v.Files.Read = []string{} }) },
 			"connections.docs.files.read", CodeFilesEmpty, "connections.docs.files.read: must name at least one", "files.read", -1},
 		{"files direction", func(c *Config) { conn(c, "wiki", func(v *Connection) { v.Files.Write = []string{drive + "/srv/a"} }) },

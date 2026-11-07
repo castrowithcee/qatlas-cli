@@ -752,7 +752,7 @@ func (m *Model) summaryRows() []summaryPair {
 	} else {
 		tools := tr(tSetupNoneNoToolIsOffered)
 		if len(conn.Tools) > 0 {
-			tools = strings.Join(conn.Tools, ", ")
+			tools = strings.Join(m.toolEntryLabels(w.provider, conn.Tools), ", ")
 		}
 		access = []summaryPair{
 			line(accessLabel, valueText(accessLabel, accessTools)),

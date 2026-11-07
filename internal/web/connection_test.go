@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -59,6 +60,8 @@ var bookMetadata = config.ProviderMetadata{
 		{ID: "book.admin", Title: "Administer", Effect: config.EffectRead},
 		{ID: "book.read", Title: "Read a book", Effect: config.EffectRead},
 		{ID: "book.create", Title: "Create a book", Effect: config.EffectCreate},
+		{ID: "book.shelf.list", Title: "List a shelf", Effect: config.EffectRead},
+		{ID: "book.shelf.get", Title: "Get a shelf", Effect: config.EffectRead},
 	},
 	Profiles: []config.ToolProfile{
 		{ID: "reader", Title: "Reader", Recommended: true, Tools: []string{"book.read"}},
@@ -913,5 +916,54 @@ func TestConnectionPageSaysOutdatedTargetsNeedAChoice(t *testing.T) {
 	body := s.request(t, http.MethodGet, "/connections/old", s.addr, cookie, nil).Body.String()
 	if !strings.Contains(body, "Outdated: the stored targets") || strings.Contains(body, "shelf/former") {
 		t.Fatalf("outdated connection page:\n%s", body)
+	}
+}
+
+// prefixSave posts the connection form of a new book connection with the given tool entries and returns the
+// saved connection's tools.
+func prefixSave(t *testing.T, tools []string) []string {
+	t.Helper()
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	body := s.request(t, http.MethodGet, "/connections/new/review?provider=book&service="+url.QueryEscape(newServiceChoice)+
+		"&svcname=book-cloud&credential="+url.QueryEscape(newCredentialChoice)+"&credname=r&credstorage=keyring&connname=c&access=tools&targets=lib1&permmode=custom&perm=read&tool=book.read",
+		s.addr, cookie, nil).Body.String()
+	cfgver := extractHiddenValue(t, body, "cfgver")
+	form := url.Values{
+		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
+		"svcbaseurl": {"https://books.example.test"},
+		"credential": {newCredentialChoice}, "credname": {"r"}, "credstorage": {"keyring"},
+		"connname": {"c"}, "targets": {"lib1"}, "permmode": {"custom"}, "perm": {"read"},
+		"access": {"tools"}, "tool": tools, "cfgver": {cfgver},
+		"secret_token-id": {newConnCanaryID}, "secret_token-secret": {newConnCanaryValue},
+	}
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg.Connections["c"].Tools
+}
+
+func TestWebDiscardsAnInjectedToolPrefix(t *testing.T) {
+	got := prefixSave(t, []string{"book.read", "book.other.*"})
+	if !slices.Equal(got, []string{"book.read"}) {
+		t.Fatalf("tools = %v, want the injected prefix dropped", got)
+	}
+}
+
+func TestWebShowsToolPrefixWithItsCount(t *testing.T) {
+	_, store, _, _ := newConnectionTestServer(t, nil)
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Services = map[string]config.Service{"s": {Provider: "book"}}
+	got := toolsSummary(cfg, config.Connection{Service: "s", Tools: []string{"book.read", "book.shelf.*"}})
+	if got != "book.read, book.shelf.* (prefix, tools today: 2)" {
+		t.Fatalf("summary = %q", got)
 	}
 }
