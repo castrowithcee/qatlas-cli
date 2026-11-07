@@ -74,6 +74,8 @@ const (
 	CodePermissionsRenamed           = "permissions-renamed"
 	CodeToolOfOtherProvider          = "tool-of-other-provider"
 	CodeUnknownToolEntry             = "unknown-tool-entry"
+	CodeInvalidToolPrefix            = "invalid-tool-prefix"
+	CodeToolPrefixNoMatch            = "tool-prefix-no-match"
 	CodeFilesEmpty                   = "files-empty"
 	CodeFilesDirectionUnsupported    = "files-direction-unsupported"
 	CodeInvalidFilesEntry            = "invalid-files-entry"
@@ -148,6 +150,8 @@ var hints = map[string]string{
 	CodePermissionsRenamed:           "Rename permissions to effects.",
 	CodeToolOfOtherProvider:          "Remove the tool; it belongs to another provider.",
 	CodeUnknownToolEntry:             "Remove the entry, or choose a registered tool of the provider.",
+	CodeInvalidToolPrefix:            "Write the prefix as the provider ID, at least one whole segment and a final '*' (no '*' elsewhere), or list the exact tool.",
+	CodeToolPrefixNoMatch:            "Remove the prefix, or choose one that covers a registered tool; a tool that requires the allow-list is never covered and needs its exact ID.",
 	CodeFilesEmpty:                   "List at least one directory, or leave the direction out to release none.",
 	CodeFilesDirectionUnsupported:    "Remove the direction; the provider has no tool that uses it.",
 	CodeInvalidFilesEntry:            "Use a directory that is neither the file system root nor the whole home directory, without '..'.",

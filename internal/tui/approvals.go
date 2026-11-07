@@ -103,7 +103,7 @@ func itemRow(text string, tone byte) approvalRow {
 
 // approvalDetailRows is the detail screen's text with unchanged entries folded away: see approvalBody.
 func approvalDetailRows(c approval.Change) []string {
-	rows := approvalBody(c, false)
+	rows := approvalBody(c, false, nil)
 	out := make([]string, len(rows))
 	for i, row := range rows {
 		out[i] = row.text
@@ -116,7 +116,13 @@ func approvalDetailRows(c approval.Change) []string {
 // newly asked for (+) and what falls away (-), then the entries that stay as a count, spelled out only when
 // expanded. A field that did not change is its current value under the same label, worded "unchanged"
 // unless the connection is new, which has nothing yet to compare with and shows its whole scope.
-func approvalBody(c approval.Change, expanded bool) []approvalRow {
+//
+// tools labels one entry of a tools list, which is how a prefix shows the number of tools it covers; nil
+// shows the entries as they are.
+func approvalBody(c approval.Change, expanded bool, tools func(string) string) []approvalRow {
+	if tools == nil {
+		tools = func(entry string) string { return entry }
+	}
 	changed := map[string]approval.FieldChange{}
 	for _, f := range c.Fields {
 		changed[f.Field] = f
@@ -128,7 +134,7 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		approval.FieldEffects:     approvalList(c.After.Effects),
 		approval.FieldTargets:     approvalList(c.After.Targets),
 		approval.FieldExclude:     approvalList(c.After.Exclude),
-		approval.FieldTools:       approvalTools(c.After.Tools),
+		approval.FieldTools:       labelEntries(approvalTools(c.After.Tools), tools),
 		approval.FieldPaths:       approval.PathsText(c.After.Paths),
 		approval.FieldFiles:       approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
 		approval.FieldForward:     approval.ForwardText(c.After.Forward),
@@ -149,16 +155,16 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 				rows = append(rows, itemRow(tr(tApprovalRenamedItem, r.Old, r.New), 0))
 			}
 			for _, v := range f.Added {
-				rows = append(rows, itemRow("+ "+v, '+'))
+				rows = append(rows, itemRow("+ "+itemText(field, v, tools), '+'))
 			}
 			for _, v := range f.Removed {
-				rows = append(rows, itemRow("- "+v, '-'))
+				rows = append(rows, itemRow("- "+itemText(field, v, tools), '-'))
 			}
 			if len(f.Kept) > 0 {
 				rows = append(rows, itemRow(tr(tApprovalUnchangedCount, len(f.Kept)), 'k'))
 				if expanded {
 					for _, v := range f.Kept {
-						rows = append(rows, itemRow("  "+v, 'k'))
+						rows = append(rows, itemRow("  "+itemText(field, v, tools), 'k'))
 					}
 				}
 			}
@@ -167,7 +173,11 @@ func approvalBody(c approval.Change, expanded bool) []approvalRow {
 		case ok && f.IsRename:
 			rows = append(rows, fieldRow(field, tr(tApprovalValueRenamed, f.Before, f.After)))
 		case ok:
-			rows = append(rows, fieldRow(field, f.Before+" -> "+f.After))
+			before, after := f.Before, f.After
+			if field == approval.FieldTools {
+				before, after = labelEntries(before, tools), labelEntries(after, tools)
+			}
+			rows = append(rows, fieldRow(field, before+" -> "+after))
 		case c.New:
 			rows = append(rows, fieldRow(field, current[field]))
 		default:
@@ -259,7 +269,9 @@ func (m *Model) approvalMark(change approval.Change) string {
 func (m *Model) approvalFacts(change approval.Change) []styledFact {
 	facts := m.statusFact(m.approvalMark(change))
 	facts = append(facts, m.approvalOriginFacts(change.Connection)...)
-	for _, row := range approvalBody(change, m.approvalExpanded) {
+	provider := change.After.Provider
+	label := func(entry string) string { return m.toolEntryLabel(provider, entry) }
+	for _, row := range approvalBody(change, m.approvalExpanded, label) {
 		f := styledFact{detailFact: detailFact{label: row.label, value: m.logText(row.value)}}
 		switch row.tone {
 		case '+':
@@ -662,4 +674,25 @@ func (m *Model) approvalDetailText() string {
 	}
 	lines := append([]string{tr(tApprovalTitle, m.approvalDetail), ""}, factsText(m.approvalFacts(*change))...)
 	return strings.Join(lines, "\n")
+}
+
+// itemText is one entry of a list change; only the tools list labels its entries.
+func itemText(field, value string, tools func(string) string) string {
+	if field == approval.FieldTools {
+		return tools(value)
+	}
+	return value
+}
+
+// labelEntries applies label to every space-separated word of a tools text, which holds entries and, for a
+// selection by effect, a sentence whose words are no prefix and stay as they are.
+func labelEntries(text string, label func(string) string) string {
+	if !strings.Contains(text, "*") {
+		return text
+	}
+	words := strings.Fields(text)
+	for i, w := range words {
+		words[i] = label(w)
+	}
+	return strings.Join(words, " ")
 }

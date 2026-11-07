@@ -71,7 +71,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"listed tools), and how its tools list shapes what it offers:\n\n" +
 			"  all-permitted  no tools list: every tool of its effects, except a tool whose contract says\n" +
 			"                 requires_tool_allow_list\n" +
-			"  listed         only the tools its tools list names\n" +
+			"  listed         only the tools its tools list names, by ID or by prefix\n" +
 			"  none           an empty tools list: no tool at all\n\n" +
 			"A connection with a paths list is bound to projects: it is listed, and offered by every other\n" +
 			"discovery and invoke command, only when the working directory, or the root of the Git repository\n" +
@@ -159,7 +159,8 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"A connection offers by effect or by selected tools, never both. By effect (its effects field, or\n" +
 			"the provider's defaults) it offers every tool of those effects, also one added later, except a\n" +
 			"high-risk tool whose contract says requires_tool_allow_list. By selected tools (its tools list) it\n" +
-			"offers exactly the listed tools, and 'tools: []' offers none. Each connection is judged on its own\n" +
+			"offers exactly the listed tools and those under a listed prefix such as <provider>.<group>.* (also\n" +
+			"one added later, never a requires_tool_allow_list tool), and 'tools: []' offers none. Each connection is judged on its own\n" +
 			"selection, even when it shares the provider, the service, or the credential with another one.\n" +
 			"Describe, invoke and the MCP broker apply the same rule, and invoke refuses before any secret is\n" +
 			"read or any provider is contacted.\n\n" +
@@ -169,7 +170,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"                            tool's effect\n" +
 			"  requires-tool-allow-list  the tool needs a tools list that names it, and the connection offers\n" +
 			"                            by effect\n" +
-			"  not-in-tools-list         the tools list does not name the tool\n" +
+			"  not-in-tools-list         the tools list neither names the tool nor covers it by a prefix\n" +
 			"  no-local-files            the tool reads or writes local files, and the connection's files\n" +
 			"                            list releases no directory for that direction\n" +
 			"  outside-targets           the connection's targets do not reach the tool, as the provider\n" +
