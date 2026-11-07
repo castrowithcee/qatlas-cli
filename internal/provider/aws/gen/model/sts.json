@@ -1,0 +1,4181 @@
+{
+  "smithy": "2.0",
+  "metadata": {
+    "suppressions": [
+      {
+        "id": "HttpMethodSemantics",
+        "namespace": "*"
+      },
+      {
+        "id": "HttpResponseCodeSemantics",
+        "namespace": "*"
+      },
+      {
+        "id": "PaginatedTrait",
+        "namespace": "*"
+      },
+      {
+        "id": "HttpHeaderTrait",
+        "namespace": "*"
+      },
+      {
+        "id": "HttpUriConflict",
+        "namespace": "*"
+      },
+      {
+        "id": "Service",
+        "namespace": "*"
+      }
+    ]
+  },
+  "shapes": {
+    "com.amazonaws.sts#AWSSecurityTokenServiceV20110615": {
+      "type": "service",
+      "version": "2011-06-15",
+      "operations": [
+        {
+          "target": "com.amazonaws.sts#AssumeRole"
+        },
+        {
+          "target": "com.amazonaws.sts#AssumeRoleWithSAML"
+        },
+        {
+          "target": "com.amazonaws.sts#AssumeRoleWithWebIdentity"
+        },
+        {
+          "target": "com.amazonaws.sts#AssumeRoot"
+        },
+        {
+          "target": "com.amazonaws.sts#DecodeAuthorizationMessage"
+        },
+        {
+          "target": "com.amazonaws.sts#GetAccessKeyInfo"
+        },
+        {
+          "target": "com.amazonaws.sts#GetCallerIdentity"
+        },
+        {
+          "target": "com.amazonaws.sts#GetDelegatedAccessToken"
+        },
+        {
+          "target": "com.amazonaws.sts#GetFederationToken"
+        },
+        {
+          "target": "com.amazonaws.sts#GetSessionToken"
+        },
+        {
+          "target": "com.amazonaws.sts#GetWebIdentityToken"
+        }
+      ],
+      "traits": {
+        "aws.api#service": {
+          "sdkId": "STS",
+          "arnNamespace": "sts",
+          "cloudFormationName": "STS",
+          "cloudTrailEventSource": "sts.amazonaws.com",
+          "endpointPrefix": "sts"
+        },
+        "aws.auth#sigv4": {
+          "name": "sts"
+        },
+        "aws.auth#sigv4a": {
+          "name": "sts"
+        },
+        "aws.protocols#awsQuery": {},
+        "smithy.api#auth": [
+          "aws.auth#sigv4",
+          "aws.auth#sigv4a"
+        ],
+        "smithy.api#title": "AWS Security Token Service",
+        "smithy.api#xmlNamespace": {
+          "uri": "https://sts.amazonaws.com/doc/2011-06-15/"
+        },
+        "smithy.rules#endpointBdd": {
+          "version": "1.1",
+          "parameters": {
+            "Region": {
+              "builtIn": "AWS::Region",
+              "required": false,
+              "documentation": "The AWS region used to dispatch the request.",
+              "type": "string"
+            },
+            "UseDualStack": {
+              "builtIn": "AWS::UseDualStack",
+              "required": true,
+              "default": false,
+              "documentation": "When true, use the dual-stack endpoint. If the configured endpoint does not support dual-stack, dispatching the request MAY return an error.",
+              "type": "boolean"
+            },
+            "UseFIPS": {
+              "builtIn": "AWS::UseFIPS",
+              "required": true,
+              "default": false,
+              "documentation": "When true, send this request to the FIPS-compliant regional endpoint. If the configured endpoint does not have a FIPS compliant endpoint, dispatching the request will return an error.",
+              "type": "boolean"
+            },
+            "Endpoint": {
+              "builtIn": "SDK::Endpoint",
+              "required": false,
+              "documentation": "Override the endpoint used to send this request",
+              "type": "string"
+            },
+            "UseGlobalEndpoint": {
+              "builtIn": "AWS::STS::UseGlobalEndpoint",
+              "required": true,
+              "default": false,
+              "documentation": "Whether the global endpoint should be used, rather then the regional endpoint for us-east-1.",
+              "type": "boolean"
+            }
+          },
+          "conditions": [
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Endpoint"
+                }
+              ]
+            },
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "PartitionResult"
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseFIPS"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseDualStack"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "aws-global"
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseGlobalEndpoint"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "eu-central-1"
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "PartitionResult"
+                    },
+                    "supportsDualStack"
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "PartitionResult"
+                    },
+                    "supportsFIPS"
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "ap-south-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "eu-north-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "eu-west-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "eu-west-2"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "eu-west-3"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "sa-east-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "us-east-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "us-east-2"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "us-west-2"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "us-west-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "ca-central-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "ap-southeast-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "ap-northeast-1"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "ap-southeast-2"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "PartitionResult"
+                    },
+                    "name"
+                  ]
+                },
+                "aws-us-gov"
+              ]
+            }
+          ],
+          "results": [
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts.amazonaws.com",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingName": "sts",
+                      "signingRegion": "us-east-1"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts.{Region}.{PartitionResult#dnsSuffix}",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingName": "sts",
+                      "signingRegion": "{Region}"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: FIPS and custom endpoint are not supported",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": {
+                  "ref": "Endpoint"
+                },
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts.{Region}.amazonaws.com",
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}",
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "FIPS is enabled but this partition does not support FIPS",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "DualStack is enabled but this partition does not support DualStack",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://sts.{Region}.{PartitionResult#dnsSuffix}",
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: Missing Region",
+              "type": "error"
+            }
+          ],
+          "root": 2,
+          "nodeCount": 31,
+          "nodes": "/////wAAAAH/////AAAAAAAAAB4AAAADAAAAAQAAAAQF9eEOAAAAAgAAAAUF9eEOAAAAAwAAABkAAAAGAAAABAAAABgAAAAHAAAABQX14QEAAAAIAAAABgAAAAkF9eENAAAABwX14QEAAAAKAAAACgX14QEAAAALAAAACwX14QEAAAAMAAAADAX14QEAAAANAAAADQX14QEAAAAOAAAADgX14QEAAAAPAAAADwX14QEAAAAQAAAAEAX14QEAAAARAAAAEQX14QEAAAASAAAAEgX14QEAAAATAAAAEwX14QEAAAAUAAAAFAX14QEAAAAVAAAAFQX14QEAAAAWAAAAFgX14QEAAAAXAAAAFwX14QEF9eECAAAACAX14QsF9eEMAAAABAAAABwAAAAaAAAACQAAABsF9eEKAAAAGAX14QgF9eEJAAAACAAAAB0F9eEHAAAACQX14QYF9eEHAAAAAwX14QMAAAAfAAAABAX14QQF9eEF"
+        },
+        "smithy.rules#endpointRuleSet": {
+          "version": "1.0",
+          "parameters": {
+            "Region": {
+              "builtIn": "AWS::Region",
+              "required": false,
+              "documentation": "The AWS region used to dispatch the request.",
+              "type": "string"
+            },
+            "UseDualStack": {
+              "builtIn": "AWS::UseDualStack",
+              "required": true,
+              "default": false,
+              "documentation": "When true, use the dual-stack endpoint. If the configured endpoint does not support dual-stack, dispatching the request MAY return an error.",
+              "type": "boolean"
+            },
+            "UseFIPS": {
+              "builtIn": "AWS::UseFIPS",
+              "required": true,
+              "default": false,
+              "documentation": "When true, send this request to the FIPS-compliant regional endpoint. If the configured endpoint does not have a FIPS compliant endpoint, dispatching the request will return an error.",
+              "type": "boolean"
+            },
+            "Endpoint": {
+              "builtIn": "SDK::Endpoint",
+              "required": false,
+              "documentation": "Override the endpoint used to send this request",
+              "type": "string"
+            },
+            "UseGlobalEndpoint": {
+              "builtIn": "AWS::STS::UseGlobalEndpoint",
+              "required": true,
+              "default": false,
+              "documentation": "Whether the global endpoint should be used, rather then the regional endpoint for us-east-1.",
+              "type": "boolean"
+            }
+          },
+          "rules": [
+            {
+              "conditions": [
+                {
+                  "fn": "booleanEquals",
+                  "argv": [
+                    {
+                      "ref": "UseGlobalEndpoint"
+                    },
+                    true
+                  ]
+                },
+                {
+                  "fn": "not",
+                  "argv": [
+                    {
+                      "fn": "isSet",
+                      "argv": [
+                        {
+                          "ref": "Endpoint"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "fn": "isSet",
+                  "argv": [
+                    {
+                      "ref": "Region"
+                    }
+                  ]
+                },
+                {
+                  "fn": "aws.partition",
+                  "argv": [
+                    {
+                      "ref": "Region"
+                    }
+                  ],
+                  "assign": "PartitionResult"
+                },
+                {
+                  "fn": "booleanEquals",
+                  "argv": [
+                    {
+                      "ref": "UseFIPS"
+                    },
+                    false
+                  ]
+                },
+                {
+                  "fn": "booleanEquals",
+                  "argv": [
+                    {
+                      "ref": "UseDualStack"
+                    },
+                    false
+                  ]
+                }
+              ],
+              "rules": [
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "ap-northeast-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "ap-south-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "ap-southeast-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "ap-southeast-2"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "aws-global"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "ca-central-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "eu-central-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "eu-north-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "eu-west-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "eu-west-2"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "eu-west-3"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "sa-east-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "us-east-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "us-east-2"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "us-west-1"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "stringEquals",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        },
+                        "us-west-2"
+                      ]
+                    }
+                  ],
+                  "endpoint": {
+                    "url": "https://sts.amazonaws.com",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "us-east-1"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                },
+                {
+                  "conditions": [],
+                  "endpoint": {
+                    "url": "https://sts.{Region}.{PartitionResult#dnsSuffix}",
+                    "properties": {
+                      "authSchemes": [
+                        {
+                          "name": "sigv4",
+                          "signingName": "sts",
+                          "signingRegion": "{Region}"
+                        }
+                      ]
+                    },
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                }
+              ],
+              "type": "tree"
+            },
+            {
+              "conditions": [
+                {
+                  "fn": "isSet",
+                  "argv": [
+                    {
+                      "ref": "Endpoint"
+                    }
+                  ]
+                }
+              ],
+              "rules": [
+                {
+                  "conditions": [
+                    {
+                      "fn": "booleanEquals",
+                      "argv": [
+                        {
+                          "ref": "UseFIPS"
+                        },
+                        true
+                      ]
+                    }
+                  ],
+                  "error": "Invalid Configuration: FIPS and custom endpoint are not supported",
+                  "type": "error"
+                },
+                {
+                  "conditions": [
+                    {
+                      "fn": "booleanEquals",
+                      "argv": [
+                        {
+                          "ref": "UseDualStack"
+                        },
+                        true
+                      ]
+                    }
+                  ],
+                  "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+                  "type": "error"
+                },
+                {
+                  "conditions": [],
+                  "endpoint": {
+                    "url": {
+                      "ref": "Endpoint"
+                    },
+                    "properties": {},
+                    "headers": {}
+                  },
+                  "type": "endpoint"
+                }
+              ],
+              "type": "tree"
+            },
+            {
+              "conditions": [
+                {
+                  "fn": "isSet",
+                  "argv": [
+                    {
+                      "ref": "Region"
+                    }
+                  ]
+                }
+              ],
+              "rules": [
+                {
+                  "conditions": [
+                    {
+                      "fn": "aws.partition",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        }
+                      ],
+                      "assign": "PartitionResult"
+                    }
+                  ],
+                  "rules": [
+                    {
+                      "conditions": [
+                        {
+                          "fn": "booleanEquals",
+                          "argv": [
+                            {
+                              "ref": "UseFIPS"
+                            },
+                            true
+                          ]
+                        },
+                        {
+                          "fn": "booleanEquals",
+                          "argv": [
+                            {
+                              "ref": "UseDualStack"
+                            },
+                            true
+                          ]
+                        }
+                      ],
+                      "rules": [
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                true,
+                                {
+                                  "fn": "getAttr",
+                                  "argv": [
+                                    {
+                                      "ref": "PartitionResult"
+                                    },
+                                    "supportsFIPS"
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                true,
+                                {
+                                  "fn": "getAttr",
+                                  "argv": [
+                                    {
+                                      "ref": "PartitionResult"
+                                    },
+                                    "supportsDualStack"
+                                  ]
+                                }
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [],
+                              "endpoint": {
+                                "url": "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                "properties": {},
+                                "headers": {}
+                              },
+                              "type": "endpoint"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [],
+                          "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+                          "type": "error"
+                        }
+                      ],
+                      "type": "tree"
+                    },
+                    {
+                      "conditions": [
+                        {
+                          "fn": "booleanEquals",
+                          "argv": [
+                            {
+                              "ref": "UseFIPS"
+                            },
+                            true
+                          ]
+                        }
+                      ],
+                      "rules": [
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "fn": "getAttr",
+                                  "argv": [
+                                    {
+                                      "ref": "PartitionResult"
+                                    },
+                                    "supportsFIPS"
+                                  ]
+                                },
+                                true
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [
+                                {
+                                  "fn": "stringEquals",
+                                  "argv": [
+                                    {
+                                      "fn": "getAttr",
+                                      "argv": [
+                                        {
+                                          "ref": "PartitionResult"
+                                        },
+                                        "name"
+                                      ]
+                                    },
+                                    "aws-us-gov"
+                                  ]
+                                }
+                              ],
+                              "endpoint": {
+                                "url": "https://sts.{Region}.amazonaws.com",
+                                "properties": {},
+                                "headers": {}
+                              },
+                              "type": "endpoint"
+                            },
+                            {
+                              "conditions": [],
+                              "endpoint": {
+                                "url": "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}",
+                                "properties": {},
+                                "headers": {}
+                              },
+                              "type": "endpoint"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [],
+                          "error": "FIPS is enabled but this partition does not support FIPS",
+                          "type": "error"
+                        }
+                      ],
+                      "type": "tree"
+                    },
+                    {
+                      "conditions": [
+                        {
+                          "fn": "booleanEquals",
+                          "argv": [
+                            {
+                              "ref": "UseDualStack"
+                            },
+                            true
+                          ]
+                        }
+                      ],
+                      "rules": [
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                true,
+                                {
+                                  "fn": "getAttr",
+                                  "argv": [
+                                    {
+                                      "ref": "PartitionResult"
+                                    },
+                                    "supportsDualStack"
+                                  ]
+                                }
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [],
+                              "endpoint": {
+                                "url": "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                "properties": {},
+                                "headers": {}
+                              },
+                              "type": "endpoint"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [],
+                          "error": "DualStack is enabled but this partition does not support DualStack",
+                          "type": "error"
+                        }
+                      ],
+                      "type": "tree"
+                    },
+                    {
+                      "conditions": [
+                        {
+                          "fn": "stringEquals",
+                          "argv": [
+                            {
+                              "ref": "Region"
+                            },
+                            "aws-global"
+                          ]
+                        }
+                      ],
+                      "endpoint": {
+                        "url": "https://sts.amazonaws.com",
+                        "properties": {
+                          "authSchemes": [
+                            {
+                              "name": "sigv4",
+                              "signingName": "sts",
+                              "signingRegion": "us-east-1"
+                            }
+                          ]
+                        },
+                        "headers": {}
+                      },
+                      "type": "endpoint"
+                    },
+                    {
+                      "conditions": [],
+                      "endpoint": {
+                        "url": "https://sts.{Region}.{PartitionResult#dnsSuffix}",
+                        "properties": {},
+                        "headers": {}
+                      },
+                      "type": "endpoint"
+                    }
+                  ],
+                  "type": "tree"
+                }
+              ],
+              "type": "tree"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: Missing Region",
+              "type": "error"
+            }
+          ]
+        },
+        "smithy.rules#endpointTests": {
+          "testCases": [
+            {
+              "documentation": "For region af-south-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.af-south-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "af-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-northeast-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-northeast-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-northeast-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-northeast-2 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-northeast-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-northeast-2",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-northeast-3 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-northeast-3.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-northeast-3",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-south-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-south-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-southeast-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-southeast-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-southeast-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-southeast-2 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-southeast-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-southeast-2",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ap-southeast-3 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ap-southeast-3.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ap-southeast-3",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region aws-global with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "aws-global",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region ca-central-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.ca-central-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "ca-central-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-central-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-central-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-central-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-north-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-north-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-north-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-south-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-south-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-west-2 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-west-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-west-2",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-west-3 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.eu-west-3.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "eu-west-3",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region me-south-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.me-south-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "me-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region sa-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.sa-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "sa-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-2 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-east-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-2",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-2 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-east-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-2",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-west-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-west-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-west-2 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-west-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-west-2",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-west-2 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-west-2.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-west-2",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region cn-north-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.cn-north-1.amazonaws.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-north-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region cn-northwest-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.cn-northwest-1.amazonaws.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-northwest-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region cn-north-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.cn-north-1.api.amazonwebservices.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-north-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region cn-north-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.cn-north-1.amazonaws.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-north-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region cn-north-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.cn-north-1.api.amazonwebservices.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-north-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-gov-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-gov-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-gov-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-gov-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-gov-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-east-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-gov-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-gov-east-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-gov-east-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-gov-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-gov-east-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-iso-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-iso-east-1.c2s.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-iso-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-iso-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-iso-west-1.c2s.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-iso-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-iso-east-1.c2s.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-iso-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isob-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts.us-isob-east-1.sc2s.sgov.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isob-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://sts-fips.us-isob-east-1.sc2s.sgov.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isob-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For custom endpoint with region set and fips disabled and dualstack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://example.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "Endpoint": "https://example.com"
+              }
+            },
+            {
+              "documentation": "For custom endpoint with region not set and fips disabled and dualstack disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://example.com"
+                }
+              },
+              "params": {
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "Endpoint": "https://example.com"
+              }
+            },
+            {
+              "documentation": "For custom endpoint with fips enabled and dualstack disabled",
+              "expect": {
+                "error": "Invalid Configuration: FIPS and custom endpoint are not supported"
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false,
+                "Endpoint": "https://example.com"
+              }
+            },
+            {
+              "documentation": "For custom endpoint with fips disabled and dualstack enabled",
+              "expect": {
+                "error": "Invalid Configuration: Dualstack and custom endpoint are not supported"
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": true,
+                "Endpoint": "https://example.com"
+              }
+            },
+            {
+              "documentation": "Missing region",
+              "expect": {
+                "error": "Invalid Configuration: Missing Region"
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `ap-northeast-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "ap-northeast-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "ap-northeast-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `ap-south-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "ap-south-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "ap-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `ap-southeast-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "ap-southeast-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "ap-southeast-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `ap-southeast-2`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "ap-southeast-2",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "ap-southeast-2",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `aws-global`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "aws-global",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "aws-global",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `ca-central-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "ca-central-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "ca-central-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `eu-central-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "eu-central-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "eu-central-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `eu-north-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "eu-north-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "eu-north-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `eu-west-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "eu-west-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "eu-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `eu-west-2`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "eu-west-2",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "eu-west-2",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `eu-west-3`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "eu-west-3",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "eu-west-3",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `sa-east-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "sa-east-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "sa-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `us-east-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-east-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `us-east-2`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-east-2",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-east-2",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `us-west-1`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-west-1",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region `us-west-2`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-west-2",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-west-2",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with Non-legacy region `us-east-3`",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingName": "sts",
+                        "signingRegion": "us-east-3"
+                      }
+                    ]
+                  },
+                  "url": "https://sts.us-east-3.amazonaws.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-east-3",
+                    "AWS::STS::UseGlobalEndpoint": true
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-east-3",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with legacy region and custom endpoint",
+              "expect": {
+                "endpoint": {
+                  "url": "https://example.com"
+                }
+              },
+              "operationInputs": [
+                {
+                  "builtInParams": {
+                    "AWS::Region": "us-west-1",
+                    "AWS::STS::UseGlobalEndpoint": true,
+                    "SDK::Endpoint": "https://example.com"
+                  },
+                  "operationName": "GetCallerIdentity"
+                }
+              ],
+              "params": {
+                "Region": "us-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": true,
+                "Endpoint": "https://example.com"
+              }
+            },
+            {
+              "documentation": "UseGlobalEndpoint with unset region and custom endpoint",
+              "expect": {
+                "endpoint": {
+                  "url": "https://example.com"
+                }
+              },
+              "params": {
+                "UseFIPS": false,
+                "UseDualStack": false,
+                "UseGlobalEndpoint": false,
+                "Endpoint": "https://example.com"
+              }
+            }
+          ],
+          "version": "1.0"
+        }
+      }
+    },
+    "com.amazonaws.sts#AssumeRole": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#AssumeRoleRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#AssumeRoleResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#ExpiredTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#MalformedPolicyDocumentException"
+        },
+        {
+          "target": "com.amazonaws.sts#PackedPolicyTooLargeException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#AssumeRoleRequest": {
+      "type": "structure",
+      "members": {
+        "RoleArn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "RoleSessionName": {
+          "target": "com.amazonaws.sts#roleSessionNameType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PolicyArns": {
+          "target": "com.amazonaws.sts#policyDescriptorListType",
+          "traits": {}
+        },
+        "Policy": {
+          "target": "com.amazonaws.sts#unrestrictedSessionPolicyDocumentType",
+          "traits": {}
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#roleDurationSecondsType",
+          "traits": {}
+        },
+        "Tags": {
+          "target": "com.amazonaws.sts#tagListType",
+          "traits": {}
+        },
+        "TransitiveTagKeys": {
+          "target": "com.amazonaws.sts#tagKeyListType",
+          "traits": {}
+        },
+        "ExternalId": {
+          "target": "com.amazonaws.sts#externalIdType",
+          "traits": {}
+        },
+        "SerialNumber": {
+          "target": "com.amazonaws.sts#serialNumberType",
+          "traits": {}
+        },
+        "TokenCode": {
+          "target": "com.amazonaws.sts#tokenCodeType",
+          "traits": {}
+        },
+        "SourceIdentity": {
+          "target": "com.amazonaws.sts#sourceIdentityType",
+          "traits": {}
+        },
+        "ProvidedContexts": {
+          "target": "com.amazonaws.sts#ProvidedContextsListType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "AssumedRoleUser": {
+          "target": "com.amazonaws.sts#AssumedRoleUser",
+          "traits": {}
+        },
+        "PackedPolicySize": {
+          "target": "com.amazonaws.sts#nonNegativeIntegerType",
+          "traits": {
+            "smithy.api#deprecated": {
+              "since": "2026-06-17",
+              "message": "Deprecated. Replaced by SessionTokenUtilization."
+            }
+          }
+        },
+        "SourceIdentity": {
+          "target": "com.amazonaws.sts#sourceIdentityType",
+          "traits": {}
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithSAML": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#AssumeRoleWithSAMLRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#AssumeRoleWithSAMLResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#ExpiredTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#IDPRejectedClaimException"
+        },
+        {
+          "target": "com.amazonaws.sts#InvalidIdentityTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#MalformedPolicyDocumentException"
+        },
+        {
+          "target": "com.amazonaws.sts#PackedPolicyTooLargeException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {
+        "smithy.api#auth": [],
+        "smithy.api#optionalAuth": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithSAMLRequest": {
+      "type": "structure",
+      "members": {
+        "RoleArn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PrincipalArn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "SAMLAssertion": {
+          "target": "com.amazonaws.sts#SAMLAssertionType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PolicyArns": {
+          "target": "com.amazonaws.sts#policyDescriptorListType",
+          "traits": {}
+        },
+        "Policy": {
+          "target": "com.amazonaws.sts#sessionPolicyDocumentType",
+          "traits": {}
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#roleDurationSecondsType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithSAMLResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "AssumedRoleUser": {
+          "target": "com.amazonaws.sts#AssumedRoleUser",
+          "traits": {}
+        },
+        "PackedPolicySize": {
+          "target": "com.amazonaws.sts#nonNegativeIntegerType",
+          "traits": {
+            "smithy.api#deprecated": {
+              "since": "2026-06-17",
+              "message": "Deprecated. Replaced by SessionTokenUtilization."
+            }
+          }
+        },
+        "Subject": {
+          "target": "com.amazonaws.sts#Subject",
+          "traits": {}
+        },
+        "SubjectType": {
+          "target": "com.amazonaws.sts#SubjectType",
+          "traits": {}
+        },
+        "Issuer": {
+          "target": "com.amazonaws.sts#Issuer",
+          "traits": {}
+        },
+        "Audience": {
+          "target": "com.amazonaws.sts#Audience",
+          "traits": {}
+        },
+        "NameQualifier": {
+          "target": "com.amazonaws.sts#NameQualifier",
+          "traits": {}
+        },
+        "SourceIdentity": {
+          "target": "com.amazonaws.sts#sourceIdentityType",
+          "traits": {}
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithWebIdentity": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#AssumeRoleWithWebIdentityRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#AssumeRoleWithWebIdentityResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#ExpiredTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#IDPCommunicationErrorException"
+        },
+        {
+          "target": "com.amazonaws.sts#IDPRejectedClaimException"
+        },
+        {
+          "target": "com.amazonaws.sts#InvalidIdentityTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#MalformedPolicyDocumentException"
+        },
+        {
+          "target": "com.amazonaws.sts#PackedPolicyTooLargeException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {
+        "smithy.api#auth": [],
+        "smithy.api#optionalAuth": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithWebIdentityRequest": {
+      "type": "structure",
+      "members": {
+        "RoleArn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "RoleSessionName": {
+          "target": "com.amazonaws.sts#roleSessionNameType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "WebIdentityToken": {
+          "target": "com.amazonaws.sts#clientTokenType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "ProviderId": {
+          "target": "com.amazonaws.sts#urlType",
+          "traits": {}
+        },
+        "PolicyArns": {
+          "target": "com.amazonaws.sts#policyDescriptorListType",
+          "traits": {}
+        },
+        "Policy": {
+          "target": "com.amazonaws.sts#sessionPolicyDocumentType",
+          "traits": {}
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#roleDurationSecondsType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoleWithWebIdentityResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "SubjectFromWebIdentityToken": {
+          "target": "com.amazonaws.sts#webIdentitySubjectType",
+          "traits": {}
+        },
+        "AssumedRoleUser": {
+          "target": "com.amazonaws.sts#AssumedRoleUser",
+          "traits": {}
+        },
+        "PackedPolicySize": {
+          "target": "com.amazonaws.sts#nonNegativeIntegerType",
+          "traits": {
+            "smithy.api#deprecated": {
+              "since": "2026-06-17",
+              "message": "Deprecated. Replaced by SessionTokenUtilization."
+            }
+          }
+        },
+        "Provider": {
+          "target": "com.amazonaws.sts#Issuer",
+          "traits": {}
+        },
+        "Audience": {
+          "target": "com.amazonaws.sts#Audience",
+          "traits": {}
+        },
+        "SourceIdentity": {
+          "target": "com.amazonaws.sts#sourceIdentityType",
+          "traits": {}
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRoot": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#AssumeRootRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#AssumeRootResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#ExpiredTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#AssumeRootRequest": {
+      "type": "structure",
+      "members": {
+        "TargetPrincipal": {
+          "target": "com.amazonaws.sts#TargetPrincipalType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "TaskPolicyArn": {
+          "target": "com.amazonaws.sts#PolicyDescriptorType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#RootDurationSecondsType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#AssumeRootResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "SourceIdentity": {
+          "target": "com.amazonaws.sts#sourceIdentityType",
+          "traits": {}
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#AssumedRoleUser": {
+      "type": "structure",
+      "members": {
+        "AssumedRoleId": {
+          "target": "com.amazonaws.sts#assumedRoleIdType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Arn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#Audience": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#Credentials": {
+      "type": "structure",
+      "members": {
+        "AccessKeyId": {
+          "target": "com.amazonaws.sts#accessKeyIdType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "SecretAccessKey": {
+          "target": "com.amazonaws.sts#accessKeySecretType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "SessionToken": {
+          "target": "com.amazonaws.sts#tokenType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Expiration": {
+          "target": "com.amazonaws.sts#dateType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#DecodeAuthorizationMessage": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#DecodeAuthorizationMessageRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#DecodeAuthorizationMessageResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#InvalidAuthorizationMessageException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#DecodeAuthorizationMessageRequest": {
+      "type": "structure",
+      "members": {
+        "EncodedMessage": {
+          "target": "com.amazonaws.sts#encodedMessageType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#DecodeAuthorizationMessageResponse": {
+      "type": "structure",
+      "members": {
+        "DecodedMessage": {
+          "target": "com.amazonaws.sts#decodedMessageType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#ExpiredTokenException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#expiredIdentityTokenMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "ExpiredTokenException",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#ExpiredTradeInTokenException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#expiredTradeInTokenExceptionMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "ExpiredTradeInTokenException",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#FederatedUser": {
+      "type": "structure",
+      "members": {
+        "FederatedUserId": {
+          "target": "com.amazonaws.sts#federatedIdType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Arn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetAccessKeyInfo": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetAccessKeyInfoRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetAccessKeyInfoResponse"
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetAccessKeyInfoRequest": {
+      "type": "structure",
+      "members": {
+        "AccessKeyId": {
+          "target": "com.amazonaws.sts#accessKeyIdType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetAccessKeyInfoResponse": {
+      "type": "structure",
+      "members": {
+        "Account": {
+          "target": "com.amazonaws.sts#accountType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#GetCallerIdentity": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetCallerIdentityRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetCallerIdentityResponse"
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetCallerIdentityRequest": {
+      "type": "structure",
+      "members": {},
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetCallerIdentityResponse": {
+      "type": "structure",
+      "members": {
+        "UserId": {
+          "target": "com.amazonaws.sts#userIdType",
+          "traits": {}
+        },
+        "Account": {
+          "target": "com.amazonaws.sts#accountType",
+          "traits": {}
+        },
+        "Arn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#GetDelegatedAccessToken": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetDelegatedAccessTokenRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetDelegatedAccessTokenResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#ExpiredTradeInTokenException"
+        },
+        {
+          "target": "com.amazonaws.sts#PackedPolicyTooLargeException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetDelegatedAccessTokenRequest": {
+      "type": "structure",
+      "members": {
+        "TradeInToken": {
+          "target": "com.amazonaws.sts#tradeInTokenType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetDelegatedAccessTokenResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials"
+        },
+        "PackedPolicySize": {
+          "target": "com.amazonaws.sts#nonNegativeIntegerType",
+          "traits": {
+            "smithy.api#deprecated": {
+              "since": "2026-06-17",
+              "message": "Deprecated. This field is not populated for GetDelegatedAccessToken."
+            }
+          }
+        },
+        "AssumedPrincipal": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#GetFederationToken": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetFederationTokenRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetFederationTokenResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#MalformedPolicyDocumentException"
+        },
+        {
+          "target": "com.amazonaws.sts#PackedPolicyTooLargeException"
+        },
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetFederationTokenRequest": {
+      "type": "structure",
+      "members": {
+        "Name": {
+          "target": "com.amazonaws.sts#userNameType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Policy": {
+          "target": "com.amazonaws.sts#sessionPolicyDocumentType",
+          "traits": {}
+        },
+        "PolicyArns": {
+          "target": "com.amazonaws.sts#policyDescriptorListType",
+          "traits": {}
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#durationSecondsType",
+          "traits": {}
+        },
+        "Tags": {
+          "target": "com.amazonaws.sts#tagListType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetFederationTokenResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "FederatedUser": {
+          "target": "com.amazonaws.sts#FederatedUser",
+          "traits": {}
+        },
+        "PackedPolicySize": {
+          "target": "com.amazonaws.sts#nonNegativeIntegerType",
+          "traits": {
+            "smithy.api#deprecated": {
+              "since": "2026-06-17",
+              "message": "Deprecated. Replaced by SessionTokenUtilization."
+            }
+          }
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#GetSessionToken": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetSessionTokenRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetSessionTokenResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#RegionDisabledException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetSessionTokenRequest": {
+      "type": "structure",
+      "members": {
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#durationSecondsType",
+          "traits": {}
+        },
+        "SerialNumber": {
+          "target": "com.amazonaws.sts#serialNumberType",
+          "traits": {}
+        },
+        "TokenCode": {
+          "target": "com.amazonaws.sts#tokenCodeType",
+          "traits": {}
+        },
+        "MinimumSessionTokenSize": {
+          "target": "com.amazonaws.sts#minimumSessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetSessionTokenResponse": {
+      "type": "structure",
+      "members": {
+        "Credentials": {
+          "target": "com.amazonaws.sts#Credentials",
+          "traits": {}
+        },
+        "SessionTokenUtilization": {
+          "target": "com.amazonaws.sts#sessionTokenUtilizationType"
+        },
+        "SessionTokenSize": {
+          "target": "com.amazonaws.sts#sessionTokenSizeType"
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#GetWebIdentityToken": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.sts#GetWebIdentityTokenRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.sts#GetWebIdentityTokenResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.sts#JWTPayloadSizeExceededException"
+        },
+        {
+          "target": "com.amazonaws.sts#OutboundWebIdentityFederationDisabledException"
+        },
+        {
+          "target": "com.amazonaws.sts#SessionDurationEscalationException"
+        }
+      ],
+      "traits": {}
+    },
+    "com.amazonaws.sts#GetWebIdentityTokenRequest": {
+      "type": "structure",
+      "members": {
+        "Audience": {
+          "target": "com.amazonaws.sts#webIdentityTokenAudienceListType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "DurationSeconds": {
+          "target": "com.amazonaws.sts#webIdentityTokenDurationSecondsType",
+          "traits": {}
+        },
+        "SigningAlgorithm": {
+          "target": "com.amazonaws.sts#jwtAlgorithmType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Tags": {
+          "target": "com.amazonaws.sts#tagListType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.sts#GetWebIdentityTokenResponse": {
+      "type": "structure",
+      "members": {
+        "WebIdentityToken": {
+          "target": "com.amazonaws.sts#webIdentityTokenType",
+          "traits": {}
+        },
+        "Expiration": {
+          "target": "com.amazonaws.sts#dateType",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.sts#IDPCommunicationErrorException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#idpCommunicationErrorMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "IDPCommunicationError",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#IDPRejectedClaimException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#idpRejectedClaimMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "IDPRejectedClaim",
+          "httpResponseCode": 403
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 403
+      }
+    },
+    "com.amazonaws.sts#InvalidAuthorizationMessageException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#invalidAuthorizationMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "InvalidAuthorizationMessageException",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#InvalidIdentityTokenException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#invalidIdentityTokenMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "InvalidIdentityToken",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#Issuer": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#JWTPayloadSizeExceededException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#JWTPayloadSizeExceededException2"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "JWTPayloadSizeExceededException",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#JWTPayloadSizeExceededException2": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#MalformedPolicyDocumentException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#malformedPolicyDocumentMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "MalformedPolicyDocument",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#NameQualifier": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#OutboundWebIdentityFederationDisabledException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#OutboundWebIdentityFederationDisabledException2"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "OutboundWebIdentityFederationDisabledException",
+          "httpResponseCode": 403
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 403
+      }
+    },
+    "com.amazonaws.sts#OutboundWebIdentityFederationDisabledException2": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#PackedPolicyTooLargeException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#packedPolicyTooLargeMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "PackedPolicyTooLarge",
+          "httpResponseCode": 400
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.sts#PolicyDescriptorType": {
+      "type": "structure",
+      "members": {
+        "arn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {}
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#ProvidedContext": {
+      "type": "structure",
+      "members": {
+        "ProviderArn": {
+          "target": "com.amazonaws.sts#arnType",
+          "traits": {}
+        },
+        "ContextAssertion": {
+          "target": "com.amazonaws.sts#contextAssertionType",
+          "traits": {}
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#ProvidedContextsListType": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.sts#ProvidedContext"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 5
+        }
+      }
+    },
+    "com.amazonaws.sts#RegionDisabledException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#regionDisabledMessage"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "RegionDisabledException",
+          "httpResponseCode": 403
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 403
+      }
+    },
+    "com.amazonaws.sts#RootDurationSecondsType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 0,
+          "max": 900
+        }
+      }
+    },
+    "com.amazonaws.sts#SAMLAssertionType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 4,
+          "max": 100000
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.sts#SessionDurationEscalationException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.sts#SessionDurationEscalationException2"
+        }
+      },
+      "traits": {
+        "aws.protocols#awsQueryError": {
+          "code": "SessionDurationEscalationException",
+          "httpResponseCode": 403
+        },
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 403
+      }
+    },
+    "com.amazonaws.sts#SessionDurationEscalationException2": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#Subject": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#SubjectType": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#Tag": {
+      "type": "structure",
+      "members": {
+        "Key": {
+          "target": "com.amazonaws.sts#tagKeyType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Value": {
+          "target": "com.amazonaws.sts#tagValueType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.sts#TargetPrincipalType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 12,
+          "max": 2048
+        }
+      }
+    },
+    "com.amazonaws.sts#accessKeyIdType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 16,
+          "max": 128
+        },
+        "smithy.api#pattern": "^[\\w]*$"
+      }
+    },
+    "com.amazonaws.sts#accessKeySecretType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.sts#accountType": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#arnType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 20,
+          "max": 2048
+        },
+        "smithy.api#pattern": "^[\\u0009\\u000A\\u000D\\u0020-\\u007E\\u0085\\u00A0-\\uD7FF\\uE000-\\uFFFD\\u10000-\\u10FFFF]+$"
+      }
+    },
+    "com.amazonaws.sts#assumedRoleIdType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 193
+        },
+        "smithy.api#pattern": "^[\\w+=,.@:-]*$"
+      }
+    },
+    "com.amazonaws.sts#clientTokenType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 4,
+          "max": 20000
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.sts#contextAssertionType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 4,
+          "max": 2048
+        }
+      }
+    },
+    "com.amazonaws.sts#dateType": {
+      "type": "timestamp"
+    },
+    "com.amazonaws.sts#decodedMessageType": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#durationSecondsType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 900,
+          "max": 129600
+        }
+      }
+    },
+    "com.amazonaws.sts#encodedMessageType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 10240
+        }
+      }
+    },
+    "com.amazonaws.sts#expiredIdentityTokenMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#expiredTradeInTokenExceptionMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#externalIdType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 1224
+        },
+        "smithy.api#pattern": "^[\\w+=,.@:\\/-]*$"
+      }
+    },
+    "com.amazonaws.sts#federatedIdType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 193
+        },
+        "smithy.api#pattern": "^[\\w+=,.@\\:-]*$"
+      }
+    },
+    "com.amazonaws.sts#idpCommunicationErrorMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#idpRejectedClaimMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#invalidAuthorizationMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#invalidIdentityTokenMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#jwtAlgorithmType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 5,
+          "max": 5
+        }
+      }
+    },
+    "com.amazonaws.sts#malformedPolicyDocumentMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#minimumSessionTokenSizeType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 0,
+          "max": 4096
+        }
+      }
+    },
+    "com.amazonaws.sts#nonNegativeIntegerType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 0
+        }
+      }
+    },
+    "com.amazonaws.sts#packedPolicyTooLargeMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#policyDescriptorListType": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.sts#PolicyDescriptorType"
+      }
+    },
+    "com.amazonaws.sts#regionDisabledMessage": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#roleDurationSecondsType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 900,
+          "max": 43200
+        }
+      }
+    },
+    "com.amazonaws.sts#roleSessionNameType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 64
+        },
+        "smithy.api#pattern": "^[\\w+=,.@-]*$"
+      }
+    },
+    "com.amazonaws.sts#serialNumberType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 9,
+          "max": 256
+        },
+        "smithy.api#pattern": "^[\\w+=/:,.@-]*$"
+      }
+    },
+    "com.amazonaws.sts#sessionPolicyDocumentType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 2048
+        },
+        "smithy.api#pattern": "^[\\u0009\\u000A\\u000D\\u0020-\\u00FF]+$"
+      }
+    },
+    "com.amazonaws.sts#sessionTokenSizeType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 0
+        }
+      }
+    },
+    "com.amazonaws.sts#sessionTokenUtilizationType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 0
+        }
+      }
+    },
+    "com.amazonaws.sts#sourceIdentityType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 64
+        },
+        "smithy.api#pattern": "^[\\w+=,.@-]*$"
+      }
+    },
+    "com.amazonaws.sts#tagKeyListType": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.sts#tagKeyType"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 0,
+          "max": 50
+        }
+      }
+    },
+    "com.amazonaws.sts#tagKeyType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 128
+        },
+        "smithy.api#pattern": "^[\\p{L}\\p{Z}\\p{N}_.:/=+\\-@]+$"
+      }
+    },
+    "com.amazonaws.sts#tagListType": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.sts#Tag"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 0,
+          "max": 50
+        }
+      }
+    },
+    "com.amazonaws.sts#tagValueType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 0,
+          "max": 256
+        },
+        "smithy.api#pattern": "^[\\p{L}\\p{Z}\\p{N}_.:/=+\\-@]*$"
+      }
+    },
+    "com.amazonaws.sts#tokenCodeType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 6,
+          "max": 6
+        },
+        "smithy.api#pattern": "^[\\d]*$"
+      }
+    },
+    "com.amazonaws.sts#tokenType": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#tradeInTokenType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.sts#unrestrictedSessionPolicyDocumentType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1
+        },
+        "smithy.api#pattern": "^[\\u0009\\u000A\\u000D\\u0020-\\u00FF]+$"
+      }
+    },
+    "com.amazonaws.sts#urlType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 4,
+          "max": 2048
+        }
+      }
+    },
+    "com.amazonaws.sts#userIdType": {
+      "type": "string"
+    },
+    "com.amazonaws.sts#userNameType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 32
+        },
+        "smithy.api#pattern": "^[\\w+=,.@-]*$"
+      }
+    },
+    "com.amazonaws.sts#webIdentitySubjectType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 6,
+          "max": 255
+        }
+      }
+    },
+    "com.amazonaws.sts#webIdentityTokenAudienceListType": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.sts#webIdentityTokenAudienceStringType"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 10
+        }
+      }
+    },
+    "com.amazonaws.sts#webIdentityTokenAudienceStringType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 1000
+        }
+      }
+    },
+    "com.amazonaws.sts#webIdentityTokenDurationSecondsType": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 60,
+          "max": 3600
+        }
+      }
+    },
+    "com.amazonaws.sts#webIdentityTokenType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#sensitive": {}
+      }
+    }
+  }
+}
