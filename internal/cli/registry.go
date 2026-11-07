@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/castrowithcee/qatlas-connect/internal/capability"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/baserow"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/bookstack"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/brave"
@@ -92,6 +93,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := brave.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := aws.Register(reg, version); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := googlemaps.Register(reg); err != nil {
