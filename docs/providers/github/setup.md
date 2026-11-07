@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-25
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # Set up GitHub
@@ -196,6 +196,7 @@ Files below `.github/workflows/` are changed only with the workflow file tools; 
 | Rename a repository | `repo`, with the Admin role on the repository | Administration: read and write |
 | Delete a repository | `repo` and `delete_repo` | Administration: read and write |
 | List collaborators | `repo` | Metadata: read |
+| Read a repository, its languages, its contributors, or its community profile | none for public, `repo` for private | Metadata: read |
 | Read rulesets of a repository | `repo` | Administration: read |
 | Change rulesets of a repository | `repo` | Administration: read and write |
 | Read or change rulesets of an organization | `admin:org` | Administration: read, or read and write (organization); as far as GitHub documents it |
