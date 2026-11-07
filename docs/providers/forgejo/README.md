@@ -51,6 +51,7 @@ repository-bound token is an additional depth of defense: the targets of the con
   `user-blocks.check`, and takes no `note`; `user-settings` also carries `pronouns`, `hide_pronouns`, and
   `enable_repo_unit_hints`. See [Users](../gitea/users.md).
 - Quota: the `quota.*` and `admin-quota-*` tools exist on Forgejo only (Gitea has no quota). See [Quota](#quota).
+- Repository flags: the `repository-flags.*` tools exist on Forgejo only. See [Repository flags](#repository-flags).
 - `signing-keys.get` reads the SSH public key with `format` `ssh`; `pub` is Gitea's form and refused.
 - `repository-signing-keys.get` serves only `gpg`.
 - The render modes are `markdown`, `gfm`, and `comment`, plus `file` for `markup.render`. The repository reference
@@ -145,6 +146,28 @@ token rights are in [Set up Forgejo](setup.md#quota-and-quota-administration).
 - A switched-off quota is detected as described under [Quota](#quota), but from a 404 on these routes: the tools read
   the rule list to tell a missing group, rule, or user from missing routes, and then `GET /admin/users` with
   `limit=1`, which exists with or without quota.
+
+## Repository flags
+
+Flags are instance-defined markers on a repository. Only an **instance administrator** can set or remove them; the
+instance answers 403 to any other token, and Qatlas reports it like any refusal. Every tool is bound to the
+connection's targets before the token is read.
+
+| Tool | Effect | Does |
+| --- | --- | --- |
+| `repository-flags.list` | read | the flags of a repository (list of names, at most 100, not paged) |
+| `repository-flags.check` | read | whether one `flag` is set; a 404 is reported as `has_flag` false |
+| `repository-flags.add` | update | sets one `flag` |
+| `repository-flags.remove` | update | removes one `flag` |
+| `repository-flags.replace` | update | replaces all flags with the list `flags`; an empty list removes all |
+| `repository-flags.clear` | delete | removes all flags |
+
+- A flag name is 1 to 100 ASCII letters, digits, `_`, `-`, or `.`, and not `.` or `..`; anything else is refused
+  before a request. This is a narrow reading, since the API documents no format.
+- Every change needs `confirm`, is sent once, and is never repeated after an unclear outcome. `replace` and `clear`
+  are listed-only: only a connection whose `tools` list names them offers them. No profile contains them.
+- Available from Forgejo 15 (the routes are the same in 15, 16, and 17). Gitea has no flag routes. Token rights:
+  [Set up Forgejo](setup.md#repository-flags).
 
 ## Not on Forgejo
 
