@@ -14,7 +14,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: "projects", Title: "Projects", Description: "Projects with their items, drafts, fields, views, status updates, iterations, templates, and access"},
 	{ID: "actions", Title: "Actions", Description: "Workflows, runs, jobs, logs, artifacts, and workflow and Actions permissions"},
 	{ID: "code", Title: "Code", Description: "Repository contents, files, trees, branches, tags, commits, comparisons, commit comments, and blame"},
-	{ID: "repositories", Title: "Repositories", Description: "Repositories, their languages, contributors, community profiles, custom properties, merge settings, rulesets, collaborators, subscriptions, and stars"},
+	{ID: "repositories", Title: "Repositories", Description: "Repositories, their languages, contributors, statistics, activity feed, community profiles, custom properties, merge settings, rulesets, collaborators, subscriptions, and stars"},
 	{ID: "releases", Title: "Releases", Description: "Releases and their assets"},
 	{ID: "security", Title: "Security", Description: "Code scanning, Dependabot, and secret scanning alerts, code quality findings, and security advisories"},
 	{ID: "discussions", Title: "Discussions", Description: "Discussions, their categories, and their comments"},
@@ -39,7 +39,8 @@ var groupBySegment = map[string]string{
 	"commit-pulls": "code", "commit-comments": "code",
 	"repositories": "repositories", "custom-properties": "repositories", "rulesets": "repositories",
 	"collaborators": "repositories", "languages": "repositories", "contributors": "repositories",
-	"community-profile": "repositories", "repository-settings": "repositories", "repository-topics": "repositories", "repository-subscriptions": "repositories", "stars": "repositories",
+	"community-profile": "repositories", "stats-contributors": "repositories", "stats-commit-activity": "repositories",
+	"stats-code-frequency": "repositories", "stats-participation": "repositories", "stats-punch-card": "repositories", "activity": "repositories", "repository-settings": "repositories", "repository-topics": "repositories", "repository-subscriptions": "repositories", "stars": "repositories",
 	"releases": "releases", "release-assets": "releases",
 	"code-scanning-alerts": "security", "dependabot-alerts": "security", "secret-scanning-alerts": "security",
 	"code-quality-findings": "security", "global-advisories": "security", "organization-advisories": "security",
@@ -48,7 +49,8 @@ var groupBySegment = map[string]string{
 	"gists":         "gists",
 	"notifications": "notifications", "thread-subscriptions": "notifications",
 	"accounts": "accounts", "users": "accounts", "organizations": "accounts", "teams": "accounts",
-	"team-members": "accounts",
+	"team-members": "accounts", "traffic-views": "repositories", "traffic-clones": "repositories",
+	"traffic-paths": "repositories", "traffic-referrers": "repositories",
 }
 
 // groupOf returns the group of a GitHub tool ID, or "" for an ID outside every group.

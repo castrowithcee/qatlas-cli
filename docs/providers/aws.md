@@ -161,6 +161,19 @@ fixed model operation; there is no general call.
   `next_cursor` and `has_more`. An operation with an idempotency token generates the token, accepts `client_token`
   to repeat a request after a timeout, and returns the token it sent.
 
+- **Protocol layers.** The generator reads the protocol of each model from its service trait and refuses a model
+  that names none or two. `awsQuery` (STS, IAM) sends a form body and reads XML. `restJson1` (Account, SES v2) binds
+  each member by the model's HTTP traits: `http` method, URI and status, `httpLabel` (also greedy), `httpQuery`,
+  `httpQueryParams`, `httpHeader`, `httpPrefixHeaders`, `httpPayload` and `httpResponseCode`, plus `jsonName`,
+  `timestampFormat`, unions, the document type and `idempotencyToken`. The body is JSON; paging uses `NextToken`
+  with `MaxResults` or `PageSize`. The HTTP bindings are a separate package (`httpbind`) that a `restXml` layer
+  reuses; only the body format differs. The generator knows no operation names: an operation whose traits do not
+  bind unambiguously, or that uses a trait the runtime does not carry (such as streaming), stops the generation and
+  names the operation. A model gives `PageSize` no maximum, so the tool offers no `page_size` there rather than
+  guessing one. The tables of `account` and `sesv2` are raw scaffolds: every operation is in `defer`, and no tool
+  exists for either service yet. Tools are rendered for `awsQuery` only; a table of a `restJson1` model with tools
+  is refused until the first service package.
+
 A model update is a deliberate change. Set the commit, the retrieval day and the upstream hashes in
 `internal/provider/aws/gen/model/pin.json`, download the upstream files into a directory laid out like
 `api-models-aws`, and run `go run ./gen/awsgen extract <directory>` in `internal/provider/aws`; it refuses a file

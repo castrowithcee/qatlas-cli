@@ -214,6 +214,9 @@ func testConfig(p *product) *config.Config {
 	cfg.Connections["protection-delete"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
 		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".branch-protections.delete",
 			p.id + ".branch-protections.get"}}
+	cfg.Connections["flag-listed"] = config.Connection{Service: "forge", Credential: "token", Effects: allEffects,
+		Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".repository-flags.replace",
+			p.id + ".repository-flags.clear", p.id + ".repository-flags.list"}}
 	cfg.Connections["tag-protection-delete"] = config.Connection{Service: "forge", Credential: "token",
 		Effects: allEffects, Targets: []string{"repos/acme/widget"}, Tools: []string{p.id + ".tag-protections.delete",
 			p.id + ".tag-protections.get"}}

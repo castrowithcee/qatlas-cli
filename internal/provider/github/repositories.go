@@ -201,8 +201,8 @@ var collaboratorsList = capability.Descriptor{
 	}},
 }
 
-// repositoryAdminSubject names the fork, the collaborators, the languages, the contributors, or the community
-// profile a repository path below a repository addresses; forks and collaborators with or without a further
+// repositoryAdminSubject names the fork, the collaborators, the languages, the contributors, the statistics, the
+// activity feed, or the community profile a repository path below a repository addresses; forks and collaborators with or without a further
 // segment. It is empty for any other path, such
 // as the repository route github.repositories.delete addresses on its own, which restSubject already names.
 func repositoryAdminSubject(path string) string {
@@ -217,6 +217,18 @@ func repositoryAdminSubject(path string) string {
 		return "the contributors of this repository"
 	case path == "community/profile":
 		return "the community profile of this repository"
+	case path == "stats/contributors":
+		return "the contributor statistics of this repository"
+	case path == "stats/commit_activity":
+		return "the commit activity of this repository"
+	case path == "stats/code_frequency":
+		return "the code frequency of this repository"
+	case path == "stats/participation":
+		return "the participation statistics of this repository"
+	case path == "stats/punch_card":
+		return "the punch card of this repository"
+	case path == "activity":
+		return "the activity feed of this repository"
 	}
 	return ""
 }

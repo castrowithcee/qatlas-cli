@@ -42,6 +42,12 @@ func TestClassify(t *testing.T) {
 		{"delete conflict", 409, "DeleteConflict", "", provider.ClassProviderError, 0},
 		{"access denied exception", 400, "AccessDeniedException", "", provider.ClassPermission, 0},
 		{"expired token exception", 400, "ExpiredTokenException", "", provider.ClassAuth, 0},
+		{"too many requests", 429, "TooManyRequestsException", "3", provider.ClassRateLimited, 3 * time.Second},
+		{"resource not found", 404, "ResourceNotFoundException", "", provider.ClassNotFound, 0},
+		{"validation", 400, "ValidationException", "", provider.ClassProviderError, 0},
+		{"conflict", 409, "ConflictException", "", provider.ClassProviderError, 0},
+		{"limit exceeded", 400, "LimitExceededException", "", provider.ClassProviderError, 0},
+		{"service quota", 402, "ServiceQuotaExceededException", "", provider.ClassProviderError, 0},
 		{"retry-after ignored when not limited", 400, "AccessDenied", "9", provider.ClassPermission, 0},
 	}
 	for _, test := range tests {
@@ -118,5 +124,37 @@ func TestEveryRuleUsesAKnownClass(t *testing.T) {
 		if !known[r.class] || r.message == "" || strings.Contains(r.message, code) {
 			t.Errorf("rule %s = %+v", code, r)
 		}
+	}
+}
+
+func TestClassifyStrict(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		code   string
+		class  provider.Class
+	}{
+		{"known code", 404, "ResourceNotFoundException", provider.ClassNotFound},
+		{"unknown client error code", 400, "BrandNewException", provider.ClassInvalidResponse},
+		{"unknown code, not found", 404, "NotFoundException", provider.ClassInvalidResponse},
+		{"unknown code, conflict status", 409, "AlreadyExistsException", provider.ClassInvalidResponse},
+		{"unknown code with 401", 401, "Whatever", provider.ClassAuth},
+		{"unknown code with 403", 403, "Whatever", provider.ClassPermission},
+		{"unknown code with 429", 429, "Whatever", provider.ClassRateLimited},
+		{"unknown code with 500", 500, "Whatever", provider.ClassProviderError},
+		{"no code at all", 400, "", provider.ClassProviderError},
+		{"slow down is not defined", 503, "SlowDown", provider.ClassInvalidResponse},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, _ := ClassifyStrict("aws.test", test.status, http.Header{}, test.code, "")
+			if got.Class != test.class || got.Original == nil || got.Original.Status != test.status {
+				t.Fatalf("got %s %+v, want %s", got.Class, got.Original, test.class)
+			}
+			if test.class == provider.ClassInvalidResponse && test.code != "SlowDown" &&
+				(len(got.Original.Entries) != 1 || got.Original.Entries[0].Code != test.code) {
+				t.Errorf("the unknown code is not kept in Original: %+v", got.Original)
+			}
+		})
 	}
 }

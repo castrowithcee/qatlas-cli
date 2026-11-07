@@ -11,15 +11,27 @@ type Model struct {
 	shapes    *object
 	serviceID string
 	service   *object
-	// Version is the API version the query protocol sends.
+	// Protocol is ProtocolQuery or ProtocolRestJSON, read from the service's protocol trait.
+	Protocol string
+	// Version is the API version of the model; the query protocol sends it as Version.
 	Version string
 	// Namespace is the xmlNamespace of the service, used for the answers of generated tests.
 	Namespace string
 }
 
-// LoadModel reads an extract. It must hold exactly one service, speak awsQuery, and list its operations
-// directly: operations bound through resources are not supported, since this package has no way to bind
-// their identifiers.
+// The protocols of a service model this package reads.
+const (
+	ProtocolQuery    = "awsQuery"
+	ProtocolRestJSON = "restJson1"
+)
+
+var protocolTraits = map[string]string{
+	"aws.protocols#awsQuery": ProtocolQuery, "aws.protocols#restJson1": ProtocolRestJSON,
+}
+
+// LoadModel reads an extract. It must hold exactly one service that speaks exactly one of awsQuery and
+// restJson1. Operations bound through resources count as operations of the service: the REST bindings
+// carry the identifiers as ordinary members of the input, so a resource adds no binding of its own.
 func LoadModel(data []byte) (*Model, error) {
 	root, err := decodeOrdered(data)
 	if err != nil {
@@ -43,11 +55,16 @@ func LoadModel(data []byte) (*Model, error) {
 		return nil, errors.New("model holds no service")
 	}
 	traits := m.service.obj("traits")
-	if !traits.has("aws.protocols#awsQuery") {
-		return nil, fmt.Errorf("service %s does not speak awsQuery", m.serviceID)
+	for trait, protocol := range protocolTraits {
+		if traits.has(trait) {
+			if m.Protocol != "" {
+				return nil, fmt.Errorf("service %s speaks more than one protocol", m.serviceID)
+			}
+			m.Protocol = protocol
+		}
 	}
-	if m.service.has("resources") {
-		return nil, fmt.Errorf("service %s binds operations through resources", m.serviceID)
+	if m.Protocol == "" {
+		return nil, fmt.Errorf("service %s speaks neither awsQuery nor restJson1", m.serviceID)
 	}
 	m.Version = m.service.str("version")
 	m.Namespace = traits.obj("smithy.api#xmlNamespace").str("uri")
@@ -59,10 +76,9 @@ func LoadModel(data []byte) (*Model, error) {
 
 // Operations returns the operation names of the service, in model order.
 func (m *Model) Operations() ([]string, error) {
-	list, _ := m.service.get("operations").([]any)
-	names := make([]string, 0, len(list))
-	for _, item := range list {
-		target := item.(*object).str("target")
+	ids := m.operationIDs()
+	names := make([]string, 0, len(ids))
+	for _, target := range ids {
 		if m.shapes.obj(target).str("type") != "operation" {
 			return nil, fmt.Errorf("service operation %q is not an operation shape", target)
 		}
@@ -81,12 +97,54 @@ func (m *Model) operation(name string) (*object, error) {
 	return nil, fmt.Errorf("operation %s is not in the model", name)
 }
 
+// operationIDs returns the operations of the service in a fixed order: those it lists, then those of its
+// resources, depth first, each once.
 func (m *Model) operationIDs() []string {
-	list, _ := m.service.get("operations").([]any)
-	ids := make([]string, 0, len(list))
-	for _, item := range list {
-		ids = append(ids, item.(*object).str("target"))
+	var ids []string
+	seen := map[string]bool{}
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
 	}
+	targets := func(o *object, key string) []string {
+		list, _ := o.get(key).([]any)
+		out := make([]string, 0, len(list))
+		for _, item := range list {
+			if t, ok := item.(*object); ok {
+				out = append(out, t.str("target"))
+			}
+		}
+		return out
+	}
+	var walk func(holder *object, visited map[string]bool)
+	walk = func(holder *object, visited map[string]bool) {
+		for _, id := range targets(holder, "operations") {
+			add(id)
+		}
+		for _, id := range targets(holder, "resources") {
+			if visited[id] {
+				continue
+			}
+			visited[id] = true
+			res := m.shapes.obj(id)
+			if res == nil {
+				continue
+			}
+			for _, key := range []string{"create", "put", "read", "update", "delete", "list"} {
+				add(res.obj(key).str("target"))
+			}
+			for _, id := range targets(res, "operations") {
+				add(id)
+			}
+			for _, id := range targets(res, "collectionOperations") {
+				add(id)
+			}
+			walk(res, visited)
+		}
+	}
+	walk(m.service, map[string]bool{})
 	return ids
 }
 
@@ -102,7 +160,7 @@ var prelude = map[string]string{
 	"smithy.api#PrimitiveShort": "short", "smithy.api#Integer": "integer", "smithy.api#PrimitiveInteger": "integer",
 	"smithy.api#Long": "long", "smithy.api#PrimitiveLong": "long", "smithy.api#Float": "float",
 	"smithy.api#PrimitiveFloat": "float", "smithy.api#Double": "double", "smithy.api#PrimitiveDouble": "double",
-	"smithy.api#Timestamp": "timestamp", "smithy.api#Blob": "blob",
+	"smithy.api#Timestamp": "timestamp", "smithy.api#Blob": "blob", "smithy.api#Document": "document",
 }
 
 // resolve returns the type and the shape object of a target. A prelude shape has no object.

@@ -71,4 +71,4 @@ var stsTable = Table{
 }
 
 // Tables are the curation tables of every pinned model, in generation order.
-var Tables = []Table{stsTable, iamTable}
+var Tables = []Table{stsTable, iamTable, accountTable, sesv2Table}

@@ -78,11 +78,13 @@ func errorXML(code string) string {
 
 // sent is one request the fake received.
 type sent struct {
-	host   string
-	action string
-	form   url.Values
-	header http.Header
-	body   string
+	// method, path and rawQuery matter to the REST protocols; the awsQuery tests leave them be.
+	method, path, rawQuery string
+	host                   string
+	action                 string
+	form                   url.Values
+	header                 http.Header
+	body                   string
 }
 
 // reply is what the fake answers.
@@ -106,7 +108,7 @@ func (f *fakeAWS) RoundTrip(req *http.Request) (*http.Response, error) {
 	data, _ := io.ReadAll(req.Body)
 	form, _ := url.ParseQuery(string(data))
 	f.mu.Lock()
-	r := sent{host: req.URL.Host, action: form.Get("Action"), form: form, header: req.Header.Clone(), body: string(data)}
+	r := sent{method: req.Method, path: req.URL.EscapedPath(), rawQuery: req.URL.RawQuery, host: req.URL.Host, action: form.Get("Action"), form: form, header: req.Header.Clone(), body: string(data)}
 	f.requests = append(f.requests, r)
 	n := 0
 	for _, prior := range f.requests {
