@@ -181,7 +181,8 @@ although the token allows it.
 
 | Tools | Classic | Fine-grained |
 | --- | --- | --- |
-| Read contents, trees, blame, commits, branches, tags | none for public, `repo` for private | Contents: read |
+| Read contents, trees, blame, commits, comparisons, branches, tags, commit comments | none for public, `repo` for private | Contents: read |
+| Read the pull requests of a commit | none for public, `repo` for private | Contents: read and Pull requests: read |
 | Create or delete a branch, create, update or delete a file, push files | `repo` | Contents: read and write |
 
 Files below `.github/workflows/` are changed only with the workflow file tools; see [GitHub Actions](#github-actions).
