@@ -2,7 +2,8 @@ package googlemaps
 
 // The shape of a Place as Places API (New) documents it, revision 20261105 of its discovery document, with
 // every member the documentation does not mark as deprecated. A member of a later revision is ignored until
-// it is added here. Photo media is never fetched: a photo is shown by its resource name and its attributions.
+// it is added here. Photo media is never fetched: a photo is shown by its resource name and its attributions. A photo name is kept whole or dropped when it
+// is longer than photos.get accepts, because a cut name is useless.
 var (
 	localizedText = object(p("text", text), p("languageCode", short))
 	dateShape     = object(p("year", integer), p("month", integer), p("day", integer))
@@ -36,7 +37,7 @@ var (
 		p("consumerAlert", object(p("overview", text), p("languageCode", short), p("details", object(
 			p("title", title), p("description", text),
 			p("aboutLink", object(p("title", title), p("uri", addr))))))),
-		p("photos", listOf(10, object(p("name", short), p("widthPx", integer), p("heightPx", integer),
+		p("photos", listOf(10, object(p("name", keepWhole(maxPhotoNameBytes)), p("widthPx", integer), p("heightPx", integer),
 			p("authorAttributions", list(authorShape)), p("flagContentUri", addr), p("googleMapsUri", addr)))),
 		// Essentials.
 		p("addressComponents", listOf(40, object(p("longText", title), p("shortText", title),

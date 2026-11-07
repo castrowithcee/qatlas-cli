@@ -194,13 +194,15 @@ func TestRegisterPublishesMetadataAndTool(t *testing.T) {
 			t.Errorf("%s effect = %v", tool.ID, tool.Effect)
 		}
 	}
-	wantTools := []string{"google.maps.places.get", "google.maps.places.search-nearby", "google.maps.places.search-text"}
+	wantTools := []string{"google.maps.photos.get", "google.maps.places.autocomplete", "google.maps.places.get",
+		"google.maps.places.search-nearby", "google.maps.places.search-text"}
 	if !reflect.DeepEqual(ids, wantTools) {
 		t.Errorf("tools = %v", ids)
 	}
 	if len(metadata.Profiles) != 1 || metadata.Profiles[0].ID != "read" || !metadata.Profiles[0].Recommended ||
 		!reflect.DeepEqual(metadata.Profiles[0].Tools, []string{"google.maps.places.get",
-			"google.maps.places.search-text", "google.maps.places.search-nearby"}) {
+			"google.maps.places.search-text", "google.maps.places.search-nearby", "google.maps.places.autocomplete",
+			"google.maps.photos.get"}) {
 		t.Errorf("profiles = %+v", metadata.Profiles)
 	}
 	for _, descriptor := range reg.Provider(Provider) {
