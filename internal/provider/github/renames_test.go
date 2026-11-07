@@ -42,10 +42,12 @@ var currentToolIDs = []string{
 	"github.commits.get",
 	"github.commits.list",
 	"github.commits.search",
+	"github.community-profile.get",
 	"github.compare.get",
 	"github.contents.delete",
 	"github.contents.get",
 	"github.contents.put",
+	"github.contributors.list",
 	"github.copilot-assignments.create",
 	"github.copilot-reviews.request",
 	"github.custom-properties.get",
@@ -86,6 +88,7 @@ var currentToolIDs = []string{
 	"github.labels.get",
 	"github.labels.list",
 	"github.labels.update",
+	"github.languages.get",
 	"github.milestones.list",
 	"github.notifications.dismiss",
 	"github.notifications.get",
@@ -171,6 +174,7 @@ var currentToolIDs = []string{
 	"github.repositories.create",
 	"github.repositories.delete",
 	"github.repositories.fork",
+	"github.repositories.get",
 	"github.repositories.list",
 	"github.repositories.rename",
 	"github.repositories.search",
@@ -240,7 +244,7 @@ func TestRegistryHoldsExactlyTheCurrentToolIDs(t *testing.T) {
 	sort.Strings(got)
 	want := append([]string(nil), currentToolIDs...)
 	sort.Strings(want)
-	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 215 {
+	if strings.Join(got, "\n") != strings.Join(want, "\n") || len(got) != 219 {
 		t.Errorf("registry holds %d tools, differing from the expected %d IDs", len(got), len(want))
 	}
 	if err := reg.ValidateRenames(); err != nil {
@@ -275,7 +279,8 @@ func TestRenamedToolsCoverEveryChangedID(t *testing.T) {
 		"github.check-suites.list":        true,
 		"github.pull-request-checks.wait": true, "github.commit-branches.list": true,
 		"github.commit-comments.get": true, "github.commit-comments.list": true, "github.commit-pulls.list": true,
-		"github.traffic-views.get": true, "github.traffic-clones.get": true, "github.traffic-paths.list": true,
+		"github.community-profile.get": true,
+		"github.traffic-views.get":     true, "github.traffic-clones.get": true, "github.traffic-paths.list": true,
 		"github.traffic-referrers.list": true}
 	for id := range current {
 		if strings.Contains(id, "-") && !targets[id] && !bornHyphenated[id] {

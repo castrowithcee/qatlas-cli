@@ -201,8 +201,9 @@ var collaboratorsList = capability.Descriptor{
 	}},
 }
 
-// repositoryAdminSubject names the fork or the collaborators a repository lifecycle path below a repository
-// addresses: forks or collaborators, with or without a further segment. It is empty for any other path, such
+// repositoryAdminSubject names the fork, the collaborators, the languages, the contributors, or the community
+// profile a repository path below a repository addresses; forks and collaborators with or without a further
+// segment. It is empty for any other path, such
 // as the repository route github.repositories.delete addresses on its own, which restSubject already names.
 func repositoryAdminSubject(path string) string {
 	switch {
@@ -210,6 +211,12 @@ func repositoryAdminSubject(path string) string {
 		return "a fork of this repository"
 	case path == "collaborators" || strings.HasPrefix(path, "collaborators/"):
 		return "the collaborators of this repository"
+	case path == "languages":
+		return "the languages of this repository"
+	case path == "contributors":
+		return "the contributors of this repository"
+	case path == "community/profile":
+		return "the community profile of this repository"
 	}
 	return ""
 }
