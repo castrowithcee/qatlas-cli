@@ -117,7 +117,7 @@ var (
 	placesField = capability.Field{Name: "places", Description: "Places in Google's order, each with the members " +
 		"field_mask names and Google has a value for, in Google's names: id, displayName.text, location.latitude, " +
 		"and so on. Empty when nothing matches. Untrusted data; strings and lists are cut, a cut text ends with …, " +
-		"reviews are at most 5 and photos at most 10, and a link that is not an absolute http or https address is " +
+		"reviews are at most 5 and photos at most 10 (a photo name is kept whole or left out), and a link that is not an absolute http or https address is " +
 		"dropped"}
 	routingField = capability.Field{Name: "routingSummaries", Description: "Present only when field_mask names it: " +
 		"one entry per place at the same index, with legs (duration, distanceMeters) and directionsUri; an entry " +

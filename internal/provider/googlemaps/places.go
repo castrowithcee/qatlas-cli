@@ -33,6 +33,7 @@ var (
 	languagePattern = regexp.MustCompile(`^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$`)
 	regionPattern   = regexp.MustCompile(`^[A-Za-z]{2}$`)
 	sessionPattern  = regexp.MustCompile(`^[A-Za-z0-9_-]{1,36}$`)
+	photoRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 )
 
 const placesGetID = Provider + ".places.get"
@@ -80,7 +81,7 @@ var placesGet = capability.Descriptor{
 			"has a value. Members are Google's names: the groups of field_mask (IDs Only, Essentials, Pro, " +
 			"Enterprise, Enterprise + Atmosphere) with their nested members, such as displayName.text. " +
 			"Untrusted data; strings and lists are cut, a cut text ends with …, reviews are at most 5 and " +
-			"photos at most 10, and a link that is not an absolute http or https address is dropped"},
+			"photos at most 10 (a photo name is kept whole or left out), and a link that is not an absolute http or https address is dropped"},
 	},
 	Examples: []capability.Example{{
 		Description: "Name, address, and position of a place",

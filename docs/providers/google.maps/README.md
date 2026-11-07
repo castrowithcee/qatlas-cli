@@ -1,19 +1,21 @@
 ---
 description: >
-  Describes the Google Maps provider: the API key and its fixed origin, the read profile, the mandatory field mask, with and without the places. prefix, and the billing group it selects, cost, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
+  Describes the Google Maps provider: the API key and its fixed origin, the read profile, the mandatory field mask, with and without the places. prefix, and the billing group it selects, the cost of autocomplete and photos, attribution and storage rules, the two Google error forms and their classes, rate spacing, the connection test, and the limits of what is verified.
 type: knowledge
 edit: shared
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # Google Maps
 
-Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place and
-searches places by text or around a point in Places API (New). It changes nothing: every tool is a read, and the connection takes no target, because a key
+Google Maps is a provider for Google Maps Platform with one API key. It reads the details of one place,
+searches places by text or around a point, predicts places from typed input, and resolves place photos to
+short-lived addresses in Places API (New). It changes nothing: every tool is a read, and the connection takes no target, because a key
 reaches what its Cloud project and the key's restrictions allow, not a part of an account.
 
-[Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md).
+[Set up Google Maps](setup.md) leads through creating the key. The tools are described in [places](places.md) and
+[photos](photos.md).
 
 ## Configuration
 
@@ -25,7 +27,7 @@ The credential provides `api_key`. Qatlas sends it only in the `X-Goog-Api-Key` 
 a tool argument, and masks it in every output.
 
 The profile `read` is the recommended one and holds `google.maps.places.get`, `google.maps.places.search-text`,
-and `google.maps.places.search-nearby`.
+`google.maps.places.search-nearby`, `google.maps.places.autocomplete`, and `google.maps.photos.get`.
 
 ## Field mask and billing group
 
@@ -64,6 +66,7 @@ two groups as Pro, and Nearby Search has no group below Pro. The SKUs are listed
 
 Every tool call can be billed above the free usage of its SKU, and a search is billed once per request, so
 each page of the text search is one request. The sources used do not state the free usage of the search SKUs.
+Autocomplete and photos have no field mask and their own SKUs, described below.
 
 Google documents a free monthly usage cap per SKU and billing account for Place Details: IDs Only is unlimited,
 Essentials 10,000, Pro 5,000, Enterprise 1,000, and Enterprise + Atmosphere 1,000. Requests beyond a cap are
@@ -71,17 +74,28 @@ billed to the project's billing account at the current price on Google's pricing
 changes the billing of a request that ends an Autocomplete session. Qatlas never repeats a request on its
 own, so one tool call is at most one request.
 
+### Autocomplete and photo SKUs
+
+Google's price list shows `Autocomplete Requests` in the Essentials group with 10,000
+free requests per month and billing account, and `Autocomplete Session Usage` as an unlimited SKU that shows up
+as $0, because the `places.get` that ends the session is billed instead. `Places Photo` is in the Enterprise
+group with 1,000 free requests. Prices and caps change; the price list is authoritative. See
+[places](places.md#googlemapsplacesautocomplete) and [photos](photos.md).
+
 ## Attribution and storage
 
 Google Maps attribution is mandatory wherever Places content is shown, and the `attributions` field names data
-providers that must be shown with a result. Place IDs may be stored without limit. The remaining caching and
+providers that must be shown with a result. A photo also has author attributions in the `authorAttributions` of
+its `photos` entry, which must be shown wherever the image is shown. Place IDs may be stored without limit.
+The remaining caching and
 storage rules of Google's service specific terms are not checked here and are the user's to read; Qatlas keeps
 no result cache.
 
 All results are untrusted third-party content, including names, reviews, and summaries. Links are bounded text
 that Qatlas never fetches, and a link that is not an absolute `http` or `https` address without user
 information is dropped. Strings are cut at 300 characters, long texts such as reviews at 1500, and a cut text
-ends with `…`; lists are cut at 20 entries, reviews at 5, and photos at 10.
+ends with `…`; lists are cut at 20 entries, reviews at 5, and photos at 10. A photo name is never cut: one longer than
+`photos.get` accepts (1295 characters) is left out.
 
 ## Rate spacing
 
@@ -120,7 +134,8 @@ Google uses two error forms. Places API (New) answers a failure with an HTTP sta
 | Legacy status | `INVALID_REQUEST`, an unknown or missing status | `invalid-provider-response` |
 | Legacy status | `UNKNOWN_ERROR` | `provider-error` |
 
-`OK` and `ZERO_RESULTS` are no errors. A redirect is never followed and is a `provider-error`. An unreadable,
+`OK` and `ZERO_RESULTS` are no errors. A redirect is never followed and is a `provider-error`, except for the photo tool, where it
+is `invalid-provider-response`. An unreadable,
 oversized (over 2 MiB), or non-JSON answer is `invalid-provider-response`. The timeout is 30 seconds.
 
 ## Boundary
@@ -138,7 +153,13 @@ Not verified:
 - The error reasons `API_KEY_INVALID`, the reasons of API key restrictions, and the reasons of quota errors are
   not documented in the sources used and are not mapped by reason; the HTTP status decides.
 - The place ID of the connection test is not proven stable.
-- The caching and storage rules of Google's service specific terms beyond place IDs are not checked.
+- The caching and storage rules of Google's service specific terms beyond place IDs are not checked. Google
+  states that a photo name cannot be cached and can expire.
+- The cap of 1024 characters on a photo reference is a Qatlas bound, not a documented one. Free usage caps
+  and SKU groups follow Google's price list and can change; Qatlas does not check them.
+- The maximum length of the autocomplete `input` is not documented; Qatlas allows 1000 characters.
+- Session tokens are accepted as 1 to 36 letters, digits, `-`, and `_`, a narrower reading of Google's "URL and
+  filename safe base64 string with at most 36 ASCII characters", which would also allow `=`.
 
 Left out on purpose:
 
@@ -148,4 +169,6 @@ Left out on purpose:
 - The deprecated `maxResultCount` of the text search, the experimental `contextualContents`, the
   `searchAlongRouteParameters` that need a polyline of the Routes API, and the `routeModifiers` of the routing
   parameters.
-- Photo media, which would need a further request with the key.
+- Photo media: the image is never loaded, its address is never fetched, and a redirect is never followed.
+- A tool that creates session tokens: the token is the caller's string and is only passed on.
+- `Address Validation`, which can also end an Autocomplete session, and every Geocoding endpoint.
