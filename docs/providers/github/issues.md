@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-10-22
-updated: 2026-10-28
+updated: 2026-11-06
 ---
 
 # GitHub issues
@@ -39,6 +39,8 @@ body. It reads projects only with `project_details`; the token rights are listed
 | `github.comments.create` | writes exactly one comment on one issue |
 | `github.comments.update` | replaces the body of one comment |
 | `github.comments.delete` | deletes one comment permanently; offered only where a connection's `tools` list names it |
+| `github.comments.hide` | hides one issue comment, pull request conversation comment, review, or pull request line comment with a reason |
+| `github.comments.unhide` | shows a hidden issue comment, pull request conversation comment, review, or pull request line comment again |
 
 Issues and comments are written through REST. `labels` and `assignees` replace the whole set; `[]` removes
 every entry. GitHub creates a label the repository does not have yet, so a misspelled name adds a new label;
@@ -72,6 +74,26 @@ identifier. Both change tools read the comment first: its route scopes it to the
 repository, so a comment of another repository answers `not-found`, and a pull request's own conversation
 comment is refused as `invalid-request` before anything changes. `github.comments.delete` removes a comment
 permanently and is offered only where a connection's `tools` list names it, as `github.labels.delete` is.
+
+`github.comments.hide` and `github.comments.unhide` minimize and restore one object, chosen by `kind`:
+`issue-comment` (the `comment_id` above), `pull-request-comment` (the `comment_id` of a conversation comment of a
+pull request, together with the `pull_number` of that pull request), `review` (the review `id` together with the
+`pull_number` of its pull request), or `review-comment` (the `id`
+`github.pull-request-review-comments.list` reports). `pull_number` is required for `review` and
+`pull-request-comment` and refused for the other kinds. `github.comments.hide` also needs a `reason`: `SPAM`,
+`ABUSE`, `OFF_TOPIC`, `OUTDATED`, `DUPLICATE`, or `RESOLVED`. GitHub offers the change only as a GraphQL mutation
+on a node identifier, which the caller never supplies: the tool first reads the object by its REST route below
+the connection's repository, checks that the object names that repository, and sends the `node_id` of that
+answer in exactly one mutation that is never repeated. An object of another repository, or one GitHub does not
+hold there, is `not-found` and nothing is sent. A pull request's own conversation comment is refused for `kind`
+`issue-comment` as `invalid-request`, like `github.comments.update` refuses it, and the message names
+`pull-request-comment`. For that kind the comment is read by the issue comment route and must belong to exactly
+the given `pull_number` of the repository, else `not-found`; a number that names an issue is refused as
+`invalid-request`, as the pull request comment tools refuse it.
+Both tools are idempotent: hiding a hidden object or showing a visible one succeeds and reports the state GitHub
+answers. The answer holds `kind`, `id`, `hidden`, and, while the object is hidden, the `reason` GitHub reports; it
+never holds comment text. An outcome that stays unclear after a timeout or a dropped connection is reported as
+uncertain, not as failure or success.
 
 ## Issue search
 
