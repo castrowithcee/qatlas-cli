@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes the AWS provider: configuration, the credential and optional role assumption, the account and region targets, global services, endpoints, how Qatlas shows up in CloudTrail, error shapes, limits, and the tools of the Security Token Service group.
+  Describes the AWS provider: configuration, the credential and optional role assumption, the account and region targets, global services, endpoints, how Qatlas shows up in CloudTrail, error shapes, limits, how the tools are generated from pinned models and curation tables, and the tools of the Security Token Service group.
 type: knowledge
 edit: shared
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # Amazon Web Services
@@ -134,6 +134,52 @@ service.
 - Identity Center, Roles Anywhere, and `credential_process` are not supported. Partitions `aws-cn` and
   `aws-us-gov` are not supported.
 - Everything AWS returns, including the decoded authorization message, is untrusted data.
+
+## How the tools are built
+
+Every AWS tool is generated from the AWS service model and a curation table, not written by hand. Each tool is one
+fixed model operation; there is no general call.
+
+- **Model pin.** The models come from the AWS repository `api-models-aws` at one pinned commit. The repository keeps
+  an extract of each model, not the upstream file: the documentation and example traits are removed, nothing else
+  changes. The pin file beside the extracts names the commit, the day the files were retrieved, and the SHA-256 of
+  every upstream file and every extract. The upstream `LICENSE` and `NOTICE` (Apache-2.0) lie beside them. A test
+  checks the extracts against the pin file without network access.
+- **Curation table.** One table per service decides which operations become tools and how: the tool ID, effect,
+  confirmation, `listed-only`, idempotency, title and descriptions, renames for readability, members hidden for a
+  security reason, and the target check and client-side policy check that run before the call. Every operation that
+  is not a read requires confirmation.
+- **Completeness.** Every operation of a model is a tool, in `exclude`, or in `defer`, each with a reason; a test
+  fails otherwise, so a new operation of an updated model never becomes a tool or disappears silently. `exclude`
+  means never a tool, such as every operation that returns a credential; a test proves that none of them is one.
+  `defer` means not yet.
+- **`listed-only`.** Such a tool is offered only by a connection whose tools list names it
+  (`requires_tool_allow_list`).
+- **From the model.** Arguments, fields and their limits come from the model. Deprecated members are left out. A
+  member the model marks sensitive, or whose name says it holds a credential, stops the generation unless the table
+  hides it. A paged operation takes `page_size` (where the service has a page size) and `cursor` and returns
+  `next_cursor` and `has_more`. An operation with an idempotency token generates the token, accepts `client_token`
+  to repeat a request after a timeout, and returns the token it sent.
+
+- **Protocol layers.** The generator reads the protocol of each model from its service trait and refuses a model
+  that names none or two. `awsQuery` (STS, IAM) sends a form body and reads XML. `restJson1` (Account, SES v2) binds
+  each member by the model's HTTP traits: `http` method, URI and status, `httpLabel` (also greedy), `httpQuery`,
+  `httpQueryParams`, `httpHeader`, `httpPrefixHeaders`, `httpPayload` and `httpResponseCode`, plus `jsonName`,
+  `timestampFormat`, unions, the document type and `idempotencyToken`. The body is JSON; paging uses `NextToken`
+  with `MaxResults` or `PageSize`. The HTTP bindings are a separate package (`httpbind`) that a `restXml` layer
+  reuses; only the body format differs. The generator knows no operation names: an operation whose traits do not
+  bind unambiguously, or that uses a trait the runtime does not carry (such as streaming), stops the generation and
+  names the operation. A model gives `PageSize` no maximum, so the tool offers no `page_size` there rather than
+  guessing one. The tables of `account` and `sesv2` are raw scaffolds: every operation is in `defer`, and no tool
+  exists for either service yet. Tools are rendered for `awsQuery` only; a table of a `restJson1` model with tools
+  is refused until the first service package.
+
+A model update is a deliberate change. Set the commit, the retrieval day and the upstream hashes in
+`internal/provider/aws/gen/model/pin.json`, download the upstream files into a directory laid out like
+`api-models-aws`, and run `go run ./gen/awsgen extract <directory>` in `internal/provider/aws`; it refuses a file
+whose hash differs and writes the extracts and their hashes. Then run `go generate ./internal/provider/aws/...` and
+commit extracts, pin file and generated files together. A test fails when the generated files do not match the
+extracts and the tables.
 
 ## Tools
 

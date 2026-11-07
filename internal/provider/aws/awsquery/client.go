@@ -1,8 +1,9 @@
-// Package awsquery implements the base of the AWS query protocol: a form-encoded POST with Action and
-// Version, an XML answer <Action>Response/<Action>Result, and the <ErrorResponse> error shape. It is the
-// shared codebase for the services that speak it (STS first). Lists (member.N), maps, flattened members and
-// pagination are meant to be added as producers of parameter names for EncodeBody and as richer decoding
-// into out, without changing Client.
+// Package awsquery implements the AWS query protocol: a form-encoded POST with Action and Version, an XML
+// answer <Action>Response/<Action>Result, and the <ErrorResponse> error shape. It is the shared runtime of
+// the services that speak it (STS and IAM). An operation is bound by data, not by code: a Shape describes
+// its input and output with the Smithy traits xmlName, xmlFlattened and the list and map forms, Encode turns
+// arguments into form parameters, Call.Output decodes the answer, and a Pager carries NextToken and
+// Marker/IsTruncated pagination in the Qatlas cursor.
 package awsquery
 
 import (
@@ -54,6 +55,9 @@ type Call struct {
 	Action  string
 	Version string
 	Params  map[string]string
+	// Output, when set, decodes <Action>Result by its shape into the map out points to (a *map[string]any).
+	// Without it, out is a pointer to a struct with xml tags.
+	Output *Shape
 }
 
 // Meta is what the answer says about the exchange itself.
@@ -63,6 +67,8 @@ type Meta struct {
 	RequestID string
 	// RetryAfter is the pause a rate-limited answer asked for; zero otherwise.
 	RetryAfter time.Duration
+	// Truncated is true when a decoded string was cut at its cap (see Shape.MaxLen).
+	Truncated bool
 }
 
 var requestID = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
@@ -115,9 +121,20 @@ func (c *Client) Do(ctx context.Context, op string, call Call, out any) (Meta, *
 	if err != nil || int64(len(data)) > limit {
 		return meta, provider.InvalidResponse(op, "the AWS response could not be read within the size limit")
 	}
-	id, derr := decodeResult(data, call.Action, out)
+	var target *map[string]any
+	if call.Output != nil && out != nil {
+		var ok bool
+		if target, ok = out.(*map[string]any); !ok {
+			return meta, provider.Fail(op, "the AWS result description needs a map to decode into")
+		}
+	}
+	id, truncated, derr := decodeResult(data, call.Action, out, call.Output, target)
 	if id = safeID(id); id != "" {
 		meta.RequestID = id
+	}
+	meta.Truncated = truncated
+	if errors.Is(derr, ErrShape) {
+		return meta, provider.Fail(op, "the AWS result description is invalid")
 	}
 	if derr != nil {
 		return meta, provider.InvalidResponse(op, "AWS returned an invalid response")
@@ -146,15 +163,16 @@ func (c *Client) failure(op string, resp *http.Response, meta Meta) (Meta, *prov
 	return meta, failure
 }
 
-// decodeResult walks <Action>Response, decodes <Action>Result into out and returns the request ID of
-// <ResponseMetadata>. An operation without output members has no Result element, which is fine.
-func decodeResult(data []byte, action string, out any) (string, error) {
+// decodeResult walks <Action>Response, decodes <Action>Result into out (by shape into target, else as an
+// XML-tagged struct) and returns the request ID of <ResponseMetadata>. An operation without output members
+// has no Result element, which is fine.
+func decodeResult(data []byte, action string, out any, shape *Shape, target *map[string]any) (id string, truncated bool, err error) {
 	d := xml.NewDecoder(bytes.NewReader(data))
 	var root xml.StartElement
 	for {
 		tok, err := d.Token()
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 		if se, ok := tok.(xml.StartElement); ok {
 			root = se
@@ -162,21 +180,27 @@ func decodeResult(data []byte, action string, out any) (string, error) {
 		}
 	}
 	if root.Name.Local != action+"Response" {
-		return "", errUnexpectedRoot
+		return "", false, errUnexpectedRoot
 	}
-	var id string
 	for {
 		tok, err := d.Token()
 		if err != nil {
-			return id, err
+			return id, truncated, err
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
 			switch t.Name.Local {
 			case action + "Result":
-				if out == nil {
+				switch {
+				case shape != nil:
+					var m map[string]any
+					m, truncated, err = bindResult(d, t, shape)
+					if err == nil && target != nil {
+						*target = m
+					}
+				case out == nil:
 					err = d.Skip()
-				} else {
+				default:
 					err = d.DecodeElement(out, &t)
 				}
 			case "ResponseMetadata":
@@ -189,10 +213,10 @@ func decodeResult(data []byte, action string, out any) (string, error) {
 				err = d.Skip()
 			}
 			if err != nil {
-				return id, err
+				return id, truncated, err
 			}
 		case xml.EndElement:
-			return id, nil
+			return id, truncated, nil
 		}
 	}
 }

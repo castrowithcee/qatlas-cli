@@ -32,6 +32,22 @@ func TestClassify(t *testing.T) {
 		{"forbidden without code", 403, "", "", provider.ClassPermission, 0},
 		{"unauthorized without code", 401, "", "", provider.ClassAuth, 0},
 		{"other 4xx", 400, "ValidationError", "", provider.ClassProviderError, 0},
+		{"throughput exceeded", 400, "ProvisionedThroughputExceededException", "5", provider.ClassRateLimited, 5 * time.Second},
+		{"throttled exception", 400, "ThrottledException", "", provider.ClassRateLimited, 0},
+		{"request throttled exception", 400, "RequestThrottledException", "2", provider.ClassRateLimited, 2 * time.Second},
+		{"slow down is not an awsQuery code", 503, "SlowDown", "9", provider.ClassInvalidResponse, 0},
+		{"no such entity", 404, "NoSuchEntity", "", provider.ClassNotFound, 0},
+		{"report not present", 410, "ReportNotPresent", "", provider.ClassNotFound, 0},
+		{"entity already exists", 409, "EntityAlreadyExists", "", provider.ClassProviderError, 0},
+		{"delete conflict", 409, "DeleteConflict", "", provider.ClassProviderError, 0},
+		{"access denied exception", 400, "AccessDeniedException", "", provider.ClassPermission, 0},
+		{"expired token exception", 400, "ExpiredTokenException", "", provider.ClassAuth, 0},
+		{"too many requests", 429, "TooManyRequestsException", "3", provider.ClassRateLimited, 3 * time.Second},
+		{"resource not found", 404, "ResourceNotFoundException", "", provider.ClassNotFound, 0},
+		{"validation", 400, "ValidationException", "", provider.ClassProviderError, 0},
+		{"conflict", 409, "ConflictException", "", provider.ClassProviderError, 0},
+		{"limit exceeded", 400, "LimitExceededException", "", provider.ClassProviderError, 0},
+		{"service quota", 402, "ServiceQuotaExceededException", "", provider.ClassProviderError, 0},
 		{"retry-after ignored when not limited", 400, "AccessDenied", "9", provider.ClassPermission, 0},
 	}
 	for _, test := range tests {
@@ -90,5 +106,55 @@ func TestNormalizeCode(t *testing.T) {
 		if got := NormalizeCode(in); got != want {
 			t.Errorf("NormalizeCode(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestConflictIsAProviderErrorThatSaysSo(t *testing.T) {
+	got, _ := Classify("op", 409, http.Header{}, "EntityAlreadyExists", "Sender")
+	if got.Class != provider.ClassProviderError || !strings.Contains(got.Message, "conflict") ||
+		got.Original == nil || got.Original.Entries[0].Code != "EntityAlreadyExists" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestEveryRuleUsesAKnownClass(t *testing.T) {
+	known := map[provider.Class]bool{provider.ClassRateLimited: true, provider.ClassPermission: true, provider.ClassAuth: true,
+		provider.ClassNotFound: true, provider.ClassProviderError: true, provider.ClassInvalidResponse: true}
+	for code, r := range codeRules {
+		if !known[r.class] || r.message == "" || strings.Contains(r.message, code) {
+			t.Errorf("rule %s = %+v", code, r)
+		}
+	}
+}
+
+func TestClassifyStrict(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		code   string
+		class  provider.Class
+	}{
+		{"known code", 404, "ResourceNotFoundException", provider.ClassNotFound},
+		{"unknown client error code", 400, "BrandNewException", provider.ClassInvalidResponse},
+		{"unknown code, not found", 404, "NotFoundException", provider.ClassInvalidResponse},
+		{"unknown code, conflict status", 409, "AlreadyExistsException", provider.ClassInvalidResponse},
+		{"unknown code with 401", 401, "Whatever", provider.ClassAuth},
+		{"unknown code with 403", 403, "Whatever", provider.ClassPermission},
+		{"unknown code with 429", 429, "Whatever", provider.ClassRateLimited},
+		{"unknown code with 500", 500, "Whatever", provider.ClassProviderError},
+		{"no code at all", 400, "", provider.ClassProviderError},
+		{"slow down is not defined", 503, "SlowDown", provider.ClassInvalidResponse},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, _ := ClassifyStrict("aws.test", test.status, http.Header{}, test.code, "")
+			if got.Class != test.class || got.Original == nil || got.Original.Status != test.status {
+				t.Fatalf("got %s %+v, want %s", got.Class, got.Original, test.class)
+			}
+			if test.class == provider.ClassInvalidResponse && test.code != "SlowDown" &&
+				(len(got.Original.Entries) != 1 || got.Original.Entries[0].Code != test.code) {
+				t.Errorf("the unknown code is not kept in Original: %+v", got.Original)
+			}
+		})
 	}
 }

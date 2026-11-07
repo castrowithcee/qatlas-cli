@@ -1,0 +1,3070 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "com.amazonaws.account#AcceptPrimaryEmailUpdate": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#AcceptPrimaryEmailUpdateRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#AcceptPrimaryEmailUpdateResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/acceptPrimaryEmailUpdate",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#AcceptPrimaryEmailUpdateRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PrimaryEmail": {
+          "target": "com.amazonaws.account#PrimaryEmailAddress",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Otp": {
+          "target": "com.amazonaws.account#Otp",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#AcceptPrimaryEmailUpdateResponse": {
+      "type": "structure",
+      "members": {
+        "Status": {
+          "target": "com.amazonaws.account#PrimaryEmailUpdateStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#AccessDeniedException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 403
+      }
+    },
+    "com.amazonaws.account#Account": {
+      "type": "service",
+      "version": "2021-02-01",
+      "resources": [
+        {
+          "target": "com.amazonaws.account#AccountNameResource"
+        },
+        {
+          "target": "com.amazonaws.account#AlternateContactResource"
+        },
+        {
+          "target": "com.amazonaws.account#CommercialToGovCloudGatewayResource"
+        },
+        {
+          "target": "com.amazonaws.account#ContactInformationResource"
+        },
+        {
+          "target": "com.amazonaws.account#PhoneNumberVerificationResource"
+        },
+        {
+          "target": "com.amazonaws.account#PrimaryEmailResource"
+        },
+        {
+          "target": "com.amazonaws.account#RegionOptResource"
+        }
+      ],
+      "traits": {
+        "aws.api#service": {
+          "sdkId": "Account",
+          "arnNamespace": "account",
+          "cloudTrailEventSource": "CLOUDTRAIL_EVENT_SOURCE"
+        },
+        "aws.auth#sigv4": {
+          "name": "account"
+        },
+        "aws.endpoints#standardPartitionalEndpoints": {
+          "endpointPatternType": "service_region_dnsSuffix"
+        },
+        "aws.protocols#restJson1": {},
+        "smithy.api#cors": {},
+        "smithy.api#paginated": {
+          "inputToken": "NextToken",
+          "outputToken": "NextToken",
+          "pageSize": "MaxResults"
+        },
+        "smithy.api#suppress": [
+          "EventSource"
+        ],
+        "smithy.api#title": "AWS Account",
+        "smithy.rules#endpointBdd": {
+          "version": "1.1",
+          "parameters": {
+            "UseDualStack": {
+              "builtIn": "AWS::UseDualStack",
+              "required": true,
+              "default": false,
+              "documentation": "When true, use the dual-stack endpoint. If the configured endpoint does not support dual-stack, dispatching the request MAY return an error.",
+              "type": "boolean"
+            },
+            "UseFIPS": {
+              "builtIn": "AWS::UseFIPS",
+              "required": true,
+              "default": false,
+              "documentation": "When true, send this request to the FIPS-compliant regional endpoint. If the configured endpoint does not have a FIPS compliant endpoint, dispatching the request will return an error.",
+              "type": "boolean"
+            },
+            "Endpoint": {
+              "builtIn": "SDK::Endpoint",
+              "required": false,
+              "documentation": "Override the endpoint used to send this request",
+              "type": "string"
+            },
+            "Region": {
+              "builtIn": "AWS::Region",
+              "required": false,
+              "documentation": "The AWS region used to dispatch the request.",
+              "type": "string"
+            }
+          },
+          "conditions": [
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Endpoint"
+                }
+              ]
+            },
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "PartitionResult"
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseFIPS"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseDualStack"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "PartitionResult"
+                    },
+                    "supportsDualStack"
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "PartitionResult"
+                    },
+                    "supportsFIPS"
+                  ]
+                },
+                true
+              ]
+            }
+          ],
+          "results": [
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: FIPS and custom endpoint are not supported",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": {
+                  "ref": "Endpoint"
+                },
+                "properties": {},
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://account-fips.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dualStackDnsSuffix}",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://account-fips.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dnsSuffix}",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "FIPS is enabled but this partition does not support FIPS",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://account.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dualStackDnsSuffix}",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "DualStack is enabled but this partition does not support DualStack",
+              "type": "error"
+            },
+            {
+              "conditions": [],
+              "endpoint": {
+                "url": "https://account.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dnsSuffix}",
+                "properties": {
+                  "authSchemes": [
+                    {
+                      "name": "sigv4",
+                      "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                    }
+                  ]
+                },
+                "headers": {}
+              },
+              "type": "endpoint"
+            },
+            {
+              "conditions": [],
+              "error": "Invalid Configuration: Missing Region",
+              "type": "error"
+            }
+          ],
+          "root": 2,
+          "nodeCount": 13,
+          "nodes": "/////wAAAAH/////AAAAAAAAAAwAAAADAAAAAQAAAAQF9eELAAAAAgAAAAUF9eELAAAAAwAAAAgAAAAGAAAABAAAAAcF9eEKAAAABQX14QgF9eEJAAAABAAAAAoAAAAJAAAABgX14QYF9eEHAAAABQAAAAsF9eEFAAAABgX14QQF9eEFAAAAAwX14QEAAAANAAAABAX14QIF9eED"
+        },
+        "smithy.rules#endpointRuleSet": {
+          "version": "1.0",
+          "parameters": {
+            "UseDualStack": {
+              "builtIn": "AWS::UseDualStack",
+              "required": true,
+              "default": false,
+              "documentation": "When true, use the dual-stack endpoint. If the configured endpoint does not support dual-stack, dispatching the request MAY return an error.",
+              "type": "boolean"
+            },
+            "UseFIPS": {
+              "builtIn": "AWS::UseFIPS",
+              "required": true,
+              "default": false,
+              "documentation": "When true, send this request to the FIPS-compliant regional endpoint. If the configured endpoint does not have a FIPS compliant endpoint, dispatching the request will return an error.",
+              "type": "boolean"
+            },
+            "Endpoint": {
+              "builtIn": "SDK::Endpoint",
+              "required": false,
+              "documentation": "Override the endpoint used to send this request",
+              "type": "string"
+            },
+            "Region": {
+              "builtIn": "AWS::Region",
+              "required": false,
+              "documentation": "The AWS region used to dispatch the request.",
+              "type": "string"
+            }
+          },
+          "rules": [
+            {
+              "conditions": [
+                {
+                  "fn": "isSet",
+                  "argv": [
+                    {
+                      "ref": "Endpoint"
+                    }
+                  ]
+                }
+              ],
+              "rules": [
+                {
+                  "conditions": [
+                    {
+                      "fn": "booleanEquals",
+                      "argv": [
+                        {
+                          "ref": "UseFIPS"
+                        },
+                        true
+                      ]
+                    }
+                  ],
+                  "error": "Invalid Configuration: FIPS and custom endpoint are not supported",
+                  "type": "error"
+                },
+                {
+                  "conditions": [],
+                  "rules": [
+                    {
+                      "conditions": [
+                        {
+                          "fn": "booleanEquals",
+                          "argv": [
+                            {
+                              "ref": "UseDualStack"
+                            },
+                            true
+                          ]
+                        }
+                      ],
+                      "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+                      "type": "error"
+                    },
+                    {
+                      "conditions": [],
+                      "endpoint": {
+                        "url": {
+                          "ref": "Endpoint"
+                        },
+                        "properties": {},
+                        "headers": {}
+                      },
+                      "type": "endpoint"
+                    }
+                  ],
+                  "type": "tree"
+                }
+              ],
+              "type": "tree"
+            },
+            {
+              "conditions": [],
+              "rules": [
+                {
+                  "conditions": [
+                    {
+                      "fn": "isSet",
+                      "argv": [
+                        {
+                          "ref": "Region"
+                        }
+                      ]
+                    }
+                  ],
+                  "rules": [
+                    {
+                      "conditions": [
+                        {
+                          "fn": "aws.partition",
+                          "argv": [
+                            {
+                              "ref": "Region"
+                            }
+                          ],
+                          "assign": "PartitionResult"
+                        }
+                      ],
+                      "rules": [
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseFIPS"
+                                },
+                                true
+                              ]
+                            },
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseDualStack"
+                                },
+                                true
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [
+                                {
+                                  "fn": "booleanEquals",
+                                  "argv": [
+                                    true,
+                                    {
+                                      "fn": "getAttr",
+                                      "argv": [
+                                        {
+                                          "ref": "PartitionResult"
+                                        },
+                                        "supportsFIPS"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "fn": "booleanEquals",
+                                  "argv": [
+                                    true,
+                                    {
+                                      "fn": "getAttr",
+                                      "argv": [
+                                        {
+                                          "ref": "PartitionResult"
+                                        },
+                                        "supportsDualStack"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "rules": [
+                                {
+                                  "conditions": [],
+                                  "endpoint": {
+                                    "url": "https://account-fips.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dualStackDnsSuffix}",
+                                    "properties": {
+                                      "authSchemes": [
+                                        {
+                                          "name": "sigv4",
+                                          "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                                        }
+                                      ]
+                                    },
+                                    "headers": {}
+                                  },
+                                  "type": "endpoint"
+                                }
+                              ],
+                              "type": "tree"
+                            },
+                            {
+                              "conditions": [],
+                              "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+                              "type": "error"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseFIPS"
+                                },
+                                true
+                              ]
+                            },
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseDualStack"
+                                },
+                                false
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [
+                                {
+                                  "fn": "booleanEquals",
+                                  "argv": [
+                                    {
+                                      "fn": "getAttr",
+                                      "argv": [
+                                        {
+                                          "ref": "PartitionResult"
+                                        },
+                                        "supportsFIPS"
+                                      ]
+                                    },
+                                    true
+                                  ]
+                                }
+                              ],
+                              "rules": [
+                                {
+                                  "conditions": [],
+                                  "endpoint": {
+                                    "url": "https://account-fips.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dnsSuffix}",
+                                    "properties": {
+                                      "authSchemes": [
+                                        {
+                                          "name": "sigv4",
+                                          "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                                        }
+                                      ]
+                                    },
+                                    "headers": {}
+                                  },
+                                  "type": "endpoint"
+                                }
+                              ],
+                              "type": "tree"
+                            },
+                            {
+                              "conditions": [],
+                              "error": "FIPS is enabled but this partition does not support FIPS",
+                              "type": "error"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseFIPS"
+                                },
+                                false
+                              ]
+                            },
+                            {
+                              "fn": "booleanEquals",
+                              "argv": [
+                                {
+                                  "ref": "UseDualStack"
+                                },
+                                true
+                              ]
+                            }
+                          ],
+                          "rules": [
+                            {
+                              "conditions": [
+                                {
+                                  "fn": "booleanEquals",
+                                  "argv": [
+                                    true,
+                                    {
+                                      "fn": "getAttr",
+                                      "argv": [
+                                        {
+                                          "ref": "PartitionResult"
+                                        },
+                                        "supportsDualStack"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "rules": [
+                                {
+                                  "conditions": [],
+                                  "endpoint": {
+                                    "url": "https://account.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dualStackDnsSuffix}",
+                                    "properties": {
+                                      "authSchemes": [
+                                        {
+                                          "name": "sigv4",
+                                          "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                                        }
+                                      ]
+                                    },
+                                    "headers": {}
+                                  },
+                                  "type": "endpoint"
+                                }
+                              ],
+                              "type": "tree"
+                            },
+                            {
+                              "conditions": [],
+                              "error": "DualStack is enabled but this partition does not support DualStack",
+                              "type": "error"
+                            }
+                          ],
+                          "type": "tree"
+                        },
+                        {
+                          "conditions": [],
+                          "endpoint": {
+                            "url": "https://account.{PartitionResult#implicitGlobalRegion}.{PartitionResult#dnsSuffix}",
+                            "properties": {
+                              "authSchemes": [
+                                {
+                                  "name": "sigv4",
+                                  "signingRegion": "{PartitionResult#implicitGlobalRegion}"
+                                }
+                              ]
+                            },
+                            "headers": {}
+                          },
+                          "type": "endpoint"
+                        }
+                      ],
+                      "type": "tree"
+                    }
+                  ],
+                  "type": "tree"
+                },
+                {
+                  "conditions": [],
+                  "error": "Invalid Configuration: Missing Region",
+                  "type": "error"
+                }
+              ],
+              "type": "tree"
+            }
+          ]
+        },
+        "smithy.rules#endpointTests": {
+          "testCases": [
+            {
+              "documentation": "For custom endpoint with region not set and fips disabled",
+              "expect": {
+                "endpoint": {
+                  "url": "https://example.com"
+                }
+              },
+              "params": {
+                "Endpoint": "https://example.com",
+                "UseFIPS": false
+              }
+            },
+            {
+              "documentation": "For custom endpoint with fips enabled",
+              "expect": {
+                "error": "Invalid Configuration: FIPS and custom endpoint are not supported"
+              },
+              "params": {
+                "Endpoint": "https://example.com",
+                "UseFIPS": true
+              }
+            },
+            {
+              "documentation": "For custom endpoint with fips disabled and dualstack enabled",
+              "expect": {
+                "error": "Invalid Configuration: Dualstack and custom endpoint are not supported"
+              },
+              "params": {
+                "Endpoint": "https://example.com",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-east-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-east-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region cn-northwest-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "cn-northwest-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.cn-northwest-1.api.amazonwebservices.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-northwest-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region cn-northwest-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "cn-northwest-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.cn-northwest-1.amazonaws.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-northwest-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region cn-northwest-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "cn-northwest-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.cn-northwest-1.api.amazonwebservices.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-northwest-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region cn-northwest-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "cn-northwest-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.cn-northwest-1.amazonaws.com.cn"
+                }
+              },
+              "params": {
+                "Region": "cn-northwest-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eusc-de-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "eusc-de-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.eusc-de-east-1.amazonaws.eu"
+                }
+              },
+              "params": {
+                "Region": "eusc-de-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eusc-de-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "eusc-de-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.eusc-de-east-1.amazonaws.eu"
+                }
+              },
+              "params": {
+                "Region": "eusc-de-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-iso-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-iso-east-1.c2s.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-iso-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-iso-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-iso-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-iso-east-1.c2s.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-iso-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-isob-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-isob-east-1.sc2s.sgov.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isob-east-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isob-east-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-isob-east-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-isob-east-1.sc2s.sgov.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isob-east-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-isoe-west-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "eu-isoe-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.eu-isoe-west-1.cloud.adc-e.uk"
+                }
+              },
+              "params": {
+                "Region": "eu-isoe-west-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region eu-isoe-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "eu-isoe-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.eu-isoe-west-1.cloud.adc-e.uk"
+                }
+              },
+              "params": {
+                "Region": "eu-isoe-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isof-south-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-isof-south-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-isof-south-1.csp.hci.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isof-south-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-isof-south-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-isof-south-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-isof-south-1.csp.hci.ic.gov"
+                }
+              },
+              "params": {
+                "Region": "us-isof-south-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS enabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-gov-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-gov-west-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": true,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS enabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-gov-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account-fips.us-gov-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": true,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS disabled and DualStack enabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-gov-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-gov-west-1.api.aws"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": false,
+                "UseDualStack": true
+              }
+            },
+            {
+              "documentation": "For region us-gov-west-1 with FIPS disabled and DualStack disabled",
+              "expect": {
+                "endpoint": {
+                  "properties": {
+                    "authSchemes": [
+                      {
+                        "name": "sigv4",
+                        "signingRegion": "us-gov-west-1"
+                      }
+                    ]
+                  },
+                  "url": "https://account.us-gov-west-1.amazonaws.com"
+                }
+              },
+              "params": {
+                "Region": "us-gov-west-1",
+                "UseFIPS": false,
+                "UseDualStack": false
+              }
+            },
+            {
+              "documentation": "Missing region",
+              "expect": {
+                "error": "Invalid Configuration: Missing Region"
+              }
+            }
+          ],
+          "version": "1.0"
+        }
+      }
+    },
+    "com.amazonaws.account#AccountCreatedDate": {
+      "type": "timestamp",
+      "traits": {
+        "smithy.api#timestampFormat": "date-time"
+      }
+    },
+    "com.amazonaws.account#AccountId": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^\\d{12}$"
+      }
+    },
+    "com.amazonaws.account#AccountName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#pattern": "^[ -;=?-~]+$",
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#AccountNameResource": {
+      "type": "resource",
+      "put": {
+        "target": "com.amazonaws.account#PutAccountName"
+      },
+      "read": {
+        "target": "com.amazonaws.account#GetAccountInformation"
+      },
+      "traits": {
+        "aws.api#arn": {
+          "template": "AccountName"
+        }
+      }
+    },
+    "com.amazonaws.account#AccountState": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "PENDING_ACTIVATION",
+            "name": "PENDING_ACTIVATION"
+          },
+          {
+            "value": "ACTIVE",
+            "name": "ACTIVE"
+          },
+          {
+            "value": "SUSPENDED",
+            "name": "SUSPENDED"
+          },
+          {
+            "value": "CLOSED",
+            "name": "CLOSED"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#AddressLine": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 60
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#AlternateContact": {
+      "type": "structure",
+      "members": {
+        "Name": {
+          "target": "com.amazonaws.account#Name",
+          "traits": {}
+        },
+        "Title": {
+          "target": "com.amazonaws.account#Title",
+          "traits": {}
+        },
+        "EmailAddress": {
+          "target": "com.amazonaws.account#EmailAddress",
+          "traits": {}
+        },
+        "PhoneNumber": {
+          "target": "com.amazonaws.account#PhoneNumber",
+          "traits": {}
+        },
+        "AlternateContactType": {
+          "target": "com.amazonaws.account#AlternateContactType",
+          "traits": {}
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.account#AlternateContactResource": {
+      "type": "resource",
+      "identifiers": {
+        "AlternateContactType": {
+          "target": "com.amazonaws.account#AlternateContactType"
+        }
+      },
+      "put": {
+        "target": "com.amazonaws.account#PutAlternateContact"
+      },
+      "read": {
+        "target": "com.amazonaws.account#GetAlternateContact"
+      },
+      "delete": {
+        "target": "com.amazonaws.account#DeleteAlternateContact"
+      },
+      "traits": {
+        "aws.api#arn": {
+          "template": "AlternateContact/{AlternateContactType}"
+        }
+      }
+    },
+    "com.amazonaws.account#AlternateContactType": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "BILLING",
+            "name": "BILLING"
+          },
+          {
+            "value": "OPERATIONS",
+            "name": "OPERATIONS"
+          },
+          {
+            "value": "SECURITY",
+            "name": "SECURITY"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#AwsAccountState": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "PENDING_ACTIVATION",
+            "name": "PENDING_ACTIVATION"
+          },
+          {
+            "value": "ACTIVE",
+            "name": "ACTIVE"
+          },
+          {
+            "value": "SUSPENDED",
+            "name": "SUSPENDED"
+          },
+          {
+            "value": "CLOSED",
+            "name": "CLOSED"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#City": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#CommercialToGovCloudGatewayResource": {
+      "type": "resource",
+      "operations": [
+        {
+          "target": "com.amazonaws.account#GetGovCloudAccountInformation"
+        }
+      ],
+      "traits": {
+        "aws.api#arn": {
+          "template": "CommercialToGovCloudGateway"
+        }
+      }
+    },
+    "com.amazonaws.account#CompanyName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#ConflictException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 409
+      }
+    },
+    "com.amazonaws.account#ContactInformation": {
+      "type": "structure",
+      "members": {
+        "FullName": {
+          "target": "com.amazonaws.account#FullName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AddressLine1": {
+          "target": "com.amazonaws.account#AddressLine",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AddressLine2": {
+          "target": "com.amazonaws.account#AddressLine",
+          "traits": {}
+        },
+        "AddressLine3": {
+          "target": "com.amazonaws.account#AddressLine",
+          "traits": {}
+        },
+        "City": {
+          "target": "com.amazonaws.account#City",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "StateOrRegion": {
+          "target": "com.amazonaws.account#StateOrRegion",
+          "traits": {}
+        },
+        "DistrictOrCounty": {
+          "target": "com.amazonaws.account#DistrictOrCounty",
+          "traits": {}
+        },
+        "PostalCode": {
+          "target": "com.amazonaws.account#PostalCode",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "CountryCode": {
+          "target": "com.amazonaws.account#CountryCode",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PhoneNumber": {
+          "target": "com.amazonaws.account#ContactInformationPhoneNumber",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "CompanyName": {
+          "target": "com.amazonaws.account#CompanyName",
+          "traits": {}
+        },
+        "WebsiteUrl": {
+          "target": "com.amazonaws.account#WebsiteUrl",
+          "traits": {}
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.account#ContactInformationPhoneNumber": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 20
+        },
+        "smithy.api#pattern": "^[+][\\s0-9()-]+$",
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#ContactInformationResource": {
+      "type": "resource",
+      "put": {
+        "target": "com.amazonaws.account#PutContactInformation"
+      },
+      "read": {
+        "target": "com.amazonaws.account#GetContactInformation"
+      },
+      "traits": {
+        "aws.api#arn": {
+          "template": "ContactInformation"
+        }
+      }
+    },
+    "com.amazonaws.account#CountryCode": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 2,
+          "max": 2
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#DeleteAlternateContact": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#DeleteAlternateContactRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/deleteAlternateContact",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#idempotent": {}
+      }
+    },
+    "com.amazonaws.account#DeleteAlternateContactRequest": {
+      "type": "structure",
+      "members": {
+        "AlternateContactType": {
+          "target": "com.amazonaws.account#AlternateContactType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#DisableRegion": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#DisableRegionRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/disableRegion",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#DisableRegionRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "RegionName": {
+          "target": "com.amazonaws.account#RegionName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#DistrictOrCounty": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#EmailAddress": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 254
+        },
+        "smithy.api#pattern": "^[\\s]*[\\w+=.#|!&-]+@[\\w.-]+\\.[\\w]+[\\s]*$",
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#EnableRegion": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#EnableRegionRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/enableRegion",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#EnableRegionRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "RegionName": {
+          "target": "com.amazonaws.account#RegionName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#FullName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#GetAccountInformation": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetAccountInformationRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetAccountInformationResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getAccountInformation",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetAccountInformationRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetAccountInformationResponse": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "AccountName": {
+          "target": "com.amazonaws.account#AccountName",
+          "traits": {}
+        },
+        "AccountCreatedDate": {
+          "target": "com.amazonaws.account#AccountCreatedDate",
+          "traits": {}
+        },
+        "AccountState": {
+          "target": "com.amazonaws.account#AccountState",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetAlternateContact": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetAlternateContactRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetAlternateContactResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getAlternateContact",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetAlternateContactRequest": {
+      "type": "structure",
+      "members": {
+        "AlternateContactType": {
+          "target": "com.amazonaws.account#AlternateContactType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetAlternateContactResponse": {
+      "type": "structure",
+      "members": {
+        "AlternateContact": {
+          "target": "com.amazonaws.account#AlternateContact",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetContactInformation": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetContactInformationRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetContactInformationResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getContactInformation",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetContactInformationRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetContactInformationResponse": {
+      "type": "structure",
+      "members": {
+        "ContactInformation": {
+          "target": "com.amazonaws.account#ContactInformation",
+          "traits": {}
+        },
+        "VerificationStatus": {
+          "target": "com.amazonaws.account#PhoneNumberVerificationStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetGovCloudAccountInformation": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetGovCloudAccountInformationRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetGovCloudAccountInformationResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceUnavailableException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getGovCloudAccountInformation",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {}
+      }
+    },
+    "com.amazonaws.account#GetGovCloudAccountInformationRequest": {
+      "type": "structure",
+      "members": {
+        "StandardAccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetGovCloudAccountInformationResponse": {
+      "type": "structure",
+      "members": {
+        "GovCloudAccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountState": {
+          "target": "com.amazonaws.account#AwsAccountState",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmail": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetPrimaryEmailRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetPrimaryEmailResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getPrimaryEmail",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmailRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmailResponse": {
+      "type": "structure",
+      "members": {
+        "PrimaryEmail": {
+          "target": "com.amazonaws.account#PrimaryEmailAddress",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmailUpdateStatus": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetPrimaryEmailUpdateStatusRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetPrimaryEmailUpdateStatusResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getPrimaryEmailUpdateStatus",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmailUpdateStatusRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetPrimaryEmailUpdateStatusResponse": {
+      "type": "structure",
+      "members": {
+        "Status": {
+          "target": "com.amazonaws.account#PrimaryEmailUpdateStatus",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "UpdatedAt": {
+          "target": "smithy.api#Timestamp",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#GetRegionOptStatus": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#GetRegionOptStatusRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#GetRegionOptStatusResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/getRegionOptStatus",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#GetRegionOptStatusRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "RegionName": {
+          "target": "com.amazonaws.account#RegionName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#GetRegionOptStatusResponse": {
+      "type": "structure",
+      "members": {
+        "RegionName": {
+          "target": "com.amazonaws.account#RegionName",
+          "traits": {}
+        },
+        "RegionOptStatus": {
+          "target": "com.amazonaws.account#RegionOptStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#InternalServerException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "server",
+        "smithy.api#httpError": 500,
+        "smithy.api#retryable": {}
+      }
+    },
+    "com.amazonaws.account#ListRegions": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#ListRegionsRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#ListRegionsResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/listRegions",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#paginated": {
+          "inputToken": "NextToken",
+          "outputToken": "NextToken",
+          "pageSize": "MaxResults",
+          "items": "Regions"
+        },
+        "smithy.api#readonly": {},
+        "smithy.api#suppress": [
+          "HttpMethodSemantics"
+        ]
+      }
+    },
+    "com.amazonaws.account#ListRegionsRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "MaxResults": {
+          "target": "smithy.api#Integer",
+          "traits": {
+            "smithy.api#range": {
+              "min": 1,
+              "max": 50
+            }
+          }
+        },
+        "NextToken": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#length": {
+              "max": 1000
+            }
+          }
+        },
+        "RegionOptStatusContains": {
+          "target": "com.amazonaws.account#RegionOptStatusList",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#ListRegionsResponse": {
+      "type": "structure",
+      "members": {
+        "NextToken": {
+          "target": "smithy.api#String",
+          "traits": {}
+        },
+        "Regions": {
+          "target": "com.amazonaws.account#RegionOptList",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#Name": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 64
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#Otp": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^[a-zA-Z0-9]{6}$",
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#PhoneNumber": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 25
+        },
+        "smithy.api#pattern": "^[\\s0-9()+-]+$",
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#PhoneNumberVerificationResource": {
+      "type": "resource",
+      "operations": [
+        {
+          "target": "com.amazonaws.account#SendPhoneNumberVerification"
+        },
+        {
+          "target": "com.amazonaws.account#VerifyPhoneNumber"
+        }
+      ],
+      "traits": {
+        "aws.api#arn": {
+          "template": "PhoneNumberVerification"
+        }
+      }
+    },
+    "com.amazonaws.account#PhoneNumberVerificationStatus": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "PENDING",
+            "name": "PENDING"
+          },
+          {
+            "value": "VERIFIED",
+            "name": "VERIFIED"
+          },
+          {
+            "value": "UNVERIFIED",
+            "name": "UNVERIFIED"
+          },
+          {
+            "value": "NOT_SUPPORTED",
+            "name": "NOT_SUPPORTED"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#PostalCode": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 20
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#PrimaryEmailAddress": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 5,
+          "max": 64
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#PrimaryEmailResource": {
+      "type": "resource",
+      "operations": [
+        {
+          "target": "com.amazonaws.account#AcceptPrimaryEmailUpdate"
+        },
+        {
+          "target": "com.amazonaws.account#GetPrimaryEmail"
+        },
+        {
+          "target": "com.amazonaws.account#GetPrimaryEmailUpdateStatus"
+        },
+        {
+          "target": "com.amazonaws.account#StartPrimaryEmailUpdate"
+        }
+      ],
+      "traits": {
+        "aws.api#arn": {
+          "template": "PrimaryEmail"
+        }
+      }
+    },
+    "com.amazonaws.account#PrimaryEmailUpdateStatus": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "PENDING",
+            "name": "PENDING"
+          },
+          {
+            "value": "ACCEPTED",
+            "name": "ACCEPTED"
+          },
+          {
+            "value": "COMPLETED",
+            "name": "COMPLETED"
+          },
+          {
+            "value": "FAILED",
+            "name": "FAILED"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#PutAccountName": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#PutAccountNameRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/putAccountName",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#idempotent": {}
+      }
+    },
+    "com.amazonaws.account#PutAccountNameRequest": {
+      "type": "structure",
+      "members": {
+        "AccountName": {
+          "target": "com.amazonaws.account#AccountName",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#PutAlternateContact": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#PutAlternateContactRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/putAlternateContact",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#idempotent": {}
+      }
+    },
+    "com.amazonaws.account#PutAlternateContactRequest": {
+      "type": "structure",
+      "members": {
+        "Name": {
+          "target": "com.amazonaws.account#Name",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "Title": {
+          "target": "com.amazonaws.account#Title",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "EmailAddress": {
+          "target": "com.amazonaws.account#EmailAddress",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PhoneNumber": {
+          "target": "com.amazonaws.account#PhoneNumber",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AlternateContactType": {
+          "target": "com.amazonaws.account#AlternateContactType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#PutContactInformation": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#PutContactInformationRequest"
+      },
+      "output": {
+        "target": "smithy.api#Unit"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/putContactInformation",
+          "method": "POST",
+          "code": 200
+        },
+        "smithy.api#idempotent": {}
+      }
+    },
+    "com.amazonaws.account#PutContactInformationRequest": {
+      "type": "structure",
+      "members": {
+        "ContactInformation": {
+          "target": "com.amazonaws.account#ContactInformation",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#Region": {
+      "type": "structure",
+      "members": {
+        "RegionName": {
+          "target": "com.amazonaws.account#RegionName",
+          "traits": {}
+        },
+        "RegionOptStatus": {
+          "target": "com.amazonaws.account#RegionOptStatus",
+          "traits": {}
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.account#RegionName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        }
+      }
+    },
+    "com.amazonaws.account#RegionOptList": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.account#Region"
+      }
+    },
+    "com.amazonaws.account#RegionOptResource": {
+      "type": "resource",
+      "operations": [
+        {
+          "target": "com.amazonaws.account#DisableRegion"
+        },
+        {
+          "target": "com.amazonaws.account#EnableRegion"
+        },
+        {
+          "target": "com.amazonaws.account#GetRegionOptStatus"
+        },
+        {
+          "target": "com.amazonaws.account#ListRegions"
+        }
+      ],
+      "traits": {
+        "aws.api#arn": {
+          "template": "RegionOpt"
+        }
+      }
+    },
+    "com.amazonaws.account#RegionOptStatus": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "ENABLED",
+            "name": "ENABLED"
+          },
+          {
+            "value": "ENABLING",
+            "name": "ENABLING"
+          },
+          {
+            "value": "DISABLING",
+            "name": "DISABLING"
+          },
+          {
+            "value": "DISABLED",
+            "name": "DISABLED"
+          },
+          {
+            "value": "ENABLED_BY_DEFAULT",
+            "name": "ENABLED_BY_DEFAULT"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#RegionOptStatusList": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.account#RegionOptStatus"
+      }
+    },
+    "com.amazonaws.account#ResourceNotFoundException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 404
+      }
+    },
+    "com.amazonaws.account#ResourceUnavailableException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 424
+      }
+    },
+    "com.amazonaws.account#SendPhoneNumberVerification": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#SendPhoneNumberVerificationRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#SendPhoneNumberVerificationResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/sendPhoneNumberVerification",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#SendPhoneNumberVerificationRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#SendPhoneNumberVerificationResponse": {
+      "type": "structure",
+      "members": {
+        "Status": {
+          "target": "com.amazonaws.account#PhoneNumberVerificationStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#SensitiveString": {
+      "type": "string",
+      "traits": {
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#StartPrimaryEmailUpdate": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#StartPrimaryEmailUpdateRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#StartPrimaryEmailUpdateResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/startPrimaryEmailUpdate",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#StartPrimaryEmailUpdateRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "PrimaryEmail": {
+          "target": "com.amazonaws.account#PrimaryEmailAddress",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#StartPrimaryEmailUpdateResponse": {
+      "type": "structure",
+      "members": {
+        "Status": {
+          "target": "com.amazonaws.account#PrimaryEmailUpdateStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#StateOrRegion": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#Title": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 50
+        },
+        "smithy.api#sensitive": {}
+      }
+    },
+    "com.amazonaws.account#TooManyRequestsException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#httpHeader": "x-amzn-ErrorType"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 429,
+        "smithy.api#retryable": {
+          "throttling": true
+        }
+      }
+    },
+    "com.amazonaws.account#ValidationException": {
+      "type": "structure",
+      "members": {
+        "message": {
+          "target": "com.amazonaws.account#SensitiveString",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "reason": {
+          "target": "com.amazonaws.account#ValidationExceptionReason",
+          "traits": {}
+        },
+        "fieldList": {
+          "target": "com.amazonaws.account#ValidationExceptionFieldList",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#error": "client",
+        "smithy.api#httpError": 400
+      }
+    },
+    "com.amazonaws.account#ValidationExceptionField": {
+      "type": "structure",
+      "members": {
+        "name": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "message": {
+          "target": "com.amazonaws.account#SensitiveString",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {}
+    },
+    "com.amazonaws.account#ValidationExceptionFieldList": {
+      "type": "list",
+      "member": {
+        "target": "com.amazonaws.account#ValidationExceptionField"
+      }
+    },
+    "com.amazonaws.account#ValidationExceptionReason": {
+      "type": "string",
+      "traits": {
+        "smithy.api#enum": [
+          {
+            "value": "invalidRegionOptTarget",
+            "name": "INVALID_REGION_OPT_TARGET"
+          },
+          {
+            "value": "fieldValidationFailed",
+            "name": "FIELD_VALIDATION_FAILED"
+          }
+        ]
+      }
+    },
+    "com.amazonaws.account#VerifyPhoneNumber": {
+      "type": "operation",
+      "input": {
+        "target": "com.amazonaws.account#VerifyPhoneNumberRequest"
+      },
+      "output": {
+        "target": "com.amazonaws.account#VerifyPhoneNumberResponse"
+      },
+      "errors": [
+        {
+          "target": "com.amazonaws.account#AccessDeniedException"
+        },
+        {
+          "target": "com.amazonaws.account#ConflictException"
+        },
+        {
+          "target": "com.amazonaws.account#InternalServerException"
+        },
+        {
+          "target": "com.amazonaws.account#ResourceNotFoundException"
+        },
+        {
+          "target": "com.amazonaws.account#TooManyRequestsException"
+        },
+        {
+          "target": "com.amazonaws.account#ValidationException"
+        }
+      ],
+      "traits": {
+        "smithy.api#http": {
+          "uri": "/verifyPhoneNumber",
+          "method": "POST",
+          "code": 200
+        }
+      }
+    },
+    "com.amazonaws.account#VerifyPhoneNumberRequest": {
+      "type": "structure",
+      "members": {
+        "AccountId": {
+          "target": "com.amazonaws.account#AccountId",
+          "traits": {}
+        },
+        "Otp": {
+          "target": "com.amazonaws.account#Otp",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "com.amazonaws.account#VerifyPhoneNumberResponse": {
+      "type": "structure",
+      "members": {
+        "Status": {
+          "target": "com.amazonaws.account#PhoneNumberVerificationStatus",
+          "traits": {}
+        }
+      },
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "com.amazonaws.account#WebsiteUrl": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1,
+          "max": 256
+        },
+        "smithy.api#sensitive": {}
+      }
+    }
+  }
+}

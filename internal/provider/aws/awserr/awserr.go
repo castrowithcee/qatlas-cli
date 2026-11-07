@@ -1,6 +1,6 @@
 // Package awserr maps AWS error codes and HTTP statuses to provider error classes. It serves every AWS
-// protocol (awsQuery now, the JSON and REST protocols later): the caller extracts the code, this package
-// decides the class and the message. The provider's own Message text never reaches a message or a log.
+// protocol (awsQuery and restJson1 today, restXml next): the caller extracts the code, this package decides
+// the class and the message. The provider's own Message text never reaches a message or a log.
 package awserr
 
 import (
@@ -25,16 +25,62 @@ type rule struct {
 
 var (
 	rateLimited = rule{provider.ClassRateLimited, Subject + " rate-limited the operation"}
+	notFound    = rule{provider.ClassNotFound, Subject + " did not find the entity; check the name and whether the credential may see it"}
+	conflict    = rule{provider.ClassProviderError, Subject + " reports a conflict: the entity already exists or is being changed; read it again before retrying"}
+	denied      = rule{provider.ClassPermission, Subject + " denied the operation; the identity lacks the required permission"}
+	expired     = rule{provider.ClassAuth, "the " + Subject + " session token has expired"}
+	invalid     = rule{provider.ClassProviderError, Subject + " rejected the request as invalid; check the arguments"}
+	quota       = rule{provider.ClassProviderError, Subject + " refused the operation because a limit or quota is exceeded"}
+	// unmapped is for a code the protocol that delivered it does not define.
+	unmapped = rule{provider.ClassInvalidResponse, Subject + " returned an error code this protocol does not define"}
 
-	// codeRules is the table error code -> class. It is data: add a row, not a branch.
+	// codeRules is the table error code -> class, keyed by the code on the wire (the awsQueryError code of
+	// the model, not the shape name). It is data: add a row, not a branch.
+	//
+	// The throttling rows are the codes of botocore 1.43.123 (_retry.json) plus RequestLimitExceeded, which the
+	// EC2 query API sends. SlowDown is S3's code and not in that source, so the awsQuery services do not
+	// define it: it is not trusted as a rate limit here. The S3 package maps it where the model proves it.
+	// There is no conflict class: a conflict is a provider-error with a message that says so, and the code
+	// stays in Original.
 	codeRules = map[string]rule{
-		"Throttling":            rateLimited,
-		"ThrottlingException":   rateLimited,
-		"RequestLimitExceeded":  rateLimited,
-		"AccessDenied":          {provider.ClassPermission, Subject + " denied the operation; the identity lacks the required permission"},
-		"InvalidClientTokenId":  {provider.ClassAuth, Subject + " does not recognise the access key"},
-		"SignatureDoesNotMatch": {provider.ClassAuth, Subject + " rejected the request signature; check the secret access key"},
-		"ExpiredToken":          {provider.ClassAuth, "the " + Subject + " session token has expired"},
+		"Throttling":                             rateLimited,
+		"ThrottlingException":                    rateLimited,
+		"ThrottledException":                     rateLimited,
+		"RequestThrottledException":              rateLimited,
+		"ProvisionedThroughputExceededException": rateLimited,
+		"RequestLimitExceeded":                   rateLimited,
+		"TooManyRequestsException":               rateLimited,
+		"SlowDown":                               unmapped,
+
+		"AccessDenied":                denied,
+		"AccessDeniedException":       denied,
+		"InvalidClientTokenId":        {provider.ClassAuth, Subject + " does not recognise the access key"},
+		"UnrecognizedClientException": {provider.ClassAuth, Subject + " does not recognise the access key"},
+		"SignatureDoesNotMatch":       {provider.ClassAuth, Subject + " rejected the request signature; check the secret access key"},
+		"ExpiredToken":                expired,
+		"ExpiredTokenException":       expired,
+
+		// IAM: NoSuchEntity is the code of NoSuchEntityException; the report codes and the organization
+		// error name an entity that is not there.
+		"NoSuchEntity":                  notFound,
+		"ReportNotPresent":              notFound,
+		"OrganizationNotFoundException": notFound,
+
+		// The restJson1 codes of the Account and SES v2 models. A service package adds the rows of its own
+		// errors here; until it does, ClassifyStrict reports such a client error as an unknown code.
+		"ResourceNotFoundException":     notFound,
+		"ValidationException":           invalid,
+		"ConflictException":             conflict,
+		"LimitExceededException":        quota,
+		"ServiceQuotaExceededException": quota,
+
+		"EntityAlreadyExists":           conflict,
+		"DeleteConflict":                conflict,
+		"EntityTemporarilyUnmodifiable": conflict,
+		"ConcurrentModification":        conflict,
+		"NameConflict":                  conflict,
+		"DuplicateCertificate":          conflict,
+		"DuplicateSSHPublicKey":         conflict,
 	}
 )
 
@@ -61,6 +107,20 @@ func Classify(op string, status int, header http.Header, code, errType string) (
 	failure, hold := classify(op, status, header, code)
 	failure.Original = original(status, code, errType)
 	return failure, hold
+}
+
+// ClassifyStrict is Classify for the protocols whose models define every error code of an operation, the
+// REST ones. A client error with a code that is not in the table is not guessed from its status: it is an
+// invalid-provider-response, with the code kept in Original. The status still decides where it means
+// something by itself: 401, 403, 429, a server-side status, and an answer without any code.
+func ClassifyStrict(op string, status int, header http.Header, code, errType string) (*provider.Error, time.Duration) {
+	if _, known := codeRules[code]; code != "" && !known &&
+		status >= 400 && status < 500 && status != http.StatusUnauthorized && status != http.StatusForbidden && status != http.StatusTooManyRequests {
+		failure := &provider.Error{Class: unmapped.class, Op: op, Message: unmapped.message}
+		failure.Original = original(status, code, errType)
+		return failure, 0
+	}
+	return Classify(op, status, header, code, errType)
 }
 
 func classify(op string, status int, header http.Header, code string) (*provider.Error, time.Duration) {

@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/castrowithcee/qatlas-connect/internal/capability"
 	"github.com/castrowithcee/qatlas-connect/internal/config"
 	"github.com/castrowithcee/qatlas-connect/internal/provider"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsquery"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/awsretry"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/endpoints"
+	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/httpbind"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/aws/sigv4"
 	"github.com/castrowithcee/qatlas-connect/internal/provider/ratelimit"
 	"github.com/castrowithcee/qatlas-connect/internal/redact"
@@ -24,14 +27,13 @@ const (
 	// minInterval spaces the requests of one connection to one service. STS is generous; this is a
 	// conservative start, not a measured limit.
 	minInterval = 250 * time.Millisecond
-
-	// maxRetries bounds the automatic repetitions of a read; maxRetryWait is the longest Retry-After a
-	// repetition waits for, and maxHold the longest one the limiter keeps for later requests.
-	maxRetries    = 2
-	maxRetryWait  = 10 * time.Second
-	maxHold       = time.Minute
-	serverBackoff = 500 * time.Millisecond
 )
+
+// retryPolicy bounds the automatic repetitions of a safe read; tests replace it to fix the jitter.
+var retryPolicy = awsretry.Default
+
+// maxRetries is the number of repetitions after the first attempt.
+var maxRetries = retryPolicy.MaxRetries
 
 var limiters = ratelimit.NewRegistry(minInterval)
 
@@ -94,41 +96,76 @@ func mismatch(op string) *provider.Error {
 }
 
 // send runs one signed awsQuery call against the fixed endpoint of service, one limiter slot per attempt.
-// It repeats a read a bounded number of times: only a rate limit that carries a usable Retry-After, and a
-// server-side failure once more after a short pause. A rate limit without Retry-After is never repeated.
+// It repeats the call only when idem is IdempotencySafe and within retryPolicy: a rate limit that carries a
+// usable Retry-After, and a server-side failure after a short pause, each with jitter. A rate limit without
+// Retry-After is never repeated, and no other operation is repeated at all.
 func (c *Client) send(ctx context.Context, op string, service endpoints.Service, region string,
-	creds sigv4.Credentials, call awsquery.Call, out any) *provider.Error {
+	creds sigv4.Credentials, idem capability.Idempotency, call awsquery.Call, out any) *provider.Error {
+	_, failure := c.sendMeta(ctx, op, service, region, creds, idem, call, out)
+	return failure
+}
+
+// sendMeta is send that also returns what the successful answer said about itself, such as a cut string.
+func (c *Client) sendMeta(ctx context.Context, op string, service endpoints.Service, region string,
+	creds sigv4.Credentials, idem capability.Idempotency, call awsquery.Call, out any) (awsquery.Meta, *provider.Error) {
 	endpoint, err := endpoints.Resolve(service, region)
 	if err != nil {
-		return provider.Fail(op, "the AWS endpoint is not available for this region")
+		return awsquery.Meta{}, provider.Fail(op, "the AWS endpoint is not available for this region")
 	}
 	client := &awsquery.Client{
 		HTTP: c.http, URL: endpoint.URL(), UserAgent: userAgent,
 		Signer: &sigv4.Signer{Credentials: creds, Region: endpoint.SigningRegion, Service: endpoint.SigningName, Clock: clock},
 	}
+	var meta awsquery.Meta
+	failure := c.attempts(ctx, op, service, idem, func() (time.Duration, *provider.Error) {
+		var failure *provider.Error
+		meta, failure = client.Do(ctx, op, call, out)
+		return meta.RetryAfter, failure
+	})
+	return meta, failure
+}
+
+// sendRest is sendMeta for a REST protocol: one signed call of an httpbind operation, with the same limiter,
+// retry and endpoint rules. req is the encoded input (Operation.Encode), codec the body format of the
+// protocol (restjson.Codec). The signature covers the body hash and no x-amz-content-sha256 header, which
+// only S3 sends.
+func (c *Client) sendRest(ctx context.Context, op string, service endpoints.Service, region string,
+	creds sigv4.Credentials, idem capability.Idempotency, codec httpbind.Codec, o *httpbind.Operation,
+	req httpbind.Request, out *map[string]any) (httpbind.Meta, *provider.Error) {
+	endpoint, err := endpoints.Resolve(service, region)
+	if err != nil {
+		return httpbind.Meta{}, provider.Fail(op, "the AWS endpoint is not available for this region")
+	}
+	client := &httpbind.Client{
+		HTTP: c.http, Codec: codec, URL: endpoint.URL(), UserAgent: userAgent,
+		Signer: &sigv4.Signer{Credentials: creds, Region: endpoint.SigningRegion, Service: endpoint.SigningName, Clock: clock},
+	}
+	var meta httpbind.Meta
+	failure := c.attempts(ctx, op, service, idem, func() (time.Duration, *provider.Error) {
+		var failure *provider.Error
+		meta, failure = client.Do(ctx, op, o, req, out)
+		return meta.RetryAfter, failure
+	})
+	return meta, failure
+}
+
+// attempts runs one call through the limiter of the connection and service, one slot per attempt. do makes
+// one attempt and returns the Retry-After of its answer. The loop repeats the call only when the policy
+// allows it, which it does for an IdempotencySafe operation only.
+func (c *Client) attempts(ctx context.Context, op string, service endpoints.Service, idem capability.Idempotency,
+	do func() (time.Duration, *provider.Error)) *provider.Error {
 	limiter := limiters.For(limiterKey(c.name, service))
 	for attempt := 0; ; attempt++ {
 		if err := limiter.Wait(ctx); err != nil {
 			return provider.Waited(op, "AWS", err)
 		}
-		meta, failure := client.Do(ctx, op, call, out)
+		retryAfter, failure := do()
 		if failure == nil {
 			return nil
 		}
-		hold := meta.RetryAfter
-		if hold > maxHold {
-			hold = maxHold
-		}
-		limiter.HoldFor(hold)
-		again := false
-		switch {
-		case failure.Class == provider.ClassRateLimited:
-			again = meta.RetryAfter > 0 && meta.RetryAfter <= maxRetryWait
-		case failure.Class == provider.ClassProviderError && failure.Original != nil && failure.Original.Status >= 500:
-			limiter.HoldFor(serverBackoff)
-			again = true
-		}
-		if !again || attempt >= maxRetries {
+		decision := retryPolicy.Decide(idem, attempt, failure, retryAfter)
+		limiter.HoldFor(decision.Hold)
+		if !decision.Again {
 			return failure
 		}
 	}
@@ -167,7 +204,7 @@ type callerIdentity struct {
 // a match is remembered.
 func (c *Client) identity(ctx context.Context, op, region string, creds sigv4.Credentials) (callerIdentity, *provider.Error) {
 	var who callerIdentity
-	if failure := c.send(ctx, op, endpoints.STS, region, creds,
+	if failure := c.send(ctx, op, endpoints.STS, region, creds, capability.IdempotencySafe,
 		awsquery.Call{Action: "GetCallerIdentity", Version: stsVersion}, &who); failure != nil {
 		return callerIdentity{}, failure
 	}

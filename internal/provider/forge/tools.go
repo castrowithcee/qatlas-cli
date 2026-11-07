@@ -130,7 +130,9 @@ var tools = []*tool{accountsMe, repositoriesList, repositoriesGet, settingsGet, 
 	collaboratorsList, collaboratorsCheck, collaboratorsGetPermission, collaboratorsAdd, collaboratorsRemove,
 	branchProtectionsList, branchProtectionsGet, branchProtectionsCreate, branchProtectionsUpdate,
 	branchProtectionsReorder, branchProtectionsDelete,
-	tagProtectionsList, tagProtectionsGet, tagProtectionsCreate, tagProtectionsUpdate, tagProtectionsDelete}
+	tagProtectionsList, tagProtectionsGet, tagProtectionsCreate, tagProtectionsUpdate, tagProtectionsDelete,
+	repositoryFlagsList, repositoryFlagsCheck, repositoryFlagsAdd, repositoryFlagsRemove, repositoryFlagsReplace,
+	repositoryFlagsClear}
 
 func (p *product) toolID(t *tool) string { return p.id + "." + t.group + "." + t.action }
 
