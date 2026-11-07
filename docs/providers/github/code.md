@@ -150,7 +150,9 @@ The token rights are listed under [Repository contents](setup.md#repository-cont
 
 The terminal editor's setup profile `repository-reader` selects the fourteen and, from
 [repository details](repositories.md#repository-details-languages-contributors-and-community-profile),
-`github.repositories.get`, `github.languages.get`, `github.contributors.list`, and `github.community-profile.get`; it is
+`github.repositories.get`, `github.languages.get`, `github.contributors.list`, and `github.community-profile.get`, and, from
+[repository statistics and activity](repositories.md#repository-statistics-and-activity), the five statistics tools and
+`github.activity.list`; it is
 not the recommended profile, which stays `read`, unchanged.
 
 ## Repository writes: branches and file contents
@@ -214,7 +216,7 @@ ref update ever moves it, though the object it was creating may still exist as a
 effect until referenced. The answer names `parent_sha`, the commit the branch was at before the push, and the
 paths written in the order given, never any file's content.
 
-The terminal editor's setup profile `repository-writer` (not recommended) selects the read eighteen of `repository-reader` plus
+The terminal editor's setup profile `repository-writer` (not recommended) selects the read twenty-four of `repository-reader` plus
 `github.branches.create` and `github.contents.put`. `github.branches.delete`, `github.contents.delete`, and
 `github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
 [`github.releases.delete`](releases.md#releases).

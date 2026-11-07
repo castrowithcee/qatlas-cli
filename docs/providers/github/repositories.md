@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the GitHub repository tools: the repository list of an owner, the details, languages, contributors, and community profile of one repository, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
+  Describes the GitHub repository tools: the repository list of an owner, the details, languages, contributors, and community profile of one repository, its statistics and activity feed, repository create, fork, rename, and delete, collaborators, rulesets, custom properties, repository settings, starred repositories, and the repository search.
 type: knowledge
 edit: shared
 created: 2026-10-22
@@ -87,6 +87,54 @@ community files by role: `code_of_conduct` (`key`, `name`, `url`, `links`), `cod
 (`key`, `name`, `spdx_id`, `node_id`, `url`, `links`), `contributing`, `readme`, `issue_template`, and
 `pull_request_template`. A file has `url`, the web address, and `links.url`, the REST address; a role without a
 file is absent.
+
+## Repository statistics and activity
+
+| Tool | Does |
+| --- | --- |
+| `github.stats-contributors.get` | reads the commits, additions, and deletions per week of each contributor |
+| `github.stats-commit-activity.get` | reads the commits per week and day of the last year |
+| `github.stats-code-frequency.get` | reads the lines added and deleted per week |
+| `github.stats-participation.get` | reads the commits per week of everyone and of the owner |
+| `github.stats-punch-card.get` | reads the commits per day of the week and hour of the day |
+| `github.activity.list` | lists the activity feed: pushes, force pushes, branch creations and deletions, and merges |
+
+All six read one repository of the connection through a fixed GitHub route, are checked against the targets and
+exclusions before a secret is read or GitHub is contacted, and write nothing. The token rights are listed under
+[Repositories, rulesets, and properties](setup.md#repositories-rulesets-and-properties). The setup profiles
+`repository-reader` and `repository-writer` select them.
+
+The five statistics tools answer `state`: `ready`, `computing` when GitHub answered 202 while it computes the
+statistic, or `empty` when GitHub answered a repository without commits with no content. Neither state is waited
+for or retried, and neither carries data, so call the tool again later. GitHub's raw arrays and tuples are given
+named members, and every list is bounded with the cut visible:
+
+- `github.stats-contributors.get` answers `contributors`, most commits first, at most 100 with
+  `contributors_truncated`. Each has `author` (an account, absent when GitHub reports none), `total` (commits
+  over the whole history), and `weeks`, the most recent 52 oldest first, each with `week` (the Unix timestamp of
+  the week start), `additions`, `deletions`, and `commits`, with `weeks_truncated`. For a repository of 10,000 or
+  more commits GitHub reports additions and deletions as 0. `author` shows the members GitHub embeds, is never
+  looked up further, and its `login` and `name` are untrusted data.
+- `github.stats-commit-activity.get` answers `weeks`, at most 52 with `weeks_truncated`, each with `week`,
+  `total`, and `days`, the commits of the seven days, Sunday first.
+- `github.stats-code-frequency.get` answers `weeks`, the most recent 260 oldest first with `weeks_truncated`, each
+  with `week`, `additions`, and `deletions` (a negative number, as GitHub sends it). GitHub refuses a repository
+  of 10,000 or more commits with 422, which the tool reports as a failed request.
+- `github.stats-participation.get` answers `all` and `owner`, the commits per week, oldest first, each at most 52
+  with `all_truncated` and `owner_truncated`.
+- `github.stats-punch-card.get` answers `entries`, at most 168 with `entries_truncated`, each with `day` (0 for
+  Sunday through 6 for Saturday), `hour` (0 through 23), and `commits`.
+
+`github.activity.list` lists one batch of the feed, newest first unless `direction` is `asc`. The filters are
+`ref` (a branch name or a full ref such as `refs/heads/main`), `actor` (a login), `time_period` (`day`, `week`,
+`month`, `quarter`, or `year`), `activity_type` (`push`, `force_push`, `branch_creation`, `branch_deletion`,
+`pr_merge`, or `merge_queue_merge`), and `direction` (`asc` or `desc`); an unknown value is refused before GitHub
+is contacted. Each activity has `id`, `node_id`, `before` and `after` (the commit SHAs of the ref around the
+change), `ref` (untrusted data), `timestamp`, `activity_type`, and `actor` (an account, absent when GitHub
+reports none, shown as GitHub embeds it and never looked up further). GitHub pages the feed by cursor: `limit`
+sets the batch, `has_more` and `next_cursor` continue it, and a cursor of other filters or another repository is
+refused; a following page GitHub announces with a cursor Qatlas cannot carry answers `invalid-response` rather
+than a feed that looks complete. GitHub does not document which fine-grained permission the feed route checks.
 
 ## Repository lifecycle and collaborators
 

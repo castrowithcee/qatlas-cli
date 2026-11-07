@@ -33,7 +33,8 @@ not-recommended profiles `pull-requests` and `pull-requests-operator` under
 [accounts](accounts.md#account-wide-tools) and [stars](repositories.md#stars), and the
 not-recommended profile `repository-reader` under
 [repository contents, tree, blame, commits, branches, and tags](code.md#repository-contents-tree-blame-commits-branches-and-tags)
-and [repository details](repositories.md#repository-details-languages-contributors-and-community-profile),
+[repository details](repositories.md#repository-details-languages-contributors-and-community-profile), and
+[repository statistics and activity](repositories.md#repository-statistics-and-activity),
 and the not-recommended profile `repository-admin-reader` under
 [repository lifecycle and collaborators](repositories.md#repository-lifecycle-and-collaborators), which also lists the
 rulesets under [Rulesets](repositories.md#rulesets-repository-and-organization-governance) and the custom property values or
