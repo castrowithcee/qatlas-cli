@@ -4,19 +4,20 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-11-06
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # Set up Google Maps
 
 This page shows how to connect Qatlas to Google Maps Platform. Fields, cost, and errors are described in the
-[Google Maps provider](README.md); the tool is described in [places](places.md).
+[Google Maps provider](README.md); the tools are described in [places](places.md) and [addressvalidation](addressvalidation.md).
 
 ## What you need
 
 - A Google Cloud project with a billing account. Google bills Places requests to that account; see
   [Cost](README.md#cost) for the free monthly caps.
-- Places API (New) enabled in that project, and Geocoding API for the geocoding tools.
+- Places API (New) enabled in that project, Geocoding API for the geocoding tools, and Address Validation API
+  for the address tools.
 - An API key of that project.
 - Qatlas keeps the key in the system keyring or the vault, or reads it from an environment variable.
 - The service is always `https://places.googleapis.com`; there is nothing to change for it.
@@ -24,7 +25,8 @@ This page shows how to connect Qatlas to Google Maps Platform. Fields, cost, and
 ## Create a key
 
 In the Google Cloud console, choose or create the project and link a billing account to it. Under APIs and
-services, enable **Places API (New)** and, for the geocoding tools, **Geocoding API**. Under Credentials, create an API key. Google changes its pages from
+services, enable **Places API (New)**, for the geocoding tools **Geocoding API**, and for the address tools
+**Address Validation API**. Under Credentials, create an API key. Google changes its pages from
 time to time; look for these names.
 
 Restrict the key to the APIs you enabled. A leaked key is not narrowed by the connection's `tools`, so keep it

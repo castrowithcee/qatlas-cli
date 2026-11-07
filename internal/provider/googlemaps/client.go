@@ -22,6 +22,12 @@ import (
 // origin could only be a mistake or an exfiltration route.
 const apiRoot = "https://places.googleapis.com"
 
+// addressValidationRoot is the second fixed origin: Address Validation API is a separate Google service that
+// accepts the same key. Only the Address Validation tools use it, through postTo.
+const addressValidationRoot = "https://addressvalidation.googleapis.com"
+
+const addressValidationHost = "addressvalidation.googleapis.com"
+
 // Bounds of one request. The timeout stays below the 60 seconds an invoke may take, so a slow answer ends
 // as a timeout of this provider and not as a cancelled call.
 const (
@@ -54,6 +60,9 @@ type Client struct {
 	// redirectInvalid makes a 3xx answer an invalid response instead of a provider error. A media request
 	// asks for JSON only, so a redirect there means Google ignored that and the answer cannot be used.
 	redirectInvalid bool
+	// uncertain is appended to a failure that leaves open whether Google acted on a request. A tool that
+	// changes something at Google sets it on its own copy of the client; a read leaves it empty.
+	uncertain string
 }
 
 // checkConnection refuses what no request may start from: no connection, a base URL other than the official
@@ -125,16 +134,31 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, mas
 // path below the API root. The body is built by the tool from checked arguments and never from caller text;
 // like the URL it never holds the key.
 func (c *Client) post(ctx context.Context, op, path string, body map[string]any, mask string) (map[string]any, error) {
+	return c.postTo(ctx, apiRoot, op, path, body, mask)
+}
+
+// postTo is post for one of the two fixed origins. root is always one of the package constants, never text of
+// a caller.
+func (c *Client) postTo(ctx context.Context, root, op, path string, body map[string]any, mask string) (map[string]any, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, failure(op, "the request could not be built")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiRoot+path, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, root+path, bytes.NewReader(payload))
 	if err != nil {
 		return nil, failure(op, "the request could not be built")
 	}
 	req.Header.Set("Content-Type", "application/json")
 	return c.send(ctx, op, req, mask)
+}
+
+// unsure marks a failure whose outcome at Google is open, when the client belongs to a tool that changes
+// something. The hint is added once.
+func (c *Client) unsure(failed *provider.Error) *provider.Error {
+	if c.uncertain != "" && !strings.HasSuffix(failed.Message, c.uncertain) {
+		failed.Message += c.uncertain
+	}
+	return failed
 }
 
 // send adds the key and, when the request has one, the field mask as headers, waits for the rate slot, sends the request once, and
@@ -153,13 +177,17 @@ func (c *Client) send(ctx context.Context, op string, req *http.Request, mask st
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, provider.Transport(op, "Google", err)
+		failed := provider.Transport(op, "Google", err)
+		if failed.MayHaveArrived() {
+			failed = c.unsure(failed)
+		}
+		return nil, failed
 	}
 	defer response.Body.Close()
 	if c.redirectInvalid && response.StatusCode >= 300 && response.StatusCode < 400 {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<10))
-		return nil, provider.InvalidResponse(op, "Google answered with a redirect although the request asked "+
-			"for JSON; Qatlas Connect does not follow it")
+		return nil, c.unsure(provider.InvalidResponse(op, "Google answered with a redirect although the request asked "+
+			"for JSON; Qatlas Connect does not follow it"))
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		body := provider.ReadErrorBody(response.Body)
@@ -168,19 +196,27 @@ func (c *Client) send(ctx context.Context, op string, req *http.Request, mask st
 			// nothing repeats this one.
 			c.limiter.HoldFor(min(max(provider.RetryAfter(response.Header), time.Second), maxHold))
 		}
-		return nil, googleError(op, response.StatusCode, body)
+		failed := googleError(op, response.StatusCode, body)
+		if req.URL.Host == addressValidationHost && failed.Class == provider.ClassPermission {
+			failed.Message = "Google refused the key for the Address Validation API; check that the API is enabled " +
+				"in the key's project, that the project has a billing account, and the key's restrictions"
+		}
+		if response.StatusCode >= 300 && (response.StatusCode < 400 || response.StatusCode >= 500) {
+			failed = c.unsure(failed)
+		}
+		return nil, failed
 	}
 	if mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type")); err != nil ||
 		mediaType != "application/json" {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<10))
-		return nil, provider.InvalidResponse(op, "Google returned an answer that is not JSON")
+		return nil, c.unsure(provider.InvalidResponse(op, "Google returned an answer that is not JSON"))
 	}
 	var out map[string]any
 	if failed := provider.ReadJSON(op, "Google", response.Body, maxResponseBytes, &out); failed != nil {
-		return nil, failed
+		return nil, c.unsure(failed)
 	}
 	if out == nil {
-		return nil, provider.InvalidResponse(op, "Google returned an invalid response")
+		return nil, c.unsure(provider.InvalidResponse(op, "Google returned an invalid response"))
 	}
 	return out, nil
 }

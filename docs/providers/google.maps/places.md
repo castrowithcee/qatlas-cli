@@ -155,7 +155,8 @@ of the session carries the same `session_token` and the same Cloud project's key
 
 1. Pass one token on each `places.autocomplete` call while the user types.
 2. Pass the same token to `places.get` for the chosen place. That call ends the session, and the token is not
-   valid for a further one. Address Validation also ends a session, but is not offered here.
+   valid for a further one. `addressvalidation.validate` with the same token also ends a session; see
+   [addressvalidation](addressvalidation.md).
 3. Use a fresh token for the next search.
 
 Without a token, with a reused one, or when a session is abandoned, each request is billed separately as
